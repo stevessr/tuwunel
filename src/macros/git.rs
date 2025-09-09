@@ -36,18 +36,6 @@ pub(super) fn commit(_args: TokenStream) -> TokenStream {
 	ret.into()
 }
 
-pub(super) fn describe(_args: TokenStream) -> TokenStream {
-	static ARGS: &[&str] =
-		&["describe", "--dirty", "--tags", "--always", "--broken", "--abbrev=10"];
-
-	let output = git(ARGS);
-	let ret = quote! {
-		static GIT_DESCRIBE: &'static str = #output;
-	};
-
-	ret.into()
-}
-
 fn git(args: &[&str]) -> String {
 	Command::new("git")
 		.args(args)

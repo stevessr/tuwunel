@@ -6,7 +6,6 @@ mod config;
 mod debug;
 mod git;
 mod implement;
-mod refutable;
 mod rustc;
 mod utils;
 
@@ -46,11 +45,6 @@ pub fn rustc_flags_capture(args: TokenStream) -> TokenStream { rustc::flags_capt
 pub fn rustc_version(args: TokenStream) -> TokenStream { rustc::version(args) }
 
 #[proc_macro_attribute]
-pub fn refutable(args: TokenStream, input: TokenStream) -> TokenStream {
-	attribute_macro::<ItemFn, _>(args, input, refutable::refutable)
-}
-
-#[proc_macro_attribute]
 pub fn implement(args: TokenStream, input: TokenStream) -> TokenStream {
 	attribute_macro::<ItemFn, _>(args, input, implement::implement)
 }
@@ -65,9 +59,6 @@ pub fn git_semantic(args: TokenStream) -> TokenStream { git::semantic(args) }
 
 #[proc_macro]
 pub fn git_commit(args: TokenStream) -> TokenStream { git::commit(args) }
-
-#[proc_macro]
-pub fn git_describe(args: TokenStream) -> TokenStream { git::describe(args) }
 
 fn attribute_macro<I, F>(args: TokenStream, input: TokenStream, func: F) -> TokenStream
 where
