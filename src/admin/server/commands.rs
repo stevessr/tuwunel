@@ -67,7 +67,7 @@ pub(super) async fn list_features(&self, available: bool, enabled: bool, comma: 
 #[admin_command]
 pub(super) async fn memory_usage(&self) -> Result {
 	let services_usage = self.services.memory_usage().await?;
-	let database_usage = self.services.db.db.memory_usage()?;
+	let database_usage = self.services.db.engine.memory_usage()?;
 	let allocator_usage = tuwunel_core::alloc::memory_usage()
 		.map_or(String::new(), |s| format!("\nAllocator:\n{s}"));
 
@@ -88,7 +88,7 @@ pub(super) async fn clear_caches(&self) -> Result {
 pub(super) async fn list_backups(&self) -> Result {
 	self.services
 		.db
-		.db
+		.engine
 		.backup_list()?
 		.try_stream()
 		.try_for_each(|result| write!(self, "{result}"))
@@ -102,13 +102,13 @@ pub(super) async fn backup_database(&self) -> Result {
 		.services
 		.server
 		.runtime()
-		.spawn_blocking(move || match db.db.backup() {
+		.spawn_blocking(move || match db.engine.backup() {
 			| Ok(()) => "Done".to_owned(),
 			| Err(e) => format!("Failed: {e}"),
 		})
 		.await?;
 
-	let count = self.services.db.db.backup_count()?;
+	let count = self.services.db.engine.backup_count()?;
 	self.write_str(&format!("{result}. Currently have {count} backups."))
 		.await
 }

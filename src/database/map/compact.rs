@@ -54,7 +54,7 @@ pub fn compact_blocking(&self, opts: Options) -> Result {
 		| (Some(_), Some(_)) => return Err!("compacting between specific levels not supported"),
 	}
 
-	self.db
+	self.engine
 		.db
 		.compact_range_cf_opt(&self.cf(), opts.range.0, opts.range.1, &co);
 

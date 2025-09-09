@@ -43,7 +43,7 @@ use crate::maps::{Maps, MapsKey, MapsVal};
 
 pub struct Database {
 	maps: Maps,
-	pub db: Arc<Engine>,
+	pub engine: Arc<Engine>,
 	pub(crate) _ctx: Arc<Context>,
 }
 
@@ -51,10 +51,10 @@ impl Database {
 	/// Load an existing database or create a new one.
 	pub async fn open(server: &Arc<Server>) -> Result<Arc<Self>> {
 		let ctx = Context::new(server)?;
-		let db = Engine::open(ctx.clone(), maps::MAPS).await?;
+		let engine = Engine::open(ctx.clone(), maps::MAPS).await?;
 		Ok(Arc::new(Self {
-			maps: maps::open(&db)?,
-			db: db.clone(),
+			maps: maps::open(&engine)?,
+			engine: engine.clone(),
 			_ctx: ctx,
 		}))
 	}
@@ -76,11 +76,11 @@ impl Database {
 
 	#[inline]
 	#[must_use]
-	pub fn is_read_only(&self) -> bool { self.db.is_read_only() }
+	pub fn is_read_only(&self) -> bool { self.engine.is_read_only() }
 
 	#[inline]
 	#[must_use]
-	pub fn is_secondary(&self) -> bool { self.db.is_secondary() }
+	pub fn is_secondary(&self) -> bool { self.engine.is_secondary() }
 }
 
 impl Index<&str> for Database {

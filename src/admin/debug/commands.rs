@@ -918,7 +918,7 @@ pub(super) async fn database_files(&self, map: Option<String>, level: Option<i32
 	let mut files: Vec<_> = self
 		.services
 		.db
-		.db
+		.engine
 		.file_list()
 		.collect::<Result<_>>()?;
 
@@ -1023,7 +1023,7 @@ pub(super) async fn resync_database(&self) -> Result {
 
 	self.services
 		.db
-		.db
+		.engine
 		.update()
 		.map_err(|e| err!("Failed to update from primary: {e:?}"))
 }

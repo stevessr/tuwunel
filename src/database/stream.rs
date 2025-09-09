@@ -50,7 +50,10 @@ impl<'a> State<'a> {
 	#[inline]
 	pub(super) fn new(map: &'a Arc<Map>, opts: ReadOptions) -> Self {
 		Self {
-			inner: map.db().db.raw_iterator_cf_opt(&map.cf(), opts),
+			inner: map
+				.engine()
+				.db
+				.raw_iterator_cf_opt(&map.cf(), opts),
 			init: true,
 			seek: false,
 		}

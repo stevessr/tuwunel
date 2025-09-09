@@ -11,13 +11,13 @@ where
 	K: AsRef<[u8]> + ?Sized + Debug,
 {
 	let write_options = &self.write_options;
-	self.db
+	self.engine
 		.db
 		.delete_cf_opt(&self.cf(), key, write_options)
 		.or_else(or_else)
 		.expect("database remove error");
 
-	if !self.db.corked() {
-		self.db.flush().expect("database flush error");
+	if !self.engine.corked() {
+		self.engine.flush().expect("database flush error");
 	}
 }

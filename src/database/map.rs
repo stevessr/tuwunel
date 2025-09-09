@@ -48,38 +48,40 @@ pub struct Map {
 	name: &'static str,
 	watch: Watch,
 	cf: Arc<ColumnFamily>,
-	db: Arc<Engine>,
+	engine: Arc<Engine>,
 	read_options: ReadOptions,
 	cache_read_options: ReadOptions,
 	write_options: WriteOptions,
 }
 
 impl Map {
-	pub(crate) fn open(db: &Arc<Engine>, name: &'static str) -> Result<Arc<Self>> {
+	pub(crate) fn open(engine: &Arc<Engine>, name: &'static str) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			name,
 			watch: Watch::default(),
-			cf: open::open(db, name),
-			db: db.clone(),
-			read_options: read_options_default(db),
-			cache_read_options: cache_read_options_default(db),
-			write_options: write_options_default(db),
+			cf: open::open(engine, name),
+			engine: engine.clone(),
+			read_options: read_options_default(engine),
+			cache_read_options: cache_read_options_default(engine),
+			write_options: write_options_default(engine),
 		}))
 	}
 
 	#[inline]
 	pub fn property_integer(&self, name: &CStr) -> Result<u64> {
-		self.db.property_integer(&self.cf(), name)
+		self.engine.property_integer(&self.cf(), name)
 	}
 
 	#[inline]
-	pub fn property(&self, name: &str) -> Result<String> { self.db.property(&self.cf(), name) }
+	pub fn property(&self, name: &str) -> Result<String> {
+		self.engine.property(&self.cf(), name)
+	}
 
 	#[inline]
 	pub fn name(&self) -> &str { self.name }
 
 	#[inline]
-	pub(crate) fn db(&self) -> &Arc<Engine> { &self.db }
+	pub(crate) fn engine(&self) -> &Arc<Engine> { &self.engine }
 
 	#[inline]
 	pub(crate) fn cf(&self) -> impl AsColumnFamilyRef + '_ { &*self.cf }

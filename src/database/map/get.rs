@@ -37,7 +37,7 @@ where
 		res: None,
 	};
 
-	self.db
+	self.engine
 		.pool
 		.execute_get(cmd)
 		.and_then(|mut res| ready(res.remove(0)))
@@ -77,7 +77,7 @@ fn get_blocking_opts<K>(
 where
 	K: AsRef<[u8]> + ?Sized,
 {
-	self.db
+	self.engine
 		.db
 		.get_pinned_cf_opt(&self.cf(), key, read_options)
 }

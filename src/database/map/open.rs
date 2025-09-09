@@ -4,8 +4,8 @@ use rocksdb::ColumnFamily;
 
 use crate::Engine;
 
-pub(super) fn open(db: &Arc<Engine>, name: &str) -> Arc<ColumnFamily> {
-	let bounded_arc = db.cf(name);
+pub(super) fn open(engine: &Arc<Engine>, name: &str) -> Arc<ColumnFamily> {
+	let bounded_arc = engine.cf(name);
 	let bounded_ptr = Arc::into_raw(bounded_arc);
 	let cf_ptr = bounded_ptr.cast::<ColumnFamily>();
 

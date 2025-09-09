@@ -97,7 +97,7 @@ pub(crate) fn maybe_exists<K>(&self, key: &K) -> bool
 where
 	K: AsRef<[u8]> + ?Sized,
 {
-	self.db
+	self.engine
 		.db
 		.key_may_exist_cf_opt(&self.cf(), key, &self.cache_read_options)
 }

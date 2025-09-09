@@ -52,7 +52,7 @@ where
 				.map(|result| result.expect("failed to serialize query key"))
 				.collect();
 
-			self.db
+			self.engine
 				.pool
 				.execute_get(Get { map: self.clone(), key: keys, res: None })
 		})

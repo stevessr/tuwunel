@@ -48,7 +48,7 @@ where
 
 	keys.ready_chunks(automatic_amplification())
 		.widen_then(automatic_width(), |chunk| {
-			self.db.pool.execute_get(Get {
+			self.engine.pool.execute_get(Get {
 				map: self.clone(),
 				key: chunk
 					.iter()
@@ -104,7 +104,7 @@ where
 	// comparator**.
 	const SORTED: bool = false;
 
-	self.db
+	self.engine
 		.db
 		.batched_multi_get_cf_opt(&self.cf(), keys, SORTED, read_options)
 		.into_iter()

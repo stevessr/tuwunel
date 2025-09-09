@@ -22,14 +22,14 @@ where
 	V: AsRef<[u8]>,
 {
 	let write_options = &self.write_options;
-	self.db
+	self.engine
 		.db
 		.put_cf_opt(&self.cf(), key, val, write_options)
 		.or_else(or_else)
 		.expect("database insert error");
 
-	if !self.db.corked() {
-		self.db.flush().expect("database flush error");
+	if !self.engine.corked() {
+		self.engine.flush().expect("database flush error");
 	}
 
 	self.notify(key.as_ref());
@@ -49,13 +49,13 @@ where
 	}
 
 	let write_options = &self.write_options;
-	self.db
+	self.engine
 		.db
 		.write_opt(batch, write_options)
 		.or_else(or_else)
 		.expect("database insert batch error");
 
-	if !self.db.corked() {
-		self.db.flush().expect("database flush error");
+	if !self.engine.corked() {
+		self.engine.flush().expect("database flush error");
 	}
 }

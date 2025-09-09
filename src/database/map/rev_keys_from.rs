@@ -61,7 +61,7 @@ where
 {
 	use crate::pool::Seek;
 
-	let opts = super::iter_options_default(&self.db);
+	let opts = super::iter_options_default(&self.engine);
 	let state = stream::State::new(self, opts);
 	if is_cached(self, from) {
 		return stream::KeysRev::<'_>::from(state.init_rev(from.as_ref().into())).boxed();
@@ -75,7 +75,7 @@ where
 		res: None,
 	};
 
-	self.db
+	self.engine
 		.pool
 		.execute_iter(seek)
 		.ok_into::<stream::KeysRev<'_>>()

@@ -390,7 +390,7 @@ async fn fix_bad_double_separator_in_state_cache(services: &Services) -> Result 
 		})
 		.await;
 
-	db.db.sort()?;
+	db.engine.sort()?;
 	db["global"].insert(b"fix_bad_double_separator_in_state_cache", []);
 
 	info!("Finished fixing");
@@ -475,7 +475,7 @@ async fn retroactively_fix_bad_data_from_roomuserid_joined(services: &Services) 
 			.await;
 	}
 
-	db.db.sort()?;
+	db.engine.sort()?;
 	db["global"].insert(b"retroactively_fix_bad_data_from_roomuserid_joined", []);
 
 	info!("Finished fixing");
@@ -521,7 +521,7 @@ async fn fix_referencedevents_missing_sep(services: &Services) -> Result {
 	info!(?total, ?fixed, "Fixed missing record separators in 'referencedevents'.");
 
 	db["global"].insert(b"fix_referencedevents_missing_sep", []);
-	db.db.sort()
+	db.engine.sort()
 }
 
 async fn fix_readreceiptid_readreceipt_duplicates(services: &Services) -> Result {
@@ -573,5 +573,5 @@ async fn fix_readreceiptid_readreceipt_duplicates(services: &Services) -> Result
 	info!(?total, ?fixed, "Fixed undeleted entries in readreceiptid_readreceipt.");
 
 	db["global"].insert(b"fix_readreceiptid_readreceipt_duplicates", []);
-	db.db.sort()
+	db.engine.sort()
 }
