@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use serde_json::value::Value as JsonValue;
+use serde_json::value::{RawValue as RawJsonValue, Value as JsonValue};
 
 use super::Event;
 use crate::{Result, err, is_true};
@@ -43,8 +43,7 @@ where
 {
 	event
 		.unsigned()
-		.as_ref()
-		.map(|raw| raw.get())
+		.map(RawJsonValue::get)
 		.map(serde_json::from_str)
 		.ok_or(err!(Request(NotFound("\"unsigned\" property not found in pdu"))))?
 		.map_err(|e| err!(Database("Failed to deserialize \"unsigned\" into value: {e}")))
