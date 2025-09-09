@@ -73,13 +73,11 @@ pub(crate) async fn delete_timezone_key_route(
 
 	services.users.set_timezone(&body.user_id, None);
 
-	if services.config.allow_local_presence {
-		// Presence update
-		services
-			.presence
-			.ping_presence(&body.user_id, &PresenceState::Online)
-			.await?;
-	}
+	// Presence update
+	services
+		.presence
+		.maybe_ping_presence(&body.user_id, &PresenceState::Online)
+		.await?;
 
 	Ok(delete_timezone_key::unstable::Response {})
 }
@@ -103,13 +101,11 @@ pub(crate) async fn set_timezone_key_route(
 		.users
 		.set_timezone(&body.user_id, body.tz.clone());
 
-	if services.config.allow_local_presence {
-		// Presence update
-		services
-			.presence
-			.ping_presence(&body.user_id, &PresenceState::Online)
-			.await?;
-	}
+	// Presence update
+	services
+		.presence
+		.maybe_ping_presence(&body.user_id, &PresenceState::Online)
+		.await?;
 
 	Ok(set_timezone_key::unstable::Response {})
 }
@@ -171,13 +167,11 @@ pub(crate) async fn set_profile_field_route(
 		);
 	}
 
-	if services.config.allow_local_presence {
-		// Presence update
-		services
-			.presence
-			.ping_presence(&body.user_id, &PresenceState::Online)
-			.await?;
-	}
+	// Presence update
+	services
+		.presence
+		.maybe_ping_presence(&body.user_id, &PresenceState::Online)
+		.await?;
 
 	Ok(set_profile_field::v3::Response {})
 }
@@ -227,13 +221,11 @@ pub(crate) async fn delete_profile_field_route(
 			.set_profile_key(&body.user_id, body.field.as_str(), None);
 	}
 
-	if services.config.allow_local_presence {
-		// Presence update
-		services
-			.presence
-			.ping_presence(&body.user_id, &PresenceState::Online)
-			.await?;
-	}
+	// Presence update
+	services
+		.presence
+		.maybe_ping_presence(&body.user_id, &PresenceState::Online)
+		.await?;
 
 	Ok(delete_profile_field::v3::Response {})
 }

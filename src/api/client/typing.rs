@@ -28,7 +28,7 @@ pub(crate) async fn create_typing_event_route(
 
 	match body.state {
 		| Typing::Yes(duration) => {
-			let duration = utils::clamp(
+			let duration = Ord::clamp(
 				duration
 					.as_millis()
 					.try_into()
@@ -64,12 +64,10 @@ pub(crate) async fn create_typing_event_route(
 	}
 
 	// ping presence
-	if services.config.allow_local_presence {
-		services
-			.presence
-			.ping_presence(&body.user_id, &ruma::presence::PresenceState::Online)
-			.await?;
-	}
+	services
+		.presence
+		.maybe_ping_presence(&body.user_id, &ruma::presence::PresenceState::Online)
+		.await?;
 
 	Ok(create_typing_event::v3::Response {})
 }

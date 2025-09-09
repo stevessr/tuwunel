@@ -49,12 +49,10 @@ pub(crate) async fn set_read_marker_route(
 	}
 
 	if let Some(event) = &body.read_receipt {
-		if services.config.allow_local_presence {
-			services
-				.presence
-				.ping_presence(sender_user, &ruma::presence::PresenceState::Online)
-				.await?;
-		}
+		services
+			.presence
+			.maybe_ping_presence(sender_user, &ruma::presence::PresenceState::Online)
+			.await?;
 
 		let receipt_content = BTreeMap::from_iter([(
 			event.to_owned(),
@@ -137,12 +135,10 @@ pub(crate) async fn create_receipt_route(
 				.await?;
 		},
 		| create_receipt::v3::ReceiptType::Read => {
-			if services.config.allow_local_presence {
-				services
-					.presence
-					.ping_presence(sender_user, &ruma::presence::PresenceState::Online)
-					.await?;
-			}
+			services
+				.presence
+				.maybe_ping_presence(sender_user, &ruma::presence::PresenceState::Online)
+				.await?;
 
 			let receipt_content = BTreeMap::from_iter([(
 				body.event_id.clone(),

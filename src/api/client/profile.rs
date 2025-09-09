@@ -46,13 +46,11 @@ pub(crate) async fn set_displayname_route(
 		.update_displayname(&body.user_id, body.displayname.clone(), &all_joined_rooms)
 		.await;
 
-	if services.config.allow_local_presence {
-		// Presence update
-		services
-			.presence
-			.ping_presence(&body.user_id, &PresenceState::Online)
-			.await?;
-	}
+	// Presence update
+	services
+		.presence
+		.maybe_ping_presence(&body.user_id, &PresenceState::Online)
+		.await?;
 
 	Ok(set_display_name::v3::Response {})
 }
@@ -148,14 +146,12 @@ pub(crate) async fn set_avatar_url_route(
 		)
 		.await;
 
-	if services.config.allow_local_presence {
-		// Presence update
-		services
-			.presence
-			.ping_presence(&body.user_id, &PresenceState::Online)
-			.await
-			.ok();
-	}
+	// Presence update
+	services
+		.presence
+		.maybe_ping_presence(&body.user_id, &PresenceState::Online)
+		.await
+		.ok();
 
 	Ok(set_avatar_url::v3::Response {})
 }

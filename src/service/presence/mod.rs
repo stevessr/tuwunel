@@ -44,12 +44,10 @@ impl crate::Service for Service {
 	async fn worker(self: Arc<Self>) -> Result {
 		// reset dormant online/away statuses to offline, and set the server user as
 		// online
-		if self.services.server.config.allow_local_presence && !self.services.db.is_read_only() {
-			self.unset_all_presence().await;
-			_ = self
-				.ping_presence(&self.services.globals.server_user, &PresenceState::Online)
-				.await;
-		}
+		self.unset_all_presence().await;
+		_ = self
+			.maybe_ping_presence(&self.services.globals.server_user, &PresenceState::Online)
+			.await;
 
 		let receiver = self.timer_channel.1.clone();
 
@@ -74,11 +72,9 @@ impl crate::Service for Service {
 
 	async fn interrupt(&self) {
 		// set the server user as offline
-		if self.services.server.config.allow_local_presence && !self.services.db.is_read_only() {
-			_ = self
-				.ping_presence(&self.services.globals.server_user, &PresenceState::Offline)
-				.await;
-		}
+		_ = self
+			.maybe_ping_presence(&self.services.globals.server_user, &PresenceState::Offline)
+			.await;
 
 		let (timer_sender, _) = &self.timer_channel;
 		if !timer_sender.is_closed() {
@@ -93,6 +89,10 @@ impl Service {
 	/// record that a user has just successfully completed a /sync (or
 	/// equivalent activity)
 	pub async fn note_sync(&self, user_id: &UserId) {
+		if !self.services.config.suppress_push_when_active {
+			return;
+		}
+
 		let now = tuwunel_core::utils::millis_since_unix_epoch();
 		self.last_sync_seen
 			.write()
@@ -120,8 +120,16 @@ impl Service {
 
 	/// Pings the presence of the given user in the given room, setting the
 	/// specified state.
-	pub async fn ping_presence(&self, user_id: &UserId, new_state: &PresenceState) -> Result {
+	pub async fn maybe_ping_presence(
+		&self,
+		user_id: &UserId,
+		new_state: &PresenceState,
+	) -> Result {
 		const REFRESH_TIMEOUT: u64 = 60 * 1000;
+
+		if !self.services.server.config.allow_local_presence || self.services.db.is_read_only() {
+			return Ok(());
+		}
 
 		let last_presence = self.db.get_presence(user_id).await;
 		let state_changed = match last_presence {
@@ -208,7 +216,11 @@ impl Service {
 	}
 
 	// Unset online/unavailable presence to offline on startup
-	pub async fn unset_all_presence(&self) {
+	async fn unset_all_presence(&self) {
+		if !self.services.server.config.allow_local_presence || self.services.db.is_read_only() {
+			return;
+		}
+
 		let _cork = self.services.db.cork();
 
 		for user_id in &self
