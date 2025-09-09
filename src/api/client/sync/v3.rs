@@ -42,7 +42,7 @@ use tuwunel_core::{
 		event::Matches,
 		pdu::{EventHash, PduCount, PduEvent},
 	},
-	pair_of, ref_at,
+	ref_at,
 	result::FlatOk,
 	trace,
 	utils::{
@@ -914,22 +914,24 @@ async fn load_joined_room(
 		.ready_filter(|state_event| *state_event.event_type() == RoomMember)
 		.ready_filter_map(extract_membership)
 		.chain(timeline_membership_changes.into_iter().stream())
-		.fold_default(async |(mut dlu, mut leu): pair_of!(HashSet<_>), (content, user_id)| {
-			use MembershipState::*;
+		.fold_default(
+			async |(mut dlu, mut leu): (HashSet<_>, HashSet<_>), (content, user_id)| {
+				use MembershipState::*;
 
-			let shares_encrypted_room = async |user_id| {
-				share_encrypted_room(services, sender_user, user_id, Some(room_id)).await
-			};
+				let shares_encrypted_room = async |user_id| {
+					share_encrypted_room(services, sender_user, user_id, Some(room_id)).await
+				};
 
-			match content.membership {
-				| Leave => leu.insert(user_id),
-				| Join if joined_since_last_sync || !shares_encrypted_room(&user_id).await =>
-					dlu.insert(user_id),
-				| _ => false,
-			};
+				match content.membership {
+					| Leave => leu.insert(user_id),
+					| Join if joined_since_last_sync || !shares_encrypted_room(&user_id).await =>
+						dlu.insert(user_id),
+					| _ => false,
+				};
 
-			(dlu, leu)
-		});
+				(dlu, leu)
+			},
+		);
 
 	let prev_batch = timeline_pdus.first().map(at!(0)).or_else(|| {
 		joined_sender_member

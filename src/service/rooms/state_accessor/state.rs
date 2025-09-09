@@ -12,7 +12,6 @@ use serde::Deserialize;
 use tuwunel_core::{
 	Result, at, err, implement,
 	matrix::{Event, StateKey},
-	pair_of,
 	utils::{
 		result::FlatOk,
 		stream::{BroadbandExt, IterStream, ReadyExt, TryIgnore},
@@ -293,7 +292,7 @@ pub fn state_keys<'a>(
 #[inline]
 pub fn state_removed(
 	&self,
-	shortstatehash: pair_of!(ShortStateHash),
+	shortstatehash: (ShortStateHash, ShortStateHash),
 ) -> impl Stream<Item = (ShortStateKey, ShortEventId)> + Send + '_ {
 	self.state_added((shortstatehash.1, shortstatehash.0))
 }
@@ -303,7 +302,7 @@ pub fn state_removed(
 #[implement(super::Service)]
 pub fn state_added(
 	&self,
-	shortstatehash: pair_of!(ShortStateHash),
+	shortstatehash: (ShortStateHash, ShortStateHash),
 ) -> impl Stream<Item = (ShortStateKey, ShortEventId)> + Send + '_ {
 	let a = self.load_full_state(shortstatehash.0);
 	let b = self.load_full_state(shortstatehash.1);

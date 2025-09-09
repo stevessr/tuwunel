@@ -15,10 +15,6 @@ where
 	Self: Stream<Item = Item> + Send + Sized,
 	<Self as Stream>::Item: Send,
 {
-	fn counts(self) -> impl Future<Output = HashMap<Item, usize>> + Send
-	where
-		<Self as Stream>::Item: Eq + Hash;
-
 	fn counts_by<K, F>(self, f: F) -> impl Future<Output = HashMap<K, usize>> + Send
 	where
 		F: Fn(Item) -> K + Send,
@@ -50,14 +46,6 @@ where
 	S: Stream<Item = Item> + Send + Sized,
 	<Self as Stream>::Item: Send,
 {
-	#[inline]
-	fn counts(self) -> impl Future<Output = HashMap<Item, usize>> + Send
-	where
-		<Self as Stream>::Item: Eq + Hash,
-	{
-		self.counts_with_cap::<0>()
-	}
-
 	#[inline]
 	fn counts_by<K, F>(self, f: F) -> impl Future<Output = HashMap<K, usize>> + Send
 	where

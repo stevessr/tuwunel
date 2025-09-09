@@ -1,21 +1,6 @@
 use bytesize::ByteSize;
 
-use crate::{Result, err};
-
-/// Parse a human-writable size string w/ si-unit suffix into integer
-#[inline]
-pub fn from_str(str: &str) -> Result<usize> {
-	let bytes: ByteSize = str
-		.parse()
-		.map_err(|e| err!(Arithmetic("Failed to parse byte size: {e}")))?;
-
-	let bytes: usize = bytes
-		.as_u64()
-		.try_into()
-		.map_err(|e| err!(Arithmetic("Failed to convert u64 to usize: {e}")))?;
-
-	Ok(bytes)
-}
+use crate::Result;
 
 /// Output a human-readable size string w/ iec-unit suffix
 #[inline]

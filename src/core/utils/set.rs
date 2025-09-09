@@ -1,12 +1,8 @@
-use std::{
-	cmp::{Eq, Ord},
-	pin::Pin,
-	sync::Arc,
-};
+use std::{cmp::Eq, pin::Pin, sync::Arc};
 
 use futures::{Stream, StreamExt};
 
-use crate::{is_equal_to, is_less_than};
+use crate::is_equal_to;
 
 /// Intersection of sets
 ///
@@ -25,31 +21,6 @@ where
 			input
 				.clone()
 				.all(|mut other| other.any(is_equal_to!(*targ)))
-		})
-	})
-}
-
-/// Intersection of sets
-///
-/// Outputs the set of elements common to all input sets. Inputs must be sorted.
-pub fn intersection_sorted<Item, Iter, Iters>(
-	mut input: Iters,
-) -> impl Iterator<Item = Item> + Send
-where
-	Iters: Iterator<Item = Iter> + Clone + Send,
-	Iter: Iterator<Item = Item> + Send,
-	Item: Eq + Ord,
-{
-	input.next().into_iter().flat_map(move |first| {
-		let mut input = input.clone().collect::<Vec<_>>();
-		first.filter(move |targ| {
-			input.iter_mut().all(|it| {
-				it.by_ref()
-					.skip_while(is_less_than!(targ))
-					.peekable()
-					.peek()
-					.is_some_and(is_equal_to!(targ))
-			})
 		})
 	})
 }

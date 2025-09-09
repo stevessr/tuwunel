@@ -6,7 +6,6 @@ use tuwunel_core::{
 	config::Config,
 	debug_warn, err,
 	log::{ConsoleFormat, ConsoleWriter, LogLevelReloadHandles, capture, fmt_span},
-	result::UnwrapOrErr,
 };
 
 #[cfg(feature = "perf_measurements")]
@@ -21,7 +20,7 @@ pub(crate) fn init(
 ) -> Result<(LogLevelReloadHandles, TracingFlameGuard, Arc<capture::State>)> {
 	let reload_handles = LogLevelReloadHandles::default();
 
-	let console_span_events = fmt_span::from_str(&config.log_span_events).unwrap_or_err();
+	let console_span_events = fmt_span::from_str(&config.log_span_events);
 
 	let console_filter = EnvFilter::builder()
 		.with_regex(config.log_filter_regex)

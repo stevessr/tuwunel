@@ -1,6 +1,5 @@
 mod band;
 mod broadband;
-mod cloned;
 mod expect;
 mod ignore;
 mod iter_stream;
@@ -18,7 +17,6 @@ pub use band::{
 	set_amplification, set_width,
 };
 pub use broadband::BroadbandExt;
-pub use cloned::Cloned;
 pub use expect::TryExpect;
 pub use ignore::TryIgnore;
 pub use iter_stream::IterStream;

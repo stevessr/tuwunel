@@ -25,7 +25,7 @@ use tuwunel_core::{
 		fmt::{markdown_table, markdown_table_head},
 	},
 	trace,
-	utils::string::{collect_stream, common_prefix},
+	utils::string::common_prefix,
 	warn,
 };
 use tuwunel_service::{
@@ -157,9 +157,11 @@ fn capture_create(context: &Context<'_>) -> (Arc<Capture>, Arc<Mutex<String>>) {
 		data.level() <= log_level && data.our_modules() && data.scope.contains(&"admin")
 	};
 
-	let logs = Arc::new(Mutex::new(
-		collect_stream(|s| markdown_table_head(s)).expect("markdown table header"),
-	));
+	let mut out = String::new();
+
+	markdown_table_head(&mut out).expect("markdown table header");
+
+	let logs = Arc::new(Mutex::new(out));
 
 	let capture = Capture::new(
 		&context.services.server.log.capture,

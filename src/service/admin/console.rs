@@ -10,7 +10,7 @@ use ruma::events::room::message::RoomMessageEventContent;
 use rustyline_async::{Readline, ReadlineError, ReadlineEvent};
 use termimad::MadSkin;
 use tokio::task::JoinHandle;
-use tuwunel_core::{Server, debug, defer, error, log, log::is_systemd_mode};
+use tuwunel_core::{Server, debug, error, log, log::is_systemd_mode};
 
 pub struct Console {
 	server: Arc<Server>,
@@ -140,16 +140,20 @@ impl Console {
 			.lock()
 			.expect("locked")
 			.insert(abort);
-		defer! {{
-			_ = self.input_abort.lock().expect("locked").take();
-		}}
 
-		let Ok(result) = future.await else {
-			return Ok(ReadlineEvent::Eof);
+		let result = future.await;
+
+		let ret = match result {
+			| Ok(result) => {
+				readline.flush()?;
+				result
+			},
+			| Err(_) => Ok(ReadlineEvent::Eof),
 		};
 
-		readline.flush()?;
-		result
+		_ = self.input_abort.lock().expect("locked").take();
+
+		ret
 	}
 
 	async fn handle(self: Arc<Self>, line: String) {
@@ -167,11 +171,10 @@ impl Console {
 			.lock()
 			.expect("locked")
 			.insert(abort);
-		defer! {{
-			_ = self.command_abort.lock().expect("locked").take();
-		}}
 
 		_ = future.await;
+
+		_ = self.command_abort.lock().expect("locked").take();
 	}
 
 	async fn process(self: Arc<Self>, line: String) {

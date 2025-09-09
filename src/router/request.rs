@@ -11,7 +11,6 @@ use axum::{
 use futures::FutureExt;
 use http::{Method, StatusCode, Uri};
 use tokio::time::sleep;
-use tracing::Span;
 use tuwunel_core::{Result, debug, debug_error, debug_warn, err, error, trace};
 use tuwunel_service::Services;
 
@@ -43,13 +42,19 @@ pub(crate) async fn handle(
 		return Err(StatusCode::SERVICE_UNAVAILABLE);
 	}
 
+	#[cfg(debug_assertions)]
+	services
+		.server
+		.metrics
+		.requests_handle_active
+		.fetch_add(1, Ordering::Relaxed);
+
 	let uri = req.uri().clone();
 	let method = req.method().clone();
 	let services_ = services.clone();
-	let parent = Span::current();
 	let task = services.server.runtime().spawn(async move {
 		tokio::select! {
-			response = execute(&services_, req, next, &parent) => response,
+			response = next.run(req) => response,
 			response = services_.server.until_shutdown()
 				.then(|()| {
 					let timeout = services_.server.config.client_shutdown_timeout;
@@ -61,47 +66,23 @@ pub(crate) async fn handle(
 		}
 	});
 
-	task.await
-		.map_err(unhandled)
-		.and_then(move |result| handle_result(&method, &uri, result))
-}
-
-#[tracing::instrument(
-	name = "handle",
-	level = "debug",
-	parent = parent,
-	skip_all,
-)]
-#[allow(unused_variables)]
-async fn execute(
-	// we made a safety contract that Services will not go out of scope
-	// during the request; this ensures a reference is accounted for at
-	// the base frame of the task regardless of its detachment.
-	services: &Arc<Services>,
-	req: http::Request<axum::body::Body>,
-	next: axum::middleware::Next,
-	parent: &Span,
-) -> Response {
 	#[cfg(debug_assertions)]
-	services
-		.server
-		.metrics
-		.requests_handle_active
-		.fetch_add(1, Ordering::Relaxed);
-
-	#[cfg(debug_assertions)]
-	tuwunel_core::defer! {{
-		_ = services.server
+	{
+		_ = services
+			.server
 			.metrics
 			.requests_handle_finished
 			.fetch_add(1, Ordering::Relaxed);
-		_ = services.server
+		_ = services
+			.server
 			.metrics
 			.requests_handle_active
 			.fetch_sub(1, Ordering::Relaxed);
-	}};
+	}
 
-	next.run(req).await
+	task.await
+		.map_err(unhandled)
+		.and_then(move |result| handle_result(&method, &uri, result))
 }
 
 fn handle_result(method: &Method, uri: &Uri, result: Response) -> Result<Response, StatusCode> {

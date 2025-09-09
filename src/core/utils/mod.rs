@@ -3,7 +3,6 @@ pub mod bool;
 pub mod bytes;
 pub mod content_disposition;
 pub mod debug;
-pub mod defer;
 pub mod future;
 pub mod hash;
 pub mod json;
@@ -83,17 +82,6 @@ macro_rules! apply {
 
 	(5, $($idx:tt)+) => {
 		|t| (($($idx)+)(t.0), ($($idx)+)(t.1), ($($idx)+)(t.2), ($($idx)+)(t.3), ($($idx)+)(t.4),)
-	};
-}
-
-#[macro_export]
-macro_rules! pair_of {
-	($decl:ty) => {
-		($decl, $decl)
-	};
-
-	($init:expr_2021) => {
-		($init, $init)
 	};
 }
 

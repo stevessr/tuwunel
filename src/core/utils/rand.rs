@@ -3,7 +3,6 @@ use std::{
 	time::{Duration, SystemTime},
 };
 
-use arrayvec::ArrayString;
 use rand::{Rng, seq::SliceRandom, thread_rng};
 
 pub fn shuffle<T>(vec: &mut [T]) {
@@ -17,18 +16,6 @@ pub fn string(length: usize) -> String {
 		.take(length)
 		.map(char::from)
 		.collect()
-}
-
-#[inline]
-pub fn string_array<const LENGTH: usize>() -> ArrayString<LENGTH> {
-	let mut ret = ArrayString::<LENGTH>::new();
-	thread_rng()
-		.sample_iter(&rand::distributions::Alphanumeric)
-		.take(LENGTH)
-		.map(char::from)
-		.for_each(|c| ret.push(c));
-
-	ret
 }
 
 #[inline]
