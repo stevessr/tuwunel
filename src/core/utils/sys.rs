@@ -30,12 +30,7 @@ pub fn maximize_fd_limit() -> Result<(), nix::errno::Errno> {
 
 /// Return a possibly corrected std::env::current_exe() even if the path is
 /// marked deleted.
-///
-/// # Safety
-/// This function is declared unsafe because the original result was altered for
-/// security purposes, and altering it back ignores those urposes and should be
-/// understood by the user.
-pub unsafe fn current_exe() -> Result<PathBuf> {
+pub fn current_exe() -> Result<PathBuf> {
 	let exe = std::env::current_exe()?;
 	match exe.to_str() {
 		| None => Ok(exe),
