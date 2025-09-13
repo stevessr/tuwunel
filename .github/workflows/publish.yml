@@ -44,20 +44,27 @@ on:
       release_url:
         type: string
         description: For release assets
+      pages_url:
+        type: string
+        description: For pages deployment
 
 jobs:
   documents:
     if: >
       !failure() && !cancelled()
-      && contains(fromJSON(inputs.sys_targets), fromJSON('["X64"]')[0])
       && (github.ref == 'refs/heads/main' || contains(github.ref, 'refs/tags/v'))
       && !contains(github.ref, '-draft')
 
     name: Documents
     runs-on: ['X64', 'het']
     permissions:
-      pages: write
+      contents: read
       id-token: write
+      pages: write
+
+    environment:
+      name: github-pages
+      url: ${{inputs.pages_url}}
 
     steps:
       - id: book
