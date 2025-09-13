@@ -140,10 +140,10 @@ features = [
 version = "0.8.3"
 
 [workspace.dependencies.const-str]
-version = "0.6"
+version = "0.7"
 
 [workspace.dependencies.ctor]
-version = "0.4"
+version = "0.5"
 
 [workspace.dependencies.cyborgtime]
 version = "2.1"
@@ -454,7 +454,7 @@ features = [
 ]
 
 [workspace.dependencies.termimad]
-version = "0.33"
+version = "0.34"
 default-features = false
 
 [workspace.dependencies.thiserror]
