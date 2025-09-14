@@ -18,7 +18,10 @@ pub(crate) enum AppserviceCommand {
 }
 
 /// All the getters and iterators from src/database/key_value/appservice.rs
-pub(super) async fn process(subcommand: AppserviceCommand, context: &Context<'_>) -> Result {
+pub(super) async fn process(
+	subcommand: AppserviceCommand,
+	context: &Context<'_>,
+) -> Result<String> {
 	let services = context.services;
 
 	match subcommand {
@@ -31,7 +34,7 @@ pub(super) async fn process(subcommand: AppserviceCommand, context: &Context<'_>
 
 			let query_time = timer.elapsed();
 
-			write!(context, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```")
+			Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
 		},
 		| AppserviceCommand::All => {
 			let timer = tokio::time::Instant::now();
@@ -42,8 +45,7 @@ pub(super) async fn process(subcommand: AppserviceCommand, context: &Context<'_>
 				.await?;
 			let query_time = timer.elapsed();
 
-			write!(context, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```")
+			Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
 		},
 	}
-	.await
 }

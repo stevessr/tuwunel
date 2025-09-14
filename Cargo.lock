@@ -4988,6 +4988,7 @@ dependencies = [
 name = "tuwunel_admin"
 version = "1.4.2"
 dependencies = [
+ "async-trait",
  "base64",
  "clap",
  "const-str",
@@ -5163,6 +5164,7 @@ dependencies = [
  "tuwunel_api",
  "tuwunel_core",
  "tuwunel_service",
+ "tuwunel_user",
 ]
 
 [[package]]
@@ -5202,6 +5204,30 @@ dependencies = [
  "tuwunel_database",
  "url",
  "webpage",
+]
+
+[[package]]
+name = "tuwunel_user"
+version = "1.4.2"
+dependencies = [
+ "async-trait",
+ "base64",
+ "clap",
+ "const-str",
+ "ctor",
+ "futures",
+ "log",
+ "ruma",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "tuwunel_core",
+ "tuwunel_database",
+ "tuwunel_macros",
+ "tuwunel_service",
 ]
 
 [[package]]

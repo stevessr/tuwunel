@@ -20,7 +20,7 @@ pub(crate) async fn invite_user_route(
 
 	let room_id = &body.room_id;
 
-	invite_check(&services, sender_user, room_id).await?;
+	invite_check(&services, sender_user, Some(room_id)).await?;
 
 	banned_room_check(&services, sender_user, Some(room_id), room_id.server_name(), client)
 		.await?;

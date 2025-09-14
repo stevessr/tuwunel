@@ -9,12 +9,12 @@ use tuwunel_database::Database;
 
 pub(crate) use crate::OnceServices;
 use crate::{
-	account_data, admin, appservice, client, config, deactivate, emergency, federation, globals,
-	key_backups,
+	account_data, admin, appservice, client, command, config, deactivate, emergency, federation,
+	globals, key_backups,
 	manager::Manager,
 	media, membership, presence, pusher, resolver, rooms, sending, server_keys,
 	service::{Args, Service},
-	sync, transaction_ids, uiaa, users,
+	sync, transaction_ids, uiaa, userroom, users,
 };
 
 pub struct Services {
@@ -59,6 +59,9 @@ pub struct Services {
 	pub users: Arc<users::Service>,
 	pub membership: Arc<membership::Service>,
 	pub deactivate: Arc<deactivate::Service>,
+	pub command: Arc<command::Service>,
+	pub userroom: Arc<userroom::Service>,
+	pub create: Arc<rooms::create::Service>,
 
 	manager: Mutex<Option<Arc<Manager>>>,
 	pub server: Arc<Server>,
@@ -117,6 +120,9 @@ pub async fn build(server: Arc<Server>) -> Result<Arc<Self>> {
 		users: users::Service::build(&args)?,
 		membership: membership::Service::build(&args)?,
 		deactivate: deactivate::Service::build(&args)?,
+		command: command::Service::build(&args)?,
+		userroom: userroom::Service::build(&args)?,
+		create: rooms::create::Service::build(&args)?,
 
 		manager: Mutex::new(None),
 		server,
@@ -176,6 +182,9 @@ pub(crate) fn services(&self) -> impl Iterator<Item = Arc<dyn Service>> + Send {
 		cast!(self.users),
 		cast!(self.membership),
 		cast!(self.deactivate),
+		cast!(self.command),
+		cast!(self.userroom),
+		cast!(self.create),
 	]
 	.into_iter()
 }

@@ -8,7 +8,8 @@ pub mod fmt_span;
 mod reload;
 mod suppress;
 
-pub use capture::Capture;
+use std::sync::Arc;
+
 pub use console::{ConsoleFormat, ConsoleWriter, is_systemd_mode};
 pub use reload::{LogLevelReloadHandles, ReloadHandle};
 pub use suppress::Suppress;
@@ -23,8 +24,7 @@ pub struct Log {
 	/// General log level reload handles.
 	pub reload: LogLevelReloadHandles,
 
-	/// Tracing capture state for ephemeral/oneshot uses.
-	pub capture: std::sync::Arc<capture::State>,
+	pub capture: Arc<capture::CaptureManager>,
 }
 
 // Wraps for logging macros. Use these macros rather than extern tracing:: or

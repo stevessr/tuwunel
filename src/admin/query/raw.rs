@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::BTreeMap, ops::Deref, sync::Arc};
+use std::{borrow::Cow, collections::BTreeMap, fmt::Write, ops::Deref, sync::Arc};
 
 use base64::prelude::*;
 use clap::Subcommand;
@@ -7,6 +7,7 @@ use tokio::time::Instant;
 use tuwunel_core::{
 	Err, Result, apply, at, is_zero,
 	utils::{
+		TryReadyExt,
 		stream::{IterStream, ReadyExt, TryIgnore, TryParallelExt},
 		string::EMPTY,
 	},
@@ -14,9 +15,9 @@ use tuwunel_core::{
 use tuwunel_database::Map;
 use tuwunel_service::Services;
 
-use crate::{admin_command, admin_command_dispatch};
+use crate::{command, command_dispatch};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 #[allow(clippy::enum_variant_names)]
 /// Query tables from database
@@ -164,7 +165,7 @@ pub(crate) enum RawCommand {
 	},
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn compact(
 	&self,
 	map: Option<Vec<String>>,
@@ -174,7 +175,7 @@ pub(super) async fn compact(
 	into: Option<usize>,
 	parallelism: Option<usize>,
 	exhaustive: bool,
-) -> Result {
+) -> Result<String> {
 	use tuwunel_database::compact::Options;
 
 	let default_all_maps: Option<_> = map.is_none().then(|| {
@@ -229,12 +230,15 @@ pub(super) async fn compact(
 	let timer = Instant::now();
 	let results = results.await;
 	let query_time = timer.elapsed();
-	self.write_str(&format!("Jobs completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	Ok(format!("Jobs completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
 }
 
-#[admin_command]
-pub(super) async fn raw_count(&self, map: Option<String>, prefix: Option<String>) -> Result {
+#[command]
+pub(super) async fn raw_count(
+	&self,
+	map: Option<String>,
+	prefix: Option<String>,
+) -> Result<String> {
 	let prefix = prefix.as_deref().unwrap_or(EMPTY);
 
 	let timer = Instant::now();
@@ -244,13 +248,12 @@ pub(super) async fn raw_count(&self, map: Option<String>, prefix: Option<String>
 		.await;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{count:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{count:#?}\n```"))
 }
 
-#[admin_command]
-pub(super) async fn raw_keys(&self, map: String, prefix: Option<String>) -> Result {
-	writeln!(self, "```").boxed().await?;
+#[command]
+pub(super) async fn raw_keys(&self, map: String, prefix: Option<String>) -> Result<String> {
+	let mut out = "```".to_owned();
 
 	let map = self.services.db.get(map.as_str())?;
 	let timer = Instant::now();
@@ -258,17 +261,23 @@ pub(super) async fn raw_keys(&self, map: String, prefix: Option<String>) -> Resu
 		.as_deref()
 		.map_or_else(|| map.raw_keys().boxed(), |prefix| map.raw_keys_prefix(prefix).boxed())
 		.map_ok(String::from_utf8_lossy)
-		.try_for_each(|str| writeln!(self, "{str:?}"))
-		.boxed()
+		.ready_try_for_each(|str| {
+			writeln!(out, "{str:?}")?;
+			Ok(())
+		})
 		.await?;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	write!(out, "\n```\n\nQuery completed in {query_time:?}")?;
+	Ok(out)
 }
 
-#[admin_command]
-pub(super) async fn raw_keys_sizes(&self, map: Option<String>, prefix: Option<String>) -> Result {
+#[command]
+pub(super) async fn raw_keys_sizes(
+	&self,
+	map: Option<String>,
+	prefix: Option<String>,
+) -> Result<String> {
 	let prefix = prefix.as_deref().unwrap_or(EMPTY);
 
 	let timer = Instant::now();
@@ -285,12 +294,15 @@ pub(super) async fn raw_keys_sizes(&self, map: Option<String>, prefix: Option<St
 		.await;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("```\n{result:#?}\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	Ok(format!("```\n{result:#?}\n```\n\nQuery completed in {query_time:?}"))
 }
 
-#[admin_command]
-pub(super) async fn raw_keys_total(&self, map: Option<String>, prefix: Option<String>) -> Result {
+#[command]
+pub(super) async fn raw_keys_total(
+	&self,
+	map: Option<String>,
+	prefix: Option<String>,
+) -> Result<String> {
 	let prefix = prefix.as_deref().unwrap_or(EMPTY);
 
 	let timer = Instant::now();
@@ -303,12 +315,15 @@ pub(super) async fn raw_keys_total(&self, map: Option<String>, prefix: Option<St
 		.await;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("```\n{result:#?}\n\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	Ok(format!("```\n{result:#?}\n\n```\n\nQuery completed in {query_time:?}"))
 }
 
-#[admin_command]
-pub(super) async fn raw_vals_sizes(&self, map: Option<String>, prefix: Option<String>) -> Result {
+#[command]
+pub(super) async fn raw_vals_sizes(
+	&self,
+	map: Option<String>,
+	prefix: Option<String>,
+) -> Result<String> {
 	let prefix = prefix.as_deref().unwrap_or(EMPTY);
 
 	let timer = Instant::now();
@@ -326,12 +341,15 @@ pub(super) async fn raw_vals_sizes(&self, map: Option<String>, prefix: Option<St
 		.await;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("```\n{result:#?}\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	Ok(format!("```\n{result:#?}\n```\n\nQuery completed in {query_time:?}"))
 }
 
-#[admin_command]
-pub(super) async fn raw_vals_total(&self, map: Option<String>, prefix: Option<String>) -> Result {
+#[command]
+pub(super) async fn raw_vals_total(
+	&self,
+	map: Option<String>,
+	prefix: Option<String>,
+) -> Result<String> {
 	let prefix = prefix.as_deref().unwrap_or(EMPTY);
 
 	let timer = Instant::now();
@@ -345,13 +363,12 @@ pub(super) async fn raw_vals_total(&self, map: Option<String>, prefix: Option<St
 		.await;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("```\n{result:#?}\n\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	Ok(format!("```\n{result:#?}\n\n```\n\nQuery completed in {query_time:?}"))
 }
 
-#[admin_command]
-pub(super) async fn raw_iter(&self, map: String, prefix: Option<String>) -> Result {
-	writeln!(self, "```").await?;
+#[command]
+pub(super) async fn raw_iter(&self, map: String, prefix: Option<String>) -> Result<String> {
+	let mut out = "```".to_owned();
 
 	let map = self.services.db.get(&map)?;
 	let timer = Instant::now();
@@ -360,45 +377,51 @@ pub(super) async fn raw_iter(&self, map: String, prefix: Option<String>) -> Resu
 		.map_or_else(|| map.raw_stream().boxed(), |prefix| map.raw_stream_prefix(prefix).boxed())
 		.map_ok(apply!(2, String::from_utf8_lossy))
 		.map_ok(apply!(2, Cow::into_owned))
-		.try_for_each(|keyval| writeln!(self, "{keyval:?}"))
+		.ready_try_for_each(|keyval| {
+			writeln!(out, "{keyval:?}")?;
+			Ok(())
+		})
 		.boxed()
 		.await?;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	write!(out, "\n```\n\nQuery completed in {query_time:?}")?;
+	Ok(out)
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn raw_keys_from(
 	&self,
 	map: String,
 	start: String,
 	limit: Option<usize>,
-) -> Result {
-	writeln!(self, "```").await?;
+) -> Result<String> {
+	let mut out = "```".to_owned();
 
 	let map = self.services.db.get(&map)?;
 	let timer = Instant::now();
 	map.raw_keys_from(&start)
 		.map_ok(String::from_utf8_lossy)
 		.take(limit.unwrap_or(usize::MAX))
-		.try_for_each(|str| writeln!(self, "{str:?}"))
+		.ready_try_for_each(|str| {
+			writeln!(out, "{str:?}")?;
+			Ok(())
+		})
 		.boxed()
 		.await?;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	write!(out, "\n```\n\nQuery completed in {query_time:?}")?;
+	Ok(out)
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn raw_iter_from(
 	&self,
 	map: String,
 	start: String,
 	limit: Option<usize>,
-) -> Result {
+) -> Result<String> {
 	let map = self.services.db.get(&map)?;
 	let timer = Instant::now();
 	let result = map
@@ -410,23 +433,21 @@ pub(super) async fn raw_iter_from(
 		.await?;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-pub(super) async fn raw_del(&self, map: String, key: String) -> Result {
+#[command]
+pub(super) async fn raw_del(&self, map: String, key: String) -> Result<String> {
 	let map = self.services.db.get(&map)?;
 	let timer = Instant::now();
 	map.remove(&key);
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("Operation completed in {query_time:?}"))
-		.await
+	Ok(format!("Operation completed in {query_time:?}"))
 }
 
-#[admin_command]
-pub(super) async fn raw_get(&self, map: String, key: String, base64: bool) -> Result {
+#[command]
+pub(super) async fn raw_get(&self, map: String, key: String, base64: bool) -> Result<String> {
 	let map = self.services.db.get(&map)?;
 	let timer = Instant::now();
 	let handle = map.get(&key).await?;
@@ -439,12 +460,11 @@ pub(super) async fn raw_get(&self, map: String, key: String, base64: bool) -> Re
 		String::from_utf8_lossy(&handle).to_string()
 	};
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:?}\n```"))
 }
 
-#[admin_command]
-pub(super) async fn raw_maps(&self) -> Result {
+#[command]
+pub(super) async fn raw_maps(&self) -> Result<String> {
 	let list: Vec<_> = self
 		.services
 		.db
@@ -453,7 +473,7 @@ pub(super) async fn raw_maps(&self) -> Result {
 		.copied()
 		.collect();
 
-	self.write_str(&format!("{list:#?}")).await
+	Ok(format!("{list:#?}"))
 }
 
 fn with_maps_or<'a>(

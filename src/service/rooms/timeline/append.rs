@@ -374,17 +374,15 @@ where
 					.search
 					.index_pdu(shortroomid, &pdu_id, &body);
 
-				if self
-					.services
+				self.services
 					.admin
-					.is_admin_command(pdu, &body)
-					.await
-				{
-					self.services
-						.admin
-						.command(body, Some((pdu.event_id()).into()))
-						.await?;
-				}
+					.message_hook(&pdu.event_id, &pdu.room_id, &pdu.sender, &body)
+					.await;
+
+				self.services
+					.userroom
+					.message_hook(&pdu.event_id, &pdu.room_id, &pdu.sender, &body)
+					.await;
 			}
 		},
 		| _ => {},

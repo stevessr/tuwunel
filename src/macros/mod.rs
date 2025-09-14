@@ -1,7 +1,7 @@
 #![allow(clippy::disallowed_macros)]
 
-mod admin;
 mod cargo;
+mod command;
 mod config;
 mod debug;
 mod git;
@@ -19,13 +19,13 @@ use syn::{
 pub(crate) type Result<T> = std::result::Result<T, Error>;
 
 #[proc_macro_attribute]
-pub fn admin_command(args: TokenStream, input: TokenStream) -> TokenStream {
-	attribute_macro::<ItemFn, _>(args, input, admin::command)
+pub fn command(args: TokenStream, input: TokenStream) -> TokenStream {
+	attribute_macro::<ItemFn, _>(args, input, command::command)
 }
 
 #[proc_macro_attribute]
-pub fn admin_command_dispatch(args: TokenStream, input: TokenStream) -> TokenStream {
-	attribute_macro::<ItemEnum, _>(args, input, admin::command_dispatch)
+pub fn command_dispatch(args: TokenStream, input: TokenStream) -> TokenStream {
+	attribute_macro::<ItemEnum, _>(args, input, command::command_dispatch)
 }
 
 #[proc_macro_attribute]

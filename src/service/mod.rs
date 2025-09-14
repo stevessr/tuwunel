@@ -11,6 +11,7 @@ pub mod account_data;
 pub mod admin;
 pub mod appservice;
 pub mod client;
+pub mod command;
 pub mod config;
 pub mod deactivate;
 pub mod emergency;
@@ -28,6 +29,7 @@ pub mod server_keys;
 pub mod sync;
 pub mod transaction_ids;
 pub mod uiaa;
+pub mod userroom;
 pub mod users;
 
 pub(crate) use once_services::OnceServices;

@@ -25,16 +25,19 @@ pub(crate) enum RoomDirectoryCommand {
 	},
 }
 
-pub(super) async fn process(command: RoomDirectoryCommand, context: &Context<'_>) -> Result {
+pub(super) async fn process(
+	command: RoomDirectoryCommand,
+	context: &Context<'_>,
+) -> Result<String> {
 	let services = context.services;
 	match command {
 		| RoomDirectoryCommand::Publish { room_id } => {
 			services.directory.set_public(&room_id);
-			context.write_str("Room published").await
+			Ok("Room published".to_owned())
 		},
 		| RoomDirectoryCommand::Unpublish { room_id } => {
 			services.directory.set_not_public(&room_id);
-			context.write_str("Room unpublished").await
+			Ok("Room unpublished".to_owned())
 		},
 		| RoomDirectoryCommand::List { page } => {
 			// TODO: i know there's a way to do this with clap, but i can't seem to find it
@@ -56,11 +59,7 @@ pub(super) async fn process(command: RoomDirectoryCommand, context: &Context<'_>
 				.collect();
 
 			if rooms.is_empty() {
-				context
-					.write_str("No rooms are published.")
-					.await?;
-
-				return Ok(());
+				return Ok("No rooms are published.".to_owned());
 			}
 
 			let body = rooms
@@ -69,9 +68,7 @@ pub(super) async fn process(command: RoomDirectoryCommand, context: &Context<'_>
 				.collect::<Vec<_>>()
 				.join("\n");
 
-			context
-				.write_str(&format!("Rooms (page {page}):\n```\n{body}\n```",))
-				.await
+			Ok(format!("Rooms (page {page}):\n```\n{body}\n```"))
 		},
 	}
 }

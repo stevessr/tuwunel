@@ -62,7 +62,7 @@ pub(crate) async fn banned_room_check(
 	server_name: Option<&ServerName>,
 	client_ip: IpAddr,
 ) -> Result {
-	if services.users.is_admin(user_id).await {
+	if services.admin.user_is_admin(user_id).await {
 		return Ok(());
 	}
 
@@ -201,6 +201,7 @@ async fn get_join_params(
 	servers.sort_unstable();
 	servers.dedup();
 	servers.append(&mut additional_servers);
+	shuffle(&mut servers);
 
 	// sort deprioritized servers last
 	servers.sort_by(|a, b| {

@@ -5,7 +5,11 @@ use tuwunel_core::{
 	Result,
 	config::Config,
 	debug_warn, err,
-	log::{ConsoleFormat, ConsoleWriter, LogLevelReloadHandles, capture, fmt_span},
+	log::{
+		ConsoleFormat, ConsoleWriter, LogLevelReloadHandles,
+		capture::{CaptureLayer, CaptureManager},
+		fmt_span,
+	},
 };
 
 #[cfg(feature = "perf_measurements")]
@@ -17,7 +21,7 @@ pub(crate) type TracingFlameGuard = ();
 #[allow(clippy::redundant_clone)]
 pub(crate) fn init(
 	config: &Config,
-) -> Result<(LogLevelReloadHandles, TracingFlameGuard, Arc<capture::State>)> {
+) -> Result<(LogLevelReloadHandles, TracingFlameGuard, Arc<CaptureManager>)> {
 	let reload_handles = LogLevelReloadHandles::default();
 
 	let console_span_events = fmt_span::from_str(&config.log_span_events);
@@ -40,12 +44,11 @@ pub(crate) fn init(
 
 	reload_handles.add("console", Box::new(console_reload_handle));
 
-	let cap_state = Arc::new(capture::State::new());
-	let cap_layer = capture::Layer::new(&cap_state);
+	let capture_manager = Arc::new(CaptureManager::new());
 
 	let subscriber = Registry::default()
 		.with(console_layer.with_filter(console_reload_filter))
-		.with(cap_layer);
+		.with(CaptureLayer::new(&capture_manager));
 
 	#[cfg(feature = "sentry_telemetry")]
 	let subscriber = {
@@ -117,7 +120,7 @@ pub(crate) fn init(
 	)]
 	let flame_guard = ();
 
-	let ret = (reload_handles, flame_guard, cap_state);
+	let ret = (reload_handles, flame_guard, capture_manager);
 
 	// Enable the tokio console. This is slightly kludgy because we're judggling
 	// compile-time and runtime conditions to elide it, each of those changing the

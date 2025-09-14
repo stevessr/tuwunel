@@ -27,7 +27,7 @@ pub(super) fn command_dispatch(item: ItemEnum, _args: &[Meta]) -> Result<TokenSt
 		pub(super) async fn process(
 			command: #name,
 			context: &crate::Context<'_>
-		) -> Result {
+		) -> Result<String> {
 			use #name::*;
 			#[allow(non_snake_case)]
 			match command {

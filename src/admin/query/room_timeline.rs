@@ -3,9 +3,9 @@ use futures::TryStreamExt;
 use ruma::OwnedRoomOrAliasId;
 use tuwunel_core::{PduCount, Result, utils::stream::TryTools};
 
-use crate::{admin_command, admin_command_dispatch};
+use crate::{command, command_dispatch};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 /// Query tables from database
 pub(crate) enum RoomTimelineCommand {
@@ -23,8 +23,8 @@ pub(crate) enum RoomTimelineCommand {
 	},
 }
 
-#[admin_command]
-pub(super) async fn last(&self, room_id: OwnedRoomOrAliasId) -> Result {
+#[command]
+pub(super) async fn last(&self, room_id: OwnedRoomOrAliasId) -> Result<String> {
 	let room_id = self
 		.services
 		.alias
@@ -37,16 +37,16 @@ pub(super) async fn last(&self, room_id: OwnedRoomOrAliasId) -> Result {
 		.last_timeline_count(None, &room_id, None)
 		.await?;
 
-	self.write_str(&format!("{result:#?}")).await
+	Ok(format!("{result:#?}"))
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn pdus(
 	&self,
 	room_id: OwnedRoomOrAliasId,
 	from: Option<String>,
 	limit: Option<usize>,
-) -> Result {
+) -> Result<String> {
 	let room_id = self
 		.services
 		.alias
@@ -63,5 +63,5 @@ pub(super) async fn pdus(
 		.try_collect()
 		.await?;
 
-	self.write_str(&format!("{result:#?}")).await
+	Ok(format!("{result:#?}"))
 }

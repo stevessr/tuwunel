@@ -13,7 +13,7 @@ pub(crate) enum PusherCommand {
 	},
 }
 
-pub(super) async fn process(subcommand: PusherCommand, context: &Context<'_>) -> Result {
+pub(super) async fn process(subcommand: PusherCommand, context: &Context<'_>) -> Result<String> {
 	let services = context.services;
 
 	match subcommand {
@@ -22,8 +22,7 @@ pub(super) async fn process(subcommand: PusherCommand, context: &Context<'_>) ->
 			let results = services.pusher.get_pushers(&user_id).await;
 			let query_time = timer.elapsed();
 
-			write!(context, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```")
+			Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
 		},
 	}
-	.await
 }

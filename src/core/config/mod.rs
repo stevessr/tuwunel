@@ -1812,6 +1812,12 @@ pub struct Config {
 	#[serde(default = "true_fn")]
 	pub federate_admin_room: bool,
 
+	/// Admin API token
+	///
+	/// display: sensitive
+	#[serde(default)]
+	pub admin_api_token: String,
+
 	/// Sentry.io crash/panic reporting, performance monitoring/metrics, etc.
 	/// This is NOT enabled by default. tuwunel's default Sentry reporting
 	/// endpoint domain is `o4509498990067712.ingest.us.sentry.io`.

@@ -8,7 +8,7 @@ use crate::Context;
 /// every user in our database (remote and local). Reports total count, any
 /// errors if there were any, etc
 #[implement(Context, params = "<'_>")]
-pub(super) async fn check_all_users(&self) -> Result {
+pub(super) async fn check_all_users(&self) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let users = self
 		.services
@@ -22,10 +22,13 @@ pub(super) async fn check_all_users(&self) -> Result {
 	let err_count = users.iter().filter(|_user| false).count();
 	let ok_count = users.iter().filter(|_user| true).count();
 
-	self.write_str(&format!(
-		"Database query completed in {query_time:?}:\n\n```\nTotal entries: \
-		 {total:?}\nFailure/Invalid user count: {err_count:?}\nSuccess/Valid user count: \
-		 {ok_count:?}\n```"
+	Ok(format!(
+		"Database query completed in {query_time:?}:\n
+		\n
+		```\n
+		Total entries: {total:?}\n
+		Failure/Invalid user count: {err_count:?}\n
+		Success/Valid user count: {ok_count:?}\n
+		```"
 	))
-	.await
 }

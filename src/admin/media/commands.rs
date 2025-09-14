@@ -7,16 +7,16 @@ use tuwunel_core::{
 };
 use tuwunel_service::media::Dim;
 
-use crate::{admin_command, utils::parse_local_user_id};
+use crate::{command, utils::parse_local_user_id};
 
-#[admin_command]
+#[command]
 pub(super) async fn delete(
 	&self,
 	mxc: Option<OwnedMxcUri>,
 	event_id: Option<OwnedEventId>,
-) -> Result {
+) -> Result<String> {
 	if event_id.is_some() && mxc.is_some() {
-		return Err!("Please specify either an MXC or an event ID, not both.",);
+		return Err!("Please specify either an MXC or an event ID, not both.");
 	}
 
 	if let Some(mxc) = mxc {
@@ -26,7 +26,7 @@ pub(super) async fn delete(
 			.delete(&mxc.as_str().try_into()?)
 			.await?;
 
-		return Err!("Deleted the MXC from our database and on our filesystem.",);
+		return Err!("Deleted the MXC from our database and on our filesystem.");
 	}
 
 	if let Some(event_id) = event_id {
@@ -136,12 +136,12 @@ pub(super) async fn delete(
 				}
 			},
 			| _ => {
-				return Err!("Event ID does not exist or is not known to us.",);
+				return Err!("Event ID does not exist or is not known to us.");
 			},
 		}
 
 		if mxc_urls.is_empty() {
-			return Err!("Parsed event ID but found no MXC URLs.",);
+			return Err!("Parsed event ID but found no MXC URLs.");
 		}
 
 		let mut mxc_deletion_count: usize = 0;
@@ -164,12 +164,10 @@ pub(super) async fn delete(
 			}
 		}
 
-		return self
-			.write_str(&format!(
-				"Deleted {mxc_deletion_count} total MXCs from our database and the filesystem \
-				 from event ID {event_id}."
-			))
-			.await;
+		return Ok(format!(
+			"Deleted {mxc_deletion_count} total MXCs from our database and the filesystem from \
+			 event ID {event_id}."
+		));
 	}
 
 	Err!(
@@ -178,21 +176,13 @@ pub(super) async fn delete(
 	)
 }
 
-#[admin_command]
-pub(super) async fn delete_list(&self) -> Result {
-	if self.body.len() < 2
-		|| !self.body[0].trim().starts_with("```")
-		|| self.body.last().unwrap_or(&"").trim() != "```"
-	{
-		return Err!("Expected code block in command body. Add --help for details.",);
-	}
-
+#[command]
+pub(super) async fn delete_list(&self) -> Result<String> {
 	let mut failed_parsed_mxcs: usize = 0;
 
 	let mxc_list = self
-		.body
-		.to_vec()
-		.drain(1..self.body.len().checked_sub(1).unwrap())
+		.input
+		.lines()
 		.filter_map(|mxc_s| {
 			mxc_s
 				.try_into()
@@ -220,23 +210,22 @@ pub(super) async fn delete_list(&self) -> Result {
 		}
 	}
 
-	self.write_str(&format!(
+	Ok(format!(
 		"Finished bulk MXC deletion, deleted {mxc_deletion_count} total MXCs from our database \
 		 and the filesystem. {failed_parsed_mxcs} MXCs failed to be parsed from the database.",
 	))
-	.await
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn delete_past_remote_media(
 	&self,
 	duration: String,
 	before: bool,
 	after: bool,
 	yes_i_want_to_delete_local_media: bool,
-) -> Result {
+) -> Result<String> {
 	if before && after {
-		return Err!("Please only pick one argument, --before or --after.",);
+		return Err!("Please only pick one argument, --before or --after.");
 	}
 	assert!(!(before && after), "--before and --after should not be specified together");
 
@@ -252,12 +241,11 @@ pub(super) async fn delete_past_remote_media(
 		)
 		.await?;
 
-	self.write_str(&format!("Deleted {deleted_count} total files.",))
-		.await
+	Ok(format!("Deleted {deleted_count} total files."))
 }
 
-#[admin_command]
-pub(super) async fn delete_all_from_user(&self, username: String) -> Result {
+#[command]
+pub(super) async fn delete_all_from_user(&self, username: String) -> Result<String> {
 	let user_id = parse_local_user_id(self.services, &username)?;
 
 	let deleted_count = self
@@ -266,18 +254,17 @@ pub(super) async fn delete_all_from_user(&self, username: String) -> Result {
 		.delete_from_user(&user_id)
 		.await?;
 
-	self.write_str(&format!("Deleted {deleted_count} total files.",))
-		.await
+	Ok(format!("Deleted {deleted_count} total files."))
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn delete_all_from_server(
 	&self,
 	server_name: OwnedServerName,
 	yes_i_want_to_delete_local_media: bool,
-) -> Result {
+) -> Result<String> {
 	if server_name == self.services.globals.server_name() && !yes_i_want_to_delete_local_media {
-		return Err!("This command only works for remote media by default.",);
+		return Err!("This command only works for remote media by default.");
 	}
 
 	let Ok(all_mxcs) = self
@@ -287,7 +274,7 @@ pub(super) async fn delete_all_from_server(
 		.await
 		.inspect_err(|e| error!("Failed to get MXC URIs from our database: {e}"))
 	else {
-		return Err!("Failed to get MXC URIs from our database",);
+		return Err!("Failed to get MXC URIs from our database");
 	};
 
 	let mut deleted_count: usize = 0;
@@ -326,26 +313,24 @@ pub(super) async fn delete_all_from_server(
 		}
 	}
 
-	self.write_str(&format!("Deleted {deleted_count} total files.",))
-		.await
+	Ok(format!("Deleted {deleted_count} total files."))
 }
 
-#[admin_command]
-pub(super) async fn get_file_info(&self, mxc: OwnedMxcUri) -> Result {
+#[command]
+pub(super) async fn get_file_info(&self, mxc: OwnedMxcUri) -> Result<String> {
 	let mxc: Mxc<'_> = mxc.as_str().try_into()?;
 	let metadata = self.services.media.get_metadata(&mxc).await;
 
-	self.write_str(&format!("```\n{metadata:#?}\n```"))
-		.await
+	Ok(format!("```\n{metadata:#?}\n```"))
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn get_remote_file(
 	&self,
 	mxc: OwnedMxcUri,
 	server: Option<OwnedServerName>,
 	timeout: u32,
-) -> Result {
+) -> Result<String> {
 	let mxc: Mxc<'_> = mxc.as_str().try_into()?;
 	let timeout = Duration::from_millis(timeout.into());
 	let mut result = self
@@ -358,11 +343,10 @@ pub(super) async fn get_remote_file(
 	let len = result.content.as_ref().expect("content").len();
 	result.content.as_mut().expect("content").clear();
 
-	self.write_str(&format!("```\n{result:#?}\nreceived {len} bytes for file content.\n```"))
-		.await
+	Ok(format!("```\n{result:#?}\nreceived {len} bytes for file content.\n```"))
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn get_remote_thumbnail(
 	&self,
 	mxc: OwnedMxcUri,
@@ -370,7 +354,7 @@ pub(super) async fn get_remote_thumbnail(
 	timeout: u32,
 	width: u32,
 	height: u32,
-) -> Result {
+) -> Result<String> {
 	let mxc: Mxc<'_> = mxc.as_str().try_into()?;
 	let timeout = Duration::from_millis(timeout.into());
 	let dim = Dim::new(width, height, None);
@@ -384,6 +368,5 @@ pub(super) async fn get_remote_thumbnail(
 	let len = result.content.as_ref().expect("content").len();
 	result.content.as_mut().expect("content").clear();
 
-	self.write_str(&format!("```\n{result:#?}\nreceived {len} bytes for file content.\n```"))
-		.await
+	Ok(format!("```\n{result:#?}\nreceived {len} bytes for file content.\n```"))
 }

@@ -20,12 +20,8 @@ use tuwunel_core::{
 		Event,
 		pdu::{PduEvent, PduId, RawPduId},
 	},
-	trace, utils,
-	utils::{
-		stream::{IterStream, ReadyExt},
-		string::EMPTY,
-		time::now_secs,
-	},
+	trace,
+	utils::{self, stream::ReadyExt, string::EMPTY, time::now_secs},
 	warn,
 };
 use tuwunel_service::rooms::{
@@ -33,16 +29,16 @@ use tuwunel_service::rooms::{
 	state_compressor::HashSetCompressStateEvent,
 };
 
-use crate::admin_command;
+use crate::{command, utils::parse_local_user_id};
 
-#[admin_command]
-pub(super) async fn echo(&self, message: Vec<String>) -> Result {
+#[command]
+pub(super) async fn echo(&self, message: Vec<String>) -> Result<String> {
 	let message = message.join(" ");
-	self.write_str(&message).await
+	Ok(message)
 }
 
-#[admin_command]
-pub(super) async fn get_auth_chain(&self, event_id: OwnedEventId) -> Result {
+#[command]
+pub(super) async fn get_auth_chain(&self, event_id: OwnedEventId) -> Result<String> {
 	let Ok(event) = self
 		.services
 		.timeline
@@ -70,42 +66,32 @@ pub(super) async fn get_auth_chain(&self, event_id: OwnedEventId) -> Result {
 		.await;
 
 	let elapsed = start.elapsed();
-	let out = format!("Loaded auth chain with length {count} in {elapsed:?}");
 
-	self.write_str(&out).await
+	Ok(format!("Loaded auth chain with length {count} in {elapsed:?}"))
 }
 
-#[admin_command]
-pub(super) async fn parse_pdu(&self) -> Result {
-	if self.body.len() < 2
-		|| !self.body[0].trim().starts_with("```")
-		|| self.body.last().unwrap_or(&EMPTY).trim() != "```"
-	{
-		return Err!("Expected code block in command body. Add --help for details.");
-	}
-
-	let string = self.body[1..self.body.len().saturating_sub(1)].join("\n");
+#[command]
+pub(super) async fn parse_pdu(&self) -> Result<String> {
 	let rules = RoomVersionId::V6
 		.rules()
 		.expect("rules for V6 rooms");
-	match serde_json::from_str(&string) {
-		| Err(e) => return Err!("Invalid json in command body: {e}"),
+	match serde_json::from_str(self.input) {
+		| Err(e) => Err!("Invalid json in command body: {e}"),
 		| Ok(value) => match ruma::signatures::reference_hash(&value, &rules) {
-			| Err(e) => return Err!("Could not parse PDU JSON: {e:?}"),
+			| Err(e) => Err!("Could not parse PDU JSON: {e:?}"),
 			| Ok(hash) => {
 				let event_id = OwnedEventId::parse(format!("${hash}"));
 				match serde_json::from_value::<PduEvent>(serde_json::to_value(value)?) {
-					| Err(e) => return Err!("EventId: {event_id:?}\nCould not parse event: {e}"),
-					| Ok(pdu) => write!(self, "EventId: {event_id:?}\n{pdu:#?}"),
+					| Err(e) => Err!("EventId: {event_id:?}\nCould not parse event: {e}"),
+					| Ok(pdu) => Ok(format!("EventId: {event_id:?}\n{pdu:#?}")),
 				}
 			},
 		},
 	}
-	.await
 }
 
-#[admin_command]
-pub(super) async fn get_pdu(&self, event_id: OwnedEventId) -> Result {
+#[command]
+pub(super) async fn get_pdu(&self, event_id: OwnedEventId) -> Result<String> {
 	let mut outlier = false;
 	let mut pdu_json = self
 		.services
@@ -123,7 +109,7 @@ pub(super) async fn get_pdu(&self, event_id: OwnedEventId) -> Result {
 	}
 
 	match pdu_json {
-		| Err(_) => return Err!("PDU not found locally."),
+		| Err(_) => Err!("PDU not found locally."),
 		| Ok(json) => {
 			let text = serde_json::to_string_pretty(&json)?;
 			let msg = if outlier {
@@ -131,18 +117,17 @@ pub(super) async fn get_pdu(&self, event_id: OwnedEventId) -> Result {
 			} else {
 				"PDU found in our database"
 			};
-			write!(self, "{msg}\n```json\n{text}\n```",)
+			Ok(format!("{msg}\n```json\n{text}\n```"))
 		},
 	}
-	.await
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn get_short_pdu(
 	&self,
 	shortroomid: ShortRoomId,
 	shorteventid: ShortEventId,
-) -> Result {
+) -> Result<String> {
 	let pdu_id: RawPduId = PduId {
 		shortroomid,
 		shorteventid: shorteventid.into(),
@@ -156,19 +141,22 @@ pub(super) async fn get_short_pdu(
 		.await;
 
 	match pdu_json {
-		| Err(_) => return Err!("PDU not found locally."),
+		| Err(_) => Err!("PDU not found locally."),
 		| Ok(json) => {
 			let json_text = serde_json::to_string_pretty(&json)?;
-			write!(self, "```json\n{json_text}\n```")
+			Ok(format!("```json\n{json_text}\n```"))
 		},
 	}
-	.await
 }
 
-#[admin_command]
-pub(super) async fn get_remote_pdu_list(&self, server: OwnedServerName, force: bool) -> Result {
+#[command]
+pub(super) async fn get_remote_pdu_list(
+	&self,
+	server: OwnedServerName,
+	force: bool,
+) -> Result<String> {
 	if !self.services.server.config.allow_federation {
-		return Err!("Federation is disabled on this homeserver.",);
+		return Err!("Federation is disabled on this homeserver.");
 	}
 
 	if server == self.services.globals.server_name() {
@@ -178,18 +166,9 @@ pub(super) async fn get_remote_pdu_list(&self, server: OwnedServerName, force: b
 		);
 	}
 
-	if self.body.len() < 2
-		|| !self.body[0].trim().starts_with("```")
-		|| self.body.last().unwrap_or(&EMPTY).trim() != "```"
-	{
-		return Err!("Expected code block in command body. Add --help for details.",);
-	}
-
 	let list = self
-		.body
-		.iter()
-		.collect::<Vec<_>>()
-		.drain(1..self.body.len().saturating_sub(1))
+		.input
+		.lines()
 		.filter_map(|pdu| EventId::parse(pdu).ok())
 		.collect::<Vec<_>>();
 
@@ -222,18 +201,17 @@ pub(super) async fn get_remote_pdu_list(&self, server: OwnedServerName, force: b
 		}
 	}
 
-	let out =
-		format!("Fetched {success_count} remote PDUs successfully with {failed_count} failures");
-
-	self.write_str(&out).await
+	Ok(format!(
+		"Fetched {success_count} remote PDUs successfully with {failed_count} failures"
+	))
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn get_remote_pdu(
 	&self,
 	event_id: OwnedEventId,
 	server: OwnedServerName,
-) -> Result {
+) -> Result<String> {
 	if !self.services.server.config.allow_federation {
 		return Err!("Federation is disabled on this homeserver.");
 	}
@@ -254,9 +232,7 @@ pub(super) async fn get_remote_pdu(
 		.await
 	{
 		| Err(e) =>
-			return Err!(
-				"Remote server did not have PDU or failed sending request to remote server: {e}"
-			),
+			Err!("Remote server did not have PDU or failed sending request to remote server: {e}"),
 		| Ok(response) => {
 			let json: CanonicalJsonObject =
 				serde_json::from_str(response.pdu.get()).map_err(|e| {
@@ -296,14 +272,13 @@ pub(super) async fn get_remote_pdu(
 
 			let text = serde_json::to_string_pretty(&json)?;
 			let msg = "Got PDU from specified server and handled as backfilled";
-			write!(self, "{msg}. Event body:\n```json\n{text}\n```")
+			Ok(format!("{msg}. Event body:\n```json\n{text}\n```"))
 		},
 	}
-	.await
 }
 
-#[admin_command]
-pub(super) async fn get_room_state(&self, room: OwnedRoomOrAliasId) -> Result {
+#[command]
+pub(super) async fn get_room_state(&self, room: OwnedRoomOrAliasId) -> Result<String> {
 	let room_id = self.services.alias.maybe_resolve(&room).await?;
 	let room_state: Vec<Raw<AnyStateEvent>> = self
 		.services
@@ -314,7 +289,7 @@ pub(super) async fn get_room_state(&self, room: OwnedRoomOrAliasId) -> Result {
 		.await?;
 
 	if room_state.is_empty() {
-		return Err!("Unable to find room state in our database (vector is empty)",);
+		return Err!("Unable to find room state in our database (vector is empty)");
 	}
 
 	let json = serde_json::to_string_pretty(&room_state).map_err(|e| {
@@ -324,12 +299,11 @@ pub(super) async fn get_room_state(&self, room: OwnedRoomOrAliasId) -> Result {
 		))
 	})?;
 
-	let out = format!("```json\n{json}\n```");
-	self.write_str(&out).await
+	Ok(format!("```json\n{json}\n```"))
 }
 
-#[admin_command]
-pub(super) async fn ping(&self, server: OwnedServerName) -> Result {
+#[command]
+pub(super) async fn ping(&self, server: OwnedServerName) -> Result<String> {
 	if server == self.services.globals.server_name() {
 		return Err!("Not allowed to send federation requests to ourselves.");
 	}
@@ -346,7 +320,7 @@ pub(super) async fn ping(&self, server: OwnedServerName) -> Result {
 		.await
 	{
 		| Err(e) => {
-			return Err!("Failed sending federation request to specified server:\n\n{e}");
+			Err!("Failed sending federation request to specified server:\n\n{e}")
 		},
 		| Ok(response) => {
 			let ping_time = timer.elapsed();
@@ -358,14 +332,13 @@ pub(super) async fn ping(&self, server: OwnedServerName) -> Result {
 				format!("Got non-JSON response which took {ping_time:?} time:\n{response:?}")
 			};
 
-			write!(self, "{out}")
+			Ok(out)
 		},
 	}
-	.await
 }
 
-#[admin_command]
-pub(super) async fn force_device_list_updates(&self) -> Result {
+#[command]
+pub(super) async fn force_device_list_updates(&self) -> Result<String> {
 	// Force E2EE device list updates for all users
 	self.services
 		.users
@@ -377,11 +350,15 @@ pub(super) async fn force_device_list_updates(&self) -> Result {
 		})
 		.await;
 
-	write!(self, "Marked all devices for all users as having new keys to update").await
+	Ok("Marked all devices for all users as having new keys to update".to_owned())
 }
 
-#[admin_command]
-pub(super) async fn change_log_level(&self, filter: Option<String>, reset: bool) -> Result {
+#[command]
+pub(super) async fn change_log_level(
+	&self,
+	filter: Option<String>,
+	reset: bool,
+) -> Result<String> {
 	let handles = &["console"];
 
 	if reset {
@@ -401,8 +378,9 @@ pub(super) async fn change_log_level(&self, filter: Option<String>, reset: bool)
 				return Err!("Failed to modify and reload the global tracing log level: {e}"),
 			| Ok(()) => {
 				let value = &self.services.server.config.log;
-				let out = format!("Successfully changed log level back to config value {value}");
-				return self.write_str(&out).await;
+				return Ok(format!(
+					"Successfully changed log level back to config value {value}"
+				));
 			},
 		}
 	}
@@ -420,10 +398,9 @@ pub(super) async fn change_log_level(&self, filter: Option<String>, reset: bool)
 			.reload
 			.reload(&new_filter_layer, Some(handles))
 		{
-			| Ok(()) =>
-				return self
-					.write_str("Successfully changed log level")
-					.await,
+			| Ok(()) => {
+				return Ok("Successfully changed log level".to_owned());
+			},
 			| Err(e) =>
 				return Err!("Failed to modify and reload the global tracing log level: {e}"),
 		}
@@ -432,54 +409,36 @@ pub(super) async fn change_log_level(&self, filter: Option<String>, reset: bool)
 	Err!("No log level was specified.")
 }
 
-#[admin_command]
-pub(super) async fn sign_json(&self) -> Result {
-	if self.body.len() < 2
-		|| !self.body[0].trim().starts_with("```")
-		|| self.body.last().unwrap_or(&"").trim() != "```"
-	{
-		return Err!("Expected code block in command body. Add --help for details.");
-	}
-
-	let string = self.body[1..self.body.len().checked_sub(1).unwrap()].join("\n");
-	match serde_json::from_str(&string) {
-		| Err(e) => return Err!("Invalid json: {e}"),
+#[command]
+pub(super) async fn sign_json(&self) -> Result<String> {
+	match serde_json::from_str(self.input) {
+		| Err(e) => Err!("Invalid json: {e}"),
 		| Ok(mut value) => {
 			self.services.server_keys.sign_json(&mut value)?;
 			let json_text = serde_json::to_string_pretty(&value)?;
-			write!(self, "{json_text}")
+			Ok(json_text)
 		},
 	}
-	.await
 }
 
-#[admin_command]
-pub(super) async fn verify_json(&self) -> Result {
-	if self.body.len() < 2
-		|| !self.body[0].trim().starts_with("```")
-		|| self.body.last().unwrap_or(&"").trim() != "```"
-	{
-		return Err!("Expected code block in command body. Add --help for details.");
-	}
-
-	let string = self.body[1..self.body.len().checked_sub(1).unwrap()].join("\n");
-	match serde_json::from_str::<CanonicalJsonObject>(&string) {
-		| Err(e) => return Err!("Invalid json: {e}"),
+#[command]
+pub(super) async fn verify_json(&self) -> Result<String> {
+	match serde_json::from_str::<CanonicalJsonObject>(self.input) {
+		| Err(e) => Err!("Invalid json: {e}"),
 		| Ok(value) => match self
 			.services
 			.server_keys
 			.verify_json(&value, None)
 			.await
 		{
-			| Err(e) => return Err!("Signature verification failed: {e}"),
-			| Ok(()) => write!(self, "Signature correct"),
+			| Err(e) => Err!("Signature verification failed: {e}"),
+			| Ok(()) => Ok("Signature correct".to_owned()),
 		},
 	}
-	.await
 }
 
-#[admin_command]
-pub(super) async fn verify_pdu(&self, event_id: OwnedEventId) -> Result {
+#[command]
+pub(super) async fn verify_pdu(&self, event_id: OwnedEventId) -> Result<String> {
 	use ruma::signatures::Verified;
 
 	let mut event = self
@@ -500,19 +459,19 @@ pub(super) async fn verify_pdu(&self, event_id: OwnedEventId) -> Result {
 		| Ok(Verified::All) => "signatures and hashes OK.",
 	};
 
-	self.write_str(msg).await
+	Ok(msg.to_owned())
 }
 
-#[admin_command]
+#[command]
 #[tracing::instrument(skip(self))]
-pub(super) async fn first_pdu_in_room(&self, room_id: OwnedRoomId) -> Result {
+pub(super) async fn first_pdu_in_room(&self, room_id: OwnedRoomId) -> Result<String> {
 	if !self
 		.services
 		.state_cache
 		.server_in_room(&self.services.server.name, &room_id)
 		.await
 	{
-		return Err!("We are not participating in the room / we don't know about the room ID.",);
+		return Err!("We are not participating in the room / we don't know about the room ID.");
 	}
 
 	let first_pdu = self
@@ -522,13 +481,12 @@ pub(super) async fn first_pdu_in_room(&self, room_id: OwnedRoomId) -> Result {
 		.await
 		.map_err(|_| err!(Database("Failed to find the first PDU in database")))?;
 
-	let out = format!("{first_pdu:?}");
-	self.write_str(&out).await
+	Ok(format!("{first_pdu:?}"))
 }
 
-#[admin_command]
+#[command]
 #[tracing::instrument(skip(self))]
-pub(super) async fn latest_pdu_in_room(&self, room_id: OwnedRoomId) -> Result {
+pub(super) async fn latest_pdu_in_room(&self, room_id: OwnedRoomId) -> Result<String> {
 	if !self
 		.services
 		.state_cache
@@ -545,17 +503,16 @@ pub(super) async fn latest_pdu_in_room(&self, room_id: OwnedRoomId) -> Result {
 		.await
 		.map_err(|_| err!(Database("Failed to find the latest PDU in database")))?;
 
-	let out = format!("{latest_pdu:?}");
-	self.write_str(&out).await
+	Ok(format!("{latest_pdu:?}"))
 }
 
-#[admin_command]
+#[command]
 #[tracing::instrument(skip(self))]
 pub(super) async fn force_set_room_state_from_server(
 	&self,
 	room_id: OwnedRoomId,
 	server_name: OwnedServerName,
-) -> Result {
+) -> Result<String> {
 	if !self
 		.services
 		.state_cache
@@ -696,17 +653,16 @@ pub(super) async fn force_set_room_state_from_server(
 		.update_joined_count(&room_id)
 		.await;
 
-	self.write_str("Successfully forced the room state from the requested remote server.")
-		.await
+	Ok("Successfully forced the room state from the requested remote server.".to_owned())
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn get_signing_keys(
 	&self,
 	server_name: Option<OwnedServerName>,
 	notary: Option<OwnedServerName>,
 	query: bool,
-) -> Result {
+) -> Result<String> {
 	let server_name = server_name.unwrap_or_else(|| self.services.server.name.clone());
 
 	if let Some(notary) = notary {
@@ -716,8 +672,7 @@ pub(super) async fn get_signing_keys(
 			.notary_request(&notary, &server_name)
 			.await?;
 
-		let out = format!("```rs\n{signing_keys:#?}\n```");
-		return self.write_str(&out).await;
+		return Ok(format!("```rs\n{signing_keys:#?}\n```"));
 	}
 
 	let signing_keys = if query {
@@ -732,12 +687,14 @@ pub(super) async fn get_signing_keys(
 			.await?
 	};
 
-	let out = format!("```rs\n{signing_keys:#?}\n```");
-	self.write_str(&out).await
+	Ok(format!("```rs\n{signing_keys:#?}\n```"))
 }
 
-#[admin_command]
-pub(super) async fn get_verify_keys(&self, server_name: Option<OwnedServerName>) -> Result {
+#[command]
+pub(super) async fn get_verify_keys(
+	&self,
+	server_name: Option<OwnedServerName>,
+) -> Result<String> {
 	let server_name = server_name.unwrap_or_else(|| self.services.server.name.clone());
 
 	let keys = self
@@ -753,17 +710,17 @@ pub(super) async fn get_verify_keys(&self, server_name: Option<OwnedServerName>)
 		writeln!(out, "| {key_id} | {key:?} |")?;
 	}
 
-	self.write_str(&out).await
+	Ok(out)
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn resolve_true_destination(
 	&self,
 	server_name: OwnedServerName,
 	no_cache: bool,
-) -> Result {
+) -> Result<String> {
 	if !self.services.server.config.allow_federation {
-		return Err!("Federation is disabled on this homeserver.",);
+		return Err!("Federation is disabled on this homeserver.");
 	}
 
 	if server_name == self.services.server.name {
@@ -779,12 +736,11 @@ pub(super) async fn resolve_true_destination(
 		.resolve_actual_dest(&server_name, !no_cache)
 		.await?;
 
-	let msg = format!("Destination: {}\nHostname URI: {}", actual.dest, actual.host);
-	self.write_str(&msg).await
+	Ok(format!("Destination: {}\nHostname URI: {}", actual.dest, actual.host))
 }
 
-#[admin_command]
-pub(super) async fn memory_stats(&self, opts: Option<String>) -> Result {
+#[command]
+pub(super) async fn memory_stats(&self, opts: Option<String>) -> Result<String> {
 	const OPTS: &str = "abcdefghijklmnopqrstuvwxyz";
 
 	let opts: String = OPTS
@@ -800,15 +756,12 @@ pub(super) async fn memory_stats(&self, opts: Option<String>) -> Result {
 
 	let stats = tuwunel_core::alloc::memory_stats(&opts).unwrap_or_default();
 
-	self.write_str("```\n").await?;
-	self.write_str(&stats).await?;
-	self.write_str("\n```").await?;
-	Ok(())
+	Ok(format!("```\n{stats}\n```"))
 }
 
 #[cfg(tokio_unstable)]
-#[admin_command]
-pub(super) async fn runtime_metrics(&self) -> Result {
+#[command]
+pub(super) async fn runtime_metrics(&self) -> Result<String> {
 	let out = self
 		.services
 		.server
@@ -826,19 +779,18 @@ pub(super) async fn runtime_metrics(&self) -> Result {
 			},
 		);
 
-	self.write_str(&out).await
+	Ok(out)
 }
 
 #[cfg(not(tokio_unstable))]
-#[admin_command]
-pub(super) async fn runtime_metrics(&self) -> Result {
-	self.write_str("Runtime metrics require building with `tokio_unstable`.")
-		.await
+#[command]
+pub(super) async fn runtime_metrics(&self) -> Result<String> {
+	Ok("Runtime metrics require building with `tokio_unstable`.".to_owned())
 }
 
 #[cfg(tokio_unstable)]
-#[admin_command]
-pub(super) async fn runtime_interval(&self) -> Result {
+#[command]
+pub(super) async fn runtime_interval(&self) -> Result<String> {
 	let out = self
 		.services
 		.server
@@ -849,29 +801,29 @@ pub(super) async fn runtime_interval(&self) -> Result {
 			|metrics| format!("```rs\n{metrics:#?}\n```"),
 		);
 
-	self.write_str(&out).await
+	Ok(out)
 }
 
 #[cfg(not(tokio_unstable))]
-#[admin_command]
-pub(super) async fn runtime_interval(&self) -> Result {
-	self.write_str("Runtime metrics require building with `tokio_unstable`.")
-		.await
+#[command]
+pub(super) async fn runtime_interval(&self) -> Result<String> {
+	Ok("Runtime metrics require building with `tokio_unstable`.".to_owned())
 }
 
-#[admin_command]
-pub(super) async fn time(&self) -> Result {
+#[command]
+pub(super) async fn time(&self) -> Result<String> {
 	let now = SystemTime::now();
 	let now = utils::time::format(now, "%+");
 
-	self.write_str(&now).await
+	Ok(now)
 }
 
-#[admin_command]
-pub(super) async fn list_dependencies(&self, names: bool) -> Result {
+#[command]
+pub(super) async fn list_dependencies(&self, names: bool) -> Result<String> {
 	if names {
 		let out = info::cargo::dependencies_names().join(" ");
-		return self.write_str(&out).await;
+
+		return Ok(out);
 	}
 
 	let mut out = String::new();
@@ -890,31 +842,34 @@ pub(super) async fn list_dependencies(&self, names: bool) -> Result {
 		writeln!(out, "| {name} | {version} | {feats} |")?;
 	}
 
-	self.write_str(&out).await
+	Ok(out)
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn database_stats(
 	&self,
 	property: Option<String>,
 	map: Option<String>,
-) -> Result {
+) -> Result<String> {
 	let map_name = map.as_ref().map_or(EMPTY, String::as_str);
 	let property = property.unwrap_or_else(|| "rocksdb.stats".to_owned());
-	self.services
-		.db
-		.iter()
-		.filter(|&(&name, _)| map_name.is_empty() || map_name == name)
-		.try_stream()
-		.try_for_each(|(&name, map)| {
+	let mut out = String::new();
+	for (&name, map) in self.services.db.iter() {
+		if map_name.is_empty() || map_name == name {
 			let res = map.property(&property).expect("invalid property");
-			writeln!(self, "##### {name}:\n```\n{}\n```", res.trim())
-		})
-		.await
+			writeln!(out, "##### {name}:\n```\n{}\n```", res.trim())?;
+		}
+	}
+
+	Ok(out)
 }
 
-#[admin_command]
-pub(super) async fn database_files(&self, map: Option<String>, level: Option<i32>) -> Result {
+#[command]
+pub(super) async fn database_files(
+	&self,
+	map: Option<String>,
+	level: Option<i32>,
+) -> Result<String> {
 	let mut files: Vec<_> = self
 		.services
 		.db
@@ -924,43 +879,46 @@ pub(super) async fn database_files(&self, map: Option<String>, level: Option<i32
 
 	files.sort_by_key(|f| f.name.clone());
 
-	writeln!(self, "| lev  | sst  | keys | dels | size | column |").await?;
-	writeln!(self, "| ---: | :--- | ---: | ---: | ---: | :---   |").await?;
-	files
-		.into_iter()
-		.filter(|file| {
-			map.as_deref()
-				.is_none_or(|map| map == file.column_family_name)
-		})
-		.filter(|file| {
-			level
-				.as_ref()
-				.is_none_or(|&level| level == file.level)
-		})
-		.try_stream()
-		.try_for_each(|file| {
-			writeln!(
-				self,
-				"| {} | {:<13} | {:7}+ | {:4}- | {:9} | {} |",
-				file.level,
-				file.name,
-				file.num_entries,
-				file.num_deletions,
-				file.size,
-				file.column_family_name,
-			)
-		})
-		.await
+	let mut out = String::new();
+
+	writeln!(out, "| lev  | sst  | keys | dels | size | column |")?;
+	writeln!(out, "| ---: | :--- | ---: | ---: | ---: | :---   |")?;
+	for file in files {
+		if map
+			.as_deref()
+			.is_some_and(|map| map != file.column_family_name)
+		{
+			continue;
+		}
+		if level
+			.as_ref()
+			.is_some_and(|&level| level != file.level)
+		{
+			continue;
+		}
+		writeln!(
+			out,
+			"| {} | {:<13} | {:7}+ | {:4}- | {:9} | {} |",
+			file.level,
+			file.name,
+			file.num_entries,
+			file.num_deletions,
+			file.size,
+			file.column_family_name,
+		)?;
+	}
+
+	Ok(out)
 }
 
-#[admin_command]
-pub(super) async fn trim_memory(&self) -> Result {
+#[command]
+pub(super) async fn trim_memory(&self) -> Result<String> {
 	tuwunel_core::alloc::trim(None)?;
 
-	writeln!(self, "done").await
+	Ok("done".to_owned())
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn create_jwt(
 	&self,
 	user: String,
@@ -968,7 +926,7 @@ pub(super) async fn create_jwt(
 	nbf_from_now: Option<u64>,
 	issuer: Option<String>,
 	audience: Option<String>,
-) -> Result {
+) -> Result<String> {
 	use jwt::{Algorithm, EncodingKey, Header, encode};
 
 	#[derive(Serialize)]
@@ -1009,14 +967,12 @@ pub(super) async fn create_jwt(
 			.and_then(Result::ok),
 	};
 
-	encode(&header, &claim, &key)
-		.map_err(|e| err!("Failed to encode JWT: {e}"))
-		.map(async |token| self.write_str(&token).await)?
-		.await
+	let token = encode(&header, &claim, &key).map_err(|e| err!("Failed to encode JWT: {e}"))?;
+	Ok(token)
 }
 
-#[admin_command]
-pub(super) async fn resync_database(&self) -> Result {
+#[command]
+pub(super) async fn resync_database(&self) -> Result<String> {
 	if !self.services.db.is_secondary() {
 		return Err!("Not a secondary instance.");
 	}
@@ -1025,5 +981,35 @@ pub(super) async fn resync_database(&self) -> Result {
 		.db
 		.engine
 		.update()
-		.map_err(|e| err!("Failed to update from primary: {e:?}"))
+		.map_err(|e| err!("Failed to update from primary: {e:?}"))?;
+
+	Ok("Done".to_owned())
+}
+
+#[command]
+pub(super) async fn sudo_command(&self, user: String) -> Result<String> {
+	let user_id = parse_local_user_id(self.services, &user)?;
+
+	let result = self
+		.services
+		.userroom
+		.run_command(self.input, "", &user_id)
+		.await;
+
+	let output = result.output;
+	let err = result.err;
+	let logs = result.logs;
+
+	let mut out = format!("output={output}\nerr={err}\nlogs={{");
+
+	for event in logs {
+		let level = event.level;
+		let span = event.span_name;
+		let message = event.message();
+		writeln!(out, "    level={level} span={span} message={message}")?;
+	}
+
+	write!(out, "}}")?;
+
+	Ok(out)
 }

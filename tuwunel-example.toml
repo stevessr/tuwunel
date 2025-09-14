@@ -1562,6 +1562,10 @@
 #
 #federate_admin_room = true
 
+# Admin API token
+#
+#admin_api_token = false
+
 # Sentry.io crash/panic reporting, performance monitoring/metrics, etc.
 # This is NOT enabled by default. tuwunel's default Sentry reporting
 # endpoint domain is `o4509498990067712.ingest.us.sentry.io`.

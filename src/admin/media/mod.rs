@@ -5,9 +5,9 @@ use clap::Subcommand;
 use ruma::{OwnedEventId, OwnedMxcUri, OwnedServerName};
 use tuwunel_core::Result;
 
-use crate::admin_command_dispatch;
+use crate::command_dispatch;
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 pub(super) enum MediaCommand {
 	/// - Deletes a single media file from our database and on the filesystem

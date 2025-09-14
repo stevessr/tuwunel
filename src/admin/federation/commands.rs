@@ -2,27 +2,30 @@ use futures::StreamExt;
 use ruma::{OwnedRoomId, OwnedServerName, OwnedUserId};
 use tuwunel_core::{Err, Result};
 
-use crate::{admin_command, get_room_info};
+use crate::{command, get_room_info};
 
-#[admin_command]
-pub(super) async fn disable_room(&self, room_id: OwnedRoomId) -> Result {
+#[command]
+pub(super) async fn disable_room(&self, room_id: OwnedRoomId) -> Result<String> {
 	self.services.metadata.disable_room(&room_id);
-	self.write_str("Room disabled.").await
+	Ok("Room disabled.".to_owned())
 }
 
-#[admin_command]
-pub(super) async fn enable_room(&self, room_id: OwnedRoomId) -> Result {
+#[command]
+pub(super) async fn enable_room(&self, room_id: OwnedRoomId) -> Result<String> {
 	self.services.metadata.enable_room(&room_id);
-	self.write_str("Room enabled.").await
+	Ok("Room enabled.".to_owned())
 }
 
-#[admin_command]
-pub(super) async fn incoming_federation(&self) -> Result {
+#[command]
+pub(super) async fn incoming_federation(&self) -> Result<String> {
 	Err!("This command is temporarily disabled")
 }
 
-#[admin_command]
-pub(super) async fn fetch_support_well_known(&self, server_name: OwnedServerName) -> Result {
+#[command]
+pub(super) async fn fetch_support_well_known(
+	&self,
+	server_name: OwnedServerName,
+) -> Result<String> {
 	let response = self
 		.services
 		.client
@@ -46,23 +49,22 @@ pub(super) async fn fetch_support_well_known(&self, server_name: OwnedServerName
 	let json: serde_json::Value = match serde_json::from_str(&text) {
 		| Ok(json) => json,
 		| Err(_) => {
-			return Err!("Response text/body is not valid JSON.",);
+			return Err!("Response text/body is not valid JSON.");
 		},
 	};
 
 	let pretty_json: String = match serde_json::to_string_pretty(&json) {
 		| Ok(json) => json,
 		| Err(_) => {
-			return Err!("Response text/body is not valid JSON.",);
+			return Err!("Response text/body is not valid JSON.");
 		},
 	};
 
-	self.write_str(&format!("Got JSON response:\n\n```json\n{pretty_json}\n```"))
-		.await
+	Ok(format!("Got JSON response:\n\n```json\n{pretty_json}\n```"))
 }
 
-#[admin_command]
-pub(super) async fn remote_user_in_rooms(&self, user_id: OwnedUserId) -> Result {
+#[command]
+pub(super) async fn remote_user_in_rooms(&self, user_id: OwnedUserId) -> Result<String> {
 	if user_id.server_name() == self.services.server.name {
 		return Err!(
 			"User belongs to our server, please use `list-joined-rooms` user admin command \
@@ -71,7 +73,7 @@ pub(super) async fn remote_user_in_rooms(&self, user_id: OwnedUserId) -> Result 
 	}
 
 	if !self.services.users.exists(&user_id).await {
-		return Err!("Remote user does not exist in our database.",);
+		return Err!("Remote user does not exist in our database.");
 	}
 
 	let mut rooms: Vec<(OwnedRoomId, u64, String)> = self
@@ -96,6 +98,5 @@ pub(super) async fn remote_user_in_rooms(&self, user_id: OwnedUserId) -> Result 
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("Rooms {user_id} shares with us ({num}):\n```\n{body}\n```",))
-		.await
+	Ok(format!("Rooms {user_id} shares with us ({num}):\n```\n{body}\n```"))
 }

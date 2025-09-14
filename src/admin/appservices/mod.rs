@@ -3,10 +3,10 @@ mod commands;
 use clap::Subcommand;
 use tuwunel_core::Result;
 
-use crate::admin_command_dispatch;
+use crate::command_dispatch;
 
 #[derive(Debug, Subcommand)]
-#[admin_command_dispatch]
+#[command_dispatch]
 pub(super) enum AppserviceCommand {
 	/// - Register an appservice using its registration YAML
 	///

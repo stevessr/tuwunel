@@ -3,7 +3,7 @@ mod data;
 use std::{ops::Range, sync::Arc};
 
 use data::Data;
-use ruma::{OwnedUserId, RoomAliasId, ServerName, UserId};
+use ruma::{OwnedRoomAliasId, OwnedUserId, RoomAliasId, ServerName, UserId};
 use tuwunel_core::{Result, Server, error};
 
 use crate::service;
@@ -117,6 +117,11 @@ impl Service {
 	#[must_use]
 	pub fn server_is_ours(&self, server_name: &ServerName) -> bool {
 		server_name == self.server_name()
+	}
+
+	#[inline]
+	pub fn local_alias(&self, alias: &str) -> Result<OwnedRoomAliasId> {
+		Ok(OwnedRoomAliasId::parse(format!("#{alias}:{}", self.server_name()))?)
 	}
 
 	#[inline]

@@ -2,9 +2,9 @@ use clap::Subcommand;
 use ruma::{OwnedEventId, OwnedRoomOrAliasId};
 use tuwunel_core::Result;
 
-use crate::{admin_command, admin_command_dispatch};
+use crate::{command, command_dispatch};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 /// Query tables from database
 pub(crate) enum ShortCommand {
@@ -17,19 +17,19 @@ pub(crate) enum ShortCommand {
 	},
 }
 
-#[admin_command]
-pub(super) async fn short_event_id(&self, event_id: OwnedEventId) -> Result {
+#[command]
+pub(super) async fn short_event_id(&self, event_id: OwnedEventId) -> Result<String> {
 	let shortid = self
 		.services
 		.short
 		.get_shorteventid(&event_id)
 		.await?;
 
-	self.write_str(&format!("{shortid:#?}")).await
+	Ok(format!("{shortid:#?}"))
 }
 
-#[admin_command]
-pub(super) async fn short_room_id(&self, room_id: OwnedRoomOrAliasId) -> Result {
+#[command]
+pub(super) async fn short_room_id(&self, room_id: OwnedRoomOrAliasId) -> Result<String> {
 	let room_id = self
 		.services
 		.alias
@@ -42,5 +42,5 @@ pub(super) async fn short_room_id(&self, room_id: OwnedRoomOrAliasId) -> Result 
 		.get_shortroomid(&room_id)
 		.await?;
 
-	self.write_str(&format!("{shortid:#?}")).await
+	Ok(format!("{shortid:#?}"))
 }

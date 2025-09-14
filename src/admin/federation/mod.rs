@@ -4,9 +4,9 @@ use clap::Subcommand;
 use ruma::{OwnedRoomId, OwnedServerName, OwnedUserId};
 use tuwunel_core::Result;
 
-use crate::admin_command_dispatch;
+use crate::command_dispatch;
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 pub(super) enum FederationCommand {
 	/// - List all rooms we are currently handling an incoming pdu from

@@ -7,9 +7,9 @@ use tuwunel_core::{
 	warn,
 };
 
-use crate::{admin_command, admin_command_dispatch, get_room_info};
+use crate::{command, command_dispatch, get_room_info};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 pub(crate) enum RoomModerationCommand {
 	/// - Bans a room from local users joining and evicts all our local users
@@ -44,8 +44,8 @@ pub(crate) enum RoomModerationCommand {
 	},
 }
 
-#[admin_command]
-async fn ban_room(&self, room: OwnedRoomOrAliasId) -> Result {
+#[command]
+async fn ban_room(&self, room: OwnedRoomOrAliasId) -> Result<String> {
 	debug!("Got room alias or ID: {}", room);
 
 	let admin_room_alias = &self.services.admin.admin_alias;
@@ -188,33 +188,20 @@ async fn ban_room(&self, room: OwnedRoomOrAliasId) -> Result {
 
 	self.services.metadata.disable_room(&room_id);
 
-	self.write_str(
-		"Room banned, removed all our local users, and disabled incoming federation with room.",
+	Ok(
+		"Room banned, removed all our local users, and disabled incoming federation with room."
+			.to_owned(),
 	)
-	.await
 }
 
-#[admin_command]
-async fn ban_list_of_rooms(&self) -> Result {
-	if self.body.len() < 2
-		|| !self.body[0].trim().starts_with("```")
-		|| self.body.last().unwrap_or(&"").trim() != "```"
-	{
-		return Err!("Expected code block in command body. Add --help for details.",);
-	}
-
-	let rooms_s = self
-		.body
-		.to_vec()
-		.drain(1..self.body.len().saturating_sub(1))
-		.collect::<Vec<_>>();
-
+#[command]
+async fn ban_list_of_rooms(&self) -> Result<String> {
 	let admin_room_alias = &self.services.admin.admin_alias;
 
 	let mut room_ban_count: usize = 0;
 	let mut room_ids: Vec<OwnedRoomId> = Vec::new();
 
-	for &room in &rooms_s {
+	for room in self.input.lines() {
 		match <&RoomOrAliasId>::try_from(room) {
 			| Ok(room_alias_or_id) => {
 				if let Ok(admin_room_id) = self.services.admin.get_admin_room().await {
@@ -365,15 +352,14 @@ async fn ban_list_of_rooms(&self) -> Result {
 		self.services.metadata.disable_room(&room_id);
 	}
 
-	self.write_str(&format!(
+	Ok(format!(
 		"Finished bulk room ban, banned {room_ban_count} total rooms, evicted all users, and \
 		 disabled incoming federation with the room."
 	))
-	.await
 }
 
-#[admin_command]
-async fn unban_room(&self, room: OwnedRoomOrAliasId) -> Result {
+#[command]
+async fn unban_room(&self, room: OwnedRoomOrAliasId) -> Result<String> {
 	let room_id = if room.is_room_id() {
 		let room_id = match RoomId::parse(&room) {
 			| Ok(room_id) => room_id,
@@ -453,12 +439,11 @@ async fn unban_room(&self, room: OwnedRoomOrAliasId) -> Result {
 	};
 
 	self.services.metadata.enable_room(&room_id);
-	self.write_str("Room unbanned and federation re-enabled.")
-		.await
+	Ok("Room unbanned and federation re-enabled.".to_owned())
 }
 
-#[admin_command]
-async fn list_banned_rooms(&self, no_details: bool) -> Result {
+#[command]
+async fn list_banned_rooms(&self, no_details: bool) -> Result<String> {
 	let room_ids: Vec<OwnedRoomId> = self
 		.services
 		.metadata
@@ -495,6 +480,5 @@ async fn list_banned_rooms(&self, no_details: bool) -> Result {
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("Rooms Banned ({num}):\n```\n{body}\n```",))
-		.await
+	Ok(format!("Rooms Banned ({num}):\n```\n{body}\n```"))
 }

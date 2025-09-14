@@ -7,9 +7,9 @@ use tuwunel_core::Result;
 use tuwunel_service::rooms::short::{ShortEventId, ShortRoomId};
 
 use self::tester::TesterCommand;
-use crate::admin_command_dispatch;
+use crate::command_dispatch;
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 pub(super) enum DebugCommand {
 	/// - Echo input of admin command
@@ -249,6 +249,11 @@ pub(super) enum DebugCommand {
 
 	/// - Synchronize database with primary (secondary only)
 	ResyncDatabase,
+
+	/// - Impersonate and run user command
+	SudoCommand {
+		user: String,
+	},
 
 	/// - Developer test stubs
 	#[command(subcommand)]

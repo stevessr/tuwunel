@@ -78,7 +78,7 @@ pub(crate) async fn handle(
 			.metrics
 			.requests_handle_active
 			.fetch_sub(1, Ordering::Relaxed);
-	}
+	};
 
 	task.await
 		.map_err(unhandled)

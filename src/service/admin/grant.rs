@@ -112,9 +112,6 @@ pub async fn make_user_admin(&self, user_id: &UserId) -> Result {
 
 	room_power_levels
 		.users
-		.insert(server_user.into(), 69420.into());
-	room_power_levels
-		.users
 		.insert(user_id.into(), 100.into());
 
 	self.services

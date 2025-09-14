@@ -4,9 +4,9 @@ use clap::Subcommand;
 use ruma::{OwnedEventId, OwnedRoomId, OwnedRoomOrAliasId};
 use tuwunel_core::Result;
 
-use crate::admin_command_dispatch;
+use crate::command_dispatch;
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 pub(super) enum UserCommand {
 	/// - Create a new user

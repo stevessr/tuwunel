@@ -26,7 +26,10 @@ pub(crate) enum PresenceCommand {
 }
 
 /// All the getters and iterators in key_value/presence.rs
-pub(super) async fn process(subcommand: PresenceCommand, context: &Context<'_>) -> Result {
+pub(super) async fn process(
+	subcommand: PresenceCommand,
+	context: &Context<'_>,
+) -> Result<String> {
 	let services = context.services;
 
 	match subcommand {
@@ -35,7 +38,7 @@ pub(super) async fn process(subcommand: PresenceCommand, context: &Context<'_>) 
 			let results = services.presence.get_presence(&user_id).await;
 			let query_time = timer.elapsed();
 
-			write!(context, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```")
+			Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
 		},
 		| PresenceCommand::PresenceSince { since, to } => {
 			let timer = tokio::time::Instant::now();
@@ -47,8 +50,7 @@ pub(super) async fn process(subcommand: PresenceCommand, context: &Context<'_>) 
 				.await;
 			let query_time = timer.elapsed();
 
-			write!(context, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```")
+			Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
 		},
 	}
-	.await
 }

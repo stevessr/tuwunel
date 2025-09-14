@@ -2,22 +2,23 @@ use futures::StreamExt;
 use ruma::OwnedRoomId;
 use tuwunel_core::{Err, Result};
 
-use crate::{PAGE_SIZE, admin_command, get_room_info};
+use crate::{PAGE_SIZE, command, get_room_info};
 
-#[admin_command]
+#[command]
 pub(super) async fn list_rooms(
 	&self,
 	page: Option<usize>,
 	exclude_disabled: bool,
 	exclude_banned: bool,
 	no_details: bool,
-) -> Result {
+) -> Result<String> {
 	// TODO: i know there's a way to do this with clap, but i can't seem to find it
 	let page = page.unwrap_or(1);
 	let mut rooms = self
 		.services
 		.metadata
 		.iter_ids()
+		// TODO????
 		.filter_map(async |room_id| {
 			(!exclude_disabled || !self.services.metadata.is_disabled(room_id).await)
 				.then_some(room_id)
@@ -55,19 +56,18 @@ pub(super) async fn list_rooms(
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("Rooms ({}):\n```\n{body}\n```", rooms.len(),))
-		.await
+	Ok(format!("Rooms ({}):\n```\n{body}\n```", rooms.len()))
 }
 
-#[admin_command]
-pub(super) async fn exists(&self, room_id: OwnedRoomId) -> Result {
+#[command]
+pub(super) async fn exists(&self, room_id: OwnedRoomId) -> Result<String> {
 	let result = self.services.metadata.exists(&room_id).await;
 
-	self.write_str(&format!("{result}")).await
+	Ok(format!("{result}"))
 }
 
-#[admin_command]
-pub(super) async fn delete_room(&self, room_id: OwnedRoomId, force: bool) -> Result {
+#[command]
+pub(super) async fn delete_room(&self, room_id: OwnedRoomId, force: bool) -> Result<String> {
 	if self.services.admin.is_admin_room(&room_id).await {
 		return Err!("Cannot delete admin room");
 	}
@@ -79,8 +79,5 @@ pub(super) async fn delete_room(&self, room_id: OwnedRoomId, force: bool) -> Res
 		.delete_room(&room_id, force, state_lock)
 		.await?;
 
-	self.write_str("Successfully deleted the room from our database.")
-		.await?;
-
-	Ok(())
+	Ok("Successfully deleted the room from our database.".to_owned())
 }

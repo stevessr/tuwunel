@@ -3,9 +3,9 @@ use futures::StreamExt;
 use ruma::{OwnedRoomId, OwnedUserId};
 use tuwunel_core::Result;
 
-use crate::{admin_command, admin_command_dispatch};
+use crate::{command, command_dispatch};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 /// All the getters and iterators from src/database/key_value/account_data.rs
 pub(crate) enum AccountDataCommand {
@@ -30,13 +30,13 @@ pub(crate) enum AccountDataCommand {
 	},
 }
 
-#[admin_command]
+#[command]
 async fn changes_since(
 	&self,
 	user_id: OwnedUserId,
 	since: u64,
 	room_id: Option<OwnedRoomId>,
-) -> Result {
+) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let results: Vec<_> = self
 		.services
@@ -46,17 +46,16 @@ async fn changes_since(
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
 }
 
-#[admin_command]
+#[command]
 async fn account_data_get(
 	&self,
 	user_id: OwnedUserId,
 	kind: String,
 	room_id: Option<OwnedRoomId>,
-) -> Result {
+) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let results = self
 		.services
@@ -65,6 +64,5 @@ async fn account_data_get(
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
 }

@@ -623,6 +623,11 @@ package = "tuwunel_admin"
 path = "src/admin"
 default-features = false
 
+[workspace.dependencies.tuwunel-user]
+package = "tuwunel_user"
+path = "src/user"
+default-features = false
+
 [workspace.dependencies.tuwunel-api]
 package = "tuwunel_api"
 path = "src/api"

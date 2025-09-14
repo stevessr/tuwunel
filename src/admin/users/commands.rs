@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Write as _};
+use std::{collections::BTreeMap, fmt::Write};
 
 use futures::{FutureExt, StreamExt};
 use ruma::{
@@ -21,15 +21,15 @@ use tuwunel_core::{
 use tuwunel_service::Services;
 
 use crate::{
-	admin_command, get_room_info,
+	command, get_room_info,
 	utils::{parse_active_local_user_id, parse_local_user_id, parse_user_id},
 };
 
 const AUTO_GEN_PASSWORD_LENGTH: usize = 25;
 const BULK_JOIN_REASON: &str = "Bulk force joining this room as initiated by the server admin.";
 
-#[admin_command]
-pub(super) async fn list_users(&self) -> Result {
+#[command]
+pub(super) async fn list_users(&self) -> Result<String> {
 	let users: Vec<_> = self
 		.services
 		.users
@@ -42,11 +42,15 @@ pub(super) async fn list_users(&self) -> Result {
 	plain_msg += users.join("\n").as_str();
 	plain_msg += "\n```";
 
-	self.write_str(&plain_msg).await
+	Ok(plain_msg)
 }
 
-#[admin_command]
-pub(super) async fn create_user(&self, username: String, password: Option<String>) -> Result {
+#[command]
+pub(super) async fn create_user(
+	&self,
+	username: String,
+	password: Option<String>,
+) -> Result<String> {
 	// Validate user id
 	let user_id = parse_local_user_id(self.services, &username)?;
 
@@ -80,7 +84,7 @@ pub(super) async fn create_user(&self, username: String, password: Option<String
 		.new_user_displayname_suffix
 		.is_empty()
 	{
-		write!(
+		writeln!(
 			displayname,
 			" {}",
 			self.services
@@ -204,28 +208,36 @@ pub(super) async fn create_user(&self, username: String, password: Option<String
 		debug!("create_user admin command called without an admin room being available");
 	}
 
-	self.write_str(&format!("Created user with user_id: {user_id} and password: `{password}`"))
-		.await
+	self.services
+		.userroom
+		.create_user_room(&user_id)
+		.boxed()
+		.await?;
+
+	Ok(format!("Created user with user_id: {user_id} and password: `{password}`"))
 }
 
-#[admin_command]
-pub(super) async fn deactivate(&self, no_leave_rooms: bool, user_id: String) -> Result {
+#[command]
+pub(super) async fn deactivate(&self, no_leave_rooms: bool, user_id: String) -> Result<String> {
 	// Validate user id
 	let user_id = parse_local_user_id(self.services, &user_id)?;
 
 	// don't deactivate the server service account
 	if user_id == self.services.globals.server_user {
-		return Err!("Not allowed to deactivate the server service account.",);
+		return Err!("Not allowed to deactivate the server service account.");
 	}
 
 	deactivate_user(self.services, &user_id, no_leave_rooms).await?;
 
-	self.write_str(&format!("User {user_id} has been deactivated"))
-		.await
+	Ok(format!("User {user_id} has been deactivated"))
 }
 
-#[admin_command]
-pub(super) async fn reset_password(&self, username: String, password: Option<String>) -> Result {
+#[command]
+pub(super) async fn reset_password(
+	&self,
+	username: String,
+	password: Option<String>,
+) -> Result<String> {
 	let user_id = parse_local_user_id(self.services, &username)?;
 
 	if user_id == self.services.globals.server_user {
@@ -243,27 +255,15 @@ pub(super) async fn reset_password(&self, username: String, password: Option<Str
 		.set_password(&user_id, Some(new_password.as_str()))
 		.await
 	{
-		| Err(e) => return Err!("Couldn't reset the password for user {user_id}: {e}"),
+		| Err(e) => Err!("Couldn't reset the password for user {user_id}: {e}"),
 		| Ok(()) =>
-			write!(self, "Successfully reset the password for user {user_id}: `{new_password}`"),
+			Ok(format!("Successfully reset the password for user {user_id}: `{new_password}`")),
 	}
-	.await
 }
 
-#[admin_command]
-pub(super) async fn deactivate_all(&self, no_leave_rooms: bool, force: bool) -> Result {
-	if self.body.len() < 2
-		|| !self.body[0].trim().starts_with("```")
-		|| self.body.last().unwrap_or(&"").trim() != "```"
-	{
-		return Err!("Expected code block in command body. Add --help for details.",);
-	}
-
-	let usernames = self
-		.body
-		.to_vec()
-		.drain(1..self.body.len().saturating_sub(1))
-		.collect::<Vec<_>>();
+#[command]
+pub(super) async fn deactivate_all(&self, no_leave_rooms: bool, force: bool) -> Result<String> {
+	let usernames = self.input.lines().collect::<Vec<&str>>();
 
 	let mut user_ids: Vec<OwnedUserId> = Vec::with_capacity(usernames.len());
 	let mut admins = Vec::new();
@@ -279,7 +279,7 @@ pub(super) async fn deactivate_all(&self, no_leave_rooms: bool, force: bool) -> 
 				continue;
 			},
 			| Ok(user_id) => {
-				if self.services.users.is_admin(&user_id).await && !force {
+				if self.services.admin.user_is_admin(&user_id).await && !force {
 					self.services
 						.admin
 						.send_text(&format!(
@@ -325,16 +325,14 @@ pub(super) async fn deactivate_all(&self, no_leave_rooms: bool, force: bool) -> 
 	}
 
 	if admins.is_empty() {
-		write!(self, "Deactivated {deactivation_count} accounts.")
+		Ok(format!("Deactivated {deactivation_count} accounts."))
 	} else {
-		write!(
-			self,
+		Ok(format!(
 			"Deactivated {deactivation_count} accounts.\nSkipped admin accounts: {}. Use \
 			 --force to deactivate admin accounts",
 			admins.join(", ")
-		)
+		))
 	}
-	.await
 }
 
 async fn deactivate_user(services: &Services, user_id: &UserId, no_leave_rooms: bool) -> Result {
@@ -351,8 +349,8 @@ async fn deactivate_user(services: &Services, user_id: &UserId, no_leave_rooms: 
 	Ok(())
 }
 
-#[admin_command]
-pub(super) async fn list_joined_rooms(&self, user_id: String) -> Result {
+#[command]
+pub(super) async fn list_joined_rooms(&self, user_id: String) -> Result<String> {
 	// Validate user id
 	let user_id = parse_local_user_id(self.services, &user_id)?;
 
@@ -377,23 +375,15 @@ pub(super) async fn list_joined_rooms(&self, user_id: String) -> Result {
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("Rooms {user_id} Joined ({}):\n```\n{body}\n```", rooms.len(),))
-		.await
+	Ok(format!("Rooms {user_id} Joined ({}):\n```\n{body}\n```", rooms.len()))
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn force_join_list_of_local_users(
 	&self,
 	room_id: OwnedRoomOrAliasId,
 	yes_i_want_to_do_this: bool,
-) -> Result {
-	if self.body.len() < 2
-		|| !self.body[0].trim().starts_with("```")
-		|| self.body.last().unwrap_or(&"").trim() != "```"
-	{
-		return Err!("Expected code block in command body. Add --help for details.",);
-	}
-
+) -> Result<String> {
 	if !yes_i_want_to_do_this {
 		return Err!(
 			"You must pass the --yes-i-want-to-do-this-flag to ensure you really want to force \
@@ -402,7 +392,7 @@ pub(super) async fn force_join_list_of_local_users(
 	}
 
 	let Ok(admin_room) = self.services.admin.get_admin_room().await else {
-		return Err!("There is not an admin room to check for server admins.",);
+		return Err!("There is not an admin room to check for server admins.");
 	};
 
 	let (room_id, servers) = self
@@ -435,14 +425,10 @@ pub(super) async fn force_join_list_of_local_users(
 		.ready_any(|user_id| server_admins.contains(&user_id.to_owned()))
 		.await
 	{
-		return Err!("There is not a single server admin in the room.",);
+		return Err!("There is not a single server admin in the room.");
 	}
 
-	let usernames = self
-		.body
-		.to_vec()
-		.drain(1..self.body.len().saturating_sub(1))
-		.collect::<Vec<_>>();
+	let usernames = self.input.lines().collect::<Vec<&str>>();
 
 	let mut user_ids: Vec<OwnedUserId> = Vec::with_capacity(usernames.len());
 
@@ -505,19 +491,18 @@ pub(super) async fn force_join_list_of_local_users(
 
 	drop(state_lock);
 
-	self.write_str(&format!(
+	Ok(format!(
 		"{successful_joins} local users have been joined to {room_id}. {failed_joins} joins \
 		 failed.",
 	))
-	.await
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn force_join_all_local_users(
 	&self,
 	room_id: OwnedRoomOrAliasId,
 	yes_i_want_to_do_this: bool,
-) -> Result {
+) -> Result<String> {
 	if !yes_i_want_to_do_this {
 		return Err!(
 			"You must pass the --yes-i-want-to-do-this-flag to ensure you really want to force \
@@ -526,7 +511,7 @@ pub(super) async fn force_join_all_local_users(
 	}
 
 	let Ok(admin_room) = self.services.admin.get_admin_room().await else {
-		return Err!("There is not an admin room to check for server admins.",);
+		return Err!("There is not an admin room to check for server admins.");
 	};
 
 	let (room_id, servers) = self
@@ -559,7 +544,7 @@ pub(super) async fn force_join_all_local_users(
 		.ready_any(|user_id| server_admins.contains(&user_id.to_owned()))
 		.await
 	{
-		return Err!("There is not a single server admin in the room.",);
+		return Err!("There is not a single server admin in the room.");
 	}
 
 	let mut failed_joins: usize = 0;
@@ -600,19 +585,18 @@ pub(super) async fn force_join_all_local_users(
 
 	drop(state_lock);
 
-	self.write_str(&format!(
+	Ok(format!(
 		"{successful_joins} local users have been joined to {room_id}. {failed_joins} joins \
 		 failed.",
 	))
-	.await
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn force_join_room(
 	&self,
 	user_id: String,
 	room_id: OwnedRoomOrAliasId,
-) -> Result {
+) -> Result<String> {
 	let user_id = parse_local_user_id(self.services, &user_id)?;
 	let (room_id, servers) = self
 		.services
@@ -634,16 +618,15 @@ pub(super) async fn force_join_room(
 
 	drop(state_lock);
 
-	self.write_str(&format!("{user_id} has been joined to {room_id}.",))
-		.await
+	Ok(format!("{user_id} has been joined to {room_id}."))
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn force_leave_room(
 	&self,
 	user_id: String,
 	room_id: OwnedRoomOrAliasId,
-) -> Result {
+) -> Result<String> {
 	let user_id = parse_local_user_id(self.services, &user_id)?;
 	let room_id = self
 		.services
@@ -675,12 +658,15 @@ pub(super) async fn force_leave_room(
 
 	drop(state_lock);
 
-	self.write_str(&format!("{user_id} has left {room_id}.",))
-		.await
+	Ok(format!("{user_id} has left {room_id}."))
 }
 
-#[admin_command]
-pub(super) async fn force_demote(&self, user_id: String, room_id: OwnedRoomOrAliasId) -> Result {
+#[command]
+pub(super) async fn force_demote(
+	&self,
+	user_id: String,
+	room_id: OwnedRoomOrAliasId,
+) -> Result<String> {
 	let user_id = parse_local_user_id(self.services, &user_id)?;
 	let room_id = self
 		.services
@@ -738,19 +724,18 @@ pub(super) async fn force_demote(&self, user_id: String, room_id: OwnedRoomOrAli
 		)
 		.await?;
 
-	self.write_str(&format!(
+	Ok(format!(
 		"User {user_id} demoted themselves to the room default power level in {room_id} - \
 		 {event_id}"
 	))
-	.await
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn force_promote(
 	&self,
 	target_id: String,
 	room_id: OwnedRoomOrAliasId,
-) -> Result {
+) -> Result<String> {
 	let target_id = parse_user_id(self.services, &target_id)?;
 	let room_id = self
 		.services
@@ -819,17 +804,14 @@ pub(super) async fn force_promote(
 
 	drop(state_lock);
 
-	self.write_str(&format!(
+	Ok(format!(
 		"User {privileged_member} promoted {target_id} to {power_level} power level in \
 		 {room_id} - {event_id}"
 	))
-	.await?;
-
-	Ok(())
 }
 
-#[admin_command]
-pub(super) async fn make_user_admin(&self, user_id: String) -> Result {
+#[command]
+pub(super) async fn make_user_admin(&self, user_id: String) -> Result<String> {
 	let user_id = parse_local_user_id(self.services, &user_id)?;
 	assert!(
 		self.services.globals.user_is_local(&user_id),
@@ -842,17 +824,16 @@ pub(super) async fn make_user_admin(&self, user_id: String) -> Result {
 		.boxed()
 		.await?;
 
-	self.write_str(&format!("{user_id} has been granted admin privileges.",))
-		.await
+	Ok(format!("{user_id} has been granted admin privileges."))
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn put_room_tag(
 	&self,
 	user_id: String,
 	room_id: OwnedRoomId,
 	tag: String,
-) -> Result {
+) -> Result<String> {
 	let user_id = parse_active_local_user_id(self.services, &user_id).await?;
 
 	let mut tags_event = self
@@ -879,19 +860,18 @@ pub(super) async fn put_room_tag(
 		)
 		.await?;
 
-	self.write_str(&format!(
+	Ok(format!(
 		"Successfully updated room account data for {user_id} and room {room_id} with tag {tag}"
 	))
-	.await
 }
 
-#[admin_command]
+#[command]
 pub(super) async fn delete_room_tag(
 	&self,
 	user_id: String,
 	room_id: OwnedRoomId,
 	tag: String,
-) -> Result {
+) -> Result<String> {
 	let user_id = parse_active_local_user_id(self.services, &user_id).await?;
 
 	let mut tags_event = self
@@ -918,15 +898,18 @@ pub(super) async fn delete_room_tag(
 		)
 		.await?;
 
-	self.write_str(&format!(
+	Ok(format!(
 		"Successfully updated room account data for {user_id} and room {room_id}, deleting room \
 		 tag {tag}"
 	))
-	.await
 }
 
-#[admin_command]
-pub(super) async fn get_room_tags(&self, user_id: String, room_id: OwnedRoomId) -> Result {
+#[command]
+pub(super) async fn get_room_tags(
+	&self,
+	user_id: String,
+	room_id: OwnedRoomId,
+) -> Result<String> {
 	let user_id = parse_active_local_user_id(self.services, &user_id).await?;
 
 	let tags_event = self
@@ -938,12 +921,11 @@ pub(super) async fn get_room_tags(&self, user_id: String, room_id: OwnedRoomId) 
 			content: TagEventContent { tags: BTreeMap::new() },
 		});
 
-	self.write_str(&format!("```\n{:#?}\n```", tags_event.content.tags))
-		.await
+	Ok(format!("```\n{:#?}\n```", tags_event.content.tags))
 }
 
-#[admin_command]
-pub(super) async fn redact_event(&self, event_id: OwnedEventId) -> Result {
+#[command]
+pub(super) async fn redact_event(&self, event_id: OwnedEventId) -> Result<String> {
 	let Ok(event) = self
 		.services
 		.timeline
@@ -995,8 +977,5 @@ pub(super) async fn redact_event(&self, event_id: OwnedEventId) -> Result {
 			.await?
 	};
 
-	self.write_str(&format!(
-		"Successfully redacted event. Redaction event ID: {redaction_event_id}"
-	))
-	.await
+	Ok(format!("Successfully redacted event. Redaction event ID: {redaction_event_id}"))
 }

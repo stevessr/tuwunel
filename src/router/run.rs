@@ -20,8 +20,8 @@ pub(crate) async fn run(services: Arc<Services>) -> Result {
 	let server = &services.server;
 	debug!("Start");
 
-	// Install the admin room callback here for now
-	tuwunel_admin::init(&services.admin).await;
+	tuwunel_user::init(&services).await;
+	tuwunel_admin::init(&services).await;
 
 	// Setup shutdown/signal handling
 	let handle = ServerHandle::new();
@@ -45,9 +45,6 @@ pub(crate) async fn run(services: Arc<Services>) -> Result {
 	// Join the signal handler before we leave.
 	sigs.abort();
 	_ = sigs.await;
-
-	// Remove the admin room callback
-	tuwunel_admin::fini(&services.admin).await;
 
 	debug_info!("Finish");
 	res

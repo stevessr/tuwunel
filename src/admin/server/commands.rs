@@ -1,16 +1,11 @@
 use std::{fmt::Write, path::PathBuf, sync::Arc};
 
-use futures::TryStreamExt;
-use tuwunel_core::{
-	Err, Result, info,
-	utils::{stream::IterStream, time},
-	warn,
-};
+use tuwunel_core::{Err, Result, info, utils::time, warn};
 
-use crate::admin_command;
+use crate::command;
 
-#[admin_command]
-pub(super) async fn uptime(&self) -> Result {
+#[command]
+pub(super) async fn uptime(&self) -> Result<String> {
 	let elapsed = self
 		.services
 		.server
@@ -19,36 +14,40 @@ pub(super) async fn uptime(&self) -> Result {
 		.expect("standard duration");
 
 	let result = time::pretty(elapsed);
-	self.write_str(&format!("{result}.")).await
+	Ok(format!("{result}."))
 }
 
-#[admin_command]
-pub(super) async fn show_config(&self) -> Result {
-	self.write_str(&format!("{}", *self.services.server.config))
-		.await
+#[command]
+pub(super) async fn show_config(&self) -> Result<String> {
+	Ok(format!("{}", *self.services.server.config))
 }
 
-#[admin_command]
-pub(super) async fn reload_config(&self, path: Option<PathBuf>) -> Result {
+#[command]
+pub(super) async fn reload_config(&self, path: Option<PathBuf>) -> Result<String> {
 	let path = path.as_deref().into_iter();
 	self.services.config.reload(path)?;
 
-	self.write_str("Successfully reconfigured.").await
+	Ok("Successfully reconfigured.".to_owned())
 }
 
-#[admin_command]
-pub(super) async fn list_features(&self, available: bool, enabled: bool, comma: bool) -> Result {
+#[command]
+pub(super) async fn list_features(
+	&self,
+	available: bool,
+	enabled: bool,
+	comma: bool,
+) -> Result<String> {
 	let delim = if comma { "," } else { " " };
 	if enabled && !available {
 		let features = info::rustc::features().join(delim);
 		let out = format!("`\n{features}\n`");
-		return self.write_str(&out).await;
+		return Ok(out);
 	}
 
 	if available && !enabled {
 		let features = info::cargo::features().join(delim);
 		let out = format!("`\n{features}\n`");
-		return self.write_str(&out).await;
+		return Ok(out);
 	}
 
 	let mut features = String::new();
@@ -61,42 +60,41 @@ pub(super) async fn list_features(&self, available: bool, enabled: bool, comma: 
 		writeln!(features, "{emoji} {feature} {remark}")?;
 	}
 
-	self.write_str(&features).await
+	Ok(features)
 }
 
-#[admin_command]
-pub(super) async fn memory_usage(&self) -> Result {
+#[command]
+pub(super) async fn memory_usage(&self) -> Result<String> {
 	let services_usage = self.services.memory_usage().await?;
 	let database_usage = self.services.db.engine.memory_usage()?;
 	let allocator_usage = tuwunel_core::alloc::memory_usage()
 		.map_or(String::new(), |s| format!("\nAllocator:\n{s}"));
 
-	self.write_str(&format!(
+	Ok(format!(
 		"Services:\n{services_usage}\nDatabase:\n{database_usage}{allocator_usage}",
 	))
-	.await
 }
 
-#[admin_command]
-pub(super) async fn clear_caches(&self) -> Result {
+#[command]
+pub(super) async fn clear_caches(&self) -> Result<String> {
 	self.services.clear_cache().await;
 
-	self.write_str("Done.").await
+	Ok("Done.".to_owned())
 }
 
-#[admin_command]
-pub(super) async fn list_backups(&self) -> Result {
-	self.services
-		.db
-		.engine
-		.backup_list()?
-		.try_stream()
-		.try_for_each(|result| write!(self, "{result}"))
-		.await
+#[command]
+pub(super) async fn list_backups(&self) -> Result<String> {
+	let mut out = String::new();
+
+	for backup in self.services.db.engine.backup_list()? {
+		writeln!(out, "{backup}")?;
+	}
+
+	Ok(out)
 }
 
-#[admin_command]
-pub(super) async fn backup_database(&self) -> Result {
+#[command]
+pub(super) async fn backup_database(&self) -> Result<String> {
 	let db = Arc::clone(&self.services.db);
 	let result = self
 		.services
@@ -109,28 +107,27 @@ pub(super) async fn backup_database(&self) -> Result {
 		.await?;
 
 	let count = self.services.db.engine.backup_count()?;
-	self.write_str(&format!("{result}. Currently have {count} backups."))
-		.await
+	Ok(format!("{result}. Currently have {count} backups."))
 }
 
-#[admin_command]
-pub(super) async fn admin_notice(&self, message: Vec<String>) -> Result {
+#[command]
+pub(super) async fn admin_notice(&self, message: Vec<String>) -> Result<String> {
 	let message = message.join(" ");
 	self.services.admin.send_text(&message).await;
 
-	self.write_str("Notice was sent to #admins").await
+	Ok("Notice was sent to #admins".to_owned())
 }
 
-#[admin_command]
-pub(super) async fn reload_mods(&self) -> Result {
+#[command]
+pub(super) async fn reload_mods(&self) -> Result<String> {
 	self.services.server.reload()?;
 
-	self.write_str("Reloading server...").await
+	Ok("Reloading server...".to_owned())
 }
 
-#[admin_command]
+#[command]
 #[cfg(unix)]
-pub(super) async fn restart(&self, force: bool) -> Result {
+pub(super) async fn restart(&self, force: bool) -> Result<String> {
 	use tuwunel_core::utils::sys::current_exe_deleted;
 
 	if !force && current_exe_deleted() {
@@ -142,13 +139,13 @@ pub(super) async fn restart(&self, force: bool) -> Result {
 
 	self.services.server.restart()?;
 
-	self.write_str("Restarting server...").await
+	Ok("Restarting server...".to_owned())
 }
 
-#[admin_command]
-pub(super) async fn shutdown(&self) -> Result {
+#[command]
+pub(super) async fn shutdown(&self) -> Result<String> {
 	warn!("shutdown command");
 	self.services.server.shutdown()?;
 
-	self.write_str("Shutting down server...").await
+	Ok("Shutting down server...".to_owned())
 }

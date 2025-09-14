@@ -6,7 +6,6 @@ use rand::Rng;
 use ruma::{
 	EventId, RoomId, UserId,
 	api::client::room::{report_content, report_room},
-	events::room::message,
 	int,
 };
 use tokio::time::sleep;
@@ -56,14 +55,13 @@ pub(crate) async fn report_room_route(
 	// urgency
 	services
 		.admin
-		.send_message(message::RoomMessageEventContent::text_markdown(format!(
+		.send_text(&format!(
 			"@room Room report received from {} -\n\nRoom ID: {}\n\nReport Reason: {}",
 			sender_user.to_owned(),
 			body.room_id,
 			body.reason,
-		)))
-		.await
-		.ok();
+		))
+		.await;
 
 	Ok(report_room::v3::Response {})
 }
@@ -110,7 +108,7 @@ pub(crate) async fn report_event_route(
 	// urgency
 	services
 		.admin
-		.send_message(message::RoomMessageEventContent::text_markdown(format!(
+		.send_text(&format!(
 			"@room Event report received from {} -\n\nEvent ID: {}\nRoom ID: {}\nSent By: \
 			 {}\n\nReport Score: {}\nReport Reason: {}",
 			sender_user.to_owned(),
@@ -119,9 +117,8 @@ pub(crate) async fn report_event_route(
 			pdu.sender,
 			body.score.unwrap_or_else(|| ruma::Int::from(0)),
 			body.reason.as_deref().unwrap_or("")
-		)))
-		.await
-		.ok();
+		))
+		.await;
 
 	Ok(report_content::v3::Response {})
 }

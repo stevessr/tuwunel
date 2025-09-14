@@ -1,5 +1,6 @@
 pub mod alias;
 pub mod auth_chain;
+pub mod create;
 pub mod delete;
 pub mod directory;
 pub mod event_handler;

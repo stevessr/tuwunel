@@ -1,8 +1,8 @@
 use tuwunel_core::{Err, Result};
 
-use crate::{admin_command, admin_command_dispatch};
+use crate::{command, command_dispatch};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, clap::Subcommand)]
 pub(crate) enum TesterCommand {
 	Panic,
@@ -12,41 +12,40 @@ pub(crate) enum TesterCommand {
 }
 
 #[rustfmt::skip]
-#[admin_command]
-async fn panic(&self) -> Result {
+#[command]
+async fn panic(&self) -> Result<String> {
 
 	panic!("panicked")
 }
 
 #[rustfmt::skip]
-#[admin_command]
-async fn failure(&self) -> Result {
+#[command]
+async fn failure(&self) -> Result<String> {
 
 	Err!("failed")
 }
 
 #[inline(never)]
 #[rustfmt::skip]
-#[admin_command]
-async fn tester(&self) -> Result {
-
-	self.write_str("Ok").await
+#[command]
+async fn tester(&self) -> Result<String> {
+	Ok("Ok".to_owned())
 }
 
 #[inline(never)]
 #[rustfmt::skip]
-#[admin_command]
-async fn timer(&self) -> Result {
+#[command]
+async fn timer(&self) -> Result<String> {
 	let started = std::time::Instant::now();
-	timed(self.body);
+	timed(self.input);
 
 	let elapsed = started.elapsed();
-	self.write_str(&format!("completed in {elapsed:#?}")).await
+	Ok(format!("completed in {elapsed:#?}"))
 }
 
 #[inline(never)]
 #[rustfmt::skip]
 #[allow(unused_variables)]
-fn timed(body: &[&str]) {
+fn timed(body: &str) {
 
 }

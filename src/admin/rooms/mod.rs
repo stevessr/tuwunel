@@ -12,9 +12,9 @@ use self::{
 	alias::RoomAliasCommand, directory::RoomDirectoryCommand, info::RoomInfoCommand,
 	moderation::RoomModerationCommand,
 };
-use crate::admin_command_dispatch;
+use crate::command_dispatch;
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 pub(super) enum RoomCommand {
 	/// - List all rooms the server knows about

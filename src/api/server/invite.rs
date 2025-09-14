@@ -108,12 +108,14 @@ pub(crate) async fn create_invite_route(
 		.map_err(|e| err!(Request(InvalidParam("Invalid sender property: {e}"))))?;
 
 	if services.metadata.is_banned(&body.room_id).await
-		&& !services.users.is_admin(&invited_user).await
+		&& !services.admin.user_is_admin(&invited_user).await
 	{
 		return Err!(Request(Forbidden("This room is banned on this homeserver.")));
 	}
 
-	if services.config.block_non_admin_invites && !services.users.is_admin(&invited_user).await {
+	if services.config.block_non_admin_invites
+		&& !services.admin.user_is_admin(&invited_user).await
+	{
 		return Err!(Request(Forbidden("This server does not allow room invites.")));
 	}
 

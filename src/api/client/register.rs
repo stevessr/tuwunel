@@ -586,6 +586,14 @@ pub(crate) async fn register_route(
 		}
 	}
 
+	if body.appservice_info.is_none() {
+		services
+			.userroom
+			.create_user_room(&user_id)
+			.boxed()
+			.await?;
+	}
+
 	Ok(register::v3::Response {
 		user_id,
 		device_id: Some(device_id),

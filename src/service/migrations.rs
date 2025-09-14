@@ -68,9 +68,7 @@ async fn fresh(services: &Services) -> Result {
 
 	// Create the admin room and server user on first run
 	if services.config.create_admin_room {
-		crate::admin::create_admin_room(services)
-			.boxed()
-			.await?;
+		services.admin.create_admin_room().await?;
 	}
 
 	warn!("Created new RocksDB database with version {DATABASE_VERSION}");
@@ -124,6 +122,14 @@ async fn migrate(services: &Services) -> Result {
 		.is_not_found()
 	{
 		retroactively_fix_bad_data_from_roomuserid_joined(services).await?;
+	}
+
+	if db["global"]
+		.get(b"create_user_rooms")
+		.await
+		.is_not_found()
+	{
+		create_user_rooms(services).await?;
 	}
 
 	if db["global"]
@@ -479,6 +485,33 @@ async fn retroactively_fix_bad_data_from_roomuserid_joined(services: &Services) 
 	db["global"].insert(b"retroactively_fix_bad_data_from_roomuserid_joined", []);
 
 	info!("Finished fixing");
+	Ok(())
+}
+
+async fn create_user_rooms(services: &Services) -> Result {
+	warn!("Creating user rooms");
+
+	let db = &services.db;
+	let _cork = db.cork_and_sync();
+
+	for user_id in &services
+		.users
+		.list_local_users()
+		.map(UserId::to_owned)
+		.collect::<Vec<_>>()
+		.await
+	{
+		services
+			.userroom
+			.create_user_room(user_id)
+			.boxed()
+			.await?;
+	}
+
+	db.engine.sort()?;
+	db["global"].insert(b"create_user_rooms", []);
+
+	info!("Created user rooms");
 	Ok(())
 }
 

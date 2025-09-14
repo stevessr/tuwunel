@@ -22,9 +22,9 @@ use self::{
 	room_timeline::RoomTimelineCommand, sending::SendingCommand, short::ShortCommand,
 	users::UsersCommand,
 };
-use crate::admin_command_dispatch;
+use crate::command_dispatch;
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 /// Query tables from database
 pub(super) enum QueryCommand {

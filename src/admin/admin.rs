@@ -1,15 +1,17 @@
 use clap::Parser;
 use tuwunel_core::Result;
+use tuwunel_macros::command_dispatch;
 
 use crate::{
-	appservice, appservice::AppserviceCommand, check, check::CheckCommand, context::Context,
-	debug, debug::DebugCommand, federation, federation::FederationCommand, media,
-	media::MediaCommand, query, query::QueryCommand, room, room::RoomCommand, server,
-	server::ServerCommand, user, user::UserCommand,
+	appservices, appservices::AppserviceCommand, check, check::CheckCommand, debug,
+	debug::DebugCommand, federation, federation::FederationCommand, media, media::MediaCommand,
+	query, query::QueryCommand, rooms, rooms::RoomCommand, server, server::ServerCommand, users,
+	users::UserCommand,
 };
 
 #[derive(Debug, Parser)]
 #[command(name = "tuwunel", version = tuwunel_core::version())]
+#[command_dispatch]
 pub(super) enum AdminCommand {
 	#[command(subcommand)]
 	/// - Commands for managing appservices
@@ -46,21 +48,4 @@ pub(super) enum AdminCommand {
 	#[command(subcommand)]
 	/// - Low-level queries for database getters and iterators
 	Query(QueryCommand),
-}
-
-#[tracing::instrument(skip_all, name = "command")]
-pub(super) async fn process(command: AdminCommand, context: &Context<'_>) -> Result {
-	use AdminCommand::*;
-
-	match command {
-		| Appservices(command) => appservice::process(command, context).await,
-		| Media(command) => media::process(command, context).await,
-		| Users(command) => user::process(command, context).await,
-		| Rooms(command) => room::process(command, context).await,
-		| Federation(command) => federation::process(command, context).await,
-		| Server(command) => server::process(command, context).await,
-		| Debug(command) => debug::process(command, context).await,
-		| Query(command) => query::process(command, context).await,
-		| Check(command) => check::process(command, context).await,
-	}
 }

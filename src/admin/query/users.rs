@@ -3,9 +3,9 @@ use futures::stream::StreamExt;
 use ruma::{OwnedDeviceId, OwnedRoomId, OwnedUserId};
 use tuwunel_core::Result;
 
-use crate::{admin_command, admin_command_dispatch};
+use crate::{command, command_dispatch};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 /// All the getters and iterators from src/database/key_value/users.rs
 pub(crate) enum UsersCommand {
@@ -105,8 +105,8 @@ pub(crate) enum UsersCommand {
 	},
 }
 
-#[admin_command]
-async fn auth_ldap(&self, user_dn: String, password: String) -> Result {
+#[command]
+async fn auth_ldap(&self, user_dn: String, password: String) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -115,22 +115,20 @@ async fn auth_ldap(&self, user_dn: String, password: String) -> Result {
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn search_ldap(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn search_ldap(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self.services.users.search_ldap(&user_id).await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_shared_rooms(&self, user_a: OwnedUserId, user_b: OwnedUserId) -> Result {
+#[command]
+async fn get_shared_rooms(&self, user_a: OwnedUserId, user_b: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result: Vec<_> = self
 		.services
@@ -141,18 +139,17 @@ async fn get_shared_rooms(&self, user_a: OwnedUserId, user_b: OwnedUserId) -> Re
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
+#[command]
 async fn get_backup_session(
 	&self,
 	user_id: OwnedUserId,
 	version: String,
 	room_id: OwnedRoomId,
 	session_id: String,
-) -> Result {
+) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -161,17 +158,16 @@ async fn get_backup_session(
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
+#[command]
 async fn get_room_backups(
 	&self,
 	user_id: OwnedUserId,
 	version: String,
 	room_id: OwnedRoomId,
-) -> Result {
+) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -180,12 +176,11 @@ async fn get_room_backups(
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_all_backups(&self, user_id: OwnedUserId, version: String) -> Result {
+#[command]
+async fn get_all_backups(&self, user_id: OwnedUserId, version: String) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -194,12 +189,11 @@ async fn get_all_backups(&self, user_id: OwnedUserId, version: String) -> Result
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_backup_algorithm(&self, user_id: OwnedUserId, version: String) -> Result {
+#[command]
+async fn get_backup_algorithm(&self, user_id: OwnedUserId, version: String) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -208,12 +202,11 @@ async fn get_backup_algorithm(&self, user_id: OwnedUserId, version: String) -> R
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_latest_backup_version(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn get_latest_backup_version(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -222,12 +215,11 @@ async fn get_latest_backup_version(&self, user_id: OwnedUserId) -> Result {
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_latest_backup(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn get_latest_backup(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -236,12 +228,11 @@ async fn get_latest_backup(&self, user_id: OwnedUserId) -> Result {
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn iter_users(&self) -> Result {
+#[command]
+async fn iter_users(&self) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result: Vec<OwnedUserId> = self
 		.services
@@ -253,12 +244,11 @@ async fn iter_users(&self) -> Result {
 
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn iter_users2(&self) -> Result {
+#[command]
+async fn iter_users2(&self) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result: Vec<_> = self.services.users.stream().collect().await;
 	let result: Vec<_> = result
@@ -269,32 +259,29 @@ async fn iter_users2(&self) -> Result {
 
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:?}\n```"))
 }
 
-#[admin_command]
-async fn count_users(&self) -> Result {
+#[command]
+async fn count_users(&self) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self.services.users.count().await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn password_hash(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn password_hash(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self.services.users.password_hash(&user_id).await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn list_devices(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn list_devices(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let devices = self
 		.services
@@ -306,12 +293,11 @@ async fn list_devices(&self, user_id: OwnedUserId) -> Result {
 
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{devices:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{devices:#?}\n```"))
 }
 
-#[admin_command]
-async fn list_devices_metadata(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn list_devices_metadata(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let devices = self
 		.services
@@ -321,12 +307,15 @@ async fn list_devices_metadata(&self, user_id: OwnedUserId) -> Result {
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{devices:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{devices:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_device_metadata(&self, user_id: OwnedUserId, device_id: OwnedDeviceId) -> Result {
+#[command]
+async fn get_device_metadata(
+	&self,
+	user_id: OwnedUserId,
+	device_id: OwnedDeviceId,
+) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let device = self
 		.services
@@ -335,12 +324,11 @@ async fn get_device_metadata(&self, user_id: OwnedUserId, device_id: OwnedDevice
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{device:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{device:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_devices_version(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn get_devices_version(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let device = self
 		.services
@@ -349,12 +337,15 @@ async fn get_devices_version(&self, user_id: OwnedUserId) -> Result {
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{device:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{device:#?}\n```"))
 }
 
-#[admin_command]
-async fn count_one_time_keys(&self, user_id: OwnedUserId, device_id: OwnedDeviceId) -> Result {
+#[command]
+async fn count_one_time_keys(
+	&self,
+	user_id: OwnedUserId,
+	device_id: OwnedDeviceId,
+) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -363,12 +354,15 @@ async fn count_one_time_keys(&self, user_id: OwnedUserId, device_id: OwnedDevice
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_device_keys(&self, user_id: OwnedUserId, device_id: OwnedDeviceId) -> Result {
+#[command]
+async fn get_device_keys(
+	&self,
+	user_id: OwnedUserId,
+	device_id: OwnedDeviceId,
+) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -377,12 +371,11 @@ async fn get_device_keys(&self, user_id: OwnedUserId, device_id: OwnedDeviceId) 
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_user_signing_key(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn get_user_signing_key(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -391,12 +384,11 @@ async fn get_user_signing_key(&self, user_id: OwnedUserId) -> Result {
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_master_key(&self, user_id: OwnedUserId) -> Result {
+#[command]
+async fn get_master_key(&self, user_id: OwnedUserId) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -405,12 +397,15 @@ async fn get_master_key(&self, user_id: OwnedUserId) -> Result {
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }
 
-#[admin_command]
-async fn get_to_device_events(&self, user_id: OwnedUserId, device_id: OwnedDeviceId) -> Result {
+#[command]
+async fn get_to_device_events(
+	&self,
+	user_id: OwnedUserId,
+	device_id: OwnedDeviceId,
+) -> Result<String> {
 	let timer = tokio::time::Instant::now();
 	let result = self
 		.services
@@ -420,6 +415,5 @@ async fn get_to_device_events(&self, user_id: OwnedUserId, device_id: OwnedDevic
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	Ok(format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
 }

@@ -3,9 +3,9 @@ use futures::StreamExt;
 use ruma::OwnedRoomId;
 use tuwunel_core::{Err, Result, utils::ReadyExt};
 
-use crate::{admin_command, admin_command_dispatch};
+use crate::{command, command_dispatch};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 pub(crate) enum RoomInfoCommand {
 	/// - List joined members in a room
@@ -26,8 +26,8 @@ pub(crate) enum RoomInfoCommand {
 	},
 }
 
-#[admin_command]
-async fn list_joined_members(&self, room_id: OwnedRoomId, local_only: bool) -> Result {
+#[command]
+async fn list_joined_members(&self, room_id: OwnedRoomId, local_only: bool) -> Result<String> {
 	let room_name = self
 		.services
 		.state_accessor
@@ -65,12 +65,11 @@ async fn list_joined_members(&self, room_id: OwnedRoomId, local_only: bool) -> R
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("{num} Members in Room \"{room_name}\":\n```\n{body}\n```",))
-		.await
+	Ok(format!("{num} Members in Room \"{room_name}\":\n```\n{body}\n```"))
 }
 
-#[admin_command]
-async fn view_room_topic(&self, room_id: OwnedRoomId) -> Result {
+#[command]
+async fn view_room_topic(&self, room_id: OwnedRoomId) -> Result<String> {
 	let Ok(room_topic) = self
 		.services
 		.state_accessor
@@ -80,6 +79,5 @@ async fn view_room_topic(&self, room_id: OwnedRoomId) -> Result {
 		return Err!("Room does not have a room topic set.");
 	};
 
-	self.write_str(&format!("Room topic:\n```\n{room_topic}\n```"))
-		.await
+	Ok(format!("Room topic:\n```\n{room_topic}\n```"))
 }

@@ -1,11 +1,13 @@
+use std::fmt::Write;
+
 use clap::Subcommand;
 use futures::StreamExt;
 use ruma::OwnedServerName;
 use tuwunel_core::{Result, utils::time};
 
-use crate::{admin_command, admin_command_dispatch};
+use crate::{command, command_dispatch};
 
-#[admin_command_dispatch]
+#[command_dispatch]
 #[derive(Debug, Subcommand)]
 /// Resolver service and caches
 pub(crate) enum ResolverCommand {
@@ -20,12 +22,14 @@ pub(crate) enum ResolverCommand {
 	},
 }
 
-#[admin_command]
-async fn destinations_cache(&self, server_name: Option<OwnedServerName>) -> Result {
+#[command]
+async fn destinations_cache(&self, server_name: Option<OwnedServerName>) -> Result<String> {
 	use tuwunel_service::resolver::cache::CachedDest;
 
-	writeln!(self, "| Server Name | Destination | Hostname | Expires |").await?;
-	writeln!(self, "| ----------- | ----------- | -------- | ------- |").await?;
+	let mut out = String::new();
+
+	writeln!(out, "| Server Name | Destination | Hostname | Expires |")?;
+	writeln!(out, "| ----------- | ----------- | -------- | ------- |")?;
 
 	let mut destinations = self
 		.services
@@ -42,19 +46,20 @@ async fn destinations_cache(&self, server_name: Option<OwnedServerName>) -> Resu
 		}
 
 		let expire = time::format(expire, "%+");
-		self.write_str(&format!("| {name} | {dest} | {host} | {expire} |\n"))
-			.await?;
+		writeln!(out, "| {name} | {dest} | {host} | {expire} |")?;
 	}
 
-	Ok(())
+	Ok(out)
 }
 
-#[admin_command]
-async fn overrides_cache(&self, server_name: Option<String>) -> Result {
+#[command]
+async fn overrides_cache(&self, server_name: Option<String>) -> Result<String> {
 	use tuwunel_service::resolver::cache::CachedOverride;
 
-	writeln!(self, "| Server Name | IP  | Port | Expires | Overriding |").await?;
-	writeln!(self, "| ----------- | --- | ----:| ------- | ---------- |").await?;
+	let mut out = String::new();
+
+	writeln!(out, "| Server Name | IP  | Port | Expires | Overriding |")?;
+	writeln!(out, "| ----------- | --- | ---- | ------- | ---------- |")?;
 
 	let mut overrides = self.services.resolver.cache.overrides().boxed();
 
@@ -68,9 +73,8 @@ async fn overrides_cache(&self, server_name: Option<String>) -> Result {
 		}
 
 		let expire = time::format(expire, "%+");
-		self.write_str(&format!("| {name} | {ips:?} | {port} | {expire} | {overriding:?} |\n"))
-			.await?;
+		writeln!(out, "| {name} | {ips:?} | {port} | {expire} | {overriding:?} |")?;
 	}
 
-	Ok(())
+	Ok(out)
 }

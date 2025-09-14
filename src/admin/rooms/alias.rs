@@ -42,7 +42,7 @@ pub(crate) enum RoomAliasCommand {
 	},
 }
 
-pub(super) async fn process(command: RoomAliasCommand, context: &Context<'_>) -> Result {
+pub(super) async fn process(command: RoomAliasCommand, context: &Context<'_>) -> Result<String> {
 	let services = context.services;
 	let server_user = &services.globals.server_user;
 
@@ -74,11 +74,7 @@ pub(super) async fn process(command: RoomAliasCommand, context: &Context<'_>) ->
 							{
 								| Err(err) => Err!("Failed to remove alias: {err}"),
 								| Ok(()) =>
-									context
-										.write_str(&format!(
-											"Successfully overwrote alias (formerly {id})"
-										))
-										.await,
+									Ok(format!("Successfully overwrote alias (formerly {id})")),
 							}
 						},
 						| (false, Ok(id)) => Err!(
@@ -91,7 +87,7 @@ pub(super) async fn process(command: RoomAliasCommand, context: &Context<'_>) ->
 								.set_alias(&room_alias, &room_id, server_user)
 							{
 								| Err(err) => Err!("Failed to remove alias: {err}"),
-								| Ok(()) => context.write_str("Successfully set alias").await,
+								| Ok(()) => Ok("Successfully set alias".to_owned()),
 							}
 						},
 					}
@@ -109,10 +105,7 @@ pub(super) async fn process(command: RoomAliasCommand, context: &Context<'_>) ->
 							.await
 						{
 							| Err(err) => Err!("Failed to remove alias: {err}"),
-							| Ok(()) =>
-								context
-									.write_str(&format!("Removed alias from {id}"))
-									.await,
+							| Ok(()) => Ok(format!("Removed alias from {id}")),
 						},
 					}
 				},
@@ -123,10 +116,7 @@ pub(super) async fn process(command: RoomAliasCommand, context: &Context<'_>) ->
 						.await
 					{
 						| Err(_) => Err!("Alias isn't in use."),
-						| Ok(id) =>
-							context
-								.write_str(&format!("Alias resolves to {id}"))
-								.await,
+						| Ok(id) => Ok(format!("Alias resolves to {id}")),
 					}
 				},
 				| RoomAliasCommand::List { .. } => unreachable!(),
@@ -141,16 +131,13 @@ pub(super) async fn process(command: RoomAliasCommand, context: &Context<'_>) ->
 					.collect()
 					.await;
 
-				let plain_list = aliases
-					.iter()
-					.fold(String::new(), |mut output, alias| {
-						writeln!(output, "- {alias}")
-							.expect("should be able to write to string buffer");
-						output
-					});
+				let mut plain_list = String::new();
+				for alias in aliases {
+					writeln!(plain_list, "- {alias}")?;
+				}
 
 				let plain = format!("Aliases for {room_id}:\n{plain_list}");
-				context.write_str(&plain).await
+				Ok(plain)
 			} else {
 				let aliases = services
 					.alias
@@ -160,16 +147,13 @@ pub(super) async fn process(command: RoomAliasCommand, context: &Context<'_>) ->
 					.await;
 
 				let server_name = services.globals.server_name();
-				let plain_list = aliases
-					.iter()
-					.fold(String::new(), |mut output, (alias, id)| {
-						writeln!(output, "- `{alias}` -> #{id}:{server_name}")
-							.expect("should be able to write to string buffer");
-						output
-					});
+				let mut plain_list = String::new();
+				for (alias, id) in aliases {
+					writeln!(plain_list, "- `{alias}` -> #{id}:{server_name}")?;
+				}
 
 				let plain = format!("Aliases:\n{plain_list}");
-				context.write_str(&plain).await
+				Ok(plain)
 			},
 	}
 }
