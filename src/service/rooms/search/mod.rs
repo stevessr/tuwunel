@@ -45,7 +45,7 @@ const TOKEN_ID_MAX_LEN: usize =
 const WORD_MAX_LEN: usize = 50;
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			db: Data { tokenids: args.db["tokenids"].clone() },
 			services: args.services.clone(),

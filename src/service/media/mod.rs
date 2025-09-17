@@ -47,7 +47,7 @@ pub const CORP_CROSS_ORIGIN: &str = "cross-origin";
 
 #[async_trait]
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			url_preview_mutex: MutexMap::new(),
 			db: Data::new(args.db),

@@ -51,7 +51,7 @@ pub type ListId = SmallString<[u8; 16]>;
 pub type ConnId = SmallString<[u8; 16]>;
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			db: Data {
 				todeviceid_events: args.db["todeviceid_events"].clone(),

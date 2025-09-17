@@ -26,7 +26,7 @@ type TimerType = (OwnedUserId, Duration);
 
 #[async_trait]
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		let config = &args.server.config;
 		let idle_timeout_s = config.presence_idle_timeout_s;
 		let offline_timeout_s = config.presence_offline_timeout_s;
@@ -35,7 +35,7 @@ impl crate::Service for Service {
 			timeout_remote_users: config.presence_timeout_remote_users,
 			idle_timeout: checked!(idle_timeout_s * 1_000)?,
 			offline_timeout: checked!(offline_timeout_s * 1_000)?,
-			db: Data::new(&args),
+			db: Data::new(args),
 			services: args.services.clone(),
 			last_sync_seen: RwLock::new(HashMap::new()),
 		}))

@@ -13,7 +13,7 @@ struct Data {
 }
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			db: Data {
 				userdevicetxnid_response: args.db["userdevicetxnid_response"].clone(),

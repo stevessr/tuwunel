@@ -43,7 +43,7 @@ struct Data {
 }
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			db: Data {
 				senderkey_pusher: args.db["senderkey_pusher"].clone(),

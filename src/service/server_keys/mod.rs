@@ -40,7 +40,7 @@ pub type PubKeyMap = PublicKeyMap;
 pub type PubKeys = PublicKeySet;
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		let minimum_valid = Duration::from_secs(3600);
 
 		let (keypair, verify_keys) = keypair::init(args.db)?;

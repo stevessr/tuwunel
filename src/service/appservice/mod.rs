@@ -30,7 +30,7 @@ type Registrations = BTreeMap<String, RegistrationInfo>;
 
 #[async_trait]
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			registration_info: RwLock::new(BTreeMap::new()),
 			services: args.services.clone(),

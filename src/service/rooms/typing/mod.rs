@@ -24,7 +24,7 @@ pub struct Service {
 }
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			server: args.server.clone(),
 			services: args.services.clone(),

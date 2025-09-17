@@ -14,7 +14,7 @@ pub(crate) trait Service: Any + Send + Sync {
 	/// service type. Note that it may be called again after a server reload,
 	/// but the prior instance will have been dropped first. Failure will
 	/// shutdown the server with an error.
-	fn build(args: Args<'_>) -> Result<Arc<impl Service>>
+	fn build(args: &Args<'_>) -> Result<Arc<impl Service>>
 	where
 		Self: Sized;
 

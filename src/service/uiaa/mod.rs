@@ -32,7 +32,7 @@ type RequestKey = (OwnedUserId, OwnedDeviceId, String);
 pub const SESSION_ID_LENGTH: usize = 32;
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			userdevicesessionid_uiaarequest: RwLock::new(RequestMap::new()),
 			db: Data {

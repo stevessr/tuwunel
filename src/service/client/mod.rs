@@ -26,7 +26,7 @@ pub struct Service {
 }
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		let config = &args.server.config;
 
 		macro_rules! create_client {

@@ -33,8 +33,8 @@ type RateLimitState = (Instant, u32); // Time if last failed try, number of fail
 
 #[async_trait]
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
-		let db = Data::new(&args);
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
+		let db = Data::new(args);
 		let config = &args.server.config;
 
 		let turn_secret = config.turn_secret_file.as_ref().map_or_else(

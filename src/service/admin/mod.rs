@@ -63,14 +63,14 @@ const COMMAND_QUEUE_LIMIT: usize = 512;
 
 #[async_trait]
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			services: args.services.clone(),
 			channel: StdRwLock::new(None),
 			handle: RwLock::new(None),
 			complete: StdRwLock::new(None),
 			#[cfg(feature = "console")]
-			console: console::Console::new(&args),
+			console: console::Console::new(args),
 		}))
 	}
 

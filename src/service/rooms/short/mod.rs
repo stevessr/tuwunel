@@ -24,7 +24,7 @@ struct Data {
 pub type ShortStateHash = ShortId;
 
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			db: Data {
 				eventid_shorteventid: args.db["eventid_shorteventid"].clone(),

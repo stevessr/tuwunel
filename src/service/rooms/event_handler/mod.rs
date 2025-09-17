@@ -35,7 +35,7 @@ type RoomMutexMap = MutexMap<OwnedRoomId, ()>;
 
 #[async_trait]
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			mutex_federation: RoomMutexMap::new(),
 			services: args.services.clone(),

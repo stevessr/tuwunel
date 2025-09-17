@@ -61,10 +61,10 @@ const EDU_VEC_CAP: usize = 1;
 
 #[async_trait]
 impl crate::Service for Service {
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
-		let num_senders = num_senders(&args);
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
+		let num_senders = num_senders(args);
 		Ok(Arc::new(Self {
-			db: Data::new(&args),
+			db: Data::new(args),
 			server: args.server.clone(),
 			services: args.services.clone(),
 			channels: (0..num_senders)

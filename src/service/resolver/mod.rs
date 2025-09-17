@@ -30,8 +30,8 @@ impl crate::Service for Service {
 		clippy::cast_sign_loss,
 		clippy::cast_possible_truncation
 	)]
-	fn build(args: crate::Args<'_>) -> Result<Arc<Self>> {
-		let cache = Cache::new(&args);
+	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
+		let cache = Cache::new(args);
 		Ok(Arc::new(Self {
 			cache: cache.clone(),
 			resolver: Resolver::build(args.server, cache)?,
