@@ -2069,12 +2069,25 @@ pub struct WellKnownConfig {
 	/// example: "matrix.example.com:443"
 	pub server: Option<OwnedServerName>,
 
+	/// The URL of the support web page. This and the below generate the content
+	/// of `/.well-known/matrix/support`.
+	///
+	/// example: "https://example.com/support"
 	pub support_page: Option<Url>,
 
+	/// The name of the support role.
+	///
+	/// example: "m.role.admin"
 	pub support_role: Option<ContactRole>,
 
+	/// The email address for the above support role.
+	///
+	/// example: "admin@example.com"
 	pub support_email: Option<String>,
 
+	/// The Matrix User ID for the above support role.
+	///
+	/// example "@admin:example.com"
 	pub support_mxid: Option<OwnedUserId>,
 }
 
