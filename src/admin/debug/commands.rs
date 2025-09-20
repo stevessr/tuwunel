@@ -304,7 +304,7 @@ pub(super) async fn get_remote_pdu(
 
 #[admin_command]
 pub(super) async fn get_room_state(&self, room: OwnedRoomOrAliasId) -> Result {
-	let room_id = self.services.alias.resolve(&room).await?;
+	let room_id = self.services.alias.maybe_resolve(&room).await?;
 	let room_state: Vec<Raw<AnyStateEvent>> = self
 		.services
 		.state_accessor

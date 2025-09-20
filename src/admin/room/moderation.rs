@@ -105,7 +105,7 @@ async fn ban_room(&self, room: OwnedRoomOrAliasId) -> Result {
 				match self
 					.services
 					.alias
-					.resolve_alias(room_alias, None)
+					.resolve_alias(room_alias)
 					.await
 				{
 					| Ok((room_id, servers)) => {
@@ -260,7 +260,7 @@ async fn ban_list_of_rooms(&self) -> Result {
 									match self
 										.services
 										.alias
-										.resolve_alias(room_alias, None)
+										.resolve_alias(room_alias)
 										.await
 									{
 										| Ok((room_id, servers)) => {
@@ -423,7 +423,7 @@ async fn unban_room(&self, room: OwnedRoomOrAliasId) -> Result {
 				match self
 					.services
 					.alias
-					.resolve_alias(room_alias, None)
+					.resolve_alias(room_alias)
 					.await
 				{
 					| Ok((room_id, servers)) => {

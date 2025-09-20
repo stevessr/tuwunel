@@ -30,7 +30,11 @@ pub(super) async fn short_event_id(&self, event_id: OwnedEventId) -> Result {
 
 #[admin_command]
 pub(super) async fn short_room_id(&self, room_id: OwnedRoomOrAliasId) -> Result {
-	let room_id = self.services.alias.resolve(&room_id).await?;
+	let room_id = self
+		.services
+		.alias
+		.maybe_resolve(&room_id)
+		.await?;
 
 	let shortid = self
 		.services

@@ -1,11 +1,9 @@
-mod remote;
-
 use std::sync::Arc;
 
 use futures::{Stream, StreamExt};
 use ruma::{
 	OwnedRoomId, OwnedServerName, OwnedUserId, RoomAliasId, RoomId, RoomOrAliasId, UserId,
-	events::StateEventType,
+	api::federation::query::get_room_information::v1::Request, events::StateEventType,
 };
 use tuwunel_core::{
 	Err, Result, err,
@@ -99,23 +97,21 @@ impl Service {
 	}
 
 	#[inline]
-	pub async fn resolve(&self, room: &RoomOrAliasId) -> Result<OwnedRoomId> {
-		self.resolve_with_servers(room, None)
-			.await
-			.map(|(room_id, _)| room_id)
+	pub async fn maybe_resolve(&self, room: &RoomOrAliasId) -> Result<OwnedRoomId> {
+		match <&RoomId>::try_from(room) {
+			| Ok(room_id) => Ok(room_id.to_owned()),
+			| Err(alias) => Ok(self.resolve_alias(alias).await?.0),
+		}
 	}
 
-	pub async fn resolve_with_servers(
+	pub async fn maybe_resolve_with_servers(
 		&self,
 		room: &RoomOrAliasId,
 		servers: Option<Vec<OwnedServerName>>,
 	) -> Result<(OwnedRoomId, Vec<OwnedServerName>)> {
-		if room.is_room_id() {
-			let room_id: &RoomId = room.try_into().expect("valid RoomId");
-			Ok((room_id.to_owned(), servers.unwrap_or_default()))
-		} else {
-			let alias: &RoomAliasId = room.try_into().expect("valid RoomAliasId");
-			self.resolve_alias(alias, servers).await
+		match <&RoomId>::try_from(room) {
+			| Ok(room_id) => Ok((room_id.to_owned(), servers.unwrap_or_default())),
+			| Err(alias) => self.resolve_alias(alias).await,
 		}
 	}
 
@@ -123,7 +119,6 @@ impl Service {
 	pub async fn resolve_alias(
 		&self,
 		room_alias: &RoomAliasId,
-		servers: Option<Vec<OwnedServerName>>,
 	) -> Result<(OwnedRoomId, Vec<OwnedServerName>)> {
 		if self
 			.services
@@ -141,9 +136,24 @@ impl Service {
 			return Err!(Request(NotFound("Room with alias not found.")));
 		}
 
-		return self
-			.remote_resolve(room_alias, servers.unwrap_or_default())
-			.await;
+		return self.remote_resolve(room_alias).await;
+	}
+
+	async fn remote_resolve(
+		&self,
+		room_alias: &RoomAliasId,
+	) -> Result<(OwnedRoomId, Vec<OwnedServerName>)> {
+		let server = room_alias.server_name();
+
+		let request = Request { room_alias: room_alias.to_owned() };
+
+		let response = self
+			.services
+			.sending
+			.send_federation_request(server, request)
+			.await?;
+
+		Ok((response.room_id, response.servers))
 	}
 
 	#[tracing::instrument(skip(self), level = "trace")]

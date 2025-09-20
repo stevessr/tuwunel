@@ -5,7 +5,7 @@ use ruma::{
 	OwnedServerName, RoomAliasId, RoomId,
 	api::client::alias::{create_alias, delete_alias, get_alias},
 };
-use tuwunel_core::{Err, Result, debug};
+use tuwunel_core::{Err, Result, debug, err};
 use tuwunel_service::Services;
 
 use crate::Ruma;
@@ -83,13 +83,11 @@ pub(crate) async fn get_alias_route(
 ) -> Result<get_alias::v3::Response> {
 	let room_alias = body.body.room_alias;
 
-	let Ok((room_id, servers)) = services
+	let (room_id, servers) = services
 		.alias
-		.resolve_alias(&room_alias, None)
+		.resolve_alias(&room_alias)
 		.await
-	else {
-		return Err!(Request(NotFound("Room with alias not found.")));
-	};
+		.map_err(|_| err!(Request(NotFound("Room with alias not found."))))?;
 
 	let servers = room_available_servers(&services, &room_id, &room_alias, servers).await;
 	debug!(?room_alias, ?room_id, "available servers: {servers:?}");

@@ -119,7 +119,7 @@ pub(super) async fn create_user(&self, username: String, password: Option<String
 		.is_empty()
 	{
 		for room in &self.services.server.config.auto_join_rooms {
-			let Ok(room_id) = self.services.alias.resolve(room).await else {
+			let Ok(room_id) = self.services.alias.maybe_resolve(room).await else {
 				error!(
 					%user_id,
 					"Failed to resolve room alias to room ID when attempting to auto join {room}, skipping"
@@ -408,7 +408,7 @@ pub(super) async fn force_join_list_of_local_users(
 	let (room_id, servers) = self
 		.services
 		.alias
-		.resolve_with_servers(&room_id, None)
+		.maybe_resolve_with_servers(&room_id, None)
 		.await?;
 
 	if !self
@@ -532,7 +532,7 @@ pub(super) async fn force_join_all_local_users(
 	let (room_id, servers) = self
 		.services
 		.alias
-		.resolve_with_servers(&room_id, None)
+		.maybe_resolve_with_servers(&room_id, None)
 		.await?;
 
 	if !self
@@ -617,7 +617,7 @@ pub(super) async fn force_join_room(
 	let (room_id, servers) = self
 		.services
 		.alias
-		.resolve_with_servers(&room_id, None)
+		.maybe_resolve_with_servers(&room_id, None)
 		.await?;
 
 	assert!(
@@ -645,7 +645,11 @@ pub(super) async fn force_leave_room(
 	room_id: OwnedRoomOrAliasId,
 ) -> Result {
 	let user_id = parse_local_user_id(self.services, &user_id)?;
-	let room_id = self.services.alias.resolve(&room_id).await?;
+	let room_id = self
+		.services
+		.alias
+		.maybe_resolve(&room_id)
+		.await?;
 
 	assert!(
 		self.services.globals.user_is_local(&user_id),
@@ -678,7 +682,11 @@ pub(super) async fn force_leave_room(
 #[admin_command]
 pub(super) async fn force_demote(&self, user_id: String, room_id: OwnedRoomOrAliasId) -> Result {
 	let user_id = parse_local_user_id(self.services, &user_id)?;
-	let room_id = self.services.alias.resolve(&room_id).await?;
+	let room_id = self
+		.services
+		.alias
+		.maybe_resolve(&room_id)
+		.await?;
 
 	assert!(
 		self.services.globals.user_is_local(&user_id),
@@ -744,7 +752,11 @@ pub(super) async fn force_promote(
 	room_id: OwnedRoomOrAliasId,
 ) -> Result {
 	let target_id = parse_user_id(self.services, &target_id)?;
-	let room_id = self.services.alias.resolve(&room_id).await?;
+	let room_id = self
+		.services
+		.alias
+		.maybe_resolve(&room_id)
+		.await?;
 
 	let state_lock = self.services.state.mutex.lock(&room_id).await;
 

@@ -165,10 +165,7 @@ async fn get_join_params(
 			},
 			// ... if room alias, resolve and don't shuffle ...
 			| Err(room_alias) => {
-				let (room_id, servers) = services
-					.alias
-					.resolve_alias(&room_alias, Some(via.to_vec()))
-					.await?;
+				let (room_id, servers) = services.alias.resolve_alias(&room_alias).await?;
 
 				(room_id, servers, Vec::new())
 			},
