@@ -43,6 +43,8 @@ impl crate::Service for Service {
 impl Service {
 	#[tracing::instrument(skip(self))]
 	pub fn set_alias(&self, alias: &RoomAliasId, room_id: &RoomId, user_id: &UserId) -> Result {
+		self.check_alias_local(alias)?;
+
 		if alias == self.services.globals.admin_alias
 			&& user_id != self.services.globals.server_user
 		{
