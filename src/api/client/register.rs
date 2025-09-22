@@ -58,8 +58,8 @@ pub(crate) async fn get_register_available_route(
 		});
 
 	if services
-		.globals
-		.forbidden_usernames()
+		.config
+		.forbidden_usernames
 		.is_match(&body.username)
 	{
 		return Err!(Request(Forbidden("Username is forbidden")));
@@ -228,8 +228,8 @@ pub(crate) async fn register_route(
 					});
 
 			if services
-				.globals
-				.forbidden_usernames()
+				.config
+				.forbidden_usernames
 				.is_match(username)
 				&& !emergency_mode_enabled
 			{
@@ -384,8 +384,8 @@ pub(crate) async fn register_route(
 	// If `new_user_displayname_suffix` is set, registration will push whatever
 	// content is set to the user's display name with a space before it
 	if !services
-		.globals
-		.new_user_displayname_suffix()
+		.config
+		.new_user_displayname_suffix
 		.is_empty()
 		&& body.appservice_info.is_none()
 	{

@@ -212,7 +212,7 @@ where
 	I: Iterator<Item = (OwnedServerName, Vec<OwnedServerSigningKeyId>)> + Send,
 {
 	let mut missing: Batch = batch.collect();
-	for notary in self.services.globals.trusted_servers() {
+	for notary in &self.services.config.trusted_servers {
 		let missing_keys = keys_count(&missing);
 		let missing_servers = missing.len();
 		debug!(

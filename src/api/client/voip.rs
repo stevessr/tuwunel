@@ -25,12 +25,12 @@ pub(crate) async fn turn_server_route(
 		return Err!(Request(NotFound("Not Found")));
 	}
 
-	let turn_secret = services.globals.turn_secret.clone();
+	let turn_secret = &services.config.turn_secret;
 
 	let (username, password) = if !turn_secret.is_empty() {
 		let expiry = SecondsSinceUnixEpoch::from_system_time(
 			SystemTime::now()
-				.checked_add(Duration::from_secs(services.globals.turn_ttl()))
+				.checked_add(Duration::from_secs(services.config.turn_ttl))
 				.expect("TURN TTL should not get this high"),
 		)
 		.expect("time is valid");
@@ -53,16 +53,13 @@ pub(crate) async fn turn_server_route(
 
 		(username, password)
 	} else {
-		(
-			services.globals.turn_username().clone(),
-			services.globals.turn_password().clone(),
-		)
+		(services.config.turn_username.clone(), services.config.turn_password.clone())
 	};
 
 	Ok(get_turn_server_info::v3::Response {
 		username,
 		password,
-		uris: services.globals.turn_uris().to_vec(),
-		ttl: Duration::from_secs(services.globals.turn_ttl()),
+		uris: services.config.turn_uris.clone(),
+		ttl: Duration::from_secs(services.config.turn_ttl),
 	})
 }

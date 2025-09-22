@@ -26,8 +26,8 @@ pub(crate) async fn create_alias_route(
 	// this isn't apart of alias_checks or delete alias route because we should
 	// allow removing forbidden room aliases
 	if services
-		.globals
-		.forbidden_alias_names()
+		.config
+		.forbidden_alias_names
 		.is_match(body.room_alias.alias())
 	{
 		return Err!(Request(Forbidden("Room alias is forbidden.")));

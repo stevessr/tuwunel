@@ -185,7 +185,7 @@ pub async fn create_admin_room(services: &Services) -> Result {
 		.await?;
 
 	// 6. Room alias
-	let alias = &services.globals.admin_alias;
+	let alias = &services.admin.admin_alias;
 
 	services
 		.timeline

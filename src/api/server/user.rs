@@ -44,7 +44,7 @@ pub(crate) async fn get_devices_route(
 				let device_id = metadata.device_id.clone();
 				let device_id_clone = device_id.clone();
 				let device_id_string = device_id.as_str().to_owned();
-				let device_display_name = if services.globals.allow_device_name_federation() {
+				let device_display_name = if services.config.allow_device_name_federation {
 					metadata.display_name.clone()
 				} else {
 					Some(device_id_string)
@@ -95,7 +95,7 @@ pub(crate) async fn get_keys_route(
 		None,
 		&body.device_keys,
 		|u| Some(u.server_name()) == body.origin.as_deref(),
-		services.globals.allow_device_name_federation(),
+		services.config.allow_device_name_federation,
 	)
 	.await?;
 

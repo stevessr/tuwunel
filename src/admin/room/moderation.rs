@@ -48,7 +48,7 @@ pub(crate) enum RoomModerationCommand {
 async fn ban_room(&self, room: OwnedRoomOrAliasId) -> Result {
 	debug!("Got room alias or ID: {}", room);
 
-	let admin_room_alias = &self.services.globals.admin_alias;
+	let admin_room_alias = &self.services.admin.admin_alias;
 
 	if let Ok(admin_room_id) = self.services.admin.get_admin_room().await {
 		if room.to_string().eq(&admin_room_id) || room.to_string().eq(admin_room_alias) {
@@ -209,7 +209,7 @@ async fn ban_list_of_rooms(&self) -> Result {
 		.drain(1..self.body.len().saturating_sub(1))
 		.collect::<Vec<_>>();
 
-	let admin_room_alias = &self.services.globals.admin_alias;
+	let admin_room_alias = &self.services.admin.admin_alias;
 
 	let mut room_ban_count: usize = 0;
 	let mut room_ids: Vec<OwnedRoomId> = Vec::new();

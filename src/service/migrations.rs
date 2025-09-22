@@ -159,7 +159,7 @@ async fn migrate(services: &Services) -> Result {
 	);
 
 	{
-		let patterns = services.globals.forbidden_usernames();
+		let patterns = &services.config.forbidden_usernames;
 		if !patterns.is_empty() {
 			services
 				.users
@@ -183,7 +183,7 @@ async fn migrate(services: &Services) -> Result {
 	}
 
 	{
-		let patterns = services.globals.forbidden_alias_names();
+		let patterns = &services.config.forbidden_alias_names;
 		if !patterns.is_empty() {
 			for room_id in services
 				.metadata

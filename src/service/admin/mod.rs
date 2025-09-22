@@ -12,7 +12,7 @@ use async_trait::async_trait;
 pub use create::create_admin_room;
 use futures::{Future, FutureExt, TryFutureExt};
 use ruma::{
-	OwnedEventId, OwnedRoomId, RoomId, UserId,
+	OwnedEventId, OwnedRoomAliasId, OwnedRoomId, RoomId, UserId,
 	events::room::message::{Relation, RoomMessageEventContent},
 };
 use tokio::sync::{RwLock, mpsc};
@@ -27,6 +27,7 @@ pub struct Service {
 	channel: StdRwLock<Option<mpsc::Sender<CommandInput>>>,
 	pub handle: RwLock<Option<Processor>>,
 	pub complete: StdRwLock<Option<Completer>>,
+	pub admin_alias: OwnedRoomAliasId,
 	#[cfg(feature = "console")]
 	pub console: Arc<console::Console>,
 }
@@ -69,6 +70,8 @@ impl crate::Service for Service {
 			channel: StdRwLock::new(None),
 			handle: RwLock::new(None),
 			complete: StdRwLock::new(None),
+			admin_alias: OwnedRoomAliasId::try_from(format!("#admins:{}", &args.server.name))
+				.expect("#admins:server_name is valid alias name"),
 			#[cfg(feature = "console")]
 			console: console::Console::new(args),
 		}))
@@ -234,7 +237,7 @@ impl Service {
 		let room_id = self
 			.services
 			.alias
-			.resolve_local_alias(&self.services.globals.admin_alias)
+			.resolve_local_alias(&self.admin_alias)
 			.await?;
 
 		self.services

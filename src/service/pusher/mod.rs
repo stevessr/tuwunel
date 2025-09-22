@@ -207,7 +207,7 @@ impl Service {
 			features: Default::default(),
 		};
 
-		let dest = dest.replace(self.services.globals.notification_push_path(), "");
+		let dest = dest.replace(&self.services.config.notification_push_path, "");
 		trace!("Push gateway destination: {dest}");
 
 		let http_request = request

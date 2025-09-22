@@ -678,8 +678,8 @@ async fn room_alias_check(
 
 	// check if room alias is forbidden
 	if services
-		.globals
-		.forbidden_alias_names()
+		.config
+		.forbidden_alias_names
 		.is_match(room_alias_name)
 	{
 		return Err!(Request(Unknown("Room alias name is forbidden.")));
@@ -725,8 +725,8 @@ async fn room_alias_check(
 async fn custom_room_id_check(services: &Services, custom_room_id: &str) -> Result<OwnedRoomId> {
 	// apply forbidden room alias checks to custom room IDs too
 	if services
-		.globals
-		.forbidden_alias_names()
+		.config
+		.forbidden_alias_names
 		.is_match(custom_room_id)
 	{
 		return Err!(Request(Unknown("Custom room ID is forbidden.")));
@@ -798,7 +798,7 @@ async fn can_create_room_check(
 	services: &Services,
 	body: &Ruma<create_room::v3::Request>,
 ) -> Result {
-	if !services.globals.allow_room_creation()
+	if !services.config.allow_room_creation
 		&& body.appservice_info.is_none()
 		&& !services.users.is_admin(body.sender_user()).await
 	{
