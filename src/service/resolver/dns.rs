@@ -34,16 +34,19 @@ type ResolvingResult = Result<Addrs, Box<dyn std::error::Error + Send + Sync>>;
 
 impl Resolver {
 	pub(super) fn build(server: &Arc<Server>, cache: Arc<Cache>) -> Result<Arc<Self>> {
+		let config = &server.config;
+
 		// Create the primary resolver.
-		let (conf, opts) = Self::configure(server)?;
+		let (conf, mut opts) = Self::configure(server)?;
+		opts.negative_min_ttl = Some(Duration::from_secs(config.dns_min_ttl_nxdomain));
+		opts.positive_min_ttl = Some(Duration::from_secs(config.dns_min_ttl));
+		opts.cache_size = config.dns_cache_entries.try_into()?;
 		let resolver = Self::create(server, conf.clone(), opts.clone())?;
 
 		// Create the passthru resolver with modified options.
 		let (conf, mut opts) = (conf, opts);
-		opts.negative_min_ttl = None;
-		opts.negative_max_ttl = None;
-		opts.positive_min_ttl = None;
-		opts.positive_max_ttl = None;
+		opts.negative_min_ttl = Some(Duration::ZERO);
+		opts.positive_min_ttl = Some(Duration::ZERO);
 		opts.cache_size = ResolverOpts::default().cache_size;
 		let passthru = Arc::new(Passthru {
 			resolver: Self::create(server, conf, opts)?,
@@ -111,10 +114,7 @@ impl Resolver {
 	fn configure_opts(server: &Arc<Server>, mut opts: ResolverOpts) -> ResolverOpts {
 		let config = &server.config;
 
-		opts.cache_size = config.dns_cache_entries as usize;
-		opts.negative_min_ttl = Some(Duration::from_secs(config.dns_min_ttl_nxdomain));
 		opts.negative_max_ttl = Some(Duration::from_secs(60 * 60 * 24 * 30));
-		opts.positive_min_ttl = Some(Duration::from_secs(config.dns_min_ttl));
 		opts.positive_max_ttl = Some(Duration::from_secs(60 * 60 * 24 * 7));
 		opts.timeout = Duration::from_secs(config.dns_timeout);
 		opts.attempts = config.dns_attempts as usize;
