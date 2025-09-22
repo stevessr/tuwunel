@@ -187,8 +187,8 @@ See the following spec pages for more details on these files:
 - [`/.well-known/matrix/support`](https://spec.matrix.org/latest/client-server-api/#getwell-knownmatrixsupport)
 
 Examples of delegation:
-- <https://puppygock.gay/.well-known/matrix/server>
-- <https://puppygock.gay/.well-known/matrix/client>
+- <https://matrix.org/.well-known/matrix/server>
+- <https://matrix.org/.well-known/matrix/client>
 
 For Apache and Nginx there are many examples available online.
 
