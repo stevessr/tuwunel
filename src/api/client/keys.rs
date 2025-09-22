@@ -13,7 +13,6 @@ use ruma::{
 				upload_signatures::{self},
 				upload_signing_keys,
 			},
-			uiaa::{AuthFlow, AuthType, UiaaInfo},
 		},
 		federation,
 	},
@@ -21,11 +20,10 @@ use ruma::{
 	serde::Raw,
 };
 use serde_json::json;
-use tuwunel_core::{Err, Error, Result, debug, debug_warn, err, result::NotFound, utils};
+use tuwunel_core::{Err, Error, Result, debug, debug_error, debug_warn, err, result::NotFound};
 use tuwunel_service::{Services, users::parse_master_key};
 
-use super::SESSION_ID_LENGTH;
-use crate::Ruma;
+use crate::{Ruma, router::auth_uiaa};
 
 /// # `POST /_matrix/client/r0/keys/upload`
 ///
@@ -162,23 +160,17 @@ pub(crate) async fn upload_signing_keys_route(
 	State(services): State<crate::State>,
 	body: Ruma<upload_signing_keys::v3::Request>,
 ) -> Result<upload_signing_keys::v3::Response> {
-	let (sender_user, sender_device) = body.sender();
-
-	// UIAA
-	let mut uiaainfo = UiaaInfo {
-		flows: vec![AuthFlow { stages: vec![AuthType::Password] }],
-		..Default::default()
-	};
-
+	// Access token is required for this endpoint regardless of conditional UIAA so
+	// we'll always have a sender_user.
 	match check_for_new_keys(
 		services,
-		sender_user,
+		body.sender_user(),
 		body.self_signing_key.as_ref(),
 		body.user_signing_key.as_ref(),
 		body.master_key.as_ref(),
 	)
 	.await
-	.inspect_err(|e| debug!(?e))
+	.inspect_err(|e| debug_error!(?e))
 	{
 		| Ok(exists) => {
 			if let Some(result) = exists {
@@ -186,45 +178,25 @@ pub(crate) async fn upload_signing_keys_route(
 				// (lost connection for example)
 				return Ok(result);
 			}
-			debug!(
-				"Skipping UIA in accordance with MSC3967, the user didn't have any existing keys"
-			);
+
 			// Some of the keys weren't found, so we let them upload
+			debug!("Skipping UIA in accordance with MSC3967, user had no existing keys");
 		},
 		| _ => {
-			match &body.auth {
-				| Some(auth) => {
-					let (worked, uiaainfo) = services
-						.uiaa
-						.try_auth(sender_user, sender_device, auth, &uiaainfo)
-						.await?;
-
-					if !worked {
-						return Err(Error::Uiaa(uiaainfo));
-					}
-					// Success!
-				},
-				| _ => match body.json_body.as_ref() {
-					| Some(json) => {
-						uiaainfo.session = Some(utils::random_string(SESSION_ID_LENGTH));
-						services
-							.uiaa
-							.create(sender_user, sender_device, &uiaainfo, json);
-
-						return Err(Error::Uiaa(uiaainfo));
-					},
-					| _ => {
-						return Err(Error::BadRequest(ErrorKind::NotJson, "Not json."));
-					},
-				},
-			}
+			let authed_user = auth_uiaa(&services, &body).await?;
+			assert_eq!(
+				body.sender_user(),
+				authed_user,
+				"Expected UIAA of {0} and not {authed_user}",
+				body.sender_user(),
+			);
 		},
 	}
 
 	services
 		.users
 		.add_cross_signing_keys(
-			sender_user,
+			body.sender_user(),
 			&body.master_key,
 			&body.self_signing_key,
 			&body.user_signing_key,
@@ -250,6 +222,7 @@ async fn check_for_new_keys(
 			.users
 			.get_master_key(None, user_id, &|_| true)
 			.await;
+
 		if result.is_not_found() {
 			empty = true;
 		} else {
@@ -262,6 +235,7 @@ async fn check_for_new_keys(
 			}
 		}
 	}
+
 	if let Some(user_signing_key) = user_signing_key {
 		let key = services.users.get_user_signing_key(user_id).await;
 		if key.is_not_found() && !empty {
@@ -269,6 +243,7 @@ async fn check_for_new_keys(
 				"Tried to update an existing user signing key, UIA required"
 			)));
 		}
+
 		if !key.is_not_found() {
 			let existing_signing_key = key?.deserialize()?;
 			if existing_signing_key != user_signing_key.deserialize()? {
@@ -278,17 +253,20 @@ async fn check_for_new_keys(
 			}
 		}
 	}
+
 	if let Some(self_signing_key) = self_signing_key {
 		let key = services
 			.users
 			.get_self_signing_key(None, user_id, &|_| true)
 			.await;
+
 		if key.is_not_found() && !empty {
-			debug!(?key);
+			debug_error!(?key);
 			return Err!(Request(Forbidden(
 				"Tried to add a new signing key independently from the master key"
 			)));
 		}
+
 		if !key.is_not_found() {
 			let existing_signing_key = key?.deserialize()?;
 			if existing_signing_key != self_signing_key.deserialize()? {
@@ -298,6 +276,7 @@ async fn check_for_new_keys(
 			}
 		}
 	}
+
 	if empty {
 		return Ok(None);
 	}
