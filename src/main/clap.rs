@@ -179,11 +179,11 @@ pub(crate) fn update(mut config: Figment, args: &Args) -> Result<Figment> {
 	// All other individual overrides can go last in case we have options which
 	// set multiple conf items at once and the user still needs granular overrides.
 	for option in &args.option {
-		let (key, val) = option
+		let (path, val) = option
 			.split_once('=')
 			.ok_or_else(|| err!("Missing '=' in -O/--option: {option:?}"))?;
 
-		if key.is_empty() {
+		if path.is_empty() {
 			return Err!("Missing key= in -O/--option: {option:?}");
 		}
 
@@ -193,12 +193,9 @@ pub(crate) fn update(mut config: Figment, args: &Args) -> Result<Figment> {
 
 		// The value has to pass for what would appear as a line in the TOML file.
 		let val = toml::from_str::<FigmentValue>(option)?;
-		let FigmentValue::Dict(_, val) = val else {
-			panic!("Unexpected Figment Value: {val:#?}");
-		};
 
 		// Figment::merge() overrides existing
-		config = config.merge((key, val[key].clone()));
+		config = config.merge((path, val.find(path)));
 	}
 
 	Ok(config)
