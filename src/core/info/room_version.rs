@@ -7,13 +7,8 @@ use ruma::{RoomVersionId, api::client::discovery::get_capabilities::v3::RoomVers
 use crate::{at, is_equal_to};
 
 /// Partially supported non-compliant room versions
-pub const UNSTABLE_ROOM_VERSIONS: &[RoomVersionId] = &[
-	RoomVersionId::V1,
-	RoomVersionId::V2,
-	RoomVersionId::V3,
-	RoomVersionId::V4,
-	RoomVersionId::V5,
-];
+pub const UNSTABLE_ROOM_VERSIONS: &[RoomVersionId] =
+	&[RoomVersionId::V2, RoomVersionId::V3, RoomVersionId::V4, RoomVersionId::V5];
 
 /// Supported and stable room versions
 pub const STABLE_ROOM_VERSIONS: &[RoomVersionId] = &[
