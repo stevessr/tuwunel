@@ -81,8 +81,10 @@ impl Resolver {
 
 	fn configure(server: &Arc<Server>) -> Result<(ResolverConfig, ResolverOpts)> {
 		let config = &server.config;
-		let (sys_conf, opts) = hickory_resolver::system_conf::read_system_conf()
-			.map_err(|e| err!(error!("Failed to configure DNS resolver from system: {e}")))?;
+		let (sys_conf, opts) =
+			hickory_resolver::system_conf::read_system_conf().map_err(|e| {
+				err!(error!("Failed to configure DNS resolver from `/etc/resolv.conf': {e}"))
+			})?;
 
 		let mut conf = ResolverConfig::new();
 		if let Some(domain) = sys_conf.domain() {
