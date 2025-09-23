@@ -13,7 +13,7 @@ use tuwunel_core::{
 	Error, Result, err, implement,
 	matrix::{
 		event::{Event, StateKey, TypeExt},
-		pdu::{EventHash, PduBuilder, PduEvent},
+		pdu::{EventHash, PduBuilder, PduEvent, PrevEvents},
 		room_version,
 		state_res::{self},
 	},
@@ -43,7 +43,7 @@ pub async fn create_hash_and_sign_event(
 		timestamp,
 	} = pdu_builder;
 
-	let prev_events: Vec<OwnedEventId> = self
+	let prev_events: PrevEvents = self
 		.services
 		.state
 		.get_forward_extremities(room_id)

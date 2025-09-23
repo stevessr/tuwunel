@@ -161,12 +161,10 @@ async fn handle(
 		})
 		.try_flatten()
 		.try_collect()
-		.boxed()
 		.await?;
 
 	// evaluate edus after pdus, at least for now.
 	edus.for_each_concurrent(automatic_width(), |edu| handle_edu(services, client, origin, edu))
-		.boxed()
 		.await;
 
 	Ok(results)
@@ -205,6 +203,7 @@ async fn handle_room(
 			Ok((event_id, result))
 		})
 		.try_collect()
+		.boxed()
 		.await
 }
 

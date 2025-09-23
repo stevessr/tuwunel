@@ -1,5 +1,6 @@
 use std::{ops::Range, time::Duration};
 
+use futures::FutureExt;
 use ruma::{
 	CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, RoomId, RoomVersionId, ServerName,
 };
@@ -62,6 +63,7 @@ pub(super) async fn handle_prev_pdu(
 		room_version,
 		create_event_id,
 	)
+	.boxed()
 	.await?;
 
 	Ok(())

@@ -17,6 +17,7 @@ use ruma::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue as RawJsonValue;
+use smallvec::SmallVec;
 
 pub use self::{
 	Count as PduCount, Id as PduId, Pdu as PduEvent, RawId as RawPduId,
@@ -32,6 +33,11 @@ use crate::Result;
 /// Persistent Data Unit (Event)
 #[derive(Clone, Deserialize, Serialize, Debug)]
 pub struct Pdu {
+	#[serde(rename = "type")]
+	pub kind: TimelineEventType,
+
+	pub content: Box<RawJsonValue>,
+
 	pub event_id: OwnedEventId,
 
 	pub room_id: OwnedRoomId,
@@ -39,31 +45,26 @@ pub struct Pdu {
 	pub sender: OwnedUserId,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub origin: Option<OwnedServerName>,
-
-	pub origin_server_ts: UInt,
-
-	#[serde(rename = "type")]
-	pub kind: TimelineEventType,
-
-	pub content: Box<RawJsonValue>,
-
-	#[serde(skip_serializing_if = "Option::is_none")]
 	pub state_key: Option<StateKey>,
-
-	pub prev_events: Vec<OwnedEventId>,
-
-	pub depth: UInt,
-
-	pub auth_events: Vec<OwnedEventId>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub redacts: Option<OwnedEventId>,
 
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub unsigned: Option<Box<RawJsonValue>>,
+	pub prev_events: PrevEvents,
+
+	pub auth_events: AuthEvents,
+
+	pub origin_server_ts: UInt,
+
+	pub depth: UInt,
 
 	pub hashes: EventHash,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub origin: Option<OwnedServerName>,
+
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub unsigned: Option<Box<RawJsonValue>>,
 
 	// BTreeMap<Box<ServerName>, BTreeMap<ServerSigningKeyId, String>>
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -74,6 +75,16 @@ pub struct Pdu {
 	#[serde(default, skip_serializing)]
 	pub rejected: bool,
 }
+
+/// Tuned prev_events vector. Most events have one prev_event. Many events have
+/// more but allocations for all of those cases still beats allocations for all
+/// cases.
+pub type PrevEvents = SmallVec<[OwnedEventId; 1]>;
+
+/// Tuned auth_events vector. Average events have three auth events. It is
+/// debatable whether this could be an ArrayVec but the realistic upper-bound is
+/// too high and non-deterministic in the era of restricted-type rooms.
+pub type AuthEvents = SmallVec<[OwnedEventId; 3]>;
 
 /// The [maximum size allowed] for a PDU.
 /// [maximum size allowed]: https://spec.matrix.org/latest/client-server-api/#size-limits

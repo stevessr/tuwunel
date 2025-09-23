@@ -533,9 +533,9 @@ async fn handle_left_room(
 			unsigned: None,
 			// The following keys are dropped on conversion
 			room_id: room_id.clone(),
-			prev_events: vec![],
+			prev_events: Default::default(),
+			auth_events: Default::default(),
 			depth: uint!(1),
-			auth_events: vec![],
 			redacts: None,
 			hashes: EventHash::default(),
 			signatures: None,

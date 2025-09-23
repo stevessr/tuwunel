@@ -163,7 +163,7 @@ async fn topic_basic() {
 			.finish(),
 	);
 
-	let events = &[
+	let events = vec![
 		to_init_pdu_event(
 			"T1",
 			alice(),
@@ -219,7 +219,7 @@ async fn topic_basic() {
 		.map(event_id)
 		.collect::<Vec<_>>();
 
-	do_check(events, edges, expected_state_ids).await;
+	do_check(&events, edges, expected_state_ids).await;
 }
 
 #[tokio::test]

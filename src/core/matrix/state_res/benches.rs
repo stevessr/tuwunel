@@ -433,13 +433,13 @@ where
 		.iter()
 		.map(AsRef::as_ref)
 		.map(event_id)
-		.collect::<Vec<_>>();
+		.collect();
 
 	let prev_events = prev_events
 		.iter()
 		.map(AsRef::as_ref)
 		.map(event_id)
-		.collect::<Vec<_>>();
+		.collect();
 
 	let state_key = state_key.map(ToOwned::to_owned);
 	PduEvent {

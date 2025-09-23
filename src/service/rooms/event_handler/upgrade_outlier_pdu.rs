@@ -212,13 +212,11 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 			.services
 			.state_compressor
 			.save_state(room_id, new_room_state)
-			.boxed()
 			.await?;
 
 		self.services
 			.state
 			.force_state(room_id, shortstatehash, added, removed, &state_lock)
-			.boxed()
 			.await?;
 	}
 

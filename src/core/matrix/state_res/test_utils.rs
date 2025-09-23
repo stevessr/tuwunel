@@ -428,13 +428,13 @@ pub(super) fn to_init_pdu_event(
 	content: Box<RawJsonValue>,
 ) -> PduEvent {
 	let ts = SERVER_TIMESTAMP.fetch_add(1, SeqCst);
+	let state_key = state_key.map(ToOwned::to_owned);
 	let id = if id.contains('$') {
 		id.to_owned()
 	} else {
 		format!("${id}:foo")
 	};
 
-	let state_key = state_key.map(ToOwned::to_owned);
 	PduEvent {
 		event_id: id.try_into().unwrap(),
 		room_id: room_id().to_owned(),
@@ -446,8 +446,8 @@ pub(super) fn to_init_pdu_event(
 		content,
 		redacts: None,
 		unsigned: None,
-		auth_events: vec![],
-		prev_events: vec![],
+		auth_events: Default::default(),
+		prev_events: Default::default(),
 		depth: uint!(0),
 		hashes: EventHash::default(),
 		signatures: None,
@@ -468,6 +468,7 @@ where
 	S: AsRef<str>,
 {
 	let ts = SERVER_TIMESTAMP.fetch_add(1, SeqCst);
+	let state_key = state_key.map(ToOwned::to_owned);
 	let id = if id.contains('$') {
 		id.to_owned()
 	} else {
@@ -477,14 +478,13 @@ where
 		.iter()
 		.map(AsRef::as_ref)
 		.map(event_id)
-		.collect::<Vec<_>>();
+		.collect();
 	let prev_events = prev_events
 		.iter()
 		.map(AsRef::as_ref)
 		.map(event_id)
-		.collect::<Vec<_>>();
+		.collect();
 
-	let state_key = state_key.map(ToOwned::to_owned);
 	PduEvent {
 		event_id: id.try_into().unwrap(),
 		room_id: room_id().to_owned(),
@@ -528,18 +528,18 @@ where
 	}
 
 	let ts = SERVER_TIMESTAMP.fetch_add(1, SeqCst);
+	let state_key = state_key.map(ToOwned::to_owned);
 	let auth_events = auth_events
 		.iter()
 		.map(AsRef::as_ref)
 		.map(event_id)
-		.collect::<Vec<_>>();
+		.collect();
 	let prev_events = prev_events
 		.iter()
 		.map(AsRef::as_ref)
 		.map(event_id)
-		.collect::<Vec<_>>();
+		.collect();
 
-	let state_key = state_key.map(ToOwned::to_owned);
 	PduEvent {
 		event_id: event_id(id),
 		room_id: hydra_room_id().to_owned(),
@@ -581,12 +581,12 @@ where
 		.iter()
 		.map(AsRef::as_ref)
 		.map(event_id)
-		.collect::<Vec<_>>();
+		.collect();
 	let prev_events = prev_events
 		.iter()
 		.map(AsRef::as_ref)
 		.map(event_id)
-		.collect::<Vec<_>>();
+		.collect();
 
 	PduEvent {
 		event_id: id.try_into().unwrap(),
@@ -636,8 +636,8 @@ pub(super) fn room_create_hydra_pdu_event(
 		content,
 		redacts: None,
 		unsigned: None,
-		auth_events: vec![],
-		prev_events: vec![],
+		auth_events: Default::default(),
+		prev_events: Default::default(),
 		depth: uint!(0),
 		hashes: EventHash::default(),
 		signatures: None,
