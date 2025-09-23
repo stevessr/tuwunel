@@ -1,8 +1,16 @@
 use std::{fmt, marker::PhantomData, str::FromStr};
 
-use ruma::{CanonicalJsonError, CanonicalJsonObject, canonical_json::try_from_json_map};
+use ruma::{
+	CanonicalJsonError, CanonicalJsonObject, canonical_json::try_from_json_map, serde::Raw,
+};
 
 use crate::Result;
+
+/// Perform a round-trip through serde_json starting with a native type T and
+/// ending with a Ruma Raw<U> which is usually just T.
+pub fn to_raw<T: serde::Serialize, U>(input: T) -> Result<Raw<U>> {
+	Ok(serde_json::from_value(serde_json::to_value(input)?)?)
+}
 
 /// Fallible conversion from any value that implements `Serialize` to a
 /// `CanonicalJsonObject`.

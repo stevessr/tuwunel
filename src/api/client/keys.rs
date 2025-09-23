@@ -17,7 +17,9 @@ use ruma::{
 	serde::Raw,
 };
 use serde_json::json;
-use tuwunel_core::{Err, Result, debug, debug_error, debug_warn, err, result::NotFound};
+use tuwunel_core::{
+	Err, Result, debug, debug_error, debug_warn, err, result::NotFound, utils::json,
+};
 use tuwunel_service::{Services, users::parse_master_key};
 
 use crate::{Ruma, router::auth_uiaa};
@@ -537,16 +539,16 @@ where
 							.signatures
 							.append(&mut our_master_key.signatures);
 					}
-					let json = serde_json::to_value(master_key).expect("to_value always works");
-					let raw = serde_json::from_value(json).expect("Raw::from_value always works");
+
+					// Dont notify. A notification would trigger another key request resulting in
+					// an endless loop.
+					let notify = false;
+					let raw = Some(json::to_raw(master_key)?);
 					services
 						.users
-						.add_cross_signing_keys(
-							&user, &raw, &None, &None,
-							false, /* Dont notify. A notification would trigger another key
-							       * request resulting in an endless loop */
-						)
+						.add_cross_signing_keys(&user, &raw, &None, &None, notify)
 						.await?;
+
 					if let Some(raw) = raw {
 						master_keys.insert(user.clone(), raw);
 					}
