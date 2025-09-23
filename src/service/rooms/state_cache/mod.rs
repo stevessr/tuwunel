@@ -16,7 +16,7 @@ use tuwunel_core::{
 	Result, implement,
 	result::LogErr,
 	trace,
-	utils::{ReadyExt, stream::TryIgnore},
+	utils::stream::{BroadbandExt, ReadyExt, TryIgnore},
 	warn,
 };
 use tuwunel_database::{Deserialized, Ignore, Interfix, Map};
@@ -180,7 +180,8 @@ pub fn server_rooms<'a>(
 #[tracing::instrument(skip(self), level = "trace")]
 pub async fn server_sees_user(&self, server: &ServerName, user_id: &UserId) -> bool {
 	self.server_rooms(server)
-		.any(|room_id| self.is_joined(user_id, room_id))
+		.map(ToOwned::to_owned)
+		.broad_any(async |room_id| self.is_joined(user_id, &room_id).await)
 		.await
 }
 
