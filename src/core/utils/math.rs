@@ -1,7 +1,7 @@
 mod expected;
 mod tried;
 
-use std::{cmp, convert::TryFrom};
+use std::convert::TryFrom;
 
 pub use checked_ops::checked_ops;
 
@@ -97,17 +97,11 @@ pub fn usize_from_u64_truncated(val: u64) -> usize { val as usize }
 
 #[inline]
 pub fn try_into<Dst: TryFrom<Src>, Src>(src: Src) -> Result<Dst> {
-	Dst::try_from(src).map_err(try_into_err::<Dst, Src>)
+	Dst::try_from(src).map_err(|_| {
+		err!(Arithmetic(
+			"failed to convert from {} to {}",
+			type_name::<Src>(),
+			type_name::<Dst>()
+		))
+	})
 }
-
-fn try_into_err<Dst: TryFrom<Src>, Src>(e: <Dst as TryFrom<Src>>::Error) -> Error {
-	drop(e);
-	err!(Arithmetic(
-		"failed to convert from {} to {}",
-		type_name::<Src>(),
-		type_name::<Dst>()
-	))
-}
-
-#[inline]
-pub fn clamp<T: Ord>(val: T, min: T, max: T) -> T { cmp::min(cmp::max(val, min), max) }

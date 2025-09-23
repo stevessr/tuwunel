@@ -6,7 +6,6 @@ pub mod debug;
 pub mod defer;
 pub mod future;
 pub mod hash;
-pub mod html;
 pub mod json;
 pub mod math;
 pub mod mutex_map;
@@ -27,13 +26,11 @@ pub use ::tuwunel_macros::implement;
 pub use self::{
 	arrayvec::ArrayVecExt,
 	bool::BoolExt,
-	bytes::{increment, u64_from_bytes, u64_from_u8, u64_from_u8x8},
+	bytes::{increment, u64_from_bytes, u64_from_u8},
 	debug::slice_truncated as debug_slice_truncated,
 	future::{BoolExt as FutureBoolExt, OptionStream, TryExtExt as TryFutureExtExt},
 	hash::sha256::delimited as calculate_hash,
-	html::Escape as HtmlEscape,
 	json::{deserialize_from_str, to_canonical_object},
-	math::clamp,
 	mutex_map::{Guard as MutexMapGuard, MutexMap},
 	rand::{shuffle, string as random_string},
 	stream::{IterStream, ReadyExt, Tools as StreamTools, TryReadyExt},
