@@ -879,6 +879,9 @@ multiple_crate_versions = { level = "allow", priority = 1 }
 ###################
 complexity = { level = "warn", priority = -1 }
 
+# promotes forward-compat for literal ..default() construction
+needless_update = { level = "allow", priority = 1 }
+
 ###################
 correctness = { level = "warn", priority = -1 }
 
