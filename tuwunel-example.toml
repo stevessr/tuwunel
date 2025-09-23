@@ -1841,7 +1841,7 @@
 #
 # example: "ou=users,dc=example,dc=org"
 #
-#base_dn = false
+#base_dn =
 
 # Bind DN if anonymous search is not enabled.
 #
@@ -1854,14 +1854,14 @@
 # example: "cn=ldap-reader,dc=example,dc=org" or
 # "cn={username},ou=users,dc=example,dc=org"
 #
-#bind_dn = false
+#bind_dn = ""
 
 # Path to a file on the system that contains the password for the
 # `bind_dn`.
 #
 # The server must be able to access the file, and it must not be empty.
 #
-#bind_password_file = false
+#bind_password_file = ""
 
 # Search filter to limit user searches.
 #
@@ -1896,7 +1896,7 @@
 #
 # example: "ou=admins,dc=example,dc=org"
 #
-#admin_base_dn = false
+#admin_base_dn =
 
 # The LDAP search filter to find administrative users for tuwunel.
 #
@@ -1908,7 +1908,7 @@
 #
 # example: "(objectClass=tuwunelAdmin)" or "(uid={username})"
 #
-#admin_filter = false
+#admin_filter =
 
 #[global.jwt]
 

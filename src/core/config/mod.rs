@@ -2157,6 +2157,8 @@ pub struct LdapConfig {
 	/// Root of the searches.
 	///
 	/// example: "ou=users,dc=example,dc=org"
+	///
+	/// default:
 	#[serde(default)]
 	pub base_dn: String,
 
@@ -2170,6 +2172,8 @@ pub struct LdapConfig {
 	///
 	/// example: "cn=ldap-reader,dc=example,dc=org" or
 	/// "cn={username},ou=users,dc=example,dc=org"
+	///
+	/// default: ""
 	#[serde(default)]
 	pub bind_dn: Option<String>,
 
@@ -2177,6 +2181,8 @@ pub struct LdapConfig {
 	/// `bind_dn`.
 	///
 	/// The server must be able to access the file, and it must not be empty.
+	///
+	/// default: ""
 	#[serde(default)]
 	pub bind_password_file: Option<PathBuf>,
 
@@ -2220,6 +2226,8 @@ pub struct LdapConfig {
 	/// Defaults to `base_dn` if empty.
 	///
 	/// example: "ou=admins,dc=example,dc=org"
+	///
+	/// default:
 	#[serde(default)]
 	pub admin_base_dn: String,
 
@@ -2232,6 +2240,8 @@ pub struct LdapConfig {
 	/// entered username for more complex filters.
 	///
 	/// example: "(objectClass=tuwunelAdmin)" or "(uid={username})"
+	///
+	/// default:
 	#[serde(default)]
 	pub admin_filter: String,
 }
