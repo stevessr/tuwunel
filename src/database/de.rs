@@ -437,13 +437,14 @@ impl<'a, 'de: 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 		tracing::instrument(level = "trace", skip_all, fields(?self.buf))
 	)]
 	fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-		const TYPE_PRE_1_91: &str = "serde_json::value::de::<impl serde::de::Deserialize for \
-		                             serde_json::value::Value>::deserialize::ValueVisitor";
-		const TYPE: &str = "serde_json::value::de::<impl serde::de::Deserialize<'_> for \
+		const TYPE_PRE_1_91: &str = "serde_json::value::de::<impl serde_core::de::Deserialize \
+		                             for serde_json::value::Value>::deserialize::ValueVisitor";
+		const TYPE: &str = "serde_json::value::de::<impl serde_core::de::Deserialize<'_> for \
 		                    serde_json::value::Value>::deserialize::ValueVisitor";
 		debug_assert!(
 			matches!(tuwunel_core::debug::type_name::<V>(), TYPE | TYPE_PRE_1_91),
-			"deserialize_any: type not expected"
+			"deserialize_any: type not expected {0}",
+			tuwunel_core::debug::type_name::<V>()
 		);
 
 		match self.record_peek_byte() {
