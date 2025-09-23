@@ -733,6 +733,13 @@
 #
 #log_thread_ids = false
 
+# Redirects logging to standard error (stderr). The default is false for
+# stdout. For those using our systemd features the redirection to stderr
+# occurs as necessary and setting this option should not be required. We
+# offer this option for all other users who desire such redirection.
+#
+#log_to_stderr = false
+
 # OpenID token expiration/TTL in seconds.
 #
 # These are the OpenID tokens that are primarily used for Matrix account

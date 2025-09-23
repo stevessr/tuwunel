@@ -888,6 +888,15 @@ pub struct Config {
 	#[serde(default)]
 	pub log_thread_ids: bool,
 
+	/// Redirects logging to standard error (stderr). The default is false for
+	/// stdout. For those using our systemd features the redirection to stderr
+	/// occurs as necessary and setting this option should not be required. We
+	/// offer this option for all other users who desire such redirection.
+	///
+	/// default: false
+	#[serde(default)]
+	pub log_to_stderr: bool,
+
 	/// OpenID token expiration/TTL in seconds.
 	///
 	/// These are the OpenID tokens that are primarily used for Matrix account

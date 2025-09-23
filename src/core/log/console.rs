@@ -28,13 +28,13 @@ pub struct ConsoleWriter {
 
 impl ConsoleWriter {
 	#[must_use]
-	pub fn new(_config: &Config) -> Self {
+	pub fn new(config: &Config) -> Self {
 		let journal_stream = get_journal_stream();
 		Self {
 			stdout: io::stdout(),
 			stderr: io::stderr(),
 			_journal_stream: journal_stream.into(),
-			use_stderr: journal_stream.0 != 0,
+			use_stderr: journal_stream.0 != 0 || config.log_to_stderr,
 		}
 	}
 }
