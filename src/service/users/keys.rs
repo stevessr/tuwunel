@@ -476,19 +476,20 @@ pub fn parse_master_key(
 
 	let master_key = master_key
 		.deserialize()
-		.map_err(|_| Error::BadRequest(ErrorKind::InvalidParam, "Invalid master key"))?;
+		.map_err(|_| err!(Request(InvalidParam("Invalid master key"))))?;
+
 	let mut master_key_ids = master_key.keys.values();
 	let master_key_id = master_key_ids
 		.next()
-		.ok_or(Error::BadRequest(ErrorKind::InvalidParam, "Master key contained no key."))?;
+		.ok_or(err!(Request(InvalidParam("Master key contained no key."))))?;
+
 	if master_key_ids.next().is_some() {
-		return Err(Error::BadRequest(
-			ErrorKind::InvalidParam,
-			"Master key contained more than one key.",
-		));
+		return Err!(Request(InvalidParam("Master key contained more than one key.")));
 	}
+
 	let mut master_key_key = prefix.clone();
 	master_key_key.extend_from_slice(master_key_id.as_bytes());
+
 	Ok((master_key_key, master_key))
 }
 
@@ -532,6 +533,7 @@ where
 		{
 			let sid = <&UserId>::try_from(user.as_str())
 				.map_err(|_| Error::bad_database("Invalid user ID in database."))?;
+
 			if sender_user == Some(user_id) || sid == user_id || allowed_signatures(sid) {
 				signatures.insert(user, signature);
 			}

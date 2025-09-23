@@ -6,13 +6,10 @@ use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, OneTimeKeyAlgorithm, OwnedDeviceId, OwnedUserId,
 	UserId,
 	api::{
-		client::{
-			error::ErrorKind,
-			keys::{
-				claim_keys, get_key_changes, get_keys, upload_keys,
-				upload_signatures::{self},
-				upload_signing_keys,
-			},
+		client::keys::{
+			claim_keys, get_key_changes, get_keys, upload_keys,
+			upload_signatures::{self},
+			upload_signing_keys,
 		},
 		federation,
 	},
@@ -20,7 +17,7 @@ use ruma::{
 	serde::Raw,
 };
 use serde_json::json;
-use tuwunel_core::{Err, Error, Result, debug, debug_error, debug_warn, err, result::NotFound};
+use tuwunel_core::{Err, Result, debug, debug_error, debug_warn, err, result::NotFound};
 use tuwunel_service::{Services, users::parse_master_key};
 
 use crate::{Ruma, router::auth_uiaa};
@@ -360,12 +357,12 @@ pub(crate) async fn get_key_changes_route(
 	let from = body
 		.from
 		.parse()
-		.map_err(|_| Error::BadRequest(ErrorKind::InvalidParam, "Invalid `from`."))?;
+		.map_err(|_| err!(Request(InvalidParam("Invalid `from`."))))?;
 
 	let to = body
 		.to
 		.parse()
-		.map_err(|_| Error::BadRequest(ErrorKind::InvalidParam, "Invalid `to`."))?;
+		.map_err(|_| err!(Request(InvalidParam("Invalid `to`."))))?;
 
 	device_list_updates.extend(
 		services
