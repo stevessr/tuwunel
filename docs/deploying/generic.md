@@ -12,10 +12,10 @@
 You may simply download the binary that fits your machine architecture (x86_64
 or aarch64). Run `uname -m` to see what you need.
 
-Prebuilt fully static musl binaries can be downloaded from the latest tagged
+Prebuilt fully static binaries can be downloaded from the latest tagged
 release [here](https://github.com/matrix-construct/tuwunel/releases/latest) or
-`main` CI branch workflow artifact output. These also include Debian/Ubuntu
-packages.
+`main` CI branch workflow artifact output. These also include `.deb` packages
+for Debian or Ubuntu and `.rpm` packages for Red Hat or Fedora.
 
 These can be curl'd directly from. `ci-bins` are CI workflow binaries by commit
 hash/revision, and `releases` are tagged releases. Sort by descending last
@@ -24,12 +24,11 @@ modified for the latest.
 These binaries have jemalloc and io_uring statically linked and included with
 them, so no additional dynamic dependencies need to be installed.
 
-For the **best** performance; if using an `x86_64` CPU made in the last ~15 years,
-we recommend using the `-haswell-` optimised binaries. This sets
-`-march=haswell` which is the most compatible and highest performance with
-optimised binaries. The database backend, RocksDB, most benefits from this as it
-will then use hardware accelerated CRC32 hashing/checksumming which is critical
-for performance.
+For the **best** performance; if using an `x86_64` CPU made in the last ~10 years,
+we recommend using the `-v3-` optimised packages. If the server refuses to start
+or exits with an "Illegal Instruction" error you will need `-v2-` or `-v1-`
+packages instead. The database backend, RocksDB, benefits from `-v2-` or greater
+as it features performance critical hardware accelerated CRC32 hashing/checksumming.
 
 ### Compiling
 
