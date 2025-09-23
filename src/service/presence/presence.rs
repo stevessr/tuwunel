@@ -1,10 +1,11 @@
+use futures::future::join;
 use ruma::{
 	UInt, UserId,
 	events::presence::{PresenceEvent, PresenceEventContent},
 	presence::PresenceState,
 };
 use serde::{Deserialize, Serialize};
-use tuwunel_core::{Error, Result, utils};
+use tuwunel_core::{Error, Result, utils, utils::future::TryExtExt};
 
 use crate::users;
 
@@ -46,7 +47,11 @@ impl Presence {
 		users: &users::Service,
 	) -> PresenceEvent {
 		let now = utils::millis_since_unix_epoch();
-		let last_active_ago = Some(UInt::new_saturating(now.saturating_sub(self.last_active_ts)));
+		let last_active_ago = now.saturating_sub(self.last_active_ts);
+
+		let avatar_url = users.avatar_url(user_id).ok();
+		let displayname = users.displayname(user_id).ok();
+		let (avatar_url, displayname) = join(avatar_url, displayname).await;
 
 		PresenceEvent {
 			sender: user_id.to_owned(),
@@ -54,9 +59,9 @@ impl Presence {
 				presence: self.state.clone(),
 				status_msg: self.status_msg.clone(),
 				currently_active: Some(self.currently_active),
-				last_active_ago,
-				displayname: users.displayname(user_id).await.ok(),
-				avatar_url: users.avatar_url(user_id).await.ok(),
+				last_active_ago: Some(UInt::new_saturating(last_active_ago)),
+				avatar_url,
+				displayname,
 			},
 		}
 	}
