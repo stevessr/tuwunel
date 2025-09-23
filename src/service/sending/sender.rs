@@ -437,14 +437,12 @@ impl Service {
 			let keys_changed = self
 				.services
 				.users
-				.room_keys_changed(room_id, since.0, None)
+				.room_keys_changed(room_id, since.0, Some(since.1))
 				.ready_filter(|(user_id, _)| self.services.globals.user_is_local(user_id));
 
 			pin_mut!(keys_changed);
 			while let Some((user_id, count)) = keys_changed.next().await {
-				if count > since.1 {
-					break;
-				}
+				debug_assert!(count <= since.1, "exceeds upper-bound");
 
 				max_edu_count.fetch_max(count, Ordering::Relaxed);
 				if !device_list_changes.insert(user_id.into()) {
