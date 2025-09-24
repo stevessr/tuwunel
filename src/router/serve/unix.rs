@@ -162,7 +162,7 @@ async fn fini(server: &Arc<Server>, listener: UnixListener, mut tasks: JoinSet<(
 	while server
 		.metrics
 		.requests_handle_active
-		.load(Ordering::Relaxed)
+		.load(Ordering::Acquire)
 		.gt(&0)
 	{
 		tokio::select! {

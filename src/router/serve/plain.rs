@@ -10,19 +10,17 @@ use tuwunel_core::{Result, Server, debug_info, info};
 
 pub(super) async fn serve(
 	server: &Arc<Server>,
-	app: Router,
+	router: Router,
 	handle: ServerHandle,
 	addrs: Vec<SocketAddr>,
 ) -> Result {
-	let app = app.into_make_service_with_connect_info::<SocketAddr>();
 	let mut join_set = JoinSet::new();
+	let router = router.into_make_service_with_connect_info::<SocketAddr>();
 	for addr in &addrs {
-		join_set.spawn_on(
-			bind(*addr)
-				.handle(handle.clone())
-				.serve(app.clone()),
-			server.runtime(),
-		);
+		let bound = bind(*addr);
+		let handler = bound.handle(handle.clone());
+		let acceptor = handler.serve(router.clone());
+		join_set.spawn_on(acceptor, server.runtime());
 	}
 
 	info!("Listening on {addrs:?}");
@@ -31,21 +29,22 @@ pub(super) async fn serve(
 	let handle_active = server
 		.metrics
 		.requests_handle_active
-		.load(Ordering::Relaxed);
+		.load(Ordering::Acquire);
+
 	debug_info!(
 		handle_finished = server
 			.metrics
 			.requests_handle_finished
-			.load(Ordering::Relaxed),
+			.load(Ordering::Acquire),
 		panics = server
 			.metrics
 			.requests_panic
-			.load(Ordering::Relaxed),
+			.load(Ordering::Acquire),
 		handle_active,
 		"Stopped listening on {addrs:?}",
 	);
 
-	debug_assert!(handle_active == 0, "active request handles still pending");
+	debug_assert_eq!(0, handle_active, "active request handles still pending");
 
 	Ok(())
 }
