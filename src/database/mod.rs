@@ -6,8 +6,6 @@ tuwunel_core::mod_ctor! {}
 tuwunel_core::mod_dtor! {}
 tuwunel_core::rustc_flags_capture! {}
 
-#[cfg(test)]
-mod benches;
 mod cork;
 mod de;
 mod deserialized;

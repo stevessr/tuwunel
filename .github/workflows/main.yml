@@ -135,6 +135,7 @@ jobs:
           {"cargo_profile": "test", "feat_set": "logging"},
           {"cargo_profile": "test", "rust_toolchain": "stable", "feat_set": "none"},
           {"cargo_profile": "test", "rust_target": "aarch64-unknown-linux-gnu"},
+          {"cargo_profile": "bench"},
           {"cargo_profile": "release", "rust_toolchain": "nightly", "feat_set": "none"},
           {"cargo_profile": "release", "rust_toolchain": "nightly", "feat_set": "default"},
           {"cargo_profile": "release", "rust_toolchain": "nightly", "feat_set": "logging"},
@@ -219,7 +220,7 @@ jobs:
       && needs.init.outputs.package
 
     name: Package
-    needs: [init, lint]
+    needs: [init, test]
     uses: ./.github/workflows/package.yml
     with:
       release_url: ${{needs.init.outputs.release_url}}
@@ -238,6 +239,7 @@ jobs:
         [
           {"feat_set": "none"},
           {"cargo_profile": "test"},
+          {"cargo_profile": "bench"},
           {"cargo_profile": "release-native"},
           {"cargo_profile": "release-debuginfo", "feat_set": "default"},
           {"cargo_profile": "release-debuginfo", "feat_set": "logging"},
@@ -293,6 +295,7 @@ jobs:
           {"feat_set": "none"},
           {"feat_set": "logging"},
           {"cargo_profile": "test"},
+          {"cargo_profile": "bench"},
           {"cargo_profile": "release-debuginfo"},
           {"cargo_profile": "release-native"},
           {"cargo_profile": "release", "rust_toolchain": "nightly"},

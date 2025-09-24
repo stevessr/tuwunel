@@ -239,3 +239,4 @@ workspace = true
 [[bin]]
 name = "tuwunel"
 path = "main.rs"
+bench = false
