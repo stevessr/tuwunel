@@ -11,10 +11,15 @@ version.workspace = true
 
 [lib]
 path = "mod.rs"
+bench = false
 crate-type = [
 	"rlib",
 #	"dylib",
 ]
+
+[[bench]]
+name = "state_res"
+harness = false
 
 [features]
 brotli_compression = [
@@ -115,6 +120,7 @@ nix.workspace = true
 insta.workspace = true
 maplit.workspace = true
 similar.workspace = true
+criterion.workspace = true
 
 [lints]
 workspace = true

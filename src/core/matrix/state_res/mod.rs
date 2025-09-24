@@ -58,8 +58,6 @@
 //! [necessary checks on receipt of a PDU]: https://spec.matrix.org/latest/server-server-api/#checks-performed-on-receipt-of-a-pdu
 //! [ruma-events]: https://crates.io/crates/ruma-events
 
-#[cfg(test)]
-mod benches;
 mod event_auth;
 mod event_format;
 pub mod events;

@@ -142,6 +142,15 @@ version = "0.8.3"
 [workspace.dependencies.const-str]
 version = "0.7"
 
+[workspace.dependencies.criterion]
+version = "0.7"
+default-features = false
+features = [
+	"cargo_bench_support",
+	"async_futures",
+	"async_tokio",
+]
+
 [workspace.dependencies.ctor]
 version = "0.5"
 

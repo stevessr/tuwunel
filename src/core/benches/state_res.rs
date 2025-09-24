@@ -1,14 +1,10 @@
-#![cfg_attr(not(tuwunel_bench), allow(unused_imports, dead_code))]
-
-#[cfg(tuwunel_bench)]
-extern crate test;
-
 use std::{
 	borrow::Borrow,
 	collections::HashMap,
 	sync::atomic::{AtomicU64, Ordering::SeqCst},
 };
 
+use criterion::{Criterion, async_executor::FuturesExecutor, criterion_group, criterion_main};
 use ruma::{
 	EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, RoomId, RoomVersionId, UserId,
 	events::{
@@ -24,36 +20,41 @@ use serde_json::{
 	json,
 	value::{RawValue as RawJsonValue, to_raw_value as to_raw_json_value},
 };
-
-use super::{AuthSet, StateMap, test_utils::not_found};
-use crate::{
-	Result,
-	matrix::{Event, EventHash, PduEvent, event::TypeExt},
+use tuwunel_core::{
+	Result, err,
+	matrix::{
+		Event, EventHash, PduEvent,
+		event::TypeExt,
+		state_res::{AuthSet, StateMap},
+	},
 	utils::stream::IterStream,
 };
 
+criterion_group!(
+	benches,
+	lexico_topo_sort,
+	resolution_shallow_auth_chain,
+	resolve_deeper_event_set
+);
+
+criterion_main!(benches);
+
 static SERVER_TIMESTAMP: AtomicU64 = AtomicU64::new(0);
 
-#[cfg(tuwunel_bench)]
-#[cfg_attr(tuwunel_bench, bench)]
-fn lexico_topo_sort(c: &mut test::Bencher) {
-	use maplit::{hashmap, hashset};
+fn lexico_topo_sort(c: &mut Criterion) {
+	c.bench_function("lexico_topo_sort", |c| {
+		use maplit::{hashmap, hashset};
 
-	let rt = tokio::runtime::Builder::new_current_thread()
-		.build()
-		.unwrap();
+		let graph = hashmap! {
+			event_id("l") => hashset![event_id("o")],
+			event_id("m") => hashset![event_id("n"), event_id("o")],
+			event_id("n") => hashset![event_id("o")],
+			event_id("o") => hashset![], // "o" has zero outgoing edges but 4 incoming edges
+			event_id("p") => hashset![event_id("o")],
+		};
 
-	let graph = hashmap! {
-		event_id("l") => hashset![event_id("o")],
-		event_id("m") => hashset![event_id("n"), event_id("o")],
-		event_id("n") => hashset![event_id("o")],
-		event_id("o") => hashset![], // "o" has zero outgoing edges but 4 incoming edges
-		event_id("p") => hashset![event_id("o")],
-	};
-
-	c.iter(move || {
-		rt.block_on(async {
-			_ = super::topological_sort(&graph, &async |_id| {
+		c.to_async(FuturesExecutor).iter(async || {
+			_ = tuwunel_core::matrix::state_res::topological_sort(&graph, &async |_id| {
 				Ok((int!(0).into(), MilliSecondsSinceUnixEpoch(uint!(0))))
 			})
 			.await;
@@ -61,131 +62,129 @@ fn lexico_topo_sort(c: &mut test::Bencher) {
 	});
 }
 
-#[cfg(tuwunel_bench)]
-#[cfg_attr(tuwunel_bench, bench)]
-fn resolution_shallow_auth_chain(c: &mut test::Bencher) {
-	let rt = tokio::runtime::Builder::new_current_thread()
-		.build()
-		.unwrap();
+fn resolution_shallow_auth_chain(c: &mut Criterion) {
+	c.bench_function("resolution_shallow_auth_chain", |c| {
+		let mut store = TestStore(maplit::hashmap! {});
 
-	let mut store = TestStore(maplit::hashmap! {});
+		// build up the DAG
+		let (state_at_bob, state_at_charlie, _) = store.set_up();
 
-	// build up the DAG
-	let (state_at_bob, state_at_charlie, _) = store.set_up();
+		let rules = RoomVersionId::V6.rules().unwrap();
+		let ev_map = store.0.clone();
+		let state_sets = [state_at_bob, state_at_charlie];
+		let auth_chains = state_sets
+			.iter()
+			.map(|map| {
+				store
+					.auth_event_ids(room_id(), map.values().cloned().collect())
+					.unwrap()
+			})
+			.collect::<Vec<_>>();
 
-	let rules = RoomVersionId::V6.rules().unwrap();
-	let ev_map = store.0.clone();
-	let state_sets = [state_at_bob, state_at_charlie];
-	let auth_chains = state_sets
-		.iter()
-		.map(|map| {
-			store
-				.auth_event_ids(room_id(), map.values().cloned().collect())
-				.unwrap()
-		})
-		.collect::<Vec<_>>();
+		let func = async || {
+			if let Err(e) = tuwunel_core::matrix::state_res::resolve(
+				&rules,
+				state_sets.clone().into_iter().stream(),
+				auth_chains.clone().into_iter().stream(),
+				&async |id| {
+					ev_map
+						.get(&id)
+						.cloned()
+						.ok_or(err!(Request(NotFound("Not Found"))))
+				},
+				&async |id| ev_map.contains_key(&id),
+				false,
+			)
+			.await
+			{
+				panic!("{e}")
+			}
+		};
 
-	let func = async || {
-		if let Err(e) = super::resolve(
-			&rules,
-			state_sets.clone().into_iter().stream(),
-			auth_chains.clone().into_iter().stream(),
-			&async |id| ev_map.get(&id).cloned().ok_or_else(not_found),
-			&async |id| ev_map.contains_key(&id),
-			false,
-		)
-		.await
-		{
-			panic!("{e}")
-		}
-	};
-
-	c.iter(move || {
-		rt.block_on(async {
+		c.to_async(FuturesExecutor).iter(async || {
 			func().await;
 		});
 	});
 }
 
-#[cfg(tuwunel_bench)]
-#[cfg_attr(tuwunel_bench, bench)]
-fn resolve_deeper_event_set(c: &mut test::Bencher) {
-	let rt = tokio::runtime::Builder::new_current_thread()
-		.build()
-		.unwrap();
+fn resolve_deeper_event_set(c: &mut Criterion) {
+	c.bench_function("resolver_deeper_event_set", |c| {
+		let mut inner = INITIAL_EVENTS();
+		let ban = BAN_STATE_SET();
 
-	let mut inner = INITIAL_EVENTS();
-	let ban = BAN_STATE_SET();
+		inner.extend(ban);
+		let store = TestStore(inner.clone());
 
-	inner.extend(ban);
-	let store = TestStore(inner.clone());
-
-	let state_set_a = [
-		&inner[&event_id("CREATE")],
-		&inner[&event_id("IJR")],
-		&inner[&event_id("IMA")],
-		&inner[&event_id("IMB")],
-		&inner[&event_id("IMC")],
-		&inner[&event_id("MB")],
-		&inner[&event_id("PA")],
-	]
-	.iter()
-	.map(|ev| {
-		(
-			ev.event_type()
-				.with_state_key(ev.state_key().unwrap()),
-			ev.event_id().to_owned(),
-		)
-	})
-	.collect::<StateMap<_>>();
-
-	let state_set_b = [
-		&inner[&event_id("CREATE")],
-		&inner[&event_id("IJR")],
-		&inner[&event_id("IMA")],
-		&inner[&event_id("IMB")],
-		&inner[&event_id("IMC")],
-		&inner[&event_id("IME")],
-		&inner[&event_id("PA")],
-	]
-	.iter()
-	.map(|ev| {
-		(
-			ev.event_type()
-				.with_state_key(ev.state_key().unwrap()),
-			ev.event_id().to_owned(),
-		)
-	})
-	.collect::<StateMap<_>>();
-
-	let rules = RoomVersionId::V6.rules().unwrap();
-	let state_sets = [state_set_a, state_set_b];
-	let auth_chains = state_sets
+		let state_set_a = [
+			&inner[&event_id("CREATE")],
+			&inner[&event_id("IJR")],
+			&inner[&event_id("IMA")],
+			&inner[&event_id("IMB")],
+			&inner[&event_id("IMC")],
+			&inner[&event_id("MB")],
+			&inner[&event_id("PA")],
+		]
 		.iter()
-		.map(|map| {
-			store
-				.auth_event_ids(room_id(), map.values().cloned().collect())
-				.unwrap()
+		.map(|ev| {
+			(
+				ev.event_type()
+					.with_state_key(ev.state_key().unwrap()),
+				ev.event_id().to_owned(),
+			)
 		})
-		.collect::<Vec<_>>();
+		.collect::<StateMap<_>>();
 
-	let func = async || {
-		if let Err(e) = super::resolve(
-			&rules,
-			state_sets.clone().into_iter().stream(),
-			auth_chains.clone().into_iter().stream(),
-			&async |id| inner.get(&id).cloned().ok_or_else(not_found),
-			&async |id| inner.contains_key(&id),
-			false,
-		)
-		.await
-		{
-			panic!("{e}")
-		}
-	};
+		let state_set_b = [
+			&inner[&event_id("CREATE")],
+			&inner[&event_id("IJR")],
+			&inner[&event_id("IMA")],
+			&inner[&event_id("IMB")],
+			&inner[&event_id("IMC")],
+			&inner[&event_id("IME")],
+			&inner[&event_id("PA")],
+		]
+		.iter()
+		.map(|ev| {
+			(
+				ev.event_type()
+					.with_state_key(ev.state_key().unwrap()),
+				ev.event_id().to_owned(),
+			)
+		})
+		.collect::<StateMap<_>>();
 
-	c.iter(move || {
-		rt.block_on(async {
+		let rules = RoomVersionId::V6.rules().unwrap();
+		let state_sets = [state_set_a, state_set_b];
+		let auth_chains = state_sets
+			.iter()
+			.map(|map| {
+				store
+					.auth_event_ids(room_id(), map.values().cloned().collect())
+					.unwrap()
+			})
+			.collect::<Vec<_>>();
+
+		let func = async || {
+			if let Err(e) = tuwunel_core::matrix::state_res::resolve(
+				&rules,
+				state_sets.clone().into_iter().stream(),
+				auth_chains.clone().into_iter().stream(),
+				&async |id| {
+					inner
+						.get(&id)
+						.cloned()
+						.ok_or(err!(Request(NotFound("Not Found"))))
+				},
+				&async |id| inner.contains_key(&id),
+				false,
+			)
+			.await
+			{
+				panic!("{e}")
+			}
+		};
+
+		c.to_async(FuturesExecutor).iter(async || {
 			func().await;
 		});
 	});
@@ -204,7 +203,7 @@ impl<E: Event> TestStore<E> {
 		self.0
 			.get(event_id)
 			.cloned()
-			.ok_or_else(not_found)
+			.ok_or(err!(Request(NotFound("Not Found"))))
 	}
 
 	/// Returns the events that correspond to the `event_ids` sorted in the same
@@ -458,8 +457,8 @@ where
 		depth: uint!(0),
 		hashes: EventHash::default(),
 		signatures: None,
-		#[cfg(test)]
-		rejected: false,
+		//#[cfg(test)]
+		//rejected: false,
 	}
 }
 

@@ -184,7 +184,6 @@ dynamic_libs = [
 
 nightly_rustflags = [
     "--cfg tokio_unstable",
-    "--cfg tuwunel_bench",
     "--allow=unstable-features",
     "-Z crate-attr=feature(test)",
     "-Z enforce-type-length-limit",
@@ -892,7 +891,7 @@ target "unit" {
     args = {
         cargo_cmd = (cargo_profile == "bench"? "bench": "test")
         cargo_args = (rust_toolchain == "nightly"?
-            "--no-fail-fast --all-targets": "--no-fail-fast --bins --tests"
+            "--no-fail-fast --all-targets -- --color=always": "--no-fail-fast --bins --tests"
         )
     }
 }
@@ -1294,7 +1293,7 @@ target "deps-base" {
         CARGO_PROFILE_TEST_DEBUG = "false"
         CARGO_PROFILE_TEST_INCREMENTAL = "false"
         CARGO_PROFILE_BENCH_DEBUG = "limited"
-        CARGO_PROFILE_BENCH_LTO = "false"
+        CARGO_PROFILE_BENCH_LTO = "thin"
         CARGO_PROFILE_RELEASE_LTO = "thin"
         CARGO_PROFILE_RELEASE_DEBUGINFO_DEBUG = "limited"
         CARGO_PROFILE_RELEASE_DEBUGINFO_LTO = "off"
