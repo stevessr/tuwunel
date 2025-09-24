@@ -51,7 +51,6 @@ COPY <<EOF complement.toml
     [global]
     address = "0.0.0.0"
     admin_room_notices = false
-    allow_check_for_updates = false
     allow_device_name_federation = true
     allow_guest_registration = true
     allow_invalid_tls_certificates = true
@@ -73,7 +72,6 @@ COPY <<EOF complement.toml
     log_thread_ids = true
     media_compat_file_link = false
     media_startup_check = true
-    only_query_trusted_key_servers = false
     port = [8008, 8448]
     prune_missing_media = true
     query_trusted_key_servers_first = false

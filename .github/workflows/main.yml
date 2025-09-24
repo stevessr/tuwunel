@@ -47,6 +47,7 @@ jobs:
       docker_repo: ${{vars.DOCKER_REPO}}
       release_url: ${{steps.release.outputs.upload_url}}
       pages_url: 'https://matrix-construct.github.io/tuwunel/'
+      rust_sdk_integration: ${{vars.RUST_SDK_INTEGRATION || 'true'}}
 
     strategy:
       fail-fast: true
@@ -59,8 +60,8 @@ jobs:
     - name: Initialize Builder
       env:
         runner: ${{matrix.runner}}
-        reserved_space: '{"het": "128GB", "aws": "48GB", "gcp": "160GB"}'
-        max_used_space: '{"het": "256GB", "aws": "64GB", "gcp": "192GB"}'
+        reserved_space: '{"het": "192GB", "aws": "48GB", "gcp": "160GB"}'
+        max_used_space: '{"het": "384GB", "aws": "64GB", "gcp": "192GB"}'
       run: |
         set +e
         docker buildx inspect "${GITHUB_ACTOR}"
@@ -167,6 +168,7 @@ jobs:
     needs: [init, lint]
     uses: ./.github/workflows/test.yml
     with:
+      rust_sdk_integration: ${{fromJSON(needs.init.outputs.rust_sdk_integration)}}
       complement: ${{fromJSON(needs.init.outputs.complement)}}
       complement_runner: ${{needs.init.outputs.complement_runner}}
       cargo_profiles: ${{needs.init.outputs.cargo_profiles}}

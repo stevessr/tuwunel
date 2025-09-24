@@ -1,0 +1,108 @@
+# syntax = docker/dockerfile:1.11-labs
+
+FROM input AS matrix-rust-sdk-integration
+ARG sys_name
+ARG sys_version
+ARG rust_toolchain
+ARG rust_target
+ARG RUSTUP_HOME
+ARG CARGO_HOME
+ARG CARGO_TARGET
+ARG MRSDK_TARGET_DIR="/usr/src/matrix-rust-sdk"
+ARG mrsdk_profile="release"
+ARG mrsdk_target_share="${MRSDK_TARGET_DIR}/${sys_name}/${sys_version}/${rust_target}/${rust_toolchain}/${mrsdk_profile}/_shared_cache"
+ARG mrsdk_test_args=""
+ARG mrsdk_test_opts=""
+#TODO!!!
+ARG mrsdk_skip_list="--skip test_history_share_on_invite_pin_violation --skip delayed_invite_response_and_sent_message_decryption --skip test_mutual_sas_verification_with_notification_client_ignores_verification_events"
+
+WORKDIR /
+COPY --link --from=input . .
+
+WORKDIR /usr/src
+ADD --link https://github.com/matrix-construct/matrix-rust-sdk.git matrix-rust-sdk
+
+WORKDIR /etc
+COPY <<EOF tuwunel.toml
+    [global]
+    admin_room_notices = false
+    allow_device_name_federation = true
+    allow_guest_registration = true
+    allow_legacy_media = true
+    allow_public_room_directory_over_federation = true
+    allow_public_room_directory_without_auth = true
+    allow_registration = true
+    create_admin_room = false
+    ip_range_denylist = []
+    log = "debug,tuwunel=trace,h2=warn,hyper=warn"
+    log_colors = false
+    log_guest_registrations = false
+    log_span_events = "NONE"
+    log_thread_ids = true
+    media_compat_file_link = false
+    media_startup_check = true
+    query_trusted_key_servers_first = false
+    query_trusted_key_servers_first_on_join = false
+    rocksdb_log_level = "debug"
+    rocksdb_max_log_files = 1
+    rocksdb_paranoid_file_checks = true
+    rocksdb_recovery_mode = 0
+    trusted_servers = []
+    url_preview_domain_contains_allowlist = ["*"]
+    url_preview_domain_explicit_denylist = ["*"]
+    yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true
+EOF
+
+WORKDIR /usr/lib
+COPY --link --from=install /usr/lib .
+
+WORKDIR /usr/bin
+COPY --link --from=install /usr/bin/tuwunel .
+
+WORKDIR /usr/src/matrix-rust-sdk
+ENV targ_dir="${MRSDK_TARGET_DIR}/${mrsdk_profile}"
+ENV targ_targ_dir="${MRSDK_TARGET_DIR}/${rust_target}/${mrsdk_profile}"
+ENV RUST_BACKTRACE="full"
+ENV TUWUNEL_CONFIG="/etc/tuwunel.toml"
+ENV TUWUNEL_DATABASE_PATH="/var/db/tuwunel"
+ENV TUWUNEL_SERVER_NAME="localhost:6167"
+ENV TUWUNEL_PORT="[6167]"
+ENV HOMESERVER_URL="http://localhost:6167"
+RUN \
+--mount=type=cache,dst=${RUSTUP_HOME}/downloads,sharing=shared \
+--mount=type=cache,dst=${CARGO_HOME}/registry,sharing=shared \
+--mount=type=cache,dst=${CARGO_HOME}/git,sharing=shared \
+--mount=type=cache,dst=${targ_dir}/deps,id=${mrsdk_target_share}/deps,sharing=locked \
+--mount=type=cache,dst=${targ_dir}/build,id=${mrsdk_target_share}/build,sharing=locked \
+--mount=type=cache,dst=${targ_dir}/examples,id=${mrsdk_target_share}/examples,sharing=locked \
+--mount=type=cache,dst=${targ_dir}/incremental,id=${mrsdk_target_share}/incremental,sharing=locked \
+--mount=type=cache,dst=${targ_dir}/.fingerprint,id=${mrsdk_target_share}/fingerprint,sharing=locked \
+--mount=type=cache,dst=${targ_targ_dir}/deps,id=${mrsdk_target_share}/deps,sharing=locked \
+--mount=type=cache,dst=${targ_targ_dir}/build,id=${mrsdk_target_share}/build,sharing=locked \
+--mount=type=cache,dst=${targ_targ_dir}/examples,id=${mrsdk_target_share}/examples,sharing=locked \
+--mount=type=cache,dst=${targ_targ_dir}/incremental,id=${mrsdk_target_share}/incremental,sharing=locked \
+--mount=type=cache,dst=${targ_targ_dir}/.fingerprint,id=${mrsdk_target_share}/fingerprint,sharing=locked \
+<<EOF
+    set -eux
+
+    nohup /usr/bin/tuwunel 1> /var/log/tuwunel.log &
+    PID=$!; trap "sleep 10s; set +ex; kill -QUIT ${PID}; wait ${PID}" EXIT
+    sleep 3s
+
+    rustup run ${rust_toolchain} \
+        cargo test \
+            --locked \
+            --release \
+            --color always \
+            --features default \
+            --target "${rust_target}" \
+            --target-dir "${MRSDK_TARGET_DIR}" \
+            --package matrix-sdk-integration-testing \
+            ${mrsdk_test_args} \
+            -- \
+            --test-threads 1 \
+            --color always \
+            ${mrsdk_skip_list} \
+            ${mrsdk_test_opts} \
+            ;
+EOF

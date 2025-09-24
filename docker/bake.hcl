@@ -241,6 +241,7 @@ group "tests" {
         "unit",
         "smoke",
         "complement",
+        "mrsdk",
     ]
 }
 
@@ -426,6 +427,39 @@ target "complement-config" {
     ]
     contexts = {
         source = elem("target:source", [sys_name, sys_version, sys_target])
+    }
+}
+
+#
+# Matrix Rust SDK tests
+#
+
+group "matrix-rust-sdk" {
+    targets = [
+        "matrix-rust-sdk-integration",
+    ]
+}
+
+target "matrix-rust-sdk-integration" {
+    name = elem("matrix-rust-sdk-integration", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("matrix-rust-sdk-integration", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
+    ]
+    output = ["type=docker,compression=zstd,mode=max,compression-level=${zstd_image_compress_level}"]
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level}"]
+    target = "matrix-rust-sdk-integration"
+    dockerfile = "${docker_dir}/Dockerfile.matrix-rust-sdk"
+    matrix = cargo_rust_feat_sys
+    inherits = [
+        elem("rust", [rust_toolchain, rust_target, sys_name, sys_version, sys_target])
+    ]
+    contexts = {
+        input = elem("target:rust", [rust_toolchain, rust_target, sys_name, sys_version, sys_target])
+        install = elem("target:install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    }
+    args = {
+        mrsdk_test_args=""
+        mrsdk_test_opts=""
     }
 }
 
@@ -1618,6 +1652,7 @@ kitchen_packages = [
     "jq",
     "libc6-dev",
     "libssl-dev",
+    "libsqlite3-dev",
     "make",
     "openssl",
     "pkg-config",

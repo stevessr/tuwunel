@@ -43,6 +43,9 @@ on:
         default: '["all"]'
       complement_runner:
         type: string
+      rust_sdk_integration:
+        type: boolean
+        default: true
 
 jobs:
   docs:
@@ -159,6 +162,38 @@ jobs:
           {"sys_target": "x86_64-v4-linux-gnu", "feat_set": "logging"},
           {"sys_target": "x86_64-v4-linux-gnu", "bake_target": "smoke-valgrind"},
         ]
+
+  rust-sdk-integration:
+    if: >
+      !failure() && !cancelled()
+      && inputs.rust_sdk_integration
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])
+      && contains(fromJSON(inputs.complement_feat_sets), fromJSON('["all"]')[0])
+      && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
+      && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v1-linux-gnu"]')[0])
+
+    name: Rust SDK Integration
+    uses: ./.github/workflows/bake.yml
+    with:
+      bake_targets: '["matrix-rust-sdk-integration"]'
+      cargo_profiles: '["test"]'
+      feat_sets: ${{inputs.complement_feat_sets}}
+      rust_toolchains: '["nightly"]'
+      sys_names: ${{inputs.sys_names}}
+      sys_versions: ${{inputs.sys_versions}}
+      rust_targets: ${{inputs.rust_targets}}
+      sys_targets: '["x86_64-v1-linux-gnu"]'
+      machines: ${{inputs.machines}}
+      runner: ${{inputs.complement_runner}}
+      excludes: ${{inputs.excludes}}
+      includes: ${{inputs.includes}}
+      artifact: >
+        {
+          "matrix-rust-sdk-integration": {
+            "src": "/var/log/tuwunel.log",
+            "dst": "rust-sdk-integration.tuwunel.log",
+          }
+        }
 
   complement:
     if: >
