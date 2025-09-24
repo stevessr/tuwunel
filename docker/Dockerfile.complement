@@ -1,22 +1,6 @@
 # syntax = docker/dockerfile:1.11-labs
 
-FROM input AS key-gen-base
-ARG var_cache
-ARG var_lib_apt
-
-WORKDIR /
-COPY --link --from=input . .
-
-RUN \
---mount=type=cache,dst=/var/cache,id=${var_cache},sharing=locked \
---mount=type=cache,dst=/var/lib/apt,id=${var_lib_apt},sharing=locked \
-<<EOF
-    set -eux
-    apt-get -y -U install --no-install-recommends openssl gawk
-EOF
-
-
-FROM key-gen-base AS key-gen
+FROM input AS key-gen
 
 WORKDIR /complement
 COPY <<EOF v3.ext
@@ -155,16 +139,6 @@ ARG var_lib_apt
 ARG complement_tags="conduwuit_blacklist"
 ARG complement_tests="./tests/..."
 ARG complement_run=".*"
-
-WORKDIR /
-RUN \
---mount=type=cache,dst=/var/cache,id=${var_cache},sharing=locked \
---mount=type=cache,dst=/var/lib/apt,id=${var_lib_apt},sharing=locked \
---mount=type=cache,dst=/go/pkg/mod/cache,sharing=locked \
-<<EOF
-    set -eux
-    apt-get -y -U install --no-install-recommends golang-go jq
-EOF
 
 WORKDIR /usr/src
 ADD https://github.com/matrix-construct/complement.git#403840348f6bcc9cc8ed1671dc2f638c2b1ce4ac complement

@@ -408,7 +408,7 @@ target "complement-base" {
         elem("complement-config", [sys_name, sys_version, sys_target])
     ]
     contexts = {
-        input = elem("target:base", [sys_name, sys_version, sys_target])
+        input = elem("target:builder", [sys_name, sys_version, sys_target])
     }
     args = complement_args
 }
@@ -1611,11 +1611,15 @@ kitchen_packages = [
     "clang",
     "cmake",
     "curl",
+    "gawk",
     "git",
+    "golang-go",
     "gzip",
+    "jq",
     "libc6-dev",
     "libssl-dev",
     "make",
+    "openssl",
     "pkg-config",
     "pkgconf",
     "xz-utils",
