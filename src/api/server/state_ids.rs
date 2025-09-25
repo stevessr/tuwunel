@@ -1,7 +1,7 @@
 use std::{borrow::Borrow, iter::once};
 
 use axum::extract::State;
-use futures::{StreamExt, TryStreamExt};
+use futures::{FutureExt, StreamExt, TryStreamExt, future::try_join};
 use ruma::{OwnedEventId, api::federation::event::get_room_state_ids};
 use tuwunel_core::{Result, at, err};
 
@@ -31,18 +31,19 @@ pub(crate) async fn get_room_state_ids_route(
 		.await
 		.map_err(|_| err!(Request(NotFound("Pdu state not found."))))?;
 
-	let pdu_ids: Vec<OwnedEventId> = services
-		.state_accessor
-		.state_full_ids(shortstatehash)
-		.map(at!(1))
-		.collect()
-		.await;
-
 	let auth_chain_ids = services
 		.auth_chain
 		.event_ids_iter(&body.room_id, once(body.event_id.borrow()))
-		.try_collect()
-		.await?;
+		.try_collect();
+
+	let pdu_ids = services
+		.state_accessor
+		.state_full_ids(shortstatehash)
+		.map(at!(1))
+		.collect::<Vec<OwnedEventId>>()
+		.map(Ok);
+
+	let (auth_chain_ids, pdu_ids) = try_join(auth_chain_ids, pdu_ids).await?;
 
 	Ok(get_room_state_ids::v1::Response { auth_chain_ids, pdu_ids })
 }

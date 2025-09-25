@@ -1,5 +1,6 @@
 use axum::extract::State;
-use ruma::{MilliSecondsSinceUnixEpoch, RoomId, api::federation::event::get_event};
+use futures::{FutureExt, future::try_join};
+use ruma::{MilliSecondsSinceUnixEpoch, OwnedRoomId, api::federation::event::get_event};
 use tuwunel_core::{Result, err};
 
 use super::AccessCheck;
@@ -21,28 +22,30 @@ pub(crate) async fn get_event_route(
 		.await
 		.map_err(|_| err!(Request(NotFound("Event not found."))))?;
 
-	let room_id: &RoomId = event
+	let room_id: OwnedRoomId = event
 		.get("room_id")
 		.and_then(|val| val.as_str())
 		.ok_or_else(|| err!(Database("Invalid event in database.")))?
 		.try_into()
 		.map_err(|_| err!(Database("Invalid room_id in event in database.")))?;
 
-	AccessCheck {
+	let access_check = AccessCheck {
 		services: &services,
 		origin: body.origin(),
-		room_id,
+		room_id: &room_id,
 		event_id: Some(&body.event_id),
-	}
-	.check()
-	.await?;
+	};
+
+	let pdu = services
+		.federation
+		.format_pdu_into(event, None)
+		.map(Ok);
+
+	let ((), pdu) = try_join(access_check.check(), pdu).await?;
 
 	Ok(get_event::v1::Response {
 		origin: services.globals.server_name().to_owned(),
 		origin_server_ts: MilliSecondsSinceUnixEpoch::now(),
-		pdu: services
-			.federation
-			.format_pdu_into(event, None)
-			.await,
+		pdu,
 	})
 }

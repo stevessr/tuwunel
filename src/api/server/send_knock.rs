@@ -1,5 +1,5 @@
 use axum::extract::State;
-use futures::FutureExt;
+use futures::{FutureExt, future::try_join};
 use ruma::{
 	OwnedServerName, OwnedUserId,
 	RoomVersionId::*,
@@ -174,16 +174,16 @@ pub(crate) async fn create_knock_event_v1_route(
 
 	drop(mutex_lock);
 
-	services
+	let broadcast = services
 		.sending
-		.send_pdu_room(&body.room_id, &pdu_id)
-		.await?;
+		.send_pdu_room(&body.room_id, &pdu_id);
+
+	let knock_room_state = services.state.summary_stripped(&pdu).map(Ok);
+
+	let (knock_room_state, ()) = try_join(knock_room_state, broadcast).await?;
 
 	Ok(create_knock_event::v1::Response {
-		knock_room_state: services
-			.state
-			.summary_stripped(&pdu)
-			.await
+		knock_room_state: knock_room_state
 			.into_iter()
 			.map(Into::into)
 			.collect(),

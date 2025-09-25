@@ -6,7 +6,10 @@ use ruma::{
 	RoomId,
 	api::{client::error::ErrorKind, federation::authorization::get_event_authorization},
 };
-use tuwunel_core::{Error, Result, utils::stream::ReadyExt};
+use tuwunel_core::{
+	Error, Result,
+	utils::stream::{BroadbandExt, ReadyExt},
+};
 
 use super::AccessCheck;
 use crate::Ruma;
@@ -43,12 +46,26 @@ pub(crate) async fn get_event_authorization_route(
 	let room_id = <&RoomId>::try_from(room_id_str)
 		.map_err(|_| Error::bad_database("Invalid room_id in event in database."))?;
 
+	let room_version = services
+		.state
+		.get_room_version(room_id)
+		.await
+		.ok();
+
 	let auth_chain = services
 		.auth_chain
 		.event_ids_iter(room_id, once(body.event_id.borrow()))
 		.ready_filter_map(Result::ok)
-		.filter_map(async |id| services.timeline.get_pdu_json(&id).await.ok())
-		.then(|pdu| services.federation.format_pdu_into(pdu, None))
+		.broad_filter_map(async |id| {
+			let pdu = services.timeline.get_pdu_json(&id).await.ok()?;
+
+			let pdu = services
+				.federation
+				.format_pdu_into(pdu, room_version.as_ref())
+				.await;
+
+			Some(pdu)
+		})
 		.collect()
 		.await;
 

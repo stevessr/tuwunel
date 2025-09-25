@@ -32,6 +32,12 @@ pub(crate) async fn get_missing_events_route(
 		.unwrap_or(LIMIT_DEFAULT)
 		.min(LIMIT_MAX);
 
+	let room_version = services
+		.state
+		.get_room_version(&body.room_id)
+		.await
+		.ok();
+
 	let mut queued_events = body.latest_events.clone();
 	// the vec will never have more entries the limit
 	let mut events = Vec::with_capacity(limit);
@@ -78,7 +84,7 @@ pub(crate) async fn get_missing_events_route(
 
 		let event = services
 			.federation
-			.format_pdu_into(event, None)
+			.format_pdu_into(event, room_version.as_ref())
 			.await;
 
 		queued_events.extend(prev_events);

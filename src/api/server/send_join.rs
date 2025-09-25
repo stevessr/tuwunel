@@ -3,7 +3,7 @@
 use std::borrow::Borrow;
 
 use axum::extract::State;
-use futures::{FutureExt, StreamExt, TryStreamExt, future::try_join3};
+use futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt, future::try_join4};
 use ruma::{
 	OwnedEventId, OwnedRoomId, OwnedServerName, OwnedUserId, RoomId, ServerName,
 	api::federation::membership::create_join_event,
@@ -189,6 +189,14 @@ async fn create_join_event(
 	)
 	.map_err(|e| err!(Request(BadJson("Event has an invalid origin server name: {e}"))))?;
 
+	// Prestart state gather here since it doesn't involve the new join event.
+	let state_ids = services
+		.state_accessor
+		.state_full_ids(shortstatehash)
+		.map(at!(1))
+		.collect::<Vec<OwnedEventId>>()
+		.boxed();
+
 	let mutex_lock = services
 		.event_handler
 		.mutex_federation
@@ -204,49 +212,51 @@ async fn create_join_event(
 
 	drop(mutex_lock);
 
-	let state_ids: Vec<OwnedEventId> = services
-		.state_accessor
-		.state_full_ids(shortstatehash)
-		.map(at!(1))
-		.collect()
-		.await;
-
-	let starting_events = state_ids.iter().map(Borrow::borrow);
-	let auth_chain = services
-		.auth_chain
-		.event_ids_iter(room_id, starting_events)
-		.broad_and_then(async |event_id| services.timeline.get_pdu_json(&event_id).await)
-		.broad_and_then(|pdu| {
-			services
-				.federation
-				.format_pdu_into(pdu, Some(&room_version_id))
-				.map(Ok)
-		})
-		.try_collect();
-
-	let state = state_ids
-		.iter()
-		.try_stream()
-		.broad_and_then(|event_id| services.timeline.get_pdu_json(event_id))
-		.broad_and_then(|pdu| {
-			services
-				.federation
-				.format_pdu_into(pdu, Some(&room_version_id))
-				.map(Ok)
-		})
-		.try_collect();
-
+	// Join event for new server.
 	let event = services
 		.federation
 		.format_pdu_into(value, Some(&room_version_id))
 		.map(Some)
 		.map(Ok);
 
-	let (auth_chain, state, event) = try_join3(auth_chain, state, event).await?;
+	// Join event revealed to existing servers.
+	let broadcast = services.sending.send_pdu_room(room_id, &pdu_id);
 
-	services
-		.sending
-		.send_pdu_room(room_id, &pdu_id)
+	// Wait for state gather which the remaining operations depend on.
+	let state_ids = state_ids.await;
+	let auth_heads = state_ids.iter().map(Borrow::borrow);
+	let into_federation_format = |pdu| {
+		services
+			.federation
+			.format_pdu_into(pdu, Some(&room_version_id))
+			.map(Ok)
+	};
+
+	let auth_chain = services
+		.auth_chain
+		.event_ids_iter(room_id, auth_heads)
+		.broad_and_then(async |event_id| {
+			services
+				.timeline
+				.get_pdu_json(&event_id)
+				.and_then(into_federation_format)
+				.await
+		})
+		.try_collect();
+
+	let state = state_ids
+		.iter()
+		.try_stream()
+		.broad_and_then(|event_id| {
+			services
+				.timeline
+				.get_pdu_json(event_id)
+				.and_then(into_federation_format)
+		})
+		.try_collect();
+
+	let (auth_chain, state, event, ()) = try_join4(auth_chain, state, event, broadcast)
+		.boxed()
 		.await?;
 
 	Ok(create_join_event::v1::RoomState { auth_chain, state, event })

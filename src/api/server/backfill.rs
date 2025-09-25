@@ -53,6 +53,12 @@ pub(crate) async fn get_backfill_route(
 		.ready_fold(PduCount::min(), cmp::max)
 		.await;
 
+	let room_version = services
+		.state
+		.get_room_version(&body.room_id)
+		.await
+		.ok();
+
 	Ok(get_backfill::v1::Response {
 		origin_server_ts: MilliSecondsSinceUnixEpoch::now(),
 
@@ -79,7 +85,7 @@ pub(crate) async fn get_backfill_route(
 			.and_then(|pdu| {
 				services
 					.federation
-					.format_pdu_into(pdu, None)
+					.format_pdu_into(pdu, room_version.as_ref())
 					.map(Ok)
 			})
 			.try_collect()
