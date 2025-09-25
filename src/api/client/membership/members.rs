@@ -2,7 +2,7 @@ use axum::extract::State;
 use futures::{FutureExt, StreamExt, pin_mut};
 use ruma::{
 	api::client::membership::{
-		get_member_events::{self, v3::MembershipEventFilter},
+		get_member_events::{self},
 		joined_members::{self, v3::RoomMember},
 	},
 	events::{
@@ -94,9 +94,7 @@ pub(crate) async fn joined_members_route(
 			.ready_filter_map(Result::ok)
 			.ready_filter(|((ty, _), _)| *ty == StateEventType::RoomMember)
 			.map(at!(1))
-			.ready_filter_map(|pdu| {
-				membership_filter(pdu, Some(&MembershipEventFilter::Join), None)
-			})
+			.ready_filter_map(|pdu| membership_filter(pdu, Some(&MembershipState::Join), None))
 			.ready_filter_map(|pdu| {
 				let content = pdu.get_content::<RoomMemberEventContent>().ok()?;
 				let sender = pdu.sender().to_owned();
@@ -115,22 +113,22 @@ pub(crate) async fn joined_members_route(
 
 fn membership_filter<Pdu: Event>(
 	pdu: Pdu,
-	for_membership: Option<&MembershipEventFilter>,
-	not_membership: Option<&MembershipEventFilter>,
+	for_membership: Option<&MembershipState>,
+	not_membership: Option<&MembershipState>,
 ) -> Option<impl Event> {
 	let membership_state_filter = match for_membership {
-		| Some(MembershipEventFilter::Ban) => MembershipState::Ban,
-		| Some(MembershipEventFilter::Invite) => MembershipState::Invite,
-		| Some(MembershipEventFilter::Knock) => MembershipState::Knock,
-		| Some(MembershipEventFilter::Leave) => MembershipState::Leave,
+		| Some(MembershipState::Ban) => MembershipState::Ban,
+		| Some(MembershipState::Invite) => MembershipState::Invite,
+		| Some(MembershipState::Knock) => MembershipState::Knock,
+		| Some(MembershipState::Leave) => MembershipState::Leave,
 		| Some(_) | None => MembershipState::Join,
 	};
 
 	let not_membership_state_filter = match not_membership {
-		| Some(MembershipEventFilter::Ban) => MembershipState::Ban,
-		| Some(MembershipEventFilter::Invite) => MembershipState::Invite,
-		| Some(MembershipEventFilter::Join) => MembershipState::Join,
-		| Some(MembershipEventFilter::Knock) => MembershipState::Knock,
+		| Some(MembershipState::Ban) => MembershipState::Ban,
+		| Some(MembershipState::Invite) => MembershipState::Invite,
+		| Some(MembershipState::Join) => MembershipState::Join,
+		| Some(MembershipState::Knock) => MembershipState::Knock,
 		| Some(_) | None => MembershipState::Leave,
 	};
 
