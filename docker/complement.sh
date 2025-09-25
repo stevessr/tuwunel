@@ -88,7 +88,7 @@ extract_output() {
 }
 
 result_src="$cid:/usr/src/complement/new_results.jsonl"
-result_dst="tests/test_results/complement/test_results.jsonl"
+result_dst="src/main/tests/complement/results.jsonl"
 extract_results() {
 	docker cp "$result_src" "$result_dst"
 }
