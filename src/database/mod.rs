@@ -1,4 +1,4 @@
-#![type_length_limit = "3072"]
+#![type_length_limit = "8192"]
 
 extern crate rust_rocksdb as rocksdb;
 
