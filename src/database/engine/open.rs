@@ -103,7 +103,10 @@ fn configure_cfds(
 		debug!("Creating new column {name:?} not previously found in existing database.");
 	});
 
-	let missing_descriptors = missing.clone().map(|_| descriptor::DROPPED);
+	let missing_descriptors = missing
+		.clone()
+		.filter(|_| config.rocksdb_drop_missing_columns)
+		.map(|_| descriptor::DROPPED);
 
 	let cfopts: Vec<_> = desc
 		.iter()
