@@ -46,7 +46,7 @@ RUN [ -f certificate.crt ] && [ -f private_key.pem ]
 FROM scratch AS complement-config
 WORKDIR /complement
 COPY --from=key-gen /complement/* .
-COPY --from=source /usr/src/tuwunel/tests/test_results/complement/test_results.jsonl old_results.jsonl
+COPY --from=source /usr/src/tuwunel/tests/complement/results.jsonl old_results.jsonl
 COPY <<EOF complement.toml
     [global]
     address = "0.0.0.0"
