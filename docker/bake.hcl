@@ -471,8 +471,23 @@ group "smoke" {
     targets = [
         "smoke-version",
         "smoke-startup",
+        #"smoke-nix",
         #"smoke-valgrind",
         #"smoke-perf",
+    ]
+}
+
+target "smoke-nix" {
+    name = elem("smoke-nix", [sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("smoke-nix", [sys_name, sys_version, sys_target], "latest"),
+    ]
+    output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
+    dockerfile = "${docker_dir}/Dockerfile.nix"
+    target = "smoke-nix"
+    matrix = sys
+    inherits = [
+        elem("build-nix", [sys_name, sys_version, sys_target]),
     ]
 }
 
@@ -712,6 +727,7 @@ target "install" {
 
 group "pkg" {
     targets = [
+        "nix",
         "deb",
         "rpm",
         "deb-install",
@@ -820,6 +836,39 @@ target "build-deb" {
     }
     args = {
         pkg_dir = "/opt/tuwunel/deb"
+    }
+}
+
+target "nix" {
+    name = elem("nix", [sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("nix", [sys_name, sys_version, sys_target], "latest"),
+    ]
+    output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
+    target = "nix-pkg"
+    matrix = sys
+    inherits = [
+        elem("build-nix", [sys_name, sys_version, sys_target]),
+    ]
+}
+
+target "build-nix" {
+    name = elem("build-nix", [sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("build-nix", [sys_name, sys_version, sys_target], "latest"),
+    ]
+    output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level}"]
+    dockerfile = "${docker_dir}/Dockerfile.nix"
+    target = "build-nix"
+    matrix = sys
+    inherits = [
+        elem("builder", [sys_name, sys_version, sys_target]),
+        elem("source", [sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:builder", [sys_name, sys_version, sys_target]),
+        source = elem("target:source", [sys_name, sys_version, sys_target]),
     }
 }
 
@@ -1654,6 +1703,7 @@ kitchen_packages = [
     "libssl-dev",
     "libsqlite3-dev",
     "make",
+    "nix-bin",
     "openssl",
     "pkg-config",
     "pkgconf",

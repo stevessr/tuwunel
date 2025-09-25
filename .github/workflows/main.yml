@@ -40,6 +40,7 @@ jobs:
       machines: ${{vars.MACHINES || env.default_machines}}
       package: ${{vars.PACKAGE || !contains(github.ref, 'refs/pull/')}}
       publish: ${{vars.PUBLISH || !contains(github.ref, 'refs/pull/')}}
+      build_nix: ${{vars.BUILD_NIX || !contains(github.ref, 'refs/pull/')}}
       build_pkgs: ${{vars.BUILD_PKGS || github.ref == 'refs/heads/main' || contains(github.ref, 'tags/v')}}
       check_pkgs: ${{vars.CHECK_PKGS || 'false'}}
       complement: ${{vars.COMPLEMENT || 'true'}}
@@ -168,6 +169,7 @@ jobs:
     needs: [init, lint]
     uses: ./.github/workflows/test.yml
     with:
+      build_nix: ${{fromJSON(needs.init.outputs.build_nix)}}
       rust_sdk_integration: ${{fromJSON(needs.init.outputs.rust_sdk_integration)}}
       complement: ${{fromJSON(needs.init.outputs.complement)}}
       complement_runner: ${{needs.init.outputs.complement_runner}}
@@ -223,6 +225,7 @@ jobs:
       release_url: ${{needs.init.outputs.release_url}}
       check_pkgs: ${{needs.init.outputs.check_pkgs}}
       build_pkgs: ${{needs.init.outputs.build_pkgs}}
+      build_nix: ${{fromJSON(needs.init.outputs.build_nix)}}
       cargo_profiles: ${{needs.init.outputs.cargo_profiles}}
       feat_sets: ${{needs.init.outputs.feat_sets}}
       rust_toolchains: ${{needs.init.outputs.rust_toolchains}}

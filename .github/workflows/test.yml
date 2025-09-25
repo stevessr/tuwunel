@@ -46,6 +46,9 @@ on:
       rust_sdk_integration:
         type: boolean
         default: true
+      build_nix:
+        type: boolean
+        default: true
 
 jobs:
   docs:
@@ -162,6 +165,30 @@ jobs:
           {"sys_target": "x86_64-v4-linux-gnu", "feat_set": "logging"},
           {"sys_target": "x86_64-v4-linux-gnu", "bake_target": "smoke-valgrind"},
         ]
+
+  nix:
+    if: >
+      !failure() && !cancelled()
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["release"]')[0])
+      && contains(fromJSON(inputs.complement_feat_sets), fromJSON('["all"]')[0])
+      && contains(fromJSON(inputs.rust_toolchains), fromJSON('["stable"]')[0])
+      && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v1-linux-gnu"]')[0])
+      && fromJSON(inputs.build_nix)
+
+    name: Smoke NixOS
+    uses: ./.github/workflows/bake.yml
+    with:
+      bake_targets: '["smoke-nix"]'
+      cargo_profiles: '["release"]'
+      feat_sets: '["all"]'
+      rust_toolchains: '["stable"]'
+      sys_names: ${{inputs.sys_names}}
+      sys_versions: ${{inputs.sys_versions}}
+      rust_targets: ${{inputs.rust_targets}}
+      sys_targets: '["x86_64-v1-linux-gnu"]'
+      machines: ${{inputs.machines}}
+      excludes: ${{inputs.excludes}}
+      includes: ${{inputs.includes}}
 
   rust-sdk-integration:
     if: >

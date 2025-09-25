@@ -44,6 +44,9 @@ on:
       check_pkgs:
         type: string
         default: 'false'
+      build_nix:
+        type: string
+        default: 'true'
 
 jobs:
   book:
@@ -142,6 +145,41 @@ jobs:
             "mime": "application/zstd",
             "zstd": 11
           }
+        }
+
+  nix:
+    if: >
+      !failure() && !cancelled()
+      && contains(fromJSON(inputs.feat_sets), fromJSON('["all"]')[0])
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["release"]')[0])
+      && contains(fromJSON(inputs.rust_toolchains), fromJSON('["stable"]')[0])
+      && fromJSON(inputs.build_pkgs)
+      && fromJSON(inputs.build_nix)
+      && false
+
+    name: NixOS Package
+    uses: ./.github/workflows/bake.yml
+    with:
+      bake_targets: '["nix"]'
+      cargo_profiles: '["release"]'
+      feat_sets: '["all"]'
+      rust_toolchains: '["stable"]'
+      sys_names: ${{inputs.sys_names}}
+      sys_versions: ${{inputs.sys_versions}}
+      rust_targets: ${{inputs.rust_targets}}
+      sys_targets: ${{inputs.sys_targets}}
+      machines: ${{inputs.machines}}
+      excludes: ${{inputs.excludes}}
+      includes: ${{inputs.includes}}
+      release_url: ${{inputs.release_url}}
+      artifact: >
+        {
+          "nix": {
+            "dst": "tuwunel.drv.tar.zst",
+            "src": "/opt/tuwunel/tuwunel.drv"
+            "mime": "application/zstd",
+            "zstd": 6,
+          },
         }
 
   pkgs:
