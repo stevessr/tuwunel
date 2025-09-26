@@ -1,6 +1,7 @@
 use std::fmt;
 
 use arrayvec::ArrayVec;
+use serde::{Deserialize, Deserializer};
 
 use super::{Count, Id, ShortEventId, ShortId, ShortRoomId};
 
@@ -13,12 +14,18 @@ pub enum RawId {
 type RawIdNormal = [u8; RawId::NORMAL_LEN];
 type RawIdBackfilled = [u8; RawId::BACKFILLED_LEN];
 
+struct RawIdVisitor;
+
 const INT_LEN: usize = size_of::<ShortId>();
 
 impl RawId {
 	const BACKFILLED_LEN: usize = size_of::<ShortRoomId>() + INT_LEN + size_of::<ShortEventId>();
 	const MAX_LEN: usize = Self::BACKFILLED_LEN;
 	const NORMAL_LEN: usize = size_of::<ShortRoomId>() + size_of::<ShortEventId>();
+
+	#[inline]
+	#[must_use]
+	pub fn is_room_eq(self, other: Self) -> bool { self.shortroomid() == other.shortroomid() }
 
 	#[inline]
 	#[must_use]
@@ -70,28 +77,22 @@ impl fmt::Debug for RawId {
 	}
 }
 
-impl AsRef<[u8]> for RawId {
+impl<'de> Deserialize<'de> for RawId {
 	#[inline]
-	fn as_ref(&self) -> &[u8] { self.as_bytes() }
+	fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+		d.deserialize_bytes(RawIdVisitor)
+	}
 }
 
-impl From<&[u8]> for RawId {
-	#[inline]
-	fn from(id: &[u8]) -> Self {
-		match id.len() {
-			| Self::NORMAL_LEN => Self::Normal(
-				id[0..Self::NORMAL_LEN]
-					.try_into()
-					.expect("normal RawId from [u8]"),
-			),
-			| Self::BACKFILLED_LEN => Self::Backfilled(
-				id[0..Self::BACKFILLED_LEN]
-					.try_into()
-					.expect("backfilled RawId from [u8]"),
-			),
-			| _ => unimplemented!("unrecognized RawId length"),
-		}
+impl serde::de::Visitor<'_> for RawIdVisitor {
+	type Value = RawId;
+
+	fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str("RawId byte array")
 	}
+
+	#[inline]
+	fn visit_bytes<E>(self, buf: &[u8]) -> Result<RawId, E> { Ok(RawId::from(buf)) }
 }
 
 impl From<Id> for RawId {
@@ -123,4 +124,38 @@ impl From<Id> for RawId {
 			},
 		}
 	}
+}
+
+impl From<&[u8]> for RawId {
+	#[inline]
+	fn from(id: &[u8]) -> Self {
+		match id.len() {
+			| Self::NORMAL_LEN => Self::Normal(
+				id[0..Self::NORMAL_LEN]
+					.try_into()
+					.expect("normal RawId from [u8]"),
+			),
+			| Self::BACKFILLED_LEN => Self::Backfilled(
+				id[0..Self::BACKFILLED_LEN]
+					.try_into()
+					.expect("backfilled RawId from [u8]"),
+			),
+			| _ => unimplemented!("unrecognized RawId length"),
+		}
+	}
+}
+
+impl From<&[u8; Self::NORMAL_LEN]> for RawId {
+	#[inline]
+	fn from(id: &[u8; Self::NORMAL_LEN]) -> Self { Self::Normal(*id) }
+}
+
+impl From<&[u8; Self::BACKFILLED_LEN]> for RawId {
+	#[inline]
+	fn from(id: &[u8; Self::BACKFILLED_LEN]) -> Self { Self::Backfilled(*id) }
+}
+
+impl AsRef<[u8]> for RawId {
+	#[inline]
+	fn as_ref(&self) -> &[u8] { self.as_bytes() }
 }
