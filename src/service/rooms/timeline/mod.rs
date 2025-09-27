@@ -34,7 +34,7 @@ use tuwunel_core::{
 };
 use tuwunel_database::{Database, Deserialized, Json, KeyVal, Map};
 
-use crate::rooms::short::ShortRoomId;
+use crate::rooms::short::{ShortRoomId, ShortStateHash};
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
@@ -163,7 +163,91 @@ pub async fn latest_item_in_room(
 		.try_next()
 		.await?
 		.map(at!(1))
-		.ok_or_else(|| err!(Request(NotFound("no PDU's found in room"))))
+		.ok_or_else(|| err!(Request(NotFound("No PDU's found in room"))))
+}
+
+/// Returns the shortstatehash of the room at the event directly preceding the
+/// exclusive `before` param. `before` does not have to be a valid shorteventid
+/// or in the room.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub async fn prev_shortstatehash(
+	&self,
+	room_id: &RoomId,
+	before: PduCount,
+) -> Result<ShortStateHash> {
+	let prev = self.prev_timeline_count(room_id, before).await?;
+
+	self.services
+		.state_accessor
+		.get_shortstatehash(prev.into_unsigned())
+		.await
+}
+
+/// Returns the shortstatehash of the room at the event directly following the
+/// exclusive `after` param. `after` does not have to be a valid shorteventid or
+/// in the room.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub async fn next_shortstatehash(
+	&self,
+	room_id: &RoomId,
+	after: PduCount,
+) -> Result<ShortStateHash> {
+	let next = self.next_timeline_count(room_id, after).await?;
+
+	self.services
+		.state_accessor
+		.get_shortstatehash(next.into_unsigned())
+		.await
+}
+
+/// Returns the shorteventid in the room preceding the exclusive `before` param.
+/// `before` does not have to be a valid shorteventid or in the room.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub async fn prev_timeline_count(&self, room_id: &RoomId, before: PduCount) -> Result<PduCount> {
+	let before = self
+		.count_to_id(room_id, before, Direction::Backward)
+		.await?;
+
+	let pdu_ids = self
+		.db
+		.pduid_pdu
+		.rev_keys_raw_from(&before)
+		.ready_try_take_while(|pdu_id: &RawPduId| Ok(pdu_id.is_room_eq(before)))
+		.ready_and_then(|pdu_id: RawPduId| Ok(pdu_id.pdu_count()));
+
+	pin_mut!(pdu_ids);
+	pdu_ids
+		.try_next()
+		.await
+		.log_err()?
+		.ok_or_else(|| err!(Request(NotFound("No earlier PDU's found in room"))))
+}
+
+/// Returns the next shorteventid in the room after the exclusive `after` param.
+/// `after` does not have to be a valid shorteventid or in the room.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub async fn next_timeline_count(&self, room_id: &RoomId, after: PduCount) -> Result<PduCount> {
+	let after = self
+		.count_to_id(room_id, after, Direction::Forward)
+		.await?;
+
+	let pdu_ids = self
+		.db
+		.pduid_pdu
+		.keys_raw_from(&after)
+		.ready_try_take_while(|pdu_id: &RawPduId| Ok(pdu_id.is_room_eq(after)))
+		.ready_and_then(|pdu_id: RawPduId| Ok(pdu_id.pdu_count()));
+
+	pin_mut!(pdu_ids);
+	pdu_ids
+		.try_next()
+		.await
+		.log_err()?
+		.ok_or(err!(Request(NotFound("No more PDU's found in room"))))
 }
 
 #[implement(Service)]
