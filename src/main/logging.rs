@@ -12,6 +12,7 @@ use tuwunel_core::{
 #[cfg(feature = "perf_measurements")]
 pub(crate) type TracingFlameGuard =
 	Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>>;
+
 #[cfg(not(feature = "perf_measurements"))]
 pub(crate) type TracingFlameGuard = ();
 

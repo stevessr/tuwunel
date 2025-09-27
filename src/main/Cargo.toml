@@ -51,6 +51,11 @@ assets = [
 name = "tuwunel"
 pkgdesc = "High performance Matrix homeserver written in Rust"
 
+[lib]
+path = "lib.rs"
+bench = false
+crate-type = ["rlib"]
+
 [features]
 default = [
 	"brotli_compression",
@@ -84,6 +89,7 @@ bzip2_compression = [
 	"tuwunel-service/bzip2_compression",
 ]
 console = [
+	"tuwunel-core/console",
 	"tuwunel-service/console",
 ]
 direct_tls = [

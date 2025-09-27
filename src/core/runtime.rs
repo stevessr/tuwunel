@@ -9,14 +9,14 @@ use std::{
 };
 
 use tokio::runtime::Builder;
+pub use tokio::runtime::{Handle, Runtime};
+
 #[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
-use tuwunel_core::result::LogDebugErr;
-use tuwunel_core::{
-	Result, debug, is_true,
+use crate::result::LogDebugErr;
+use crate::{
+	Args, Result, Server, debug, is_true,
 	utils::sys::compute::{nth_core_available, set_affinity},
 };
-
-use crate::{clap::Args, server::Server};
 
 const WORKER_NAME: &str = "tuwunel:worker";
 const WORKER_MIN: usize = 2;
@@ -30,7 +30,10 @@ static WORKER_AFFINITY: OnceLock<bool> = OnceLock::new();
 static GC_ON_PARK: OnceLock<Option<bool>> = OnceLock::new();
 static GC_MUZZY: OnceLock<Option<bool>> = OnceLock::new();
 
-pub(super) fn new(args: &Args) -> Result<tokio::runtime::Runtime> {
+pub fn new(args: Option<&Args>) -> Result<Runtime> {
+	let args_default = args.is_none().then(Args::default);
+	let args = args.unwrap_or_else(|| args_default.as_ref().expect("default arguments"));
+
 	WORKER_AFFINITY
 		.set(args.worker_affinity)
 		.expect("set WORKER_AFFINITY from program argument");
@@ -86,9 +89,8 @@ fn enable_histogram(builder: &mut Builder, args: &Args) {
 
 #[cfg(tokio_unstable)]
 #[tracing::instrument(name = "stop", level = "info", skip_all)]
-pub(super) fn shutdown(server: &Arc<Server>, runtime: tokio::runtime::Runtime) {
+pub fn shutdown(server: &Arc<Server>, runtime: Runtime) -> Result {
 	use tracing::Level;
-	use tuwunel_core::event;
 
 	// The final metrics output is promoted to INFO when tokio_unstable is active in
 	// a release/bench mode and DEBUG is likely optimized out
@@ -100,21 +102,22 @@ pub(super) fn shutdown(server: &Arc<Server>, runtime: tokio::runtime::Runtime) {
 
 	wait_shutdown(server, runtime);
 	let runtime_metrics = server
-		.server
 		.metrics
 		.runtime_interval()
 		.unwrap_or_default();
 
-	event!(LEVEL, ?runtime_metrics, "Final runtime metrics");
+	crate::event!(LEVEL, ?runtime_metrics, "Final runtime metrics");
+	Ok(())
 }
 
 #[cfg(not(tokio_unstable))]
 #[tracing::instrument(name = "stop", level = "info", skip_all)]
-pub(super) fn shutdown(server: &Arc<Server>, runtime: tokio::runtime::Runtime) {
+pub fn shutdown(server: &Arc<Server>, runtime: Runtime) -> Result {
 	wait_shutdown(server, runtime);
+	Ok(())
 }
 
-fn wait_shutdown(_server: &Arc<Server>, runtime: tokio::runtime::Runtime) {
+fn wait_shutdown(_server: &Arc<Server>, runtime: Runtime) {
 	debug!(
 		timeout = ?SHUTDOWN_TIMEOUT,
 		"Waiting for runtime..."
@@ -124,7 +127,7 @@ fn wait_shutdown(_server: &Arc<Server>, runtime: tokio::runtime::Runtime) {
 
 	// Join any jemalloc threads so they don't appear in use at exit.
 	#[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
-	tuwunel_core::alloc::je::background_thread_enable(false)
+	crate::alloc::je::background_thread_enable(false)
 		.log_debug_err()
 		.ok();
 }
@@ -153,7 +156,7 @@ fn thread_start() {
 fn set_worker_affinity() {
 	static CORES_OCCUPIED: AtomicUsize = AtomicUsize::new(0);
 
-	let handle = tokio::runtime::Handle::current();
+	let handle = Handle::current();
 	let num_workers = handle.metrics().num_workers();
 	let i = CORES_OCCUPIED.fetch_add(1, Ordering::Relaxed);
 	if i >= num_workers {
@@ -170,7 +173,7 @@ fn set_worker_affinity() {
 
 #[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
 fn set_worker_mallctl(id: usize) {
-	use tuwunel_core::alloc::je::{
+	use crate::alloc::je::{
 		is_affine_arena,
 		this_thread::{set_arena, set_muzzy_decay},
 	};
@@ -183,8 +186,7 @@ fn set_worker_mallctl(id: usize) {
 		.get()
 		.expect("GC_MUZZY initialized by runtime::new()");
 
-	let muzzy_auto_disable =
-		tuwunel_core::utils::available_parallelism() >= DISABLE_MUZZY_THRESHOLD;
+	let muzzy_auto_disable = crate::utils::available_parallelism() >= DISABLE_MUZZY_THRESHOLD;
 
 	if matches!(muzzy_option, Some(false) | None if muzzy_auto_disable) {
 		set_muzzy_decay(-1).log_debug_err().ok();
@@ -238,7 +240,7 @@ fn thread_park() {
 
 fn gc_on_park() {
 	#[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
-	tuwunel_core::alloc::je::this_thread::decay()
+	crate::alloc::je::this_thread::decay()
 		.log_debug_err()
 		.ok();
 }

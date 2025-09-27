@@ -5,7 +5,7 @@ use std::{env, os::unix::process::CommandExt, process::Command};
 use tuwunel_core::{debug, info, utils};
 
 #[cold]
-pub(super) fn restart() -> ! {
+pub fn restart() -> ! {
 	let exe = utils::sys::current_exe().expect("program path must be available");
 	let envs = env::vars();
 	let args = env::args().skip(1);
