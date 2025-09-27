@@ -5,9 +5,7 @@ use tuwunel_core::{
 	Result, implement, trace,
 	utils::stream::{ReadyExt, TryIgnore},
 };
-use tuwunel_database::{Database, Deserialized, Interfix, Map};
-
-use crate::rooms::short::ShortStateHash;
+use tuwunel_database::{Deserialized, Interfix, Map};
 
 pub struct Service {
 	db: Data,
@@ -15,22 +13,18 @@ pub struct Service {
 }
 
 struct Data {
-	db: Arc<Database>,
 	userroomid_notificationcount: Arc<Map>,
 	userroomid_highlightcount: Arc<Map>,
 	roomuserid_lastnotificationread: Arc<Map>,
-	roomsynctoken_shortstatehash: Arc<Map>,
 }
 
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			db: Data {
-				db: args.db.clone(),
 				userroomid_notificationcount: args.db["userroomid_notificationcount"].clone(),
 				userroomid_highlightcount: args.db["userroomid_highlightcount"].clone(),
 				roomuserid_lastnotificationread: args.db["userroomid_highlightcount"].clone(),
-				roomsynctoken_shortstatehash: args.db["roomsynctoken_shortstatehash"].clone(),
 			},
 			services: args.services.clone(),
 		}))
@@ -102,69 +96,6 @@ pub async fn delete_room_notification_read(&self, room_id: &RoomId) -> Result {
 			self.db
 				.roomuserid_lastnotificationread
 				.remove(key);
-		})
-		.await;
-
-	Ok(())
-}
-
-#[implement(Service)]
-#[tracing::instrument(level = "trace", skip(self))]
-pub async fn associate_token_shortstatehash(
-	&self,
-	room_id: &RoomId,
-	token: u64,
-	shortstatehash: ShortStateHash,
-) {
-	let shortroomid = self
-		.services
-		.short
-		.get_shortroomid(room_id)
-		.await
-		.expect("room exists");
-
-	let _cork = self.db.db.cork();
-	let key: &[u64] = &[shortroomid, token];
-	self.db
-		.roomsynctoken_shortstatehash
-		.put(key, shortstatehash);
-}
-
-#[implement(Service)]
-pub async fn get_token_shortstatehash(
-	&self,
-	room_id: &RoomId,
-	token: u64,
-) -> Result<ShortStateHash> {
-	let shortroomid = self
-		.services
-		.short
-		.get_shortroomid(room_id)
-		.await?;
-
-	let key: &[u64] = &[shortroomid, token];
-	self.db
-		.roomsynctoken_shortstatehash
-		.qry(key)
-		.await
-		.deserialized()
-}
-
-#[implement(Service)]
-pub async fn delete_room_synctokens(&self, room_id: &RoomId) -> Result {
-	let shortroomid = self
-		.services
-		.short
-		.get_shortroomid(room_id)
-		.await?;
-
-	self.db
-		.roomsynctoken_shortstatehash
-		.keys_prefix_raw(&shortroomid)
-		.ignore_err()
-		.ready_for_each(|key| {
-			trace!("Removing key: {key:?}");
-			self.db.roomsynctoken_shortstatehash.remove(key);
 		})
 		.await;
 

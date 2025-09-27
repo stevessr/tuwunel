@@ -1100,8 +1100,8 @@ where
 		};
 
 		let since_shortstatehash = services
-			.user
-			.get_token_shortstatehash(room_id, globalsince)
+			.timeline
+			.next_shortstatehash(room_id, PduCount::Normal(globalsince))
 			.await
 			.ok();
 
@@ -1117,26 +1117,44 @@ where
 				continue;
 			}
 
-			let since_encryption = services
-				.state_accessor
-				.state_get(since_shortstatehash, &StateEventType::RoomEncryption, "")
-				.await;
+			let synced_shortstatehash = services
+				.timeline
+				.prev_shortstatehash(room_id, PduCount::Normal(globalsince).saturating_add(1))
+				.await
+				.ok();
 
-			let since_sender_member: Option<RoomMemberEventContent> = services
-				.state_accessor
-				.state_get_content(
-					since_shortstatehash,
-					&StateEventType::RoomMember,
-					sender_user.as_str(),
-				)
-				.ok()
-				.await;
+			let synced_sender_member: OptionFuture<_> = synced_shortstatehash
+				.map(|shortstatehash| {
+					services
+						.state_accessor
+						.state_get_content(
+							shortstatehash,
+							&StateEventType::RoomMember,
+							sender_user.as_str(),
+						)
+						.map_ok(|content: RoomMemberEventContent| content)
+				})
+				.into();
 
-			let joined_since_last_sync = since_sender_member
+			let joined_since_last_sync = synced_sender_member
+				.await
+				.and_then(Result::ok)
 				.as_ref()
 				.is_none_or(|member| member.membership != MembershipState::Join);
 
-			let new_encrypted_room = encrypted_room && since_encryption.is_err();
+			let synced_encryption: OptionFuture<_> = synced_shortstatehash
+				.map(|shortstatehash| {
+					services.state_accessor.state_get(
+						shortstatehash,
+						&StateEventType::RoomEncryption,
+						"",
+					)
+				})
+				.into();
+
+			let synced_encryption = synced_encryption.await.and_then(Result::ok);
+
+			let new_encrypted_room = encrypted_room && synced_encryption.is_none();
 
 			if encrypted_room {
 				let current_state_ids: HashMap<_, OwnedEventId> = services
