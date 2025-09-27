@@ -4,7 +4,10 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{ToTokens, quote};
 use syn::{Attribute, Error, Fields, Ident, ItemEnum, ItemFn, Meta, Variant, parse_quote};
 
-use crate::{Result, utils::camel_to_snake_string};
+use crate::{
+	Result,
+	utils::{camel_to_snake_string, get_simple_settings},
+};
 
 pub(super) fn command(mut item: ItemFn, _args: &[Meta]) -> Result<TokenStream> {
 	let attr: Attribute = parse_quote! {
@@ -15,13 +18,20 @@ pub(super) fn command(mut item: ItemFn, _args: &[Meta]) -> Result<TokenStream> {
 	Ok(item.into_token_stream().into())
 }
 
-pub(super) fn command_dispatch(item: ItemEnum, _args: &[Meta]) -> Result<TokenStream> {
+pub(super) fn command_dispatch(item: ItemEnum, args: &[Meta]) -> Result<TokenStream> {
 	let name = &item.ident;
+	let opts = get_simple_settings(args);
+	let prefix = opts
+		.get("handler_prefix")
+		.map(|s| format!("{s}_"))
+		.unwrap_or_default();
+
 	let arm: Vec<TokenStream2> = item
 		.variants
 		.iter()
-		.map(dispatch_arm)
+		.map(|variant| dispatch_arm(variant, prefix.as_str()))
 		.try_collect()?;
+
 	let switch = quote! {
 		#[allow(clippy::large_stack_frames)] //TODO: fixme
 		pub(super) async fn process(
@@ -42,9 +52,10 @@ pub(super) fn command_dispatch(item: ItemEnum, _args: &[Meta]) -> Result<TokenSt
 		.into())
 }
 
-fn dispatch_arm(v: &Variant) -> Result<TokenStream2> {
+fn dispatch_arm(v: &Variant, prefix: &str) -> Result<TokenStream2> {
 	let name = &v.ident;
 	let target = camel_to_snake_string(&format!("{name}"));
+	let target = format!("{prefix}{target}");
 	let handler = Ident::new(&target, Span::call_site().into());
 	let res = match &v.fields {
 		| Fields::Named(fields) => {
@@ -52,6 +63,7 @@ fn dispatch_arm(v: &Variant) -> Result<TokenStream2> {
 				.named
 				.iter()
 				.filter_map(|f| f.ident.as_ref());
+
 			let arg = field.clone();
 			quote! {
 				#name { #( #field ),* } => {
@@ -63,6 +75,7 @@ fn dispatch_arm(v: &Variant) -> Result<TokenStream2> {
 			let Some(ref field) = fields.unnamed.first() else {
 				return Err(Error::new(Span::call_site().into(), "One unnamed field required"));
 			};
+
 			quote! {
 				#name ( #field ) => {
 					Box::pin(#handler::process(#field, context)).await
