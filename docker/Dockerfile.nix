@@ -26,6 +26,7 @@ ARG sys_target
 
 WORKDIR /usr/src/tuwunel
 COPY --link --from=source /usr/src/tuwunel .
+ENV TUWUNEL_DATABASE_PATH="/tmp/buildtest.db"
 RUN \
 --mount=type=cache,dst=/nix,sharing=shared \
 --mount=type=cache,dst=/root/.cache/nix,sharing=shared \
