@@ -49,11 +49,14 @@ on:
       build_nix:
         type: boolean
         default: true
+      head_msg:
+        type: string
 
 jobs:
   docs:
     if: >
-      contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])
+      !contains(inputs.head_msg, '[ci only it]')
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])
       && contains(fromJSON(inputs.feat_sets), fromJSON('["all"]')[0])
       && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v1-linux-gnu"]')[0])
@@ -75,7 +78,8 @@ jobs:
 
   unit:
     if: >
-      contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])
+      !contains(inputs.head_msg, '[ci only it]')
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])
       && contains(fromJSON(inputs.feat_sets), fromJSON('["all"]')[0])
       && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v1-linux-gnu"]')[0])
@@ -97,7 +101,8 @@ jobs:
 
   bench:
     if: >
-      contains(fromJSON(inputs.cargo_profiles), fromJSON('["bench"]')[0])
+      !contains(inputs.head_msg, '[ci only it]')
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["bench"]')[0])
       && contains(fromJSON(inputs.feat_sets), fromJSON('["all"]')[0])
       && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
@@ -120,6 +125,8 @@ jobs:
   smoke:
     if: >
       !failure() && !cancelled()
+      && !contains(inputs.head_msg, '[ci only it]')
+      && !contains(inputs.head_msg, '[ci no build]')
       && inputs.cargo_profiles
       && inputs.machines
 
@@ -192,6 +199,8 @@ jobs:
   nix:
     if: >
       !failure() && !cancelled()
+      && !contains(inputs.head_msg, '[ci only it]')
+      && !contains(inputs.head_msg, '[ci no build]')
       && contains(fromJSON(inputs.cargo_profiles), fromJSON('["release"]')[0])
       && contains(fromJSON(inputs.complement_feat_sets), fromJSON('["all"]')[0])
       && contains(fromJSON(inputs.rust_toolchains), fromJSON('["stable"]')[0])
@@ -216,6 +225,7 @@ jobs:
   rust-sdk-integration:
     if: >
       !failure() && !cancelled()
+      && !contains(inputs.head_msg, '[ci no build]')
       && inputs.rust_sdk_integration
       && contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])
       && contains(fromJSON(inputs.complement_feat_sets), fromJSON('["all"]')[0])
@@ -248,6 +258,7 @@ jobs:
   complement:
     if: >
       !failure() && !cancelled()
+      && !contains(inputs.head_msg, '[ci no build]')
       && inputs.complement
       && contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])
       && contains(fromJSON(inputs.complement_feat_sets), fromJSON('["all"]')[0])
@@ -273,6 +284,7 @@ jobs:
   compliance:
     if: >
       !failure() && !cancelled()
+      && !contains(inputs.head_msg, '[ci no build]')
       && inputs.complement
       && inputs.machines
       && contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])

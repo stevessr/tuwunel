@@ -49,6 +49,7 @@ jobs:
       release_url: ${{steps.release.outputs.upload_url}}
       pages_url: 'https://matrix-construct.github.io/tuwunel/'
       rust_sdk_integration: ${{vars.RUST_SDK_INTEGRATION || 'true'}}
+      head_msg: ${{github.event.head_commit.message || github.event.workflow_run.head_commit.message}}
 
     strategy:
       fail-fast: true
@@ -117,6 +118,8 @@ jobs:
     if: >
       !failure() && !cancelled()
       && !contains(github.ref, 'refs/tags/v')
+      && !contains(needs.init.outputs.head_msg, '[ci no lint]')
+      && !contains(needs.init.outputs.head_msg, '[ci only it]')
 
     name: Lint
     needs: [init] #needs: [init, deps]
@@ -165,11 +168,13 @@ jobs:
     if: >
       !failure() && !cancelled()
       && !contains(github.ref, 'refs/tags/v')
+      && !contains(needs.init.outputs.head_msg, '[ci no test]')
 
     name: Test
     needs: [init, lint]
     uses: ./.github/workflows/test.yml
     with:
+      head_msg: ${{needs.init.outputs.head_msg}}
       build_nix: ${{fromJSON(needs.init.outputs.build_nix)}}
       rust_sdk_integration: ${{fromJSON(needs.init.outputs.rust_sdk_integration)}}
       complement: ${{fromJSON(needs.init.outputs.complement)}}
@@ -218,6 +223,9 @@ jobs:
     if: >
       !failure() && !cancelled()
       && needs.init.outputs.package
+      && !contains(needs.init.outputs.head_msg, '[ci only it]')
+      && !contains(needs.init.outputs.head_msg, '[ci no build]')
+      && !contains(needs.init.outputs.head_msg, '[ci no package]')
 
     name: Package
     needs: [init, test]
@@ -274,6 +282,10 @@ jobs:
     if: >
       !failure() && !cancelled()
       && needs.init.outputs.publish
+      && !contains(needs.init.outputs.head_msg, '[ci only it]')
+      && !contains(needs.init.outputs.head_msg, '[ci no build]')
+      && !contains(needs.init.outputs.head_msg, '[ci no package]')
+      && !contains(needs.init.outputs.head_msg, '[ci no publish]')
 
     name: Publish
     needs: [init, test, package]
