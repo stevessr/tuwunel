@@ -580,7 +580,7 @@ async fn handle_left_room(
 	};
 
 	let Ok(left_shortstatehash) = services
-		.state_accessor
+		.state
 		.pdu_shortstatehash(&left_event_id)
 		.await
 	else {
@@ -703,16 +703,12 @@ async fn load_joined_room(
 		.iter()
 		.map(at!(0))
 		.map(PduCount::into_unsigned)
-		.map(|shorteventid| {
-			services
-				.state_accessor
-				.get_shortstatehash(shorteventid)
-		})
+		.map(|shorteventid| services.state.get_shortstatehash(shorteventid))
 		.next()
 		.into();
 
 	let current_shortstatehash = services
-		.state_accessor
+		.state
 		.get_shortstatehash(last_timeline_count.into_unsigned())
 		.or_else(|_| services.state.get_room_shortstatehash(room_id));
 

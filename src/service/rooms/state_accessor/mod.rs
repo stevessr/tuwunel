@@ -31,26 +31,15 @@ use tuwunel_core::{
 	Result, err,
 	matrix::{Event, room_version, state_res::events::RoomCreateEvent},
 };
-use tuwunel_database::Map;
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
-	db: Data,
-}
-
-struct Data {
-	shorteventid_shortstatehash: Arc<Map>,
 }
 
 #[async_trait]
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
-		Ok(Arc::new(Self {
-			services: args.services.clone(),
-			db: Data {
-				shorteventid_shortstatehash: args.db["shorteventid_shortstatehash"].clone(),
-			},
-		}))
+		Ok(Arc::new(Self { services: args.services.clone() }))
 	}
 
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }

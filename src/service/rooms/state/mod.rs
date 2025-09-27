@@ -1,7 +1,9 @@
 use std::{collections::HashMap, fmt::Write, iter::once, sync::Arc};
 
 use async_trait::async_trait;
-use futures::{FutureExt, Stream, StreamExt, TryStreamExt, future::join_all, pin_mut};
+use futures::{
+	FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt, future::join_all, pin_mut,
+};
 use ruma::{
 	EventId, OwnedEventId, OwnedRoomId, RoomId, RoomVersionId, UserId,
 	events::{
@@ -490,6 +492,44 @@ pub async fn get_room_shortstatehash(&self, room_id: &RoomId) -> Result<ShortSta
 		.deserialized()
 }
 
+/// Returns the state hash at this event.
+#[implement(Service)]
+pub async fn pdu_shortstatehash(&self, event_id: &EventId) -> Result<ShortStateHash> {
+	self.services
+		.short
+		.get_shorteventid(event_id)
+		.and_then(|shorteventid| self.get_shortstatehash(shorteventid))
+		.await
+}
+
+/// Returns the state hash at this event.
+#[implement(Service)]
+#[tracing::instrument(
+	level = "debug"
+	skip(self),
+	ret,
+)]
+pub async fn get_shortstatehash(&self, shorteventid: ShortEventId) -> Result<ShortStateHash> {
+	const BUFSIZE: usize = size_of::<ShortEventId>();
+
+	self.db
+		.shorteventid_shortstatehash
+		.aqry::<BUFSIZE, _>(&shorteventid)
+		.await
+		.deserialized()
+}
+
+#[implement(Service)]
+pub(super) async fn delete_room_shortstatehash(
+	&self,
+	room_id: &RoomId,
+	_mutex_lock: &Guard<OwnedRoomId, ()>,
+) -> Result {
+	self.db.roomid_shortstatehash.remove(room_id);
+
+	Ok(())
+}
+
 #[implement(Service)]
 #[tracing::instrument(
 	level = "trace"
@@ -549,17 +589,6 @@ pub(super) async fn delete_all_rooms_forward_extremities(&self, room_id: &RoomId
 			self.db.roomid_pduleaves.remove(key);
 		})
 		.await;
-
-	Ok(())
-}
-
-#[implement(Service)]
-pub(super) async fn delete_room_shortstatehash(
-	&self,
-	room_id: &RoomId,
-	_mutex_lock: &Guard<OwnedRoomId, ()>,
-) -> Result {
-	self.db.roomid_shortstatehash.remove(room_id);
 
 	Ok(())
 }

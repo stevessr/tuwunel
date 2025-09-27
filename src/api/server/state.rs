@@ -34,7 +34,7 @@ pub(crate) async fn get_room_state_route(
 	.await?;
 
 	let shortstatehash = services
-		.state_accessor
+		.state
 		.pdu_shortstatehash(&body.event_id)
 		.await
 		.map_err(|_| err!(Request(NotFound("PDU state not found."))))?;

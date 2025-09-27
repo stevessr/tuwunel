@@ -179,7 +179,7 @@ pub async fn prev_shortstatehash(
 	let prev = self.prev_timeline_count(room_id, before).await?;
 
 	self.services
-		.state_accessor
+		.state
 		.get_shortstatehash(prev.into_unsigned())
 		.await
 }
@@ -197,7 +197,7 @@ pub async fn next_shortstatehash(
 	let next = self.next_timeline_count(room_id, after).await?;
 
 	self.services
-		.state_accessor
+		.state
 		.get_shortstatehash(next.into_unsigned())
 		.await
 }

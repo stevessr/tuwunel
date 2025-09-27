@@ -134,7 +134,7 @@ pub(crate) async fn get_context_route(
 		.map_or_else(|| body.event_id.as_ref(), |pdu| pdu.event_id.as_ref());
 
 	let state_ids = services
-		.state_accessor
+		.state
 		.pdu_shortstatehash(state_at)
 		.or_else(|_| services.state.get_room_shortstatehash(room_id))
 		.map_ok(|shortstatehash| {

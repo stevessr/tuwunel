@@ -40,7 +40,7 @@ where
 
 	let Ok(prev_event_sstatehash) = self
 		.services
-		.state_accessor
+		.state
 		.pdu_shortstatehash(prev_event_id)
 		.await
 	else {
@@ -105,7 +105,7 @@ where
 
 			let sstatehash = self
 				.services
-				.state_accessor
+				.state
 				.pdu_shortstatehash(prev_event_id);
 
 			try_join(sstatehash, prev_event)

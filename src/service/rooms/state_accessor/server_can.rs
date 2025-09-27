@@ -18,7 +18,12 @@ pub async fn server_can_see_event(
 	room_id: &RoomId,
 	event_id: &EventId,
 ) -> bool {
-	let Ok(shortstatehash) = self.pdu_shortstatehash(event_id).await else {
+	let Ok(shortstatehash) = self
+		.services
+		.state
+		.pdu_shortstatehash(event_id)
+		.await
+	else {
 		return true;
 	};
 
