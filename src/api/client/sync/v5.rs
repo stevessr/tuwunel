@@ -244,7 +244,6 @@ fn is_empty_response(response: &Response) -> bool {
         known_rooms = known_rooms.len(),
     )
 )]
-#[allow(clippy::too_many_arguments)]
 async fn handle_lists<'a, Rooms, AllRooms>(
 	services: &Services,
 	sync_info: SyncInfo<'_>,
@@ -502,7 +501,6 @@ where
 }
 
 #[tracing::instrument(level = "debug", skip_all, fields(room_id, roomsince))]
-#[allow(clippy::too_many_arguments)]
 async fn handle_room(
 	services: &Services,
 	next_batch: u64,

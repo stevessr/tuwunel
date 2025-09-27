@@ -354,7 +354,6 @@ impl Service {
 	}
 
 	/// This fetches auth events from the current state.
-	#[allow(clippy::too_many_arguments)]
 	#[tracing::instrument(skip(self, content), level = "debug")]
 	pub async fn get_auth_events(
 		&self,

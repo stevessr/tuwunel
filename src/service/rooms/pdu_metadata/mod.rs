@@ -37,7 +37,6 @@ impl Service {
 		}
 	}
 
-	#[allow(clippy::too_many_arguments)]
 	pub async fn get_relations<'a>(
 		&'a self,
 		user_id: &'a UserId,

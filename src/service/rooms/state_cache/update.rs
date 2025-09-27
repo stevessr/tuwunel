@@ -29,7 +29,6 @@ use tuwunel_database::{Json, serialize_key};
 			?membership_event,
 		),
 	)]
-#[allow(clippy::too_many_arguments)]
 pub async fn update_membership(
 	&self,
 	room_id: &RoomId,

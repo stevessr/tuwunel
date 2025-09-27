@@ -98,7 +98,6 @@ pub(crate) async fn get_relating_events_route(
 	.await
 }
 
-#[allow(clippy::too_many_arguments)]
 async fn paginate_relations_with_filter(
 	services: &Services,
 	sender_user: &UserId,
