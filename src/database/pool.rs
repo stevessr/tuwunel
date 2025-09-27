@@ -303,7 +303,7 @@ fn worker_init(&self, id: usize) {
 		}
 	}
 
-	debug!(
+	trace!(
 		?group,
 		affinity = ?affinity.collect::<Vec<_>>(),
 		"worker ready"
