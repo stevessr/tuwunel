@@ -16,16 +16,16 @@ use tuwunel_service::Services;
 
 use crate::{admin_command, admin_command_dispatch};
 
-#[admin_command_dispatch]
+#[admin_command_dispatch(handler_prefix = "raw")]
 #[derive(Debug, Subcommand)]
 #[allow(clippy::enum_variant_names)]
 /// Query tables from database
 pub(crate) enum RawCommand {
 	/// - List database maps
-	RawMaps,
+	Maps,
 
 	/// - Raw database query
-	RawGet {
+	Get {
 		/// Map name
 		map: String,
 
@@ -38,7 +38,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database delete (for string keys)
-	RawDel {
+	Del {
 		/// Map name
 		map: String,
 
@@ -47,7 +47,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database keys iteration
-	RawKeys {
+	Keys {
 		/// Map name
 		map: String,
 
@@ -56,7 +56,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database key size breakdown
-	RawKeysSizes {
+	KeysSizes {
 		/// Map name
 		map: Option<String>,
 
@@ -65,7 +65,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database keys total bytes
-	RawKeysTotal {
+	KeysTotal {
 		/// Map name
 		map: Option<String>,
 
@@ -74,7 +74,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database values size breakdown
-	RawValsSizes {
+	ValsSizes {
 		/// Map name
 		map: Option<String>,
 
@@ -83,7 +83,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database values total bytes
-	RawValsTotal {
+	ValsTotal {
 		/// Map name
 		map: Option<String>,
 
@@ -92,7 +92,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database items iteration
-	RawIter {
+	Iter {
 		/// Map name
 		map: String,
 
@@ -101,7 +101,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database keys iteration
-	RawKeysFrom {
+	KeysFrom {
 		/// Map name
 		map: String,
 
@@ -114,7 +114,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database items iteration
-	RawIterFrom {
+	IterFrom {
 		/// Map name
 		map: String,
 
@@ -127,7 +127,7 @@ pub(crate) enum RawCommand {
 	},
 
 	/// - Raw database record count
-	RawCount {
+	Count {
 		/// Map name
 		map: Option<String>,
 
@@ -165,7 +165,7 @@ pub(crate) enum RawCommand {
 }
 
 #[admin_command]
-pub(super) async fn compact(
+pub(super) async fn raw_compact(
 	&self,
 	map: Option<Vec<String>>,
 	start: Option<String>,
