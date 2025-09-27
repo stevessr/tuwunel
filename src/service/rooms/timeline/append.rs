@@ -117,7 +117,7 @@ where
 		{
 			if let Ok(shortstatehash) = self
 				.services
-				.state_accessor
+				.state
 				.pdu_shortstatehash(pdu.event_id())
 				.await
 			{
