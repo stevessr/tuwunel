@@ -126,7 +126,7 @@ async fn mainline_position<Fetch, Fut, Pdu>(
 ) -> Result<usize>
 where
 	Fetch: Fn(OwnedEventId) -> Fut + Sync,
-	Fut: Future<Output = Result<Pdu>>,
+	Fut: Future<Output = Result<Pdu>> + Send,
 	Pdu: Event,
 {
 	let mut current_event = Some(event.clone());
@@ -154,7 +154,7 @@ async fn get_power_levels_auth_event<Fetch, Fut, Pdu>(
 ) -> Result<Option<Pdu>>
 where
 	Fetch: Fn(OwnedEventId) -> Fut + Sync,
-	Fut: Future<Output = Result<Pdu>>,
+	Fut: Future<Output = Result<Pdu>> + Send,
 	Pdu: Event,
 {
 	let power_level_event = event
