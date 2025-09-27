@@ -17,18 +17,18 @@ release [here](https://github.com/matrix-construct/tuwunel/releases/latest) or
 `main` CI branch workflow artifact output. These also include `.deb` packages
 for Debian or Ubuntu and `.rpm` packages for Red Hat or Fedora.
 
-These can be curl'd directly from. `ci-bins` are CI workflow binaries by commit
-hash/revision, and `releases` are tagged releases. Sort by descending last
-modified for the latest.
-
-These binaries have jemalloc and io_uring statically linked and included with
-them, so no additional dynamic dependencies need to be installed.
-
 For the **best** performance; if using an `x86_64` CPU made in the last ~10 years,
-we recommend using the `-v3-` optimised packages. If the server refuses to start
-or exits with an "Illegal Instruction" error you will need `-v2-` or `-v1-`
-packages instead. The database backend, RocksDB, benefits from `-v2-` or greater
-as it features performance critical hardware accelerated CRC32 hashing/checksumming.
+we recommend using the `-v3-` optimised packages. See below for a command to check
+what your system supports. If the server refuses to start or exits with an "Illegal
+Instruction" error you will need `-v2-` or `-v1-` packages instead. The database
+backend, RocksDB, benefits from `-v2-` or greater as it features performance
+critical hardware accelerated CRC32 hashing/checksumming.
+
+Linux users can run this script to display which optimization levels they may
+choose:
+```
+cat /proc/cpuinfo | grep -Po '(avx|sse)[235]' | sort -u | sed 's/avx5/v4/;s/avx2/v3/;s/sse3/v2/;s/sse2/v1/' | sort
+```
 
 ### Compiling
 
