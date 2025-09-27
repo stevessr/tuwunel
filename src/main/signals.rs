@@ -7,7 +7,7 @@ use super::server::Server;
 
 #[cfg(unix)]
 #[tracing::instrument(skip_all)]
-pub(super) async fn signal(server: Arc<Server>) {
+pub async fn enable(server: Arc<Server>) {
 	use signal::unix;
 	use unix::SignalKind;
 
@@ -22,6 +22,7 @@ pub(super) async fn signal(server: Arc<Server>) {
 		trace!("Installed signal handlers");
 		let sig: &'static str;
 		tokio::select! {
+			() = server.server.until_shutdown() => break,
 			_ = signal::ctrl_c() => { sig = "SIGINT"; },
 			_ = quit.recv() => { sig = "SIGQUIT"; },
 			_ = term.recv() => { sig = "SIGTERM"; },
@@ -46,9 +47,10 @@ pub(super) async fn signal(server: Arc<Server>) {
 
 #[cfg(not(unix))]
 #[tracing::instrument(skip_all)]
-pub(super) async fn signal(server: Arc<Server>) {
+pub async fn enable(server: Arc<Server>) {
 	loop {
 		tokio::select! {
+			() = server.server.until_shutdown() => break,
 			_ = signal::ctrl_c() => {
 				warn!("Received Ctrl+C");
 				if let Err(e) = server.server.signal.send("SIGINT") {

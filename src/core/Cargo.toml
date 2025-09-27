@@ -17,17 +17,11 @@ crate-type = [
 #	"dylib",
 ]
 
-[[bench]]
-name = "state_res"
-harness = false
-
 [features]
 brotli_compression = [
 	"reqwest/brotli",
 ]
-tuwunel_mods = [
-    "dep:libloading"
-]
+console = []
 gzip_compression = [
 	"reqwest/gzip",
 ]
@@ -53,6 +47,9 @@ release_max_log_level = [
 	"log/release_max_level_info",
 ]
 sentry_telemetry = []
+tuwunel_mods = [
+    "dep:libloading"
+]
 zstd_compression = [
     "reqwest/zstd",
 ]
@@ -124,3 +121,7 @@ criterion.workspace = true
 
 [lints]
 workspace = true
+
+[[bench]]
+name = "state_res"
+harness = false
