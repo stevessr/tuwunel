@@ -149,6 +149,18 @@ pub struct Args {
 	pub gc_muzzy: Option<bool>,
 }
 
+impl Args {
+	#[must_use]
+	pub fn default_test(name: &str) -> Self {
+		let mut args = Self::default();
+		args.test.push(name.into());
+		args.option
+			.push("server_name=\"localhost\"".into());
+
+		args
+	}
+}
+
 impl Default for Args {
 	fn default() -> Self { Self::parse() }
 }
