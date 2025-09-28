@@ -35,8 +35,8 @@ use tuwunel_core::{
 /// # Arguments
 ///
 /// * The test function's name.
-/// * A list of JSON files relative to `tests/it/fixtures` to load PDUs to
-///   resolve from.
+/// * A list of JSON files relative to `tests/state_res/fixtures` to load PDUs
+///   to resolve from.
 macro_rules! snapshot_test {
     ($name:ident, $paths:expr $(,)?) => {
         #[tokio::test]
@@ -61,10 +61,10 @@ macro_rules! snapshot_test {
 /// # Arguments
 ///
 /// * The test function's name.
-/// * A list of JSON files relative to `tests/it/fixtures` to load PDUs to
-///   resolve from.
-/// * A list of JSON files relative to `tests/it/fixtures` to load event IDs
-///   forming contrived states to resolve.
+/// * A list of JSON files relative to `tests/state_res/fixtures` to load PDUs
+///   to resolve from.
+/// * A list of JSON files relative to `tests/state_res/fixtures` to load event
+///   IDs forming contrived states to resolve.
 macro_rules! snapshot_test_contrived_states {
     ($name:ident, $pdus_path:expr, $state_set_paths:expr $(,)?) => {
         #[tokio::test]
@@ -146,7 +146,7 @@ fn snapshot_test_prelude(
 
 	tracing::subscriber::set_global_default(subscriber).ok();
 
-	let fixtures_path = Path::new("tests/it/fixtures");
+	let fixtures_path = Path::new("tests/state_res/fixtures");
 
 	let pdu_batches = paths
 		.iter()
@@ -313,7 +313,7 @@ async fn test_contrived_states(pdus_paths: &[&str], state_sets_paths: &[&str]) -
 		.map(|pdu| (pdu.event_id().to_owned(), pdu.clone()))
 		.collect();
 
-	let fixtures_path = Path::new("tests/it/fixtures");
+	let fixtures_path = Path::new("tests/state_res/fixtures");
 
 	let state_sets = state_sets_paths
 		.iter()
