@@ -1,5 +1,7 @@
 use std::{
 	collections::BTreeMap,
+	fs::remove_dir_all,
+	path::Path,
 	sync::{Arc, Mutex},
 };
 
@@ -78,5 +80,53 @@ impl Drop for Context {
 
 		debug!("Joining background threads...");
 		env.join_all_threads();
+
+		after_close(self, &self.server.config.database_path)
+			.expect("Failed to execute after_close handler");
 	}
+}
+
+/// For unit and integration tests the 'fresh' directive deletes found db.
+pub(super) fn before_open(ctx: &Arc<Context>, path: &Path) -> Result {
+	if ctx.server.config.test.contains("fresh") {
+		match delete_database_for_testing(ctx, path) {
+			| Err(e) if !e.is_not_found() => return Err(e),
+			| _ => (),
+		}
+	}
+
+	Ok(())
+}
+
+/// For unit and integration tests the 'cleanup' directive deletes after close
+/// to cleanup.
+fn after_close(ctx: &Context, path: &Path) -> Result {
+	if ctx.server.config.test.contains("cleanup") {
+		delete_database_for_testing(ctx, path)?;
+	}
+
+	Ok(())
+}
+
+/// For unit and integration tests; removes the database directory when called.
+/// To prevent misuse, cfg!(test) must be true for a unit test or the
+/// integration test server is named localhost.
+#[tracing::instrument(level = "debug", skip_all)]
+fn delete_database_for_testing(ctx: &Context, path: &Path) -> Result {
+	let config = &ctx.server.config;
+	let localhost = config
+		.server_name
+		.as_str()
+		.starts_with("localhost");
+
+	if !cfg!(test) && !localhost {
+		return Ok(());
+	}
+
+	debug_assert!(
+		config.test.contains("cleanup") | config.test.contains("fresh"),
+		"missing any test directive legitimating this call.",
+	);
+
+	remove_dir_all(path).map_err(Into::into)
 }

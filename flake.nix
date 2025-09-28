@@ -140,6 +140,9 @@
           # Needed for Complement: <https://github.com/golang/go/issues/52690>
           CGO_CFLAGS = "-Wl,--no-gc-sections";
           CGO_LDFLAGS = "-Wl,--no-gc-sections";
+
+          # Integration tests temporary database storage
+          TUWUNEL_DATABASE_PATH = "/var/tmp/tuwunel.db";
         };
 
         # Development tools

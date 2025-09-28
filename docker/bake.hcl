@@ -239,8 +239,15 @@ group "tests" {
         "docs",
         "unit",
         "smoke",
+        "integration",
+        "matrix-compliance",
+    ]
+}
+
+group "matrix-compliance" {
+    targets = [
         "complement",
-        "mrsdk",
+        "matrix-rust-sdk-integration",
     ]
 }
 
@@ -430,12 +437,13 @@ target "complement-config" {
 }
 
 #
-# Matrix Rust SDK tests
+# Integration tests
 #
 
-group "matrix-rust-sdk" {
+group "integrations" {
     targets = [
         "matrix-rust-sdk-integration",
+        "integration",
     ]
 }
 
@@ -459,6 +467,29 @@ target "matrix-rust-sdk-integration" {
     args = {
         mrsdk_test_args=""
         mrsdk_test_opts=""
+    }
+}
+
+target "integration" {
+    name = elem("integration", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("integration", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
+    ]
+    target = "cargo"
+    matrix = cargo_rust_feat_sys
+    inherits = [
+        elem("build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    }
+    args = {
+        TUWUNEL_DATABASE_PATH = "/tmp/integration.test.db"
+
+        cargo_cmd = (cargo_profile == "bench"? "bench": "test")
+        cargo_args = (cargo_profile == "bench"?
+            "--no-fail-fast --bench=*": "--no-fail-fast --test=*"
+        )
     }
 }
 
@@ -559,6 +590,50 @@ target "tests-smoke" {
     ]
     contexts = {
         input = elem("target:install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    }
+}
+
+#
+# Unit tests
+#
+
+target "unit" {
+    name = elem("unit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("unit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
+    ]
+    target = "cargo"
+    matrix = cargo_rust_feat_sys
+    inherits = [
+        elem("build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    }
+    args = {
+        cargo_cmd = (cargo_profile == "bench"? "bench": "test")
+        cargo_args = (cargo_profile == "bench"?
+            "--no-fail-fast --lib": "--no-fail-fast --lib --bins"
+        )
+    }
+}
+
+target "docs" {
+    name = elem("docs", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("docs", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
+    ]
+    target = "cargo"
+    matrix = cargo_rust_feat_sys
+    inherits = [
+        elem("build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    }
+    args = {
+        cargo_cmd = "test"
+        cargo_args = "--doc --no-fail-fast"
     }
 }
 
@@ -872,50 +947,6 @@ target "build-nix" {
 }
 
 #
-# Unit tests
-#
-
-target "unit" {
-    name = elem("unit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
-    tags = [
-        elem_tag("unit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
-    ]
-    target = "cargo"
-    matrix = cargo_rust_feat_sys
-    inherits = [
-        elem("build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
-    ]
-    contexts = {
-        input = elem("target:build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
-    }
-    args = {
-        cargo_cmd = (cargo_profile == "bench"? "bench": "test")
-        cargo_args = (rust_toolchain == "nightly"?
-            "--no-fail-fast --all-targets -- --color=always": "--no-fail-fast --bins --tests"
-        )
-    }
-}
-
-target "docs" {
-    name = elem("docs", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
-    tags = [
-        elem_tag("docs", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
-    ]
-    target = "cargo"
-    matrix = cargo_rust_feat_sys
-    inherits = [
-        elem("build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
-    ]
-    contexts = {
-        input = elem("target:build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
-    }
-    args = {
-        cargo_cmd = "test"
-        cargo_args = "--doc --no-fail-fast"
-    }
-}
-
-#
 # Workspace builds
 #
 
@@ -1004,7 +1035,7 @@ target "build-tests" {
     }
     args = {
         cargo_cmd = (cargo_profile == "bench"? "bench": "test")
-        cargo_args = "--no-run"
+        cargo_args = (cargo_profile == "bench"? "--no-run --benches": "--no-run --tests")
     }
 }
 
@@ -1292,7 +1323,7 @@ target "deps-base" {
 
         CARGO_PROFILE_TEST_DEBUG = "false"
         CARGO_PROFILE_TEST_INCREMENTAL = "false"
-        CARGO_PROFILE_BENCH_DEBUG = "limited"
+        CARGO_PROFILE_BENCH_DEBUG = "false"
         CARGO_PROFILE_BENCH_LTO = "thin"
         CARGO_PROFILE_RELEASE_LTO = "thin"
         CARGO_PROFILE_RELEASE_DEBUGINFO_DEBUG = "limited"
@@ -1320,7 +1351,7 @@ target "deps-base" {
                         "-C link-arg=-l:libgcc.a": "",
                 ]):
 
-            cargo_profile == "release" && rust_toolchain == "nightly"?
+            (cargo_profile == "release" || cargo_profile == "bench") && rust_toolchain == "nightly"?
                 join(" ", [
                     join(" ", rustflags),
                     join(" ", nightly_rustflags),
@@ -1342,7 +1373,7 @@ target "deps-base" {
                         "-C link-arg=-l:libgcc.a": "",
                 ]):
 
-            cargo_profile == "release" || cargo_profile == "release-debuginfo"?
+            cargo_profile == "release" || cargo_profile == "release-debuginfo" || cargo_profile == "bench"?
                 join(" ", [
                     join(" ", rustflags),
                     join(" ", static_rustflags),

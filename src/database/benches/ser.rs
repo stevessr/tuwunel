@@ -1,6 +1,6 @@
 use criterion::{Criterion, criterion_group, criterion_main};
 
-criterion_group!(benches, ser_str,);
+criterion_group!(benches, ser_str);
 
 criterion_main!(benches);
 

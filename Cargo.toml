@@ -703,7 +703,7 @@ inherits = "release-native.build-override"
 #]
 
 [profile.bench]
-debug = "limited"
+debug = false
 strip = false
 #rustflags = [
 #	"-Cremark=all",

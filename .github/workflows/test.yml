@@ -87,7 +87,7 @@ jobs:
     name: Unit
     uses: ./.github/workflows/bake.yml
     with:
-      bake_targets: '["unit"]'
+      bake_targets: '["unit", "integration"]'
       cargo_profiles: '["test"]'
       feat_sets: '["all"]'
       rust_toolchains: ${{inputs.rust_toolchains}}
@@ -110,7 +110,7 @@ jobs:
     name: Bench
     uses: ./.github/workflows/bake.yml
     with:
-      bake_targets: '["unit"]'
+      bake_targets: '["unit", "integration"]'
       cargo_profiles: '["bench"]'
       feat_sets: '["all"]'
       rust_toolchains: '["nightly"]'
@@ -222,7 +222,7 @@ jobs:
       excludes: ${{inputs.excludes}}
       includes: ${{inputs.includes}}
 
-  rust-sdk-integration:
+  matrix-rust-sdk-integration:
     if: >
       !failure() && !cancelled()
       && !contains(inputs.head_msg, '[ci no build]')
@@ -232,7 +232,8 @@ jobs:
       && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v1-linux-gnu"]')[0])
 
-    name: Rust SDK Integration
+    name: Matrix SDK Integration
+    needs: [smoke]
     uses: ./.github/workflows/bake.yml
     with:
       bake_targets: '["matrix-rust-sdk-integration"]'
@@ -251,7 +252,7 @@ jobs:
         {
           "matrix-rust-sdk-integration": {
             "src": "/var/log/tuwunel.log",
-            "dst": "rust-sdk-integration.tuwunel.log",
+            "dst": "matrix-rust-sdk-integration.tuwunel.log",
           }
         }
 
@@ -293,7 +294,7 @@ jobs:
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v1-linux-gnu"]')[0])
 
     name: Matrix Compliance
-    needs: [complement]
+    needs: [complement, smoke]
     runs-on: ["${{matrix.machine}}", "${{inputs.complement_runner}}"]
     concurrency:
       group: complement-cant-walk-and-chew-bubblegum

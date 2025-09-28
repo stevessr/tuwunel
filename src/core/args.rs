@@ -151,12 +151,12 @@ pub struct Args {
 
 impl Args {
 	#[must_use]
-	pub fn default_test(name: &str) -> Self {
+	pub fn default_test(name: &[&str]) -> Self {
 		let mut args = Self::default();
-		args.test.push(name.into());
+		args.test
+			.extend(name.iter().copied().map(ToOwned::to_owned));
 		args.option
 			.push("server_name=\"localhost\"".into());
-
 		args
 	}
 }
