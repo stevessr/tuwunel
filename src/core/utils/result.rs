@@ -2,6 +2,7 @@ mod and_then_ref;
 mod debug_inspect;
 mod filter;
 mod flat_ok;
+mod inspect_log;
 mod into_is_ok;
 mod log_debug_err;
 mod log_err;
@@ -12,9 +13,18 @@ mod unwrap_infallible;
 mod unwrap_or_err;
 
 pub use self::{
-	and_then_ref::AndThenRef, debug_inspect::DebugInspect, filter::Filter, flat_ok::FlatOk,
-	into_is_ok::IntoIsOk, log_debug_err::LogDebugErr, log_err::LogErr, map_expect::MapExpect,
-	map_ref::MapRef, not_found::NotFound, unwrap_infallible::UnwrapInfallible,
+	and_then_ref::AndThenRef,
+	debug_inspect::DebugInspect,
+	filter::Filter,
+	flat_ok::FlatOk,
+	inspect_log::{ErrDebugLog, ErrLog},
+	into_is_ok::IntoIsOk,
+	log_debug_err::LogDebugErr,
+	log_err::LogErr,
+	map_expect::MapExpect,
+	map_ref::MapRef,
+	not_found::NotFound,
+	unwrap_infallible::UnwrapInfallible,
 	unwrap_or_err::UnwrapOrErr,
 };
 

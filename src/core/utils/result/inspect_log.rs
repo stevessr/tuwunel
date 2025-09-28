@@ -9,9 +9,11 @@ pub trait ErrLog<T, E>
 where
 	E: fmt::Display,
 {
+	#[must_use]
 	fn log_err(self, level: Level) -> Self;
 
 	#[inline]
+	#[must_use]
 	fn err_log(self) -> Self
 	where
 		Self: Sized,
@@ -24,9 +26,11 @@ pub trait ErrDebugLog<T, E>
 where
 	E: fmt::Debug,
 {
+	#[must_use]
 	fn log_err_debug(self, level: Level) -> Self;
 
 	#[inline]
+	#[must_use]
 	fn err_debug_log(self) -> Self
 	where
 		Self: Sized,
