@@ -262,7 +262,8 @@ pub async fn set_event_state(
 	)
 )]
 pub async fn append_to_state(&self, new_pdu: &PduEvent) -> Result<u64> {
-	const BUFSIZE: usize = size_of::<u64>();
+	const KEY_LEN: usize = size_of::<ShortEventId>();
+	const VAL_LEN: usize = size_of::<ShortStateHash>();
 
 	let shorteventid = self
 		.services
@@ -277,7 +278,7 @@ pub async fn append_to_state(&self, new_pdu: &PduEvent) -> Result<u64> {
 	if let Ok(p) = previous_shortstatehash {
 		self.db
 			.shorteventid_shortstatehash
-			.aput::<BUFSIZE, BUFSIZE, _, _>(shorteventid, p);
+			.aput::<KEY_LEN, VAL_LEN, _, _>(shorteventid, p);
 	}
 
 	match &new_pdu.state_key {
