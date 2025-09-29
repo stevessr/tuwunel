@@ -243,6 +243,7 @@ async fn build_sync_events(
 	let joined_rooms = services
 		.state_cache
 		.rooms_joined(sender_user)
+		.ready_filter(|&room_id| filter.room.matches(room_id))
 		.map(ToOwned::to_owned)
 		.broad_filter_map(|room_id| {
 			load_joined_room(
@@ -275,6 +276,7 @@ async fn build_sync_events(
 	let left_rooms = services
 		.state_cache
 		.rooms_left(sender_user)
+		.ready_filter(|(room_id, _)| filter.room.matches(room_id))
 		.broad_filter_map(|(room_id, _)| {
 			handle_left_room(
 				services,
@@ -294,6 +296,7 @@ async fn build_sync_events(
 	let invited_rooms = services
 		.state_cache
 		.rooms_invited(sender_user)
+		.ready_filter(|(room_id, _)| filter.room.matches(room_id))
 		.fold_default(async |mut invited_rooms: BTreeMap<_, _>, (room_id, invite_state)| {
 			let invite_count = services
 				.state_cache
@@ -317,6 +320,7 @@ async fn build_sync_events(
 	let knocked_rooms = services
 		.state_cache
 		.rooms_knocked(sender_user)
+		.ready_filter(|(room_id, _)| filter.room.matches(room_id))
 		.fold_default(async |mut knocked_rooms: BTreeMap<_, _>, (room_id, knock_state)| {
 			let knock_count = services
 				.state_cache
@@ -340,7 +344,7 @@ async fn build_sync_events(
 	let presence_updates: OptionFuture<_> = services
 		.config
 		.allow_local_presence
-		.then(|| process_presence_updates(services, since, next_batch, sender_user))
+		.then(|| process_presence_updates(services, since, next_batch, sender_user, &filter))
 		.into();
 
 	let account_data = services
@@ -443,10 +447,12 @@ async fn process_presence_updates(
 	since: u64,
 	next_batch: u64,
 	syncing_user: &UserId,
+	filter: &FilterDefinition,
 ) -> PresenceUpdates {
 	services
 		.presence
 		.presence_since(since, Some(next_batch))
+		.ready_filter(|(user_id, ..)| filter.presence.matches(user_id))
 		.filter(|(user_id, ..)| {
 			services
 				.state_cache
@@ -461,6 +467,7 @@ async fn process_presence_updates(
 		})
 		.map(|(user_id, event)| (user_id.to_owned(), event.content))
 		.collect()
+		.boxed()
 		.await
 }
 
@@ -797,7 +804,6 @@ async fn load_joined_room(
 		join(encrypted_room, associate_token),
 		join(last_privateread_update, last_notification_read),
 	)
-	.boxed()
 	.await;
 
 	let joined_since_last_sync =
@@ -1127,7 +1133,6 @@ async fn calculate_state_changes<'a>(
 			services.timeline.get_pdu(&event_id).ok().await
 		})
 		.collect::<Vec<_>>()
-		.boxed()
 		.await;
 
 	let send_member_counts = state_events
