@@ -64,7 +64,7 @@ impl Service {
 
 		let mut pdus: Vec<_> = self
 			.db
-			.get_relations(user_id, room_id, target, from, dir)
+			.get_relations(user_id, room_id, target.into(), from, dir)
 			.collect()
 			.await;
 
@@ -83,7 +83,7 @@ impl Service {
 
 			let relations: Vec<_> = self
 				.db
-				.get_relations(user_id, room_id, target, from, dir)
+				.get_relations(user_id, room_id, target.into(), from, dir)
 				.collect()
 				.await;
 

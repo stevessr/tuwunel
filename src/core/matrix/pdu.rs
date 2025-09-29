@@ -24,10 +24,10 @@ pub use self::{
 	builder::{Builder, Builder as PduBuilder},
 	count::Count,
 	hashes::EventHashes as EventHash,
-	id::{ShortId, *},
+	id::Id,
 	raw_id::*,
 };
-use super::{Event, StateKey};
+use super::{Event, ShortRoomId, StateKey};
 use crate::Result;
 
 /// Persistent Data Unit (Event)

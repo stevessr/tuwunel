@@ -182,11 +182,7 @@ fn search_pdu_ids_query_word(
 	word: &str,
 ) -> impl Stream<Item = Val<'_>> + Send + '_ + use<'_> {
 	// rustc says const'ing this not yet stable
-	let end_id: RawPduId = PduId {
-		shortroomid,
-		shorteventid: PduCount::max(),
-	}
-	.into();
+	let end_id: RawPduId = PduId { shortroomid, count: PduCount::max() }.into();
 
 	// Newest pdus first
 	let end = make_tokenid(shortroomid, word, &end_id);

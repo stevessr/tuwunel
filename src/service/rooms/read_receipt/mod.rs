@@ -63,7 +63,7 @@ impl Service {
 		room_id: &RoomId,
 		user_id: &UserId,
 	) -> Result<Raw<AnySyncEphemeralRoomEvent>> {
-		let pdu_count = self
+		let count = self
 			.private_read_get_count(room_id, user_id)
 			.map_err(|e| {
 				err!(Database(warn!("No private read receipt was set in {room_id}: {e}")))
@@ -79,9 +79,9 @@ impl Service {
 				)))
 			});
 
-		let (pdu_count, shortroomid) = try_join!(pdu_count, shortroomid)?;
-		let shorteventid = PduCount::Normal(pdu_count);
-		let pdu_id: RawPduId = PduId { shortroomid, shorteventid }.into();
+		let (count, shortroomid) = try_join!(count, shortroomid)?;
+		let count = PduCount::Normal(count);
+		let pdu_id: RawPduId = PduId { shortroomid, count }.into();
 		let pdu = self
 			.services
 			.timeline
