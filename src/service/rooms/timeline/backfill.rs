@@ -198,7 +198,7 @@ pub async fn backfill_pdu(
 	let count: i64 = (*count).try_into()?;
 	let pdu_id: RawPduId = PduId {
 		shortroomid,
-		shorteventid: PduCount::Backfilled(validated!(0 - count)),
+		count: PduCount::Backfilled(validated!(0 - count)),
 	}
 	.into();
 

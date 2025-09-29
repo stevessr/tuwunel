@@ -28,10 +28,7 @@ use tuwunel_core::{
 	},
 	warn,
 };
-use tuwunel_service::rooms::{
-	short::{ShortEventId, ShortRoomId},
-	state_compressor::HashSetCompressStateEvent,
-};
+use tuwunel_service::rooms::{short::ShortRoomId, state_compressor::HashSetCompressStateEvent};
 
 use crate::admin_command;
 
@@ -138,16 +135,8 @@ pub(super) async fn get_pdu(&self, event_id: OwnedEventId) -> Result {
 }
 
 #[admin_command]
-pub(super) async fn get_short_pdu(
-	&self,
-	shortroomid: ShortRoomId,
-	shorteventid: ShortEventId,
-) -> Result {
-	let pdu_id: RawPduId = PduId {
-		shortroomid,
-		shorteventid: shorteventid.into(),
-	}
-	.into();
+pub(super) async fn get_short_pdu(&self, shortroomid: ShortRoomId, count: i64) -> Result {
+	let pdu_id: RawPduId = PduId { shortroomid, count: count.into() }.into();
 
 	let pdu_json = self
 		.services

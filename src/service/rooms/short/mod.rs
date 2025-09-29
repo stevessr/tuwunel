@@ -3,7 +3,7 @@ use std::{borrow::Borrow, fmt::Debug, mem::size_of_val, sync::Arc};
 use futures::{FutureExt, Stream, StreamExt};
 use ruma::{EventId, OwnedRoomId, RoomId, events::StateEventType};
 use serde::Deserialize;
-pub use tuwunel_core::matrix::pdu::{ShortEventId, ShortId, ShortRoomId, ShortStateKey};
+pub use tuwunel_core::matrix::{ShortEventId, ShortId, ShortRoomId, ShortStateKey};
 use tuwunel_core::{
 	Err, Result, err, implement,
 	matrix::StateKey,

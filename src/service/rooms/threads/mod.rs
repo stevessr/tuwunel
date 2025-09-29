@@ -128,7 +128,7 @@ impl Service {
 		&'a self,
 		user_id: &'a UserId,
 		room_id: &'a RoomId,
-		shorteventid: PduCount,
+		count: PduCount,
 		_inc: &'a IncludeThreads,
 	) -> impl Stream<Item = Result<(PduCount, PduEvent)>> + Send {
 		self.services
@@ -136,7 +136,7 @@ impl Service {
 			.get_shortroomid(room_id)
 			.map_ok(move |shortroomid| PduId {
 				shortroomid,
-				shorteventid: shorteventid.saturating_sub(1),
+				count: count.saturating_sub(1),
 			})
 			.map_ok(Into::into)
 			.map_ok(move |current: RawPduId| {
@@ -162,7 +162,7 @@ impl Service {
 							pdu.as_mut_pdu().remove_transaction_id().ok();
 						}
 
-						Some((pdu_id.shorteventid, pdu))
+						Some((pdu_id.count, pdu))
 					})
 					.map(Ok)
 			})

@@ -19,6 +19,10 @@ pub enum Count {
 impl Count {
 	#[inline]
 	#[must_use]
+	pub fn to_be_bytes(self) -> [u8; size_of::<u64>()] { self.into_unsigned().to_be_bytes() }
+
+	#[inline]
+	#[must_use]
 	pub fn from_unsigned(unsigned: u64) -> Self { Self::from_signed(unsigned as i64) }
 
 	#[inline]

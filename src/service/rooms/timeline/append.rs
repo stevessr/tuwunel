@@ -178,7 +178,7 @@ where
 		.reset_notification_counts(pdu.sender(), pdu.room_id());
 
 	let count = PduCount::Normal(*next_count1);
-	let pdu_id: RawPduId = PduId { shortroomid, shorteventid: count }.into();
+	let pdu_id: RawPduId = PduId { shortroomid, count }.into();
 
 	// Insert pdu
 	self.append_pdu_json(&pdu_id, pdu, &pdu_json, count);

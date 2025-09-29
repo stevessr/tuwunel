@@ -17,7 +17,7 @@ use tuwunel_core::{
 use tuwunel_database::{Interfix, Map};
 
 use crate::rooms::{
-	short::{ShortEventId, ShortRoomId},
+	short::ShortRoomId,
 	timeline::{PduId, RawPduId},
 };
 
@@ -52,12 +52,12 @@ impl Data {
 		&'a self,
 		user_id: &'a UserId,
 		shortroomid: ShortRoomId,
-		target: ShortEventId,
+		target: PduCount,
 		from: PduCount,
 		dir: Direction,
 	) -> impl Stream<Item = (PduCount, impl Event)> + Send + '_ {
 		let mut current = ArrayVec::<u8, 16>::new();
-		current.extend(target.to_be_bytes());
+		current.extend(target.into_unsigned().to_be_bytes());
 		current.extend(
 			from.saturating_inc(dir)
 				.into_unsigned()
@@ -75,12 +75,12 @@ impl Data {
 				.boxed(),
 		}
 		.ignore_err()
-		.ready_take_while(move |key| key.starts_with(&target.to_be_bytes()))
+		.ready_take_while(move |key| key.starts_with(&target.into_unsigned().to_be_bytes()))
 		.map(|to_from| u64_from_u8(&to_from[8..16]))
 		.map(PduCount::from_unsigned)
-		.map(move |shorteventid| (user_id, shortroomid, shorteventid))
-		.wide_filter_map(async |(user_id, shortroomid, shorteventid)| {
-			let pdu_id: RawPduId = PduId { shortroomid, shorteventid }.into();
+		.map(move |count| (user_id, shortroomid, count))
+		.wide_filter_map(async |(user_id, shortroomid, count)| {
+			let pdu_id: RawPduId = PduId { shortroomid, count }.into();
 			let mut pdu = self
 				.services
 				.timeline
@@ -95,7 +95,7 @@ impl Data {
 					.ok();
 			}
 
-			Some((shorteventid, pdu))
+			Some((count, pdu))
 		})
 	}
 

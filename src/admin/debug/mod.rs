@@ -4,7 +4,7 @@ pub(crate) mod tester;
 use clap::Subcommand;
 use ruma::{OwnedEventId, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName};
 use tuwunel_core::Result;
-use tuwunel_service::rooms::short::{ShortEventId, ShortRoomId};
+use tuwunel_service::rooms::short::ShortRoomId;
 
 use self::tester::TesterCommand;
 use crate::admin_command_dispatch;
@@ -43,8 +43,8 @@ pub(super) enum DebugCommand {
 		/// Shortroomid integer
 		shortroomid: ShortRoomId,
 
-		/// Shorteventid integer
-		shorteventid: ShortEventId,
+		/// PduCount integer
+		count: i64,
 	},
 
 	/// - Attempts to retrieve a PDU from a remote server. Inserts it into our
