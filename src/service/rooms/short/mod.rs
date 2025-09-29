@@ -1,10 +1,15 @@
 use std::{borrow::Borrow, fmt::Debug, mem::size_of_val, sync::Arc};
 
-use futures::{Stream, StreamExt};
-use ruma::{EventId, RoomId, events::StateEventType};
+use futures::{FutureExt, Stream, StreamExt};
+use ruma::{EventId, OwnedRoomId, RoomId, events::StateEventType};
 use serde::Deserialize;
 pub use tuwunel_core::matrix::pdu::{ShortEventId, ShortId, ShortRoomId, ShortStateKey};
-use tuwunel_core::{Err, Result, err, implement, matrix::StateKey, utils, utils::IterStream};
+use tuwunel_core::{
+	Err, Result, err, implement,
+	matrix::StateKey,
+	utils,
+	utils::{IterStream, stream::ReadyExt},
+};
 use tuwunel_database::{Deserialized, Get, Map, Qry};
 
 pub struct Service {
@@ -236,6 +241,18 @@ pub async fn get_shortroomid(&self, room_id: &RoomId) -> Result<ShortRoomId> {
 		.get(room_id)
 		.await
 		.deserialized()
+}
+
+#[implement(Service)]
+pub async fn get_roomid_from_short(&self, shortroomid_: ShortRoomId) -> Result<OwnedRoomId> {
+	self.db
+		.roomid_shortroomid
+		.stream()
+		.ready_filter_map(Result::ok)
+		.ready_find(|&(_, shortroomid)| shortroomid == shortroomid_)
+		.map(|found| found.map(|(room_id, _): (&RoomId, ShortRoomId)| room_id.to_owned()))
+		.await
+		.ok_or_else(|| err!(Database("Failed to find RoomId from {shortroomid_:?}")))
 }
 
 #[implement(Service)]
