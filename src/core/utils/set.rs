@@ -81,3 +81,31 @@ where
 			None
 		})
 }
+
+/// Difference of sets
+///
+/// Outputs the set of elements found in `a` which are not found in `b`. Streams
+/// must be sorted.
+pub fn difference_sorted_stream2<Item, S>(a: S, b: S) -> impl Stream<Item = Item> + Send
+where
+	S: Stream<Item = Item> + Send + Unpin,
+	Item: Eq + PartialOrd + Send + Sync,
+{
+	use tokio::sync::Mutex;
+
+	let b = Arc::new(Mutex::new(b.peekable()));
+	a.map(move |ai| (ai, b.clone()))
+		.filter_map(async move |(ai, b)| {
+			let mut lock = b.lock().await;
+			let b = &mut Pin::new(&mut *lock);
+			while b.as_mut().next_if(|bi| *bi < ai).await.is_some() {
+				continue;
+			}
+
+			b.as_mut()
+				.next_if_eq(&ai)
+				.await
+				.is_none()
+				.then_some(ai)
+		})
+}

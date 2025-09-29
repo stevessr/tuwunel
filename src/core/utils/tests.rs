@@ -276,3 +276,47 @@ async fn set_intersection_sorted_stream2() {
 		.await;
 	assert!(r.eq(&["ccc", "ggg", "iii"]));
 }
+
+#[tokio::test]
+async fn set_difference_sorted_stream2() {
+	use futures::StreamExt;
+	use utils::{IterStream, set::difference_sorted_stream2};
+
+	let a = ["bar", "foo"];
+	let b = ["bar"];
+	let r = difference_sorted_stream2(a.iter().stream(), b.iter().stream())
+		.collect::<Vec<&str>>()
+		.await;
+	println!("{r:?}");
+	assert!(r.eq(&["foo"]));
+
+	let r = difference_sorted_stream2(b.iter().stream(), a.iter().stream())
+		.collect::<Vec<&str>>()
+		.await;
+	println!("{r:?}");
+	assert!(r.is_empty());
+
+	let a = ["aaa", "ccc", "xxx", "yyy"];
+	let b = ["hhh", "iii", "jjj", "zzz"];
+	let r = difference_sorted_stream2(a.iter().stream(), b.iter().stream())
+		.collect::<Vec<&str>>()
+		.await;
+	println!("{r:?}");
+	assert!(r.eq(&["aaa", "ccc", "xxx", "yyy"]));
+
+	let a = ["aaa", "ccc", "eee", "ggg"];
+	let b = ["aaa", "bbb", "ccc", "ddd", "eee"];
+	let r = difference_sorted_stream2(a.iter().stream(), b.iter().stream())
+		.collect::<Vec<&str>>()
+		.await;
+	println!("{r:?}");
+	assert!(r.eq(&["ggg"]));
+
+	let a = ["aaa", "ccc", "eee", "ggg", "hhh", "iii"];
+	let b = ["bbb", "ccc", "ddd", "fff", "ggg", "iii"];
+	let r = difference_sorted_stream2(a.iter().stream(), b.iter().stream())
+		.collect::<Vec<&str>>()
+		.await;
+	println!("{r:?}");
+	assert!(r.eq(&["aaa", "eee", "hhh"]));
+}
