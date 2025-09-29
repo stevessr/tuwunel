@@ -1,14 +1,17 @@
-use ruma::api::client::filter::{RoomEventFilter, UrlFilter};
+use ruma::{
+	RoomId, UserId,
+	api::client::filter::{Filter, RoomEventFilter, RoomFilter, UrlFilter},
+};
 use serde_json::Value;
 
 use super::Event;
 use crate::is_equal_to;
 
-pub trait Matches<E: Event> {
-	fn matches(&self, event: &E) -> bool;
+pub trait Matches<T> {
+	fn matches(&self, t: T) -> bool;
 }
 
-impl<E: Event> Matches<E> for &RoomEventFilter {
+impl<E: Event> Matches<&E> for RoomEventFilter {
 	#[inline]
 	fn matches(&self, event: &E) -> bool {
 		if !matches_sender(event, self) {
@@ -29,6 +32,60 @@ impl<E: Event> Matches<E> for &RoomEventFilter {
 
 		true
 	}
+}
+
+impl Matches<&RoomId> for RoomFilter {
+	#[inline]
+	fn matches(&self, room_id: &RoomId) -> bool {
+		if !matches_room_id(room_id, self) {
+			return false;
+		}
+
+		true
+	}
+}
+
+impl Matches<&UserId> for Filter {
+	#[inline]
+	fn matches(&self, user_id: &UserId) -> bool {
+		if !matches_user_id(user_id, self) {
+			return false;
+		}
+
+		true
+	}
+}
+
+fn matches_user_id(user_id: &UserId, filter: &Filter) -> bool {
+	if filter
+		.not_senders
+		.iter()
+		.any(is_equal_to!(user_id))
+	{
+		return false;
+	}
+
+	if let Some(senders) = filter.senders.as_ref() {
+		if !senders.iter().any(is_equal_to!(user_id)) {
+			return false;
+		}
+	}
+
+	true
+}
+
+fn matches_room_id(room_id: &RoomId, filter: &RoomFilter) -> bool {
+	if filter.not_rooms.iter().any(is_equal_to!(room_id)) {
+		return false;
+	}
+
+	if let Some(rooms) = filter.rooms.as_ref() {
+		if !rooms.iter().any(is_equal_to!(room_id)) {
+			return false;
+		}
+	}
+
+	true
 }
 
 fn matches_room<E: Event>(event: &E, filter: &RoomEventFilter) -> bool {
