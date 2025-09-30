@@ -104,8 +104,9 @@ where
 	debug!(?method, ?url, "Sending request");
 	match client.execute(request).await {
 		| Ok(response) => handle_response::<T>(dest, actual, &method, &url, response).await,
-		| Err(error) =>
-			Err(handle_error(actual, &method, &url, error).expect_err("always returns error")),
+		| Err(error) => Err(self
+			.handle_error(dest, actual, &method, &url, error)
+			.expect_err("always returns error")),
 	}
 }
 
@@ -198,7 +199,10 @@ async fn into_http_response(
 	Ok(http_response)
 }
 
+#[implement(super::Service)]
 fn handle_error(
+	&self,
+	dest: &ServerName,
 	actual: &ActualDest,
 	method: &Method,
 	url: &Url,
@@ -219,6 +223,9 @@ fn handle_error(
 	} else {
 		debug_error!("{e:?}");
 	}
+
+	self.services.resolver.cache.del_destination(dest);
+	self.services.resolver.cache.del_override(dest);
 
 	Err(e.into())
 }
