@@ -23,10 +23,6 @@ pub trait BoolExt {
 	#[allow(clippy::result_unit_err)]
 	fn into_result(self) -> Result<(), ()>;
 
-	fn then_ok_or<T, E>(self, t: T, e: E) -> Result<T, E>;
-
-	fn then_ok_or_else<T, E, F: FnOnce() -> E>(self, t: T, e: F) -> Result<T, E>;
-
 	fn map<T, F: FnOnce(Self) -> T>(self, f: F) -> T
 	where
 		Self: Sized;
@@ -44,6 +40,12 @@ pub trait BoolExt {
 	fn or<T, F: FnOnce() -> T>(self, f: F) -> Option<T>;
 
 	fn or_some<T>(self, t: T) -> Option<T>;
+
+	fn then_none<T>(self) -> Option<T>;
+
+	fn then_ok_or<T, E>(self, t: T, e: E) -> Result<T, E>;
+
+	fn then_ok_or_else<T, E, F: FnOnce() -> E>(self, t: T, e: F) -> Result<T, E>;
 }
 
 impl BoolExt for bool {
@@ -70,14 +72,6 @@ impl BoolExt for bool {
 
 	#[inline]
 	fn into_result(self) -> Result<(), ()> { self.ok_or(()) }
-
-	#[inline]
-	fn then_ok_or<T, E>(self, t: T, e: E) -> Result<T, E> { self.map_ok_or(e, move || t) }
-
-	#[inline]
-	fn then_ok_or_else<T, E, F: FnOnce() -> E>(self, t: T, e: F) -> Result<T, E> {
-		self.ok_or_else(e).map(move |()| t)
-	}
 
 	#[inline]
 	fn map<T, F: FnOnce(Self) -> T>(self, f: F) -> T
@@ -113,4 +107,15 @@ impl BoolExt for bool {
 
 	#[inline]
 	fn or_some<T>(self, t: T) -> Option<T> { (!self).then_some(t) }
+
+	#[inline]
+	fn then_none<T>(self) -> Option<T> { Option::<T>::None }
+
+	#[inline]
+	fn then_ok_or<T, E>(self, t: T, e: E) -> Result<T, E> { self.map_ok_or(e, move || t) }
+
+	#[inline]
+	fn then_ok_or_else<T, E, F: FnOnce() -> E>(self, t: T, e: F) -> Result<T, E> {
+		self.ok_or_else(e).map(move |()| t)
+	}
 }
