@@ -4,6 +4,7 @@
 pub mod client;
 pub mod router;
 pub mod server;
+mod utils;
 
 pub(crate) use self::router::{Ruma, RumaResponse, State};
 
