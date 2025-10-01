@@ -10,6 +10,7 @@ use tuwunel_core::{Result, debug, implement, info, warn};
 use super::{
 	Db, Engine,
 	cf_opts::cf_options,
+	context,
 	db_opts::db_options,
 	descriptor::{self, Descriptor},
 	repair::repair,
@@ -23,6 +24,7 @@ pub(crate) async fn open(ctx: Arc<Context>, desc: &[Descriptor]) -> Result<Arc<S
 	let config = &server.config;
 	let path = &config.database_path;
 
+	context::before_open(&ctx, path)?;
 	let db_opts = db_options(
 		config,
 		&ctx.env.lock().expect("environment locked"),

@@ -87,7 +87,7 @@ RUN \
             "--manifest-path=Cargo.toml" \
             ${recipe_args} \
             ${color_args} \
-            ${cargo_args}
+            $cargo_args
 
     # If this image is further reused with other cargo commands, all
     # modifications made by cargo chef cook outside of target-dir have to be

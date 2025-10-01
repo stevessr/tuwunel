@@ -5,23 +5,19 @@ use tuwunel::Server;
 use tuwunel_core::{Args, Result, runtime};
 
 #[test]
-fn dummy() {}
-
-#[test]
-#[should_panic = "dummy"]
-fn panic_dummy() { panic!("dummy") }
-
-#[test]
-fn smoke() -> Result {
+fn smoke_async() -> Result {
 	with_settings!({
-		description => "Smoke Test",
-		snapshot_suffix => "smoke_test",
+		description => "Smoke Async",
+		snapshot_suffix => "smoke_async",
 	}, {
 		let args = Args::default_test(&["smoke", "fresh", "cleanup"]);
 		let runtime = runtime::new(Some(&args))?;
 		let server = Server::new(Some(&args), Some(runtime.handle()))?;
-		let result = tuwunel::exec(&server, runtime);
+		let result = runtime.block_on(async {
+			tuwunel::async_exec(&server).await
+		});
 
+		runtime::shutdown(&server.server, runtime)?;
 		assert_debug_snapshot!(result);
 		result
 	})

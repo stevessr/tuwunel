@@ -13,6 +13,7 @@ version.workspace = true
 name = "tuwunel_macros"
 path = "mod.rs"
 proc-macro = true
+bench = false
 
 [dependencies]
 syn.workspace = true

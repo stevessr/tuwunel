@@ -45,9 +45,28 @@ pub struct Args {
 	#[arg(long)]
 	pub execute: Vec<String>,
 
-	/// Set functional testing modes if available. Ex '--test=smoke'
-	#[arg(long, hide(true))]
+	/// Set functional testing modes if available. Ex '--test=smoke'. Empty
+	/// values are permitted for compatibility with testing and benchmarking
+	/// frameworks which may simply pass `--test` to the same execution.
+	#[arg(
+		long,
+		hide(true),
+		num_args = 0..=1,
+		require_equals(false),
+		default_missing_value = "",
+	)]
 	pub test: Vec<String>,
+
+	/// Compatibility option for benchmark frameworks which pass `--bench` to
+	/// the same execution and must be silently accepted without error.
+	#[arg(
+		long,
+		hide(true),
+		num_args = 0..=1,
+		require_equals(false),
+		default_missing_value = "",
+	)]
+	pub bench: Vec<String>,
 
 	/// Override the tokio worker_thread count.
 	#[arg(
@@ -151,12 +170,12 @@ pub struct Args {
 
 impl Args {
 	#[must_use]
-	pub fn default_test(name: &str) -> Self {
+	pub fn default_test(name: &[&str]) -> Self {
 		let mut args = Self::default();
-		args.test.push(name.into());
+		args.test
+			.extend(name.iter().copied().map(ToOwned::to_owned));
 		args.option
 			.push("server_name=\"localhost\"".into());
-
 		args
 	}
 }

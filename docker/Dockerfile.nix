@@ -26,14 +26,15 @@ ARG sys_target
 
 WORKDIR /usr/src/tuwunel
 COPY --link --from=source /usr/src/tuwunel .
-ENV TUWUNEL_DATABASE_PATH="/tmp/buildtest.db"
 RUN \
 --mount=type=cache,dst=/nix,sharing=shared \
 --mount=type=cache,dst=/root/.cache/nix,sharing=shared \
 --mount=type=cache,dst=/root/.local/state/nix,sharing=shared \
 <<EOF
 	set -eux
+
 	nix-build \
+		--verbose \
 		--cores 0 \
 		--max-jobs $(nproc) \
 		--log-format raw \
@@ -51,8 +52,8 @@ ARG sys_target
 WORKDIR /
 COPY --link --from=build-nix . .
 
-WORKDIR /opt/tuwunel
-ENV TUWUNEL_DATABASE_PATH="/tmp/smoketest.db"
+WORKDIR /tmp/tuwunel
+ENV TUWUNEL_DATABASE_PATH="/tmp/tuwunel/smoketest.db"
 ENV TUWUNEL_LOG="info"
 RUN \
 --mount=type=cache,dst=/nix,sharing=shared \
@@ -61,11 +62,8 @@ RUN \
 <<EOF
     set -eux
     bin/tuwunel \
-        -Otest='["smoke"]' \
+        -Otest='["smoke", "fresh"]' \
         -Oserver_name=\"localhost\" \
-        -Odatabase_path=\"${TUWUNEL_DATABASE_PATH}\"
-
-    rm -rf "${TUWUNEL_DATABASE_PATH}"
 EOF
 
 

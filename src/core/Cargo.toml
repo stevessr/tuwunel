@@ -114,10 +114,10 @@ url.workspace = true
 nix.workspace = true
 
 [dev-dependencies]
+criterion.workspace = true
 insta.workspace = true
 maplit.workspace = true
 similar.workspace = true
-criterion.workspace = true
 
 [lints]
 workspace = true

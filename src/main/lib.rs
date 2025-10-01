@@ -9,10 +9,9 @@ pub mod signals;
 
 use std::sync::Arc;
 
-use tuwunel_core::{
-	Result, Runtime, debug_info, error, mod_ctor, mod_dtor, runtime::shutdown,
-	rustc_flags_capture,
-};
+pub use tuwunel_core::runtime::shutdown;
+use tuwunel_core::{Result, Runtime, debug_info, error, mod_ctor, mod_dtor, rustc_flags_capture};
+use tuwunel_service::Services;
 
 pub use self::server::Server;
 
@@ -26,28 +25,55 @@ pub fn exec(server: &Arc<Server>, runtime: Runtime) -> Result {
 }
 
 pub fn run(server: &Arc<Server>, runtime: &Runtime) -> Result {
-	runtime.spawn(signals::enable(server.clone()));
-	runtime.block_on(run_async(server))
+	runtime.block_on(async_exec(server))
 }
 
 /// Operate the server normally in release-mode static builds. This will start,
 /// run and stop the server within the asynchronous runtime.
-#[cfg(any(not(tuwunel_mods), not(feature = "tuwunel_mods")))]
 #[tracing::instrument(
     name = "main",
     parent = None,
     skip_all
 )]
-pub async fn run_async(server: &Arc<Server>) -> Result {
+pub async fn async_exec(server: &Arc<Server>) -> Result {
+	let signals = server
+		.server
+		.runtime()
+		.spawn(signals::enable(server.clone()));
+
+	async_start(server).await?;
+	async_run(server).await?;
+	async_stop(server).await?;
+	signals.await?;
+
+	debug_info!("Exit runtime");
+	Ok(())
+}
+
+#[cfg(any(not(tuwunel_mods), not(feature = "tuwunel_mods")))]
+pub async fn async_start(server: &Arc<Server>) -> Result<Arc<Services>> {
 	extern crate tuwunel_router as router;
 
-	match router::start(&server.server).await {
-		| Ok(services) => server.services.lock().await.insert(services),
+	Ok(match router::start(&server.server).await {
+		| Ok(services) => server
+			.services
+			.lock()
+			.await
+			.insert(services)
+			.clone(),
+
 		| Err(error) => {
 			error!("Critical error starting server: {error}");
 			return Err(error);
 		},
-	};
+	})
+}
+
+/// Operate the server normally in release-mode static builds. This will start,
+/// run and stop the server within the asynchronous runtime.
+#[cfg(any(not(tuwunel_mods), not(feature = "tuwunel_mods")))]
+pub async fn async_run(server: &Arc<Server>) -> Result {
+	extern crate tuwunel_router as router;
 
 	if let Err(error) = router::run(
 		server
@@ -63,6 +89,13 @@ pub async fn run_async(server: &Arc<Server>) -> Result {
 		return Err(error);
 	}
 
+	Ok(())
+}
+
+#[cfg(any(not(tuwunel_mods), not(feature = "tuwunel_mods")))]
+pub async fn async_stop(server: &Arc<Server>) -> Result {
+	extern crate tuwunel_router as router;
+
 	if let Err(error) = router::stop(
 		server
 			.services
@@ -77,7 +110,6 @@ pub async fn run_async(server: &Arc<Server>) -> Result {
 		return Err(error);
 	}
 
-	debug_info!("Exit runtime");
 	Ok(())
 }
 
@@ -85,7 +117,7 @@ pub async fn run_async(server: &Arc<Server>) -> Result {
 /// and hot-reload portions of the server as-needed before returning for an
 /// actual shutdown. This is not available in release-mode or static builds.
 #[cfg(all(tuwunel_mods, feature = "tuwunel_mods"))]
-pub async fn run_async(server: &Arc<Server>) -> Result {
+pub async fn async_exec(server: &Arc<Server>) -> Result {
 	let mut starts = true;
 	let mut reloads = true;
 	while reloads {

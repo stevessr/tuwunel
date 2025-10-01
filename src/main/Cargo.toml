@@ -51,11 +51,6 @@ assets = [
 name = "tuwunel"
 pkgdesc = "High performance Matrix homeserver written in Rust"
 
-[lib]
-path = "lib.rs"
-bench = false
-crate-type = ["rlib"]
-
 [features]
 default = [
 	"brotli_compression",
@@ -239,10 +234,25 @@ tracing-opentelemetry.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
 
+[dev-dependencies]
+criterion.workspace = true
+insta.workspace = true
+maplit.workspace = true
+similar.workspace = true
+
 [lints]
 workspace = true
+
+[lib]
+path = "lib.rs"
+bench = false
+crate-type = ["rlib"]
 
 [[bin]]
 name = "tuwunel"
 path = "main.rs"
 bench = false
+
+[[bench]]
+name = "main"
+harness = false
