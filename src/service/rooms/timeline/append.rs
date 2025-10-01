@@ -363,6 +363,7 @@ where
 						stripped_state,
 						None,
 						true,
+						count,
 					)
 					.await?;
 			}

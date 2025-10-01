@@ -22,6 +22,7 @@ use ruma::{
 use tuwunel_core::{
 	Err, Result, debug, debug_info, debug_warn, err, extract_variant, info,
 	matrix::{
+		PduCount,
 		event::{Event, gen_event_id},
 		pdu::{PduBuilder, PduEvent},
 	},
@@ -276,6 +277,7 @@ async fn knock_room_helper_local(
 		.map_err(|e| err!(BadServerResponse("Invalid knock event PDU: {e:?}")))?;
 
 	info!("Updating membership locally to knock state with provided stripped state events");
+	let count = services.globals.next_count();
 	services
 		.state_cache
 		.update_membership(
@@ -294,6 +296,7 @@ async fn knock_room_helper_local(
 			),
 			None,
 			false,
+			PduCount::Normal(*count),
 		)
 		.await?;
 
@@ -490,6 +493,7 @@ async fn knock_room_helper_remote(
 		.await?;
 
 	info!("Updating membership locally to knock state with provided stripped state events");
+	let count = services.globals.next_count();
 	services
 		.state_cache
 		.update_membership(
@@ -508,6 +512,7 @@ async fn knock_room_helper_remote(
 			),
 			None,
 			false,
+			PduCount::Normal(*count),
 		)
 		.await?;
 

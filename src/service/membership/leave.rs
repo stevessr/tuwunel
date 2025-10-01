@@ -11,6 +11,7 @@ use ruma::{
 };
 use tuwunel_core::{
 	Err, Result, debug_info, debug_warn, err, implement,
+	matrix::PduCount,
 	pdu::PduBuilder,
 	utils::{self, FutureBoolExt, future::ReadyEqExt},
 	warn,
@@ -51,6 +52,7 @@ pub async fn leave(
 	if is_banned.or(is_disabled).await {
 		// the room is banned/disabled, the room must be rejected locally since we
 		// cant/dont want to federate with this server
+		let count = self.services.globals.next_count();
 		self.services
 			.state_cache
 			.update_membership(
@@ -61,6 +63,7 @@ pub async fn leave(
 				None,
 				None,
 				true,
+				PduCount::Normal(*count),
 			)
 			.await?;
 
@@ -104,6 +107,7 @@ pub async fn leave(
 			.ok();
 
 		// We always drop the invite, we can't rely on other servers
+		let count = self.services.globals.next_count();
 		self.services
 			.state_cache
 			.update_membership(
@@ -114,6 +118,7 @@ pub async fn leave(
 				last_state,
 				None,
 				true,
+				PduCount::Normal(*count),
 			)
 			.await?;
 	} else {
@@ -131,6 +136,7 @@ pub async fn leave(
 				"Trying to leave a room you are not a member of, marking room as left locally."
 			);
 
+			let count = self.services.globals.next_count();
 			return self
 				.services
 				.state_cache
@@ -142,6 +148,7 @@ pub async fn leave(
 					None,
 					None,
 					true,
+					PduCount::Normal(*count),
 				)
 				.await;
 		};

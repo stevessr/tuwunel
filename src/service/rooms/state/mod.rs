@@ -12,7 +12,7 @@ use tuwunel_core::{
 	Event, PduEvent, Result, err,
 	error::inspect_debug_log,
 	implement,
-	matrix::{RoomVersionRules, StateKey, TypeStateKey, room_version},
+	matrix::{PduCount, RoomVersionRules, StateKey, TypeStateKey, room_version},
 	result::{AndThenRef, FlatOk},
 	state_res::{StateMap, auth_types_for_event},
 	trace,
@@ -126,6 +126,7 @@ pub async fn force_state(
 					return Ok(());
 				};
 
+				let count = self.services.globals.next_count();
 				self.services
 					.state_cache
 					.update_membership(
@@ -136,6 +137,7 @@ pub async fn force_state(
 						None,
 						None,
 						false,
+						PduCount::Normal(*count),
 					)
 					.await
 			},

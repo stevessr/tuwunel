@@ -14,7 +14,7 @@ use ruma::{
 	},
 	serde::Raw,
 };
-use tuwunel_core::{Result, implement, is_not_empty, utils::ReadyExt, warn};
+use tuwunel_core::{Result, implement, is_not_empty, matrix::PduCount, utils::ReadyExt, warn};
 use tuwunel_database::{Json, serialize_key};
 
 /// Update current membership data.
@@ -26,6 +26,7 @@ use tuwunel_database::{Json, serialize_key};
 			%room_id,
 			%user_id,
 			%sender,
+			%count,
 			?membership_event,
 		),
 	)]
@@ -39,6 +40,7 @@ pub async fn update_membership(
 	last_state: Option<Vec<Raw<AnyStrippedStateEvent>>>,
 	invite_via: Option<Vec<OwnedServerName>>,
 	update_joined_count: bool,
+	count: PduCount,
 ) -> Result {
 	let membership = membership_event.membership;
 
@@ -58,11 +60,6 @@ pub async fn update_membership(
 
 	match &membership {
 		| MembershipState::Join => {
-			// Increment the counter for a unique value and hold the guard even though the
-			// value is not used. This will allow proper sync to clients similar to the
-			// other membership state changes.
-			let _next_count = self.services.globals.next_count();
-
 			// Check if the user never joined this room
 			if !self.once_joined(user_id, room_id).await {
 				// Add the user ID to the join list then
@@ -128,7 +125,7 @@ pub async fn update_membership(
 				}
 			}
 
-			self.mark_as_joined(user_id, room_id);
+			self.mark_as_joined(user_id, room_id, count);
 		},
 		| MembershipState::Invite => {
 			// We want to know if the sender is ignored by the receiver
@@ -141,11 +138,11 @@ pub async fn update_membership(
 				return Ok(());
 			}
 
-			self.mark_as_invited(user_id, room_id, last_state, invite_via)
+			self.mark_as_invited(user_id, room_id, count, last_state, invite_via)
 				.await;
 		},
 		| MembershipState::Leave | MembershipState::Ban => {
-			self.mark_as_left(user_id, room_id);
+			self.mark_as_left(user_id, room_id, count);
 
 			if self.services.globals.user_is_local(user_id)
 				&& (self.services.config.forget_forced_upon_leave
@@ -241,15 +238,19 @@ pub async fn update_joined_count(&self, room_id: &RoomId) {
 /// `update_membership` instead
 #[implement(super::Service)]
 #[tracing::instrument(skip(self), level = "debug")]
-pub(crate) fn mark_as_joined(&self, user_id: &UserId, room_id: &RoomId) {
+pub(crate) fn mark_as_joined(&self, user_id: &UserId, room_id: &RoomId, count: PduCount) {
 	let userroom_id = (user_id, room_id);
 	let userroom_id = serialize_key(userroom_id).expect("failed to serialize userroom_id");
 
 	let roomuser_id = (room_id, user_id);
 	let roomuser_id = serialize_key(roomuser_id).expect("failed to serialize roomuser_id");
 
-	self.db.userroomid_joined.insert(&userroom_id, []);
-	self.db.roomuserid_joined.insert(&roomuser_id, []);
+	self.db
+		.userroomid_joined
+		.raw_aput::<8, _, _>(&userroom_id, count.into_unsigned());
+	self.db
+		.roomuserid_joined
+		.raw_aput::<8, _, _>(&roomuser_id, count.into_unsigned());
 
 	self.db
 		.userroomid_invitestate
@@ -276,9 +277,7 @@ pub(crate) fn mark_as_joined(&self, user_id: &UserId, room_id: &RoomId) {
 /// `update_membership` instead
 #[implement(super::Service)]
 #[tracing::instrument(skip(self), level = "debug")]
-pub(crate) fn mark_as_left(&self, user_id: &UserId, room_id: &RoomId) {
-	let count = self.services.globals.next_count();
-
+pub(crate) fn mark_as_left(&self, user_id: &UserId, room_id: &RoomId, count: PduCount) {
 	let userroom_id = (user_id, room_id);
 	let userroom_id = serialize_key(userroom_id).expect("failed to serialize userroom_id");
 
@@ -293,7 +292,7 @@ pub(crate) fn mark_as_left(&self, user_id: &UserId, room_id: &RoomId) {
 		.raw_put(&userroom_id, Json(leftstate));
 	self.db
 		.roomuserid_leftcount
-		.raw_aput::<8, _, _>(&roomuser_id, *count);
+		.raw_aput::<8, _, _>(&roomuser_id, count.into_unsigned());
 
 	self.db.userroomid_joined.remove(&userroom_id);
 	self.db.roomuserid_joined.remove(&roomuser_id);
@@ -324,10 +323,9 @@ pub(crate) fn _mark_as_knocked(
 	&self,
 	user_id: &UserId,
 	room_id: &RoomId,
+	count: PduCount,
 	knocked_state: Option<Vec<Raw<AnyStrippedStateEvent>>>,
 ) {
-	let count = self.services.globals.next_count();
-
 	let userroom_id = (user_id, room_id);
 	let userroom_id = serialize_key(userroom_id).expect("failed to serialize userroom_id");
 
@@ -339,7 +337,7 @@ pub(crate) fn _mark_as_knocked(
 		.raw_put(&userroom_id, Json(knocked_state.unwrap_or_default()));
 	self.db
 		.roomuserid_knockedcount
-		.raw_aput::<8, _, _>(&roomuser_id, *count);
+		.raw_aput::<8, _, _>(&roomuser_id, count.into_unsigned());
 
 	self.db.userroomid_joined.remove(&userroom_id);
 	self.db.roomuserid_joined.remove(&roomuser_id);
@@ -381,11 +379,10 @@ pub(crate) async fn mark_as_invited(
 	&self,
 	user_id: &UserId,
 	room_id: &RoomId,
+	count: PduCount,
 	last_state: Option<Vec<Raw<AnyStrippedStateEvent>>>,
 	invite_via: Option<Vec<OwnedServerName>>,
 ) {
-	let count = self.services.globals.next_count();
-
 	let roomuser_id = (room_id, user_id);
 	let roomuser_id = serialize_key(roomuser_id).expect("failed to serialize roomuser_id");
 
@@ -397,7 +394,7 @@ pub(crate) async fn mark_as_invited(
 		.raw_put(&userroom_id, Json(last_state.unwrap_or_default()));
 	self.db
 		.roomuserid_invitecount
-		.raw_aput::<8, _, _>(&roomuser_id, *count);
+		.raw_aput::<8, _, _>(&roomuser_id, count.into_unsigned());
 
 	self.db.userroomid_joined.remove(&userroom_id);
 	self.db.roomuserid_joined.remove(&roomuser_id);

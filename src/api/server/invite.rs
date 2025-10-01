@@ -12,7 +12,7 @@ use ruma::{
 };
 use tuwunel_core::{
 	Err, Error, Result, err, extract_variant,
-	matrix::{Event, PduEvent, event::gen_event_id},
+	matrix::{Event, PduCount, PduEvent, event::gen_event_id},
 	utils,
 	utils::hash::sha256,
 	warn,
@@ -143,6 +143,7 @@ pub(crate) async fn create_invite_route(
 		.server_in_room(services.globals.server_name(), &body.room_id)
 		.await
 	{
+		let count = services.globals.next_count();
 		services
 			.state_cache
 			.update_membership(
@@ -153,8 +154,10 @@ pub(crate) async fn create_invite_route(
 				Some(invite_state),
 				body.via.clone(),
 				true,
+				PduCount::Normal(*count),
 			)
 			.await?;
+		drop(count);
 
 		for appservice in services.appservice.read().await.values() {
 			if appservice.is_user_match(&invited_user) {

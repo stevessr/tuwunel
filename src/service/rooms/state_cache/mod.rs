@@ -371,6 +371,17 @@ pub async fn get_left_count(&self, room_id: &RoomId, user_id: &UserId) -> Result
 		.deserialized()
 }
 
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "trace")]
+pub async fn get_joined_count(&self, room_id: &RoomId, user_id: &UserId) -> Result<u64> {
+	let key = (room_id, user_id);
+	self.db
+		.roomuserid_joined
+		.qry(&key)
+		.await
+		.deserialized()
+}
+
 /// Returns an iterator over all rooms this user joined.
 #[implement(Service)]
 #[tracing::instrument(skip(self), level = "debug")]
