@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt};
 
 use ruma::{
 	MilliSecondsSinceUnixEpoch, OwnedEventId,
@@ -10,7 +10,7 @@ use serde_json::value::{RawValue as RawJsonValue, to_raw_value};
 use super::StateKey;
 
 /// Build the start of a PDU in order to add it to the Database.
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct Builder {
 	#[serde(rename = "type")]
 	pub event_type: TimelineEventType,
@@ -29,6 +29,19 @@ pub struct Builder {
 }
 
 type Unsigned = BTreeMap<String, serde_json::Value>;
+
+impl Default for Builder {
+	fn default() -> Self {
+		Self {
+			event_type: "m.room.message".into(),
+			content: Box::<RawJsonValue>::default(),
+			unsigned: None,
+			state_key: None,
+			redacts: None,
+			timestamp: None,
+		}
+	}
+}
 
 impl Builder {
 	pub fn state<S, T>(state_key: S, content: &T) -> Self
@@ -58,15 +71,30 @@ impl Builder {
 	}
 }
 
-impl Default for Builder {
-	fn default() -> Self {
-		Self {
-			event_type: "m.room.message".into(),
-			content: Box::<RawJsonValue>::default(),
-			unsigned: None,
-			state_key: None,
-			redacts: None,
-			timestamp: None,
+impl fmt::Debug for Builder {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let mut d = f.debug_struct("Builder");
+
+		d.field("type", &self.event_type);
+
+		if let Some(state_key) = self.state_key.as_ref() {
+			d.field("state_key", state_key);
 		}
+
+		if let Some(redacts) = self.redacts.as_ref() {
+			d.field("redacts", redacts);
+		}
+
+		if let Some(timestamp) = self.timestamp.as_ref() {
+			d.field("ts", timestamp);
+		}
+
+		if let Some(unsigned) = self.unsigned.as_ref() {
+			d.field("unsigned", unsigned);
+		}
+
+		d.field("content", &self.content);
+
+		d.finish()
 	}
 }
