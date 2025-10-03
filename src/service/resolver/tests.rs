@@ -4,11 +4,11 @@ use super::fed::{FedDest, add_port_to_hostname, get_ip_with_port};
 fn ips_get_default_ports() {
 	assert_eq!(
 		get_ip_with_port("1.1.1.1"),
-		Some(FedDest::Literal("1.1.1.1:8448".parse().unwrap()))
+		Some(FedDest::Literal("1.1.1.1:443".parse().unwrap()))
 	);
 	assert_eq!(
 		get_ip_with_port("dead:beef::"),
-		Some(FedDest::Literal("[dead:beef::]:8448".parse().unwrap()))
+		Some(FedDest::Literal("[dead:beef::]:443".parse().unwrap()))
 	);
 }
 
@@ -28,7 +28,7 @@ fn ips_keep_custom_ports() {
 fn hostnames_get_default_ports() {
 	assert_eq!(
 		add_port_to_hostname("example.com"),
-		FedDest::Named("example.com".into(), ":8448".try_into().unwrap())
+		FedDest::Named("example.com".into(), ":443".try_into().unwrap())
 	);
 }
 

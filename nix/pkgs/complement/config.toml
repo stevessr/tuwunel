@@ -8,7 +8,7 @@ allow_registration = true
 database_path = "/database"
 error_on_unknown_config_opts = true
 log = "trace,h2=debug,hyper=debug"
-port = [8008, 8448]
+port = [8008, 443]
 trusted_servers = []
 only_query_trusted_key_servers = false
 query_trusted_key_servers_first = false
