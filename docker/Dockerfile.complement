@@ -72,7 +72,7 @@ COPY <<EOF complement.toml
     log_thread_ids = true
     media_compat_file_link = false
     media_startup_check = true
-    port = [8008, 8448]
+    port = [8008, 443]
     prune_missing_media = true
     query_trusted_key_servers_first = false
     query_trusted_key_servers_first_on_join = false
@@ -103,7 +103,10 @@ EOF
 
 FROM input AS complement-testee
 
-EXPOSE 8008 8448
+WORKDIR /
+COPY --link --from=input . .
+
+EXPOSE 8008 443
 RUN mkdir /database
 COPY --from=complement-config * /complement/
 ENV TUWUNEL_CONFIG="/complement/complement.toml"
@@ -112,7 +115,10 @@ ENTRYPOINT tuwunel -Oserver_name=\""$SERVER_NAME\""
 
 FROM input AS complement-testee-valgrind
 
-EXPOSE 8008 8448
+WORKDIR /
+COPY --link --from=input . .
+
+EXPOSE 8008 443
 RUN mkdir /database
 COPY --from=complement-config * /complement/
 ENV TUWUNEL_CONFIG="/complement/complement.toml"

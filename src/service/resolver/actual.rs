@@ -72,7 +72,7 @@ impl super::Service {
 				if let Some(pos) = dest.as_str().find(':') {
 					self.actual_dest_2(dest, cache, pos).await?
 				} else {
-					self.conditional_query_and_cache(dest.as_str(), 8448, true)
+					self.conditional_query_and_cache(dest.as_str(), 443, true)
 						.await?;
 					self.services.server.check_running()?;
 					match self.request_well_known(dest.as_str()).await? {
@@ -122,7 +122,7 @@ impl super::Service {
 	async fn actual_dest_2(&self, dest: &ServerName, cache: bool, pos: usize) -> Result<FedDest> {
 		debug!("2: Hostname with included port");
 		let (host, port) = dest.as_str().split_at(pos);
-		self.conditional_query_and_cache(host, port.parse::<u16>().unwrap_or(8448), cache)
+		self.conditional_query_and_cache(host, port.parse::<u16>().unwrap_or(443), cache)
 			.await?;
 
 		Ok(FedDest::Named(
@@ -170,7 +170,7 @@ impl super::Service {
 	) -> Result<FedDest> {
 		debug!("3.2: Hostname with port in .well-known file");
 		let (host, port) = delegated.split_at(pos);
-		self.conditional_query_and_cache(host, port.parse::<u16>().unwrap_or(8448), cache)
+		self.conditional_query_and_cache(host, port.parse::<u16>().unwrap_or(443), cache)
 			.await?;
 
 		Ok(FedDest::Named(
@@ -191,7 +191,7 @@ impl super::Service {
 		self.conditional_query_and_cache_override(
 			&delegated,
 			&overrider.hostname(),
-			force_port.unwrap_or(8448),
+			force_port.unwrap_or(443),
 			cache,
 		)
 		.await?;
@@ -211,7 +211,7 @@ impl super::Service {
 
 	async fn actual_dest_3_4(&self, cache: bool, delegated: String) -> Result<FedDest> {
 		debug!("3.4: No SRV records, just use the hostname from .well-known");
-		self.conditional_query_and_cache(&delegated, 8448, cache)
+		self.conditional_query_and_cache(&delegated, 443, cache)
 			.await?;
 		Ok(add_port_to_hostname(&delegated))
 	}
@@ -227,7 +227,7 @@ impl super::Service {
 		self.conditional_query_and_cache_override(
 			host,
 			&overrider.hostname(),
-			force_port.unwrap_or(8448),
+			force_port.unwrap_or(443),
 			cache,
 		)
 		.await?;
@@ -246,7 +246,7 @@ impl super::Service {
 
 	async fn actual_dest_5(&self, dest: &ServerName, cache: bool) -> Result<FedDest> {
 		debug!("5: No SRV record found");
-		self.conditional_query_and_cache(dest.as_str(), 8448, cache)
+		self.conditional_query_and_cache(dest.as_str(), 443, cache)
 			.await?;
 
 		Ok(add_port_to_hostname(dest.as_str()))

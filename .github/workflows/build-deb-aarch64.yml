@@ -1,0 +1,28 @@
+name: Build aarch64 .deb
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build aarch64 binary and .deb using cross Docker image
+        run: |
+          set -euo pipefail
+          # Use the cross Docker image to build for aarch64
+          docker run --rm -v "${{ github.workspace }}:/work" -w /work cross-rs/cross:latest \
+            sh -lc "cargo install cargo-deb --force && cross build --release --target aarch64-unknown-linux-gnu -p tuwunel && cp target/aarch64-unknown-linux-gnu/release/tuwunel target/release/tuwunel && cargo deb --no-build --target aarch64-unknown-linux-gnu -p tuwunel"
+
+      - name: Find .deb and upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuwunel-deb-aarch64
+          path: |
+            target/debian/**/*.deb
+            target/**/*.deb
