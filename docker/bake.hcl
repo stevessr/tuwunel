@@ -714,7 +714,7 @@ target "docker" {
     dockerfile-inline =<<EOF
         FROM scratch AS install
         COPY --from=input . .
-        EXPOSE 8008 8448
+        EXPOSE 8008 443
         ENTRYPOINT ["tuwunel"]
 EOF
 }

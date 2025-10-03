@@ -16,13 +16,13 @@ pub enum FedDest {
 /// numeric or service-name
 pub type PortString = ArrayString<16>;
 
-const DEFAULT_PORT: &str = ":8448";
+const DEFAULT_PORT: &str = ":443";
 
 pub(crate) fn get_ip_with_port(dest_str: &str) -> Option<FedDest> {
 	if let Ok(dest) = dest_str.parse::<SocketAddr>() {
 		Some(FedDest::Literal(dest))
 	} else if let Ok(ip_addr) = dest_str.parse::<IpAddr>() {
-		Some(FedDest::Literal(SocketAddr::new(ip_addr, 8448)))
+		Some(FedDest::Literal(SocketAddr::new(ip_addr, 443)))
 	} else {
 		None
 	}
