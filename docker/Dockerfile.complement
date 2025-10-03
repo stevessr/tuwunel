@@ -72,7 +72,7 @@ COPY <<EOF complement.toml
     log_thread_ids = true
     media_compat_file_link = false
     media_startup_check = true
-    port = [8008, 8448]
+    port = [8008, 443]
     prune_missing_media = true
     query_trusted_key_servers_first = false
     query_trusted_key_servers_first_on_join = false
