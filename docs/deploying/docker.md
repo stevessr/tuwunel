@@ -26,7 +26,7 @@ OCI images for tuwunel are available in the registries listed below.
 When you have the image you can simply run it with
 
 ```bash
-docker run -d -p 8448:6167 \
+docker run -d -p 443:6167 \
     -v db:/var/lib/tuwunel/ \
     -e TUWUNEL_SERVER_NAME="your.server.name" \
     -e TUWUNEL_ALLOW_REGISTRATION=false \
@@ -127,7 +127,7 @@ to deploy and use tuwunel, with a little caveat. If you already took a look at
 the files, then you should have seen the `well-known` service, and that is the
 little caveat. Traefik is simply a proxy and loadbalancer and is not able to
 serve any kind of content, but for tuwunel to federate, we need to either
-expose ports `443` and `8448` or serve two endpoints `.well-known/matrix/client`
+expose ports `443` and `443` or serve two endpoints `.well-known/matrix/client`
 and `.well-known/matrix/server`.
 
 With the service `well-known` we use a single `nginx` container that will serve

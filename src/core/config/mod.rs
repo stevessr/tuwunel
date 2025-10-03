@@ -117,7 +117,7 @@ pub struct Config {
 	/// If you are using Docker, don't change this, you'll need to map an
 	/// external port to this.
 	///
-	/// To listen on multiple ports, specify a vector e.g. [8080, 8448]
+	/// To listen on multiple ports, specify a vector e.g. [8080, 443]
 	///
 	/// default: 8008
 	#[serde(default = "default_port")]

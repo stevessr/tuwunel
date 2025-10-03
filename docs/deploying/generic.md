@@ -69,7 +69,7 @@ sudo useradd -r --shell /usr/bin/nologin --no-create-home tuwunel
 
 ## Forwarding ports in the firewall or the router
 
-Matrix's default federation port is port 8448, and clients must be using port 443.
+Matrix's default federation port is port 443, and clients must be using port 443.
 If you would like to use only port 443, or a different port, you will need to setup
 delegation. Tuwunel has config options for doing delegation, or you can configure
 your reverse proxy to manually serve the necessary JSON files to do delegation
@@ -148,7 +148,14 @@ We recommend Caddy as a reverse proxy, as it is trivial to use, handling TLS cer
 - **[Caddy Setup Guide](reverse-proxy-caddy.md)** - Recommended for ease of use and automatic TLS
 - **[Nginx Setup Guide](reverse-proxy-nginx.md)** - Popular choice with extensive documentation
 
-### Quick Overview
+```caddyfile
+your.server.name, your.server.name:443 {
+    # TCP reverse_proxy
+    reverse_proxy localhost:8008
+    # UNIX socket
+    #reverse_proxy unix//run/tuwunel/tuwunel.sock
+}
+```
 
 Regardless of which reverse proxy you choose, you will need to:
 
@@ -207,17 +214,17 @@ You can also use these commands as a quick health check (replace
 ```bash
 curl https://your.server.name/_tuwunel/server_version
 
-# If using port 8448
-curl https://your.server.name:8448/_tuwunel/server_version
+# If using port 443
+curl https://your.server.name:443/_tuwunel/server_version
 
 # If federation is enabled
-curl https://your.server.name:8448/_matrix/federation/v1/version
+curl https://your.server.name:443/_matrix/federation/v1/version
 ```
 
 - To check if your server can talk with other homeservers, you can use the
 [Matrix Federation Tester](https://federationtester.matrix.org/). If you can
 register but cannot join federated rooms check your config again and also check
-if the port 8448 is open and forwarded correctly.
+if the port 443 is open and forwarded correctly.
 
 # What's next?
 
