@@ -94,8 +94,8 @@ dockerTools.buildImage {
     ];
 
     ExposedPorts = {
-      "8008/tcp" = { };
-      "8448/tcp" = { };
+      "8008/tcp" = {};
+      "443/tcp" = {};
     };
   };
 }
