@@ -16,6 +16,7 @@ ARG CARGO_TERM_VERBOSE=0
 ARG RUST_BACKTRACE
 ARG JEMALLOC_OVERRIDE
 ARG ROCKSDB_LIB_DIR
+ARG VALGRINDFLAGS=""
 ARG CARGO_BUILD_RUSTFLAGS
 ARG CARGO_PROFILE_TEST_DEBUG
 ARG CARGO_PROFILE_TEST_INCREMENTAL
@@ -47,6 +48,7 @@ ENV CARGO_TERM_VERBOSE="${CARGO_TERM_VERBOSE}"
 ENV RUST_BACKTRACE="${RUST_BACKTRACE}"
 ENV JEMALLOC_OVERRIDE="${JEMALLOC_OVERRIDE}"
 ENV ROCKSDB_LIB_DIR="${ROCKSDB_LIB_DIR}"
+ENV VALGRINDFLAGS="${VALGRINDFLAGS}"
 ENV CARGO_PROFILE_TEST_DEBUG="${CARGO_PROFILE_TEST_DEBUG}"
 ENV CARGO_PROFILE_TEST_INCREMENTAL="${CARGO_PROFILE_TEST_INCREMENTAL}"
 ENV CARGO_PROFILE_BENCH_DEBUG="${CARGO_PROFILE_BENCH_DEBUG}"
@@ -74,6 +76,7 @@ RUN \
 --mount=type=cache,dst=${targ_targ_dir}/.fingerprint,id=${cargo_target_share}/fingerprint,sharing=locked \
 <<EOF
     set -eux
+    ulimit -n 65535
     rustup run ${rust_toolchain} \
         cargo ${cargo_cmd} \
             --verbose \
@@ -87,7 +90,7 @@ RUN \
             "--manifest-path=Cargo.toml" \
             ${recipe_args} \
             ${color_args} \
-            $cargo_args
+            ${cargo_args}
 
     # If this image is further reused with other cargo commands, all
     # modifications made by cargo chef cook outside of target-dir have to be
