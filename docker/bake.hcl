@@ -953,13 +953,13 @@ target "build-deb" {
 }
 
 target "nix" {
-    name = elem("nix", [sys_name, sys_version, sys_target])
+    name = elem("nix", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
     tags = [
-        elem_tag("nix", [sys_name, sys_version, sys_target], "latest"),
+        elem_tag("nix", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
     output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
     target = "nix-pkg"
-    matrix = sys
+    matrix = cargo_rust_feat_sys
     inherits = [
         elem("build-nix", [sys_name, sys_version, sys_target]),
     ]
