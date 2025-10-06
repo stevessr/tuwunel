@@ -29,10 +29,13 @@ use super::{SyncInfo, share_encrypted_room};
 #[tracing::instrument(level = "trace", skip_all, fields(globalsince, next_batch,))]
 pub(super) async fn collect(
 	services: &Services,
-	syncinfo: SyncInfo<'_>,
+	sync_info: SyncInfo<'_>,
 	next_batch: u64,
 ) -> Result<response::E2EE> {
-	let &(sender_user, sender_device, globalsince, _) = &syncinfo;
+	let SyncInfo {
+		sender_user, sender_device, globalsince, ..
+	} = sync_info;
+
 	let keys_changed = services
 		.users
 		.keys_changed(sender_user, globalsince, Some(next_batch))
@@ -46,7 +49,7 @@ pub(super) async fn collect(
 		.rooms_joined(sender_user)
 		.map(ToOwned::to_owned)
 		.broad_filter_map(async |room_id| {
-			collect_room(services, syncinfo, next_batch, &room_id)
+			collect_room(services, sync_info, next_batch, &room_id)
 				.await
 				.ok()
 		})
@@ -101,7 +104,7 @@ pub(super) async fn collect(
 #[tracing::instrument(level = "trace", skip_all, fields(room_id))]
 async fn collect_room(
 	services: &Services,
-	(sender_user, _, globalsince, _): SyncInfo<'_>,
+	SyncInfo { sender_user, globalsince, .. }: SyncInfo<'_>,
 	next_batch: u64,
 	room_id: &RoomId,
 ) -> Result<pair_of!(HashSet<OwnedUserId>)> {

@@ -11,7 +11,7 @@ use tuwunel_core::{
 };
 use tuwunel_service::{Services, rooms::read_receipt::pack_receipts};
 
-use super::{KnownRooms, SyncInfo, TodoRooms, extension_rooms_todo};
+use super::{KnownRooms, SyncInfo, TodoRoom, TodoRooms, extension_rooms_todo};
 
 #[tracing::instrument(level = "trace", skip_all)]
 pub(super) async fn collect(
@@ -21,33 +21,41 @@ pub(super) async fn collect(
 	known_rooms: &KnownRooms,
 	todo_rooms: &TodoRooms,
 ) -> Result<response::Receipts> {
-	let (_, _, _, request) = sync_info;
-	let data = &request.extensions.receipts;
-	let rooms = extension_rooms_todo(
-		sync_info,
-		known_rooms,
-		todo_rooms,
-		data.lists.as_ref(),
-		data.rooms.as_ref(),
-	)
-	.stream()
-	.broad_filter_map(async |room_id| {
-		collect_room(services, sync_info, next_batch, todo_rooms, room_id).await
-	})
-	.collect()
-	.await;
+	let SyncInfo { request, .. } = sync_info;
+
+	let lists = request
+		.extensions
+		.receipts
+		.lists
+		.as_deref()
+		.map(<[_]>::iter);
+
+	let rooms = request
+		.extensions
+		.receipts
+		.rooms
+		.as_deref()
+		.map(<[_]>::iter);
+
+	let rooms = extension_rooms_todo(sync_info, known_rooms, todo_rooms, lists, rooms)
+		.stream()
+		.broad_filter_map(async |room_id| {
+			collect_room(services, sync_info, next_batch, todo_rooms, room_id).await
+		})
+		.collect()
+		.await;
 
 	Ok(response::Receipts { rooms })
 }
 
 async fn collect_room(
 	services: &Services,
-	(sender_user, ..): SyncInfo<'_>,
+	SyncInfo { sender_user, .. }: SyncInfo<'_>,
 	next_batch: u64,
 	todo_rooms: &TodoRooms,
 	room_id: &RoomId,
 ) -> Option<(OwnedRoomId, Raw<SyncReceiptEvent>)> {
-	let &(_, _, roomsince) = todo_rooms.get(room_id)?;
+	let &TodoRoom { roomsince, .. } = todo_rooms.get(room_id)?;
 	let private_receipt = services
 		.read_receipt
 		.last_privateread_update(sender_user, room_id)

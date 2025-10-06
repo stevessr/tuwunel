@@ -8,7 +8,9 @@ use super::SyncInfo;
 #[tracing::instrument(level = "trace", skip_all, fields(globalsince, next_batch))]
 pub(super) async fn collect(
 	services: &Services,
-	(sender_user, sender_device, globalsince, _request): SyncInfo<'_>,
+	SyncInfo {
+		sender_user, sender_device, globalsince, ..
+	}: SyncInfo<'_>,
 	next_batch: u64,
 ) -> Result<Option<response::ToDevice>> {
 	services

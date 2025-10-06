@@ -7,7 +7,7 @@ use futures::{
 use ruma::{
 	JsOption, MxcUri, OwnedMxcUri, RoomId, UInt, UserId,
 	api::client::sync::sync_events::{UnreadNotificationsCount, v5::response},
-	events::StateEventType,
+	events::{StateEventType, room::member::MembershipState},
 };
 use tuwunel_core::{
 	Result, at, debug_error, is_equal_to,
@@ -25,21 +25,25 @@ use crate::client::{DEFAULT_BUMP_TYPES, ignored_filter, sync::load_timeline};
 pub(super) async fn handle(
 	services: &Services,
 	next_batch: u64,
-	(sender_user, _, _globalsince, _): &SyncInfo<'_>,
+	SyncInfo { sender_user, .. }: SyncInfo<'_>,
 	room_id: &RoomId,
-	(required_state_request, timeline_limit, roomsince): &TodoRoom,
-	is_invited: bool,
+	&TodoRoom {
+		ref membership,
+		ref requested_state,
+		timeline_limit,
+		roomsince,
+	}: &TodoRoom,
 ) -> Result<Option<response::Room>> {
-	let timeline: OptionFuture<_> = is_invited
-		.eq(&false)
+	let timeline: OptionFuture<_> = membership
+		.ne(&MembershipState::Invite)
 		.then(|| {
 			load_timeline(
 				services,
 				sender_user,
 				room_id,
-				PduCount::Normal(*roomsince),
+				PduCount::Normal(roomsince),
 				Some(PduCount::from(next_batch)),
-				*timeline_limit,
+				timeline_limit,
 			)
 		})
 		.into();
@@ -52,7 +56,7 @@ pub(super) async fn handle(
 	let (timeline_pdus, limited, _lastcount) =
 		timeline.unwrap_or_else(|| (Vec::new(), true, PduCount::default()));
 
-	if *roomsince != 0 && timeline_pdus.is_empty() && !is_invited {
+	if roomsince != 0 && timeline_pdus.is_empty() && membership.ne(&MembershipState::Invite) {
 		return Ok(None);
 	}
 
@@ -60,7 +64,7 @@ pub(super) async fn handle(
 		.first()
 		.map(at!(0))
 		.map(PduCount::into_unsigned)
-		.or_else(|| roomsince.ne(&0).then_some(*roomsince))
+		.or_else(|| roomsince.ne(&0).then_some(roomsince))
 		.as_ref()
 		.map(ToString::to_string);
 
@@ -80,7 +84,7 @@ pub(super) async fn handle(
 			bump_stamp
 		});
 
-	let lazy = required_state_request
+	let lazy = requested_state
 		.iter()
 		.any(is_equal_to!(&(StateEventType::RoomMember, "$LAZY".into())));
 
@@ -97,7 +101,7 @@ pub(super) async fn handle(
 		.iter()
 		.map(|sender| (StateEventType::RoomMember, StateKey::from_str(sender.as_str())));
 
-	let required_state = required_state_request
+	let required_state = requested_state
 		.iter()
 		.cloned()
 		.chain(timeline_senders)
@@ -119,7 +123,8 @@ pub(super) async fn handle(
 		.collect();
 
 	// TODO: figure out a timestamp we can use for remote invites
-	let invite_state: OptionFuture<_> = is_invited
+	let invite_state: OptionFuture<_> = membership
+		.eq(&MembershipState::Invite)
 		.then(|| {
 			services
 				.state_cache
@@ -199,7 +204,7 @@ pub(super) async fn handle(
 	let num_live = None; // Count events in timeline greater than global sync counter
 
 	Ok(Some(response::Room {
-		initial: Some(*roomsince == 0),
+		initial: Some(roomsince == 0),
 		name: room_name.or(hero_name),
 		avatar: JsOption::from_option(room_avatar.or(heroes_avatar)),
 		invite_state: invite_state.flatten(),
