@@ -1,11 +1,19 @@
-use futures::{FutureExt, StreamExt, pin_mut, stream::FuturesUnordered};
+use futures::{FutureExt, Stream, StreamExt, pin_mut, stream::FuturesUnordered};
 use ruma::{DeviceId, RoomId, UserId};
 use tuwunel_core::{Result, implement, trace};
 use tuwunel_database::{Interfix, Separator, serialize_key};
 
 #[implement(super::Service)]
-#[tracing::instrument(skip(self), level = "debug")]
-pub async fn watch(&self, user_id: &UserId, device_id: &DeviceId) -> Result {
+#[tracing::instrument(skip(self, rooms), level = "debug")]
+pub async fn watch<'a, Rooms>(
+	&self,
+	user_id: &UserId,
+	device_id: &DeviceId,
+	rooms: Rooms,
+) -> Result
+where
+	Rooms: Stream<Item = &'a RoomId> + Send + 'a,
+{
 	let userdeviceid_prefix = (user_id, device_id, Interfix);
 	let globaluserdata_prefix = (Separator, user_id, Interfix);
 	let roomuserdataid_prefix = (Option::<&RoomId>::None, user_id, Interfix);
@@ -67,11 +75,8 @@ pub async fn watch(&self, user_id: &UserId, device_id: &DeviceId) -> Result {
 	let mut futures = FuturesUnordered::new();
 	futures.extend(watchers.into_iter());
 
-	// Events for rooms we are in
-	let rooms_joined = self.services.state_cache.rooms_joined(user_id);
-
-	pin_mut!(rooms_joined);
-	while let Some(room_id) = rooms_joined.next().await {
+	pin_mut!(rooms);
+	while let Some(room_id) = rooms.next().await {
 		let Ok(short_roomid) = self.services.short.get_shortroomid(room_id).await else {
 			continue;
 		};

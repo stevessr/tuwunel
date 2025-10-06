@@ -160,10 +160,14 @@ pub(crate) async fn sync_events_v5_route(
 	};
 
 	loop {
-		let watchers = services.sync.watch(sender_user, sender_device);
-		let next_batch = services.globals.wait_pending().await?;
+		let watch_rooms = todo_rooms.keys().map(AsRef::as_ref).stream();
+		let watchers = services
+			.sync
+			.watch(sender_user, sender_device, watch_rooms);
 
+		let next_batch = services.globals.wait_pending().await?;
 		debug_assert!(globalsince <= next_batch, "next_batch is monotonic");
+
 		if globalsince < next_batch {
 			let rooms = handle_rooms(services, sync_info, next_batch, &todo_rooms)
 				.map_ok(|rooms| response.rooms = rooms);

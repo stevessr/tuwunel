@@ -163,10 +163,14 @@ pub(crate) async fn sync_events_route(
 		.expect("configuration must limit maximum timeout");
 
 	loop {
-		let watchers = services.sync.watch(sender_user, sender_device);
-		let next_batch = services.globals.wait_pending().await?;
+		let watch_rooms = services.state_cache.rooms_joined(sender_user);
+		let watchers = services
+			.sync
+			.watch(sender_user, sender_device, watch_rooms);
 
+		let next_batch = services.globals.wait_pending().await?;
 		debug_assert!(since <= next_batch, "next_batch is monotonic");
+
 		if since < next_batch || body.body.full_state {
 			let response = build_sync_events(&services, &body, since, next_batch).await?;
 			let empty = response.rooms.is_empty()
