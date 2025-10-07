@@ -1,3 +1,4 @@
+mod direct;
 mod room_tags;
 
 use std::sync::Arc;
