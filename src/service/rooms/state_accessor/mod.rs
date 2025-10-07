@@ -28,7 +28,7 @@ use ruma::{
 	room::RoomType,
 };
 use tuwunel_core::{
-	Result, err,
+	Result, err, is_true,
 	matrix::{Pdu, room_version, state_res::events::RoomCreateEvent},
 };
 
@@ -80,6 +80,14 @@ impl Service {
 	pub async fn get_avatar(&self, room_id: &RoomId) -> Result<RoomAvatarEventContent> {
 		self.room_state_get_content(room_id, &StateEventType::RoomAvatar, "")
 			.await
+	}
+
+	pub async fn is_direct(&self, room_id: &RoomId, user_id: &UserId) -> bool {
+		self.get_member(room_id, user_id)
+			.await
+			.ok()
+			.and_then(|content| content.is_direct)
+			.is_some_and(is_true!())
 	}
 
 	pub async fn get_member(
