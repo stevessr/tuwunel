@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use futures::{
-	FutureExt, StreamExt, TryFutureExt,
+	FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 	future::{OptionFuture, join, join3, join4},
 };
 use ruma::{
@@ -99,16 +99,31 @@ pub(super) async fn handle(
 	timeline_senders.dedup();
 	let timeline_senders = timeline_senders
 		.iter()
-		.map(|sender| (StateEventType::RoomMember, StateKey::from_str(sender.as_str())));
+		.map(|sender| (StateEventType::RoomMember, StateKey::from_str(sender.as_str())))
+		.stream();
+
+	let wildcard_state = requested_state
+		.iter()
+		.filter(|(_, state_key)| state_key == "*")
+		.map(|(event_type, _)| {
+			services
+				.state_accessor
+				.room_state_keys(room_id, event_type)
+				.map_ok(|state_key| (event_type.clone(), state_key))
+				.ready_filter_map(Result::ok)
+		})
+		.stream()
+		.flatten();
 
 	let required_state = requested_state
 		.iter()
 		.cloned()
-		.chain(timeline_senders)
 		.stream()
+		.chain(wildcard_state)
+		.chain(timeline_senders)
 		.broad_filter_map(async |state| {
 			let state_key: StateKey = match state.1.as_str() {
-				| "$LAZY" => return None,
+				| "$LAZY" | "*" => return None,
 				| "$ME" => sender_user.as_str().into(),
 				| _ => state.1.clone(),
 			};
