@@ -1,26 +1,22 @@
 use futures::StreamExt;
 use ruma::api::client::sync::sync_events::v5::response;
 use tuwunel_core::{self, Result};
-use tuwunel_service::Services;
 
-use super::SyncInfo;
+use super::{Connection, SyncInfo};
 
-#[tracing::instrument(level = "trace", skip_all, fields(globalsince, next_batch))]
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) async fn collect(
-	services: &Services,
-	SyncInfo {
-		sender_user, sender_device, globalsince, ..
-	}: SyncInfo<'_>,
-	next_batch: u64,
+	SyncInfo { services, sender_user, sender_device, .. }: SyncInfo<'_>,
+	conn: &Connection,
 ) -> Result<Option<response::ToDevice>> {
 	services
 		.users
-		.remove_to_device_events(sender_user, sender_device, globalsince)
+		.remove_to_device_events(sender_user, sender_device, conn.globalsince)
 		.await;
 
 	let events: Vec<_> = services
 		.users
-		.get_to_device_events(sender_user, sender_device, None, Some(next_batch))
+		.get_to_device_events(sender_user, sender_device, None, Some(conn.next_batch))
 		.collect()
 		.await;
 
@@ -28,7 +24,7 @@ pub(super) async fn collect(
 		.is_empty()
 		.eq(&false)
 		.then(|| response::ToDevice {
-			next_batch: next_batch.to_string(),
+			next_batch: conn.next_batch.to_string().into(),
 			events,
 		});
 

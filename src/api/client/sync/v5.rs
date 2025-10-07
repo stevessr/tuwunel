@@ -1,73 +1,73 @@
 mod account_data;
 mod e2ee;
+mod filter;
 mod receipts;
 mod room;
+mod selector;
 mod to_device;
 mod typing;
 
-use std::{
-	collections::{BTreeMap, BTreeSet},
-	mem::take,
-	ops::Deref,
-	time::Duration,
-};
+use std::{collections::BTreeMap, fmt::Debug, time::Duration};
 
 use axum::extract::State;
 use futures::{
-	FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt,
-	future::{OptionFuture, join, join3, join5, try_join},
-	pin_mut,
+	FutureExt, TryFutureExt, TryStreamExt,
+	future::{OptionFuture, join, join5, try_join},
 };
 use ruma::{
-	DeviceId, OwnedRoomId, RoomId, UInt, UserId,
+	DeviceId, OwnedRoomId, RoomId, UserId,
 	api::client::sync::sync_events::v5::{
-		Request, Response, request::ExtensionRoomConfig, response,
+		ListId, Request, Response, request::ExtensionRoomConfig, response,
 	},
-	directory::RoomTypeFilter,
 	events::room::member::MembershipState,
-	uint,
 };
 use tokio::time::{Instant, timeout_at};
 use tuwunel_core::{
-	Err, Result, apply,
+	Result, apply, at,
+	debug::INFO_SPAN_LEVEL,
+	err,
 	error::inspect_log,
-	extract_variant, is_equal_to,
-	matrix::TypeStateKey,
+	extract_variant,
+	smallvec::SmallVec,
 	trace,
 	utils::{
-		FutureBoolExt, IterStream, ReadyExt, TryFutureExtExt,
-		future::ReadyEqExt,
-		math::{ruma_from_usize, usize_from_ruma},
+		BoolExt, IterStream, TryFutureExtExt,
 		result::FlatOk,
-		stream::{BroadbandExt, TryBroadbandExt, TryReadyExt, WidebandExt},
+		stream::{TryBroadbandExt, TryReadyExt},
 	},
-	warn,
 };
 use tuwunel_service::{
 	Services,
-	sync::{KnownRooms, ListId, into_connection_key},
+	sync::{Connection, into_connection_key},
 };
 
+use self::{
+	filter::{filter_room, filter_room_meta},
+	selector::selector,
+};
 use super::share_encrypted_room;
-use crate::{Ruma, client::DEFAULT_BUMP_TYPES};
+use crate::Ruma;
 
 #[derive(Copy, Clone)]
 struct SyncInfo<'a> {
+	services: &'a Services,
 	sender_user: &'a UserId,
 	sender_device: &'a DeviceId,
 	request: &'a Request,
-	globalsince: u64,
 }
 
-struct TodoRoom {
-	membership: MembershipState,
-	requested_state: BTreeSet<TypeStateKey>,
-	timeline_limit: usize,
-	roomsince: u64,
+#[derive(Clone, Debug)]
+struct WindowRoom {
+	room_id: OwnedRoomId,
+	membership: Option<MembershipState>,
+	lists: ListIds,
+	ranked: usize,
+	last_count: u64,
 }
 
-type TodoRooms = BTreeMap<OwnedRoomId, TodoRoom>;
+type Window = BTreeMap<OwnedRoomId, WindowRoom>;
 type ResponseLists = BTreeMap<ListId, response::List>;
+type ListIds = SmallVec<[ListId; 1]>;
 
 /// `POST /_matrix/client/unstable/org.matrix.simplified_msc3575/sync`
 /// ([MSC4186])
@@ -81,65 +81,59 @@ type ResponseLists = BTreeMap<ListId, response::List>;
 /// [MSC4186]: https://github.com/matrix-org/matrix-spec-proposals/pull/4186
 #[tracing::instrument(
 	name = "sync",
-	level = "debug",
+	level = INFO_SPAN_LEVEL,
 	skip_all,
 	fields(
-		user_id = %body.sender_user(),
+		user_id = %body.sender_user().localpart(),
 		device_id = %body.sender_device(),
+		conn_id = ?body.body.conn_id.clone().unwrap_or_default(),
+		since = ?body.body.pos.clone().or_else(|| body.body.pos_qrs_.clone()).unwrap_or_default(),
 	)
 )]
 pub(crate) async fn sync_events_v5_route(
 	State(ref services): State<crate::State>,
-	mut body: Ruma<Request>,
+	body: Ruma<Request>,
 ) -> Result<Response> {
-	debug_assert!(DEFAULT_BUMP_TYPES.is_sorted(), "DEFAULT_BUMP_TYPES is not sorted");
-
-	let mut request = take(&mut body.body);
-	let mut globalsince = request
+	let request = &body.body;
+	let since = request
 		.pos
 		.as_ref()
+		.or(request.pos_qrs_.as_ref())
 		.and_then(|string| string.parse().ok())
 		.unwrap_or(0);
 
 	let (sender_user, sender_device) = body.sender();
 	let conn_key = into_connection_key(sender_user, sender_device, request.conn_id.as_deref());
+	let conn_val = since
+		.ne(&0)
+		.then(|| services.sync.find_connection(&conn_key))
+		.unwrap_or_else(|| Ok(services.sync.init_connection(&conn_key)))
+		.map_err(|_| err!(Request(UnknownPos("Connection lost; restarting sync stream."))))?;
 
-	if globalsince != 0 && !services.sync.is_connection_cached(&conn_key) {
-		return Err!(Request(UnknownPos(
-			"Connection data unknown to server; restarting sync stream."
-		)));
-	}
-
-	// Client / User requested an initial sync
-	if globalsince == 0 {
-		services.sync.drop_connection(&conn_key);
-	}
-
-	// Get sticky parameters from cache
-	let known_rooms = services
-		.sync
-		.update_cache(&conn_key, &mut request);
-
-	let sync_info = SyncInfo {
-		sender_user,
-		sender_device,
-		globalsince,
-		request: &request,
-	};
-
-	let lists = handle_lists(services, sync_info, known_rooms);
-
+	let conn = conn_val.lock();
 	let ping_presence = services
 		.presence
 		.maybe_ping_presence(sender_user, &request.set_presence)
 		.inspect_err(inspect_log)
 		.ok();
 
-	let ((known_rooms, todo_rooms, lists), _) = join(lists, ping_presence).await;
+	let (mut conn, _) = join(conn, ping_presence).await;
+
+	conn.update_cache(request);
+	conn.globalsince = since;
+	conn.next_batch = since;
+
+	let sync_info = SyncInfo {
+		services,
+		sender_user,
+		sender_device,
+		request,
+	};
 
 	let timeout = request
 		.timeout
 		.as_ref()
+		.or(request.timeout_qrs_.as_ref())
 		.map(Duration::as_millis)
 		.map(TryInto::try_into)
 		.flat_ok()
@@ -153,53 +147,64 @@ pub(crate) async fn sync_events_v5_route(
 
 	let mut response = Response {
 		txn_id: request.txn_id.clone(),
-		lists,
+		lists: Default::default(),
 		pos: Default::default(),
 		rooms: Default::default(),
 		extensions: Default::default(),
 	};
 
 	loop {
-		let watch_rooms = todo_rooms.keys().map(AsRef::as_ref).stream();
+		let window;
+		(window, response.lists) = selector(&mut conn, sync_info).boxed().await;
+		let watch_rooms = window.keys().map(AsRef::as_ref).stream();
 		let watchers = services
 			.sync
 			.watch(sender_user, sender_device, watch_rooms);
 
-		let next_batch = services.globals.wait_pending().await?;
-		debug_assert!(globalsince <= next_batch, "next_batch is monotonic");
+		conn.next_batch = services.globals.wait_pending().await?;
+		debug_assert!(
+			conn.globalsince <= conn.next_batch,
+			"next_batch should not be greater than since."
+		);
 
-		if globalsince < next_batch {
-			let rooms = handle_rooms(services, sync_info, next_batch, &todo_rooms)
-				.map_ok(|rooms| response.rooms = rooms);
+		if conn.globalsince < conn.next_batch {
+			let rooms =
+				handle_rooms(sync_info, &conn, &window).map_ok(|rooms| response.rooms = rooms);
 
-			let extensions =
-				handle_extensions(services, sync_info, next_batch, &known_rooms, &todo_rooms)
-					.map_ok(|extensions| response.extensions = extensions);
+			let extensions = handle_extensions(sync_info, &conn, &window)
+				.map_ok(|extensions| response.extensions = extensions);
 
 			try_join(rooms, extensions).boxed().await?;
 
+			for room_id in window.keys() {
+				conn.rooms
+					.entry(room_id.into())
+					.or_default()
+					.roomsince = conn.next_batch;
+			}
+
 			if !is_empty_response(&response) {
-				trace!(globalsince, next_batch, "response {response:?}");
-				response.pos = next_batch.to_string().into();
+				response.pos = conn.next_batch.to_string().into();
+				trace!(conn.globalsince, conn.next_batch, "response {response:?}");
 				return Ok(response);
 			}
 		}
 
-		if timeout_at(stop_at, watchers).await.is_err() {
-			trace!(globalsince, next_batch, "timeout; empty response");
-			response.pos = next_batch.to_string().into();
+		if timeout_at(stop_at, watchers).await.is_err() || services.server.is_stopping() {
+			response.pos = conn.next_batch.to_string().into();
+			trace!(conn.globalsince, conn.next_batch, "timeout; empty response");
 			return Ok(response);
 		}
 
 		trace!(
-			globalsince,
-			last_batch = ?next_batch,
+			conn.globalsince,
+			last_batch = ?conn.next_batch,
 			count = ?services.globals.pending_count(),
 			stop_at = ?stop_at,
 			"notified by watcher"
 		);
 
-		globalsince = next_batch;
+		conn.globalsince = conn.next_batch;
 	}
 }
 
@@ -212,360 +217,89 @@ fn is_empty_response(response: &Response) -> bool {
 }
 
 #[tracing::instrument(
-    level = "debug",
-    skip_all,
-    fields(
-        known_rooms = known_rooms.len(),
-    )
-)]
-#[allow(clippy::too_many_arguments)]
-async fn handle_lists(
-	services: &Services,
-	sync_info: SyncInfo<'_>,
-	known_rooms: KnownRooms,
-) -> (KnownRooms, TodoRooms, ResponseLists) {
-	let &SyncInfo {
-		sender_user,
-		sender_device,
-		request,
-		globalsince,
-	} = &sync_info;
-
-	let all_joined_rooms = services
-		.state_cache
-		.rooms_joined(sender_user)
-		.map(ToOwned::to_owned)
-		.collect::<Vec<OwnedRoomId>>();
-
-	let all_invited_rooms = services
-		.state_cache
-		.rooms_invited(sender_user)
-		.map(ToOwned::to_owned)
-		.collect::<Vec<OwnedRoomId>>();
-
-	let all_knocked_rooms = services
-		.state_cache
-		.rooms_knocked(sender_user)
-		.map(ToOwned::to_owned)
-		.collect::<Vec<OwnedRoomId>>();
-
-	let (all_joined_rooms, all_invited_rooms, all_knocked_rooms) =
-		join3(all_joined_rooms, all_invited_rooms, all_knocked_rooms).await;
-
-	let all_invited_rooms = all_invited_rooms.iter().map(AsRef::as_ref);
-	let all_knocked_rooms = all_knocked_rooms.iter().map(AsRef::as_ref);
-	let all_joined_rooms = all_joined_rooms.iter().map(AsRef::as_ref);
-	let all_rooms = all_joined_rooms
-		.clone()
-		.chain(all_invited_rooms.clone())
-		.chain(all_knocked_rooms.clone());
-
-	let mut todo_rooms: TodoRooms = BTreeMap::new();
-	let mut response_lists = ResponseLists::new();
-	for (list_id, list) in &request.lists {
-		let active_rooms: Vec<_> = match list.filters.as_ref().and_then(|f| f.is_invite) {
-			| None => all_rooms.clone().collect(),
-			| Some(true) => all_invited_rooms.clone().collect(),
-			| Some(false) => all_joined_rooms.clone().collect(),
-		};
-
-		let active_rooms = match list.filters.as_ref().map(|f| &f.not_room_types) {
-			| None => active_rooms,
-			| Some(filter) if filter.is_empty() => active_rooms,
-			| Some(value) =>
-				filter_rooms(
-					services,
-					value,
-					&true,
-					active_rooms.iter().stream().map(Deref::deref),
-				)
-				.collect()
-				.await,
-		};
-
-		let mut new_known_rooms: BTreeSet<OwnedRoomId> = BTreeSet::new();
-		let ranges = list.ranges.clone();
-		for mut range in ranges {
-			range.0 = uint!(0);
-			range.1 = range.1.checked_add(uint!(1)).unwrap_or(range.1);
-			range.1 = range
-				.1
-				.clamp(range.0, UInt::try_from(active_rooms.len()).unwrap_or(UInt::MAX));
-
-			let room_ids =
-				active_rooms[usize_from_ruma(range.0)..usize_from_ruma(range.1)].to_vec();
-
-			let new_rooms: BTreeSet<OwnedRoomId> = room_ids
-				.clone()
-				.into_iter()
-				.map(From::from)
-				.collect();
-
-			new_known_rooms.extend(new_rooms);
-			for room_id in room_ids {
-				let todo_room = todo_rooms
-					.entry(room_id.to_owned())
-					.or_insert(TodoRoom {
-						membership: MembershipState::Join,
-						requested_state: BTreeSet::new(),
-						timeline_limit: 0_usize,
-						roomsince: u64::MAX,
-					});
-
-				todo_room.membership = if all_invited_rooms
-					.clone()
-					.any(is_equal_to!(room_id))
-				{
-					MembershipState::Invite
-				} else {
-					MembershipState::Join
-				};
-
-				todo_room.requested_state.extend(
-					list.room_details
-						.required_state
-						.iter()
-						.map(|(ty, sk)| (ty.clone(), sk.as_str().into())),
-				);
-
-				let limit: usize = usize_from_ruma(list.room_details.timeline_limit).min(100);
-				todo_room.timeline_limit = todo_room.timeline_limit.max(limit);
-
-				// 0 means unknown because it got out of date
-				todo_room.roomsince = todo_room.roomsince.min(
-					known_rooms
-						.get(list_id.as_str())
-						.and_then(|k| k.get(room_id))
-						.copied()
-						.unwrap_or(0),
-				);
-			}
-		}
-
-		if let Some(conn_id) = request.conn_id.as_deref() {
-			let conn_key = into_connection_key(sender_user, sender_device, conn_id.into());
-			let list_id = list_id.as_str().into();
-			services
-				.sync
-				.update_known_rooms(&conn_key, list_id, new_known_rooms, globalsince);
-		}
-
-		response_lists.insert(list_id.clone(), response::List {
-			count: ruma_from_usize(active_rooms.len()),
-		});
-	}
-
-	let (known_rooms, todo_rooms) =
-		fetch_subscriptions(services, sync_info, known_rooms, todo_rooms).await;
-
-	(known_rooms, todo_rooms, response_lists)
-}
-
-#[tracing::instrument(
+	name = "rooms",
 	level = "debug",
 	skip_all,
 	fields(
-		global_since,
-		known_rooms = known_rooms.len(),
-		todo_rooms = todo_rooms.len(),
+		next_batch = conn.next_batch,
+		window = window.len(),
 	)
 )]
-async fn fetch_subscriptions(
-	services: &Services,
-	SyncInfo {
-		sender_user,
-		sender_device,
-		globalsince,
-		request,
-	}: SyncInfo<'_>,
-	known_rooms: KnownRooms,
-	todo_rooms: TodoRooms,
-) -> (KnownRooms, TodoRooms) {
-	let subs = (todo_rooms, BTreeSet::new());
-	let (todo_rooms, known_subs) = request
-		.room_subscriptions
-		.iter()
-		.stream()
-		.broad_filter_map(async |(room_id, room)| {
-			let not_exists = services.metadata.exists(room_id).eq(&false);
-			let is_disabled = services.metadata.is_disabled(room_id);
-			let is_banned = services.metadata.is_banned(room_id);
-
-			pin_mut!(not_exists, is_disabled, is_banned);
-			not_exists
-				.or(is_disabled)
-				.or(is_banned)
-				.await
-				.eq(&false)
-				.then_some((room_id, room))
-		})
-		.ready_fold(subs, |(mut todo_rooms, mut known_subs), (room_id, room)| {
-			let todo_room = todo_rooms
-				.entry(room_id.clone())
-				.or_insert(TodoRoom {
-					membership: MembershipState::Join,
-					requested_state: BTreeSet::new(),
-					timeline_limit: 0_usize,
-					roomsince: u64::MAX,
-				});
-
-			todo_room.requested_state.extend(
-				room.required_state
-					.iter()
-					.map(|(ty, sk)| (ty.clone(), sk.as_str().into())),
-			);
-
-			let limit: UInt = room.timeline_limit;
-			todo_room.timeline_limit = todo_room
-				.timeline_limit
-				.max(usize_from_ruma(limit));
-
-			// 0 means unknown because it got out of date
-			todo_room.roomsince = todo_room.roomsince.min(
-				known_rooms
-					.get("subscriptions")
-					.and_then(|k| k.get(room_id))
-					.copied()
-					.unwrap_or(0),
-			);
-
-			known_subs.insert(room_id.clone());
-			(todo_rooms, known_subs)
-		})
-		.await;
-
-	if let Some(conn_id) = request.conn_id.as_deref() {
-		let conn_key = into_connection_key(sender_user, sender_device, conn_id.into());
-		let list_id = "subscriptions".into();
-		services
-			.sync
-			.update_known_rooms(&conn_key, list_id, known_subs, globalsince);
-	}
-
-	(known_rooms, todo_rooms)
-}
-
-#[tracing::instrument(
-	level = "debug",
-	skip_all,
-	fields(?filters, negate)
-)]
-fn filter_rooms<'a, Rooms>(
-	services: &'a Services,
-	filters: &'a [RoomTypeFilter],
-	negate: &'a bool,
-	rooms: Rooms,
-) -> impl Stream<Item = &'a RoomId> + Send + 'a
-where
-	Rooms: Stream<Item = &'a RoomId> + Send + 'a,
-{
-	rooms
-		.wide_filter_map(async |room_id| {
-			match services
-				.state_accessor
-				.get_room_type(room_id)
-				.await
-			{
-				| Ok(room_type) => Some((room_id, Some(room_type))),
-				| Err(e) if e.is_not_found() => Some((room_id, None)),
-				| Err(_) => None,
-			}
-		})
-		.map(|(room_id, room_type)| (room_id, RoomTypeFilter::from(room_type)))
-		.ready_filter_map(|(room_id, room_type_filter)| {
-			let contains = filters.contains(&room_type_filter);
-			let pos = !*negate && (filters.is_empty() || contains);
-			let neg = *negate && !contains;
-
-			(pos || neg).then_some(room_id)
-		})
-}
-
-#[tracing::instrument(
-    level = "debug",
-    skip_all,
-    fields(
-        next_batch,
-        todo_rooms = todo_rooms.len(),
-    )
-)]
 async fn handle_rooms(
-	services: &Services,
 	sync_info: SyncInfo<'_>,
-	next_batch: u64,
-	todo_rooms: &TodoRooms,
+	conn: &Connection,
+	window: &Window,
 ) -> Result<BTreeMap<OwnedRoomId, response::Room>> {
-	let rooms: BTreeMap<_, _> = todo_rooms
+	window
 		.iter()
 		.try_stream()
-		.broad_and_then(async |(room_id, todo_room)| {
-			let room = room::handle(services, next_batch, sync_info, room_id, todo_room).await?;
-
-			Ok((room_id, room))
+		.broad_and_then(async |(room_id, room)| {
+			room::handle(sync_info, conn, room)
+				.map_ok(|room| (room_id, room))
+				.await
 		})
 		.ready_try_filter_map(|(room_id, room)| Ok(room.map(|room| (room_id, room))))
 		.map_ok(|(room_id, room)| (room_id.to_owned(), room))
 		.try_collect()
-		.await?;
-
-	Ok(rooms)
+		.await
 }
 
 #[tracing::instrument(
+	name = "extensions",
 	level = "debug",
 	skip_all,
 	fields(
-		global_since,
-		known_rooms = known_rooms.len(),
+		next_batch = conn.next_batch,
+		window = window.len(),
+		rooms = conn.rooms.len(),
+		subs = conn.subscriptions.len(),
 	)
 )]
 async fn handle_extensions(
-	services: &Services,
 	sync_info: SyncInfo<'_>,
-	next_batch: u64,
-	known_rooms: &KnownRooms,
-	todo_rooms: &TodoRooms,
+	conn: &Connection,
+	window: &Window,
 ) -> Result<response::Extensions> {
-	let SyncInfo { request, .. } = sync_info;
+	let SyncInfo { .. } = sync_info;
 
-	let account_data: OptionFuture<_> = request
+	let account_data: OptionFuture<_> = conn
 		.extensions
 		.account_data
 		.enabled
 		.unwrap_or(false)
-		.then(|| account_data::collect(services, sync_info, next_batch, known_rooms, todo_rooms))
+		.then(|| account_data::collect(sync_info, conn, window))
 		.into();
 
-	let receipts: OptionFuture<_> = request
+	let receipts: OptionFuture<_> = conn
 		.extensions
 		.receipts
 		.enabled
 		.unwrap_or(false)
-		.then(|| receipts::collect(services, sync_info, next_batch, known_rooms, todo_rooms))
+		.then(|| receipts::collect(sync_info, conn, window))
 		.into();
 
-	let typing: OptionFuture<_> = request
+	let typing: OptionFuture<_> = conn
 		.extensions
 		.typing
 		.enabled
 		.unwrap_or(false)
-		.then(|| typing::collect(services, sync_info, next_batch, known_rooms, todo_rooms))
+		.then(|| typing::collect(sync_info, conn, window))
 		.into();
 
-	let to_device: OptionFuture<_> = request
+	let to_device: OptionFuture<_> = conn
 		.extensions
 		.to_device
 		.enabled
 		.unwrap_or(false)
-		.then(|| to_device::collect(services, sync_info, next_batch))
+		.then(|| to_device::collect(sync_info, conn))
 		.into();
 
-	let e2ee: OptionFuture<_> = request
+	let e2ee: OptionFuture<_> = conn
 		.extensions
 		.e2ee
 		.enabled
 		.unwrap_or(false)
-		.then(|| e2ee::collect(services, sync_info, next_batch))
+		.then(|| e2ee::collect(sync_info, conn))
 		.into();
 
 	let (account_data, receipts, typing, to_device, e2ee) =
@@ -582,45 +316,60 @@ async fn handle_extensions(
 	})
 }
 
-fn extension_rooms_todo<'a, ListIter, ConfigIter>(
-	SyncInfo { request, .. }: SyncInfo<'a>,
-	known_rooms: &'a KnownRooms,
-	todo_rooms: &'a TodoRooms,
-	lists: Option<ListIter>,
-	rooms: Option<ConfigIter>,
+#[tracing::instrument(
+	name = "selector",
+	level = "trace",
+	skip_all,
+	fields(?implicit, ?explicit),
+)]
+fn extension_rooms_selector<'a, ListIter, SubsIter>(
+	SyncInfo { .. }: SyncInfo<'a>,
+	conn: &'a Connection,
+	window: &'a Window,
+	implicit: Option<ListIter>,
+	explicit: Option<SubsIter>,
 ) -> impl Iterator<Item = &'a RoomId> + Send + Sync + 'a
 where
-	ListIter: Iterator<Item = &'a ListId> + Clone + Send + Sync + 'a,
-	ConfigIter: Iterator<Item = &'a ExtensionRoomConfig> + Clone + Send + Sync + 'a,
+	ListIter: Iterator<Item = &'a ListId> + Clone + Debug + Send + Sync + 'a,
+	SubsIter: Iterator<Item = &'a ExtensionRoomConfig> + Clone + Debug + Send + Sync + 'a,
 {
-	let lists_explicit = lists.clone().into_iter().flatten();
-
-	let rooms_explicit = rooms
+	let has_all_subscribed = explicit
 		.clone()
 		.into_iter()
 		.flatten()
-		.filter_map(|erc| extract_variant!(erc, ExtensionRoomConfig::Room))
-		.map(AsRef::<RoomId>::as_ref);
+		.any(|erc| matches!(erc, ExtensionRoomConfig::AllSubscribed));
 
-	let lists_requested = request
-		.lists
-		.keys()
-		.filter(move |_| lists.is_none());
+	let all_subscribed = has_all_subscribed
+		.then(|| conn.subscriptions.keys())
+		.into_iter()
+		.flatten()
+		.map(AsRef::as_ref);
 
-	let rooms_implicit = todo_rooms
-		.keys()
-		.map(AsRef::as_ref)
-		.filter(move |_| rooms.is_none());
-
-	lists_explicit
-		.chain(lists_requested)
-		.flat_map(|list_id| {
-			known_rooms
-				.get(list_id.as_str())
+	let rooms_explicit = has_all_subscribed
+		.is_false()
+		.then(move || {
+			explicit
 				.into_iter()
-				.flat_map(BTreeMap::keys)
+				.flatten()
+				.filter_map(|erc| extract_variant!(erc, ExtensionRoomConfig::Room))
+				.map(AsRef::as_ref)
 		})
-		.map(AsRef::as_ref)
+		.into_iter()
+		.flatten();
+
+	let rooms_selected = window
+		.iter()
+		.filter(move |(_, room)| {
+			implicit.as_ref().is_none_or(|lists| {
+				lists
+					.clone()
+					.any(|list| room.lists.contains(list))
+			})
+		})
+		.map(at!(0))
+		.map(AsRef::as_ref);
+
+	all_subscribed
 		.chain(rooms_explicit)
-		.chain(rooms_implicit)
+		.chain(rooms_selected)
 }

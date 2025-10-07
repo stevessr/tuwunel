@@ -9,58 +9,54 @@ use tuwunel_core::{
 	Result,
 	utils::{BoolExt, IterStream, stream::BroadbandExt},
 };
-use tuwunel_service::{Services, rooms::read_receipt::pack_receipts};
+use tuwunel_service::{rooms::read_receipt::pack_receipts, sync::Room};
 
-use super::{KnownRooms, SyncInfo, TodoRoom, TodoRooms, extension_rooms_todo};
+use super::{Connection, SyncInfo, Window, extension_rooms_selector};
 
 #[tracing::instrument(level = "trace", skip_all)]
 pub(super) async fn collect(
-	services: &Services,
 	sync_info: SyncInfo<'_>,
-	next_batch: u64,
-	known_rooms: &KnownRooms,
-	todo_rooms: &TodoRooms,
+	conn: &Connection,
+	window: &Window,
 ) -> Result<response::Receipts> {
-	let SyncInfo { request, .. } = sync_info;
+	let SyncInfo { .. } = sync_info;
 
-	let lists = request
+	let implicit = conn
 		.extensions
 		.receipts
 		.lists
 		.as_deref()
 		.map(<[_]>::iter);
 
-	let rooms = request
+	let explicit = conn
 		.extensions
 		.receipts
 		.rooms
 		.as_deref()
 		.map(<[_]>::iter);
 
-	let rooms = extension_rooms_todo(sync_info, known_rooms, todo_rooms, lists, rooms)
+	let rooms = extension_rooms_selector(sync_info, conn, window, implicit, explicit)
 		.stream()
-		.broad_filter_map(async |room_id| {
-			collect_room(services, sync_info, next_batch, todo_rooms, room_id).await
-		})
+		.broad_filter_map(|room_id| collect_room(sync_info, conn, window, room_id))
 		.collect()
 		.await;
 
 	Ok(response::Receipts { rooms })
 }
 
+#[tracing::instrument(level = "trace", skip_all, fields(room_id))]
 async fn collect_room(
-	services: &Services,
-	SyncInfo { sender_user, .. }: SyncInfo<'_>,
-	next_batch: u64,
-	todo_rooms: &TodoRooms,
+	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
+	conn: &Connection,
+	_window: &Window,
 	room_id: &RoomId,
 ) -> Option<(OwnedRoomId, Raw<SyncReceiptEvent>)> {
-	let &TodoRoom { roomsince, .. } = todo_rooms.get(room_id)?;
+	let &Room { roomsince, .. } = conn.rooms.get(room_id)?;
 	let private_receipt = services
 		.read_receipt
 		.last_privateread_update(sender_user, room_id)
 		.then(async |last_private_update| {
-			if last_private_update <= roomsince || last_private_update > next_batch {
+			if last_private_update <= roomsince || last_private_update > conn.next_batch {
 				return None;
 			}
 
@@ -77,7 +73,7 @@ async fn collect_room(
 
 	let receipts: Vec<Raw<AnySyncEphemeralRoomEvent>> = services
 		.read_receipt
-		.readreceipts_since(room_id, roomsince, Some(next_batch))
+		.readreceipts_since(room_id, roomsince, Some(conn.next_batch))
 		.filter_map(async |(read_user, _ts, v)| {
 			services
 				.users
@@ -92,6 +88,6 @@ async fn collect_room(
 
 	receipts
 		.is_empty()
-		.eq(&false)
+		.is_false()
 		.then(|| (room_id.to_owned(), pack_receipts(receipts.into_iter())))
 }

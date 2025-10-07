@@ -32,7 +32,7 @@ pub(super) async fn list_connections(&self) -> Result {
 	let connections = self.services.sync.list_connections();
 
 	for connection_key in connections {
-		self.write_str(&format!("{connection_key:?}"))
+		self.write_str(&format!("{connection_key:?}\n"))
 			.await?;
 	}
 
@@ -51,7 +51,7 @@ pub(super) async fn show_connection(
 
 	let out;
 	{
-		let cached = cache.lock()?;
+		let cached = cache.lock().await;
 		out = format!("{cached:#?}");
 	};
 

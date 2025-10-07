@@ -22,23 +22,20 @@ use tuwunel_core::{
 		stream::BroadbandExt,
 	},
 };
-use tuwunel_service::Services;
+use tuwunel_service::sync::Connection;
 
 use super::{SyncInfo, share_encrypted_room};
 
-#[tracing::instrument(level = "trace", skip_all, fields(globalsince, next_batch,))]
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) async fn collect(
-	services: &Services,
 	sync_info: SyncInfo<'_>,
-	next_batch: u64,
+	conn: &Connection,
 ) -> Result<response::E2EE> {
-	let SyncInfo {
-		sender_user, sender_device, globalsince, ..
-	} = sync_info;
+	let SyncInfo { services, sender_user, sender_device, .. } = sync_info;
 
 	let keys_changed = services
 		.users
-		.keys_changed(sender_user, globalsince, Some(next_batch))
+		.keys_changed(sender_user, conn.globalsince, Some(conn.next_batch))
 		.map(ToOwned::to_owned)
 		.collect::<HashSet<_>>()
 		.map(|changed| (changed, HashSet::new()));
@@ -48,11 +45,7 @@ pub(super) async fn collect(
 		.state_cache
 		.rooms_joined(sender_user)
 		.map(ToOwned::to_owned)
-		.broad_filter_map(async |room_id| {
-			collect_room(services, sync_info, next_batch, &room_id)
-				.await
-				.ok()
-		})
+		.broad_filter_map(async |room_id| collect_room(sync_info, conn, &room_id).await.ok())
 		.chain(once(keys_changed))
 		.ready_fold((changed, left), |(mut changed, mut left), room| {
 			changed.extend(room.0);
@@ -77,7 +70,7 @@ pub(super) async fn collect(
 		.last_one_time_keys_update(sender_user)
 		.then(|since| -> OptionFuture<_> {
 			since
-				.gt(&globalsince)
+				.gt(&conn.globalsince)
 				.then(|| {
 					services
 						.users
@@ -103,9 +96,8 @@ pub(super) async fn collect(
 
 #[tracing::instrument(level = "trace", skip_all, fields(room_id))]
 async fn collect_room(
-	services: &Services,
-	SyncInfo { sender_user, globalsince, .. }: SyncInfo<'_>,
-	next_batch: u64,
+	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
+	conn: &Connection,
 	room_id: &RoomId,
 ) -> Result<pair_of!(HashSet<OwnedUserId>)> {
 	let current_shortstatehash = services
@@ -115,7 +107,7 @@ async fn collect_room(
 
 	let room_keys_changed = services
 		.users
-		.room_keys_changed(room_id, globalsince, Some(next_batch))
+		.room_keys_changed(room_id, conn.globalsince, Some(conn.next_batch))
 		.map(|(user_id, _)| user_id)
 		.map(ToOwned::to_owned)
 		.collect::<HashSet<_>>();
@@ -130,13 +122,13 @@ async fn collect_room(
 		return Ok(lists);
 	};
 
-	if current_shortstatehash <= globalsince {
+	if current_shortstatehash <= conn.globalsince {
 		return Ok(lists);
 	}
 
 	let Ok(since_shortstatehash) = services
 		.timeline
-		.prev_shortstatehash(room_id, PduCount::Normal(globalsince).saturating_add(1))
+		.prev_shortstatehash(room_id, PduCount::Normal(conn.globalsince).saturating_add(1))
 		.await
 	else {
 		return Ok(lists);
@@ -168,7 +160,7 @@ async fn collect_room(
 	}
 
 	let encrypted_since_last_sync = !since_encryption;
-	let joined_since_last_sync = sender_joined_count.is_ok_and(|count| count > globalsince);
+	let joined_since_last_sync = sender_joined_count.is_ok_and(|count| count > conn.globalsince);
 	let joined_members_burst: OptionFuture<_> = (joined_since_last_sync
 		|| encrypted_since_last_sync)
 		.then(|| {

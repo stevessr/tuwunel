@@ -2,12 +2,7 @@ mod v3;
 mod v5;
 
 use futures::{StreamExt, pin_mut};
-use ruma::{
-	RoomId, UserId,
-	events::TimelineEventType::{
-		self, Beacon, CallInvite, PollStart, RoomEncrypted, RoomMessage, Sticker,
-	},
-};
+use ruma::{RoomId, UserId};
 use tuwunel_core::{
 	Error, PduCount, Result,
 	matrix::pdu::PduEvent,
@@ -16,9 +11,6 @@ use tuwunel_core::{
 use tuwunel_service::Services;
 
 pub(crate) use self::{v3::sync_events_route, v5::sync_events_v5_route};
-
-pub(crate) const DEFAULT_BUMP_TYPES: &[TimelineEventType; 6] =
-	&[CallInvite, PollStart, Beacon, RoomEncrypted, RoomMessage, Sticker];
 
 async fn load_timeline(
 	services: &Services,

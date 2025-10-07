@@ -10,37 +10,34 @@ use tuwunel_core::{
 	Result, debug_error,
 	utils::{IterStream, ReadyExt},
 };
-use tuwunel_service::Services;
 
-use super::{KnownRooms, SyncInfo, TodoRooms, extension_rooms_todo};
+use super::{Connection, SyncInfo, Window, extension_rooms_selector};
 
-#[tracing::instrument(level = "trace", skip_all, fields(globalsince))]
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) async fn collect(
-	services: &Services,
 	sync_info: SyncInfo<'_>,
-	_next_batch: u64,
-	known_rooms: &KnownRooms,
-	todo_rooms: &TodoRooms,
+	conn: &Connection,
+	window: &Window,
 ) -> Result<response::Typing> {
 	use response::Typing;
 
-	let SyncInfo { sender_user, request, .. } = sync_info;
+	let SyncInfo { services, sender_user, .. } = sync_info;
 
-	let lists = request
+	let implicit = conn
 		.extensions
 		.typing
 		.lists
 		.as_deref()
 		.map(<[_]>::iter);
 
-	let rooms = request
+	let explicit = conn
 		.extensions
 		.typing
 		.rooms
 		.as_deref()
 		.map(<[_]>::iter);
 
-	extension_rooms_todo(sync_info, known_rooms, todo_rooms, lists, rooms)
+	extension_rooms_selector(sync_info, conn, window, implicit, explicit)
 		.stream()
 		.filter_map(async |room_id| {
 			services

@@ -4,41 +4,39 @@ use tuwunel_core::{
 	Result, extract_variant,
 	utils::{IterStream, ReadyExt, stream::BroadbandExt},
 };
-use tuwunel_service::Services;
+use tuwunel_service::sync::Room;
 
-use super::{KnownRooms, SyncInfo, TodoRoom, TodoRooms, extension_rooms_todo};
+use super::{Connection, SyncInfo, Window, extension_rooms_selector};
 
-#[tracing::instrument(level = "trace", skip_all, fields(globalsince, next_batch))]
+#[tracing::instrument(level = "trace", skip_all)]
 pub(super) async fn collect(
-	services: &Services,
 	sync_info: SyncInfo<'_>,
-	next_batch: u64,
-	known_rooms: &KnownRooms,
-	todo_rooms: &TodoRooms,
+	conn: &Connection,
+	window: &Window,
 ) -> Result<response::AccountData> {
-	let SyncInfo { sender_user, globalsince, request, .. } = sync_info;
+	let SyncInfo { services, sender_user, .. } = sync_info;
 
-	let lists = request
+	let implicit = conn
 		.extensions
 		.account_data
 		.lists
 		.as_deref()
 		.map(<[_]>::iter);
 
-	let rooms = request
+	let explicit = conn
 		.extensions
 		.account_data
 		.rooms
 		.as_deref()
 		.map(<[_]>::iter);
 
-	let rooms = extension_rooms_todo(sync_info, known_rooms, todo_rooms, lists, rooms)
+	let rooms = extension_rooms_selector(sync_info, conn, window, implicit, explicit)
 		.stream()
 		.broad_filter_map(async |room_id| {
-			let &TodoRoom { roomsince, .. } = todo_rooms.get(room_id)?;
+			let &Room { roomsince, .. } = conn.rooms.get(room_id)?;
 			let changes: Vec<_> = services
 				.account_data
-				.changes_since(Some(room_id), sender_user, roomsince, Some(next_batch))
+				.changes_since(Some(room_id), sender_user, roomsince, Some(conn.next_batch))
 				.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Room))
 				.collect()
 				.await;
@@ -52,7 +50,7 @@ pub(super) async fn collect(
 
 	let global = services
 		.account_data
-		.changes_since(None, sender_user, globalsince, Some(next_batch))
+		.changes_since(None, sender_user, conn.globalsince, Some(conn.next_batch))
 		.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Global))
 		.collect();
 

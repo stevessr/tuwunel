@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, collections::HashSet};
 
 use futures::{
 	FutureExt, StreamExt, TryFutureExt, TryStreamExt,
@@ -6,43 +6,79 @@ use futures::{
 };
 use ruma::{
 	JsOption, MxcUri, OwnedMxcUri, RoomId, UInt, UserId,
-	api::client::sync::sync_events::{UnreadNotificationsCount, v5::response},
-	events::{StateEventType, room::member::MembershipState},
+	api::client::sync::sync_events::{
+		UnreadNotificationsCount,
+		v5::{DisplayName, response},
+	},
+	events::{
+		StateEventType,
+		TimelineEventType::{
+			self, Beacon, CallInvite, PollStart, RoomEncrypted, RoomMessage, Sticker,
+		},
+		room::member::MembershipState,
+	},
 };
 use tuwunel_core::{
-	Result, at, debug_error, is_equal_to,
+	Result, at, debug_error, err, is_equal_to,
 	matrix::{Event, StateKey, pdu::PduCount},
 	ref_at,
-	utils::{IterStream, ReadyExt, TryFutureExtExt, result::FlatOk, stream::BroadbandExt},
+	utils::{
+		BoolExt, IterStream, ReadyExt, TryFutureExtExt, math::usize_from_ruma, result::FlatOk,
+		stream::BroadbandExt,
+	},
 };
-use tuwunel_service::Services;
+use tuwunel_service::{Services, sync::Room};
 
-use super::{SyncInfo, TodoRoom};
-use crate::client::{DEFAULT_BUMP_TYPES, ignored_filter, sync::load_timeline};
+use super::{super::load_timeline, Connection, SyncInfo, WindowRoom};
+use crate::client::ignored_filter;
 
-#[tracing::instrument(level = "debug", skip_all, fields(room_id, roomsince))]
+static DEFAULT_BUMP_TYPES: [TimelineEventType; 6] =
+	[CallInvite, PollStart, Beacon, RoomEncrypted, RoomMessage, Sticker];
+
+#[tracing::instrument(
+	name = "room",
+	level = "debug",
+	skip_all,
+	fields(room_id, roomsince)
+)]
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn handle(
-	services: &Services,
-	next_batch: u64,
-	SyncInfo { sender_user, .. }: SyncInfo<'_>,
-	room_id: &RoomId,
-	&TodoRoom {
-		ref membership,
-		ref requested_state,
-		timeline_limit,
-		roomsince,
-	}: &TodoRoom,
+	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
+	conn: &Connection,
+	WindowRoom { lists, membership, room_id, .. }: &WindowRoom,
 ) -> Result<Option<response::Room>> {
-	let timeline: OptionFuture<_> = membership
-		.ne(&MembershipState::Invite)
+	debug_assert!(DEFAULT_BUMP_TYPES.is_sorted(), "DEFAULT_BUMP_TYPES is not sorted");
+
+	let &Room { roomsince } = conn
+		.rooms
+		.get(room_id)
+		.ok_or_else(|| err!("Missing connection state for {room_id}"))?;
+
+	let is_invite = *membership == Some(MembershipState::Invite);
+	let default_details = (0_usize, HashSet::new());
+	let (timeline_limit, required_state) = lists
+		.iter()
+		.filter_map(|list_id| conn.lists.get(list_id))
+		.map(|list| &list.room_details)
+		.chain(conn.subscriptions.get(room_id).into_iter())
+		.fold(default_details, |(mut timeline_limit, mut required_state), config| {
+			let limit = usize_from_ruma(config.timeline_limit);
+
+			timeline_limit = timeline_limit.max(limit);
+			required_state.extend(config.required_state.clone());
+
+			(timeline_limit, required_state)
+		});
+
+	let timeline: OptionFuture<_> = is_invite
+		.is_false()
 		.then(|| {
 			load_timeline(
 				services,
 				sender_user,
 				room_id,
 				PduCount::Normal(roomsince),
-				Some(PduCount::from(next_batch)),
+				Some(PduCount::from(conn.next_batch)),
 				timeline_limit,
 			)
 		})
@@ -56,7 +92,7 @@ pub(super) async fn handle(
 	let (timeline_pdus, limited, _lastcount) =
 		timeline.unwrap_or_else(|| (Vec::new(), true, PduCount::default()));
 
-	if roomsince != 0 && timeline_pdus.is_empty() && membership.ne(&MembershipState::Invite) {
+	if roomsince != 0 && timeline_pdus.is_empty() && !is_invite {
 		return Ok(None);
 	}
 
@@ -76,7 +112,7 @@ pub(super) async fn handle(
 				.is_ok()
 		})
 		.fold(Option::<UInt>::None, |mut bump_stamp, (_, pdu)| {
-			let ts = pdu.origin_server_ts().get();
+			let ts = pdu.origin_server_ts().0;
 			if bump_stamp.is_none_or(|bump_stamp| bump_stamp < ts) {
 				bump_stamp.replace(ts);
 			}
@@ -84,7 +120,7 @@ pub(super) async fn handle(
 			bump_stamp
 		});
 
-	let lazy = requested_state
+	let lazy = required_state
 		.iter()
 		.any(is_equal_to!(&(StateEventType::RoomMember, "$LAZY".into())));
 
@@ -102,7 +138,7 @@ pub(super) async fn handle(
 		.map(|sender| (StateEventType::RoomMember, StateKey::from_str(sender.as_str())))
 		.stream();
 
-	let wildcard_state = requested_state
+	let wildcard_state = required_state
 		.iter()
 		.filter(|(_, state_key)| state_key == "*")
 		.map(|(event_type, _)| {
@@ -115,7 +151,7 @@ pub(super) async fn handle(
 		.stream()
 		.flatten();
 
-	let required_state = requested_state
+	let required_state = required_state
 		.iter()
 		.cloned()
 		.stream()
@@ -138,8 +174,7 @@ pub(super) async fn handle(
 		.collect();
 
 	// TODO: figure out a timestamp we can use for remote invites
-	let invite_state: OptionFuture<_> = membership
-		.eq(&MembershipState::Invite)
+	let invite_state: OptionFuture<_> = is_invite
 		.then(|| {
 			services
 				.state_cache
@@ -159,6 +194,7 @@ pub(super) async fn handle(
 	let room_name = services
 		.state_accessor
 		.get_name(room_id)
+		.map_ok(Into::into)
 		.map(Result::ok);
 
 	let room_avatar = services
@@ -194,12 +230,17 @@ pub(super) async fn handle(
 		.map_ok(Result::ok)
 		.map(FlatOk::flat_ok);
 
-	let meta = join(room_name, room_avatar);
+	let is_dm = services
+		.state_accessor
+		.is_direct(room_id, sender_user)
+		.map(|is_dm| is_dm.then_some(is_dm));
+
+	let meta = join3(room_name, room_avatar, is_dm);
 	let events = join3(timeline, required_state, invite_state);
 	let member_counts = join(joined_count, invited_count);
 	let notification_counts = join(highlight_count, notification_count);
 	let (
-		(room_name, room_avatar),
+		(room_name, room_avatar, is_dm),
 		(timeline, required_state, invite_state),
 		(joined_count, invited_count),
 		(highlight_count, notification_count),
@@ -211,7 +252,7 @@ pub(super) async fn handle(
 		services,
 		sender_user,
 		room_id,
-		room_name.as_deref(),
+		room_name.as_ref(),
 		room_avatar.as_deref(),
 	)
 	.await?;
@@ -220,14 +261,16 @@ pub(super) async fn handle(
 
 	Ok(Some(response::Room {
 		initial: Some(roomsince == 0),
+		lists: lists.clone(),
+		membership: membership.clone(),
 		name: room_name.or(hero_name),
 		avatar: JsOption::from_option(room_avatar.or(heroes_avatar)),
-		invite_state: invite_state.flatten(),
+		is_dm,
 		required_state,
-		timeline,
-		is_dm: None,
-		prev_batch,
+		invite_state: invite_state.flatten(),
+		prev_batch: prev_batch.as_deref().map(Into::into),
 		limited,
+		timeline,
 		bump_stamp,
 		heroes,
 		num_live,
@@ -237,15 +280,15 @@ pub(super) async fn handle(
 	}))
 }
 
-#[tracing::instrument(level = "debug", skip_all, fields(room_id, roomsince))]
+#[tracing::instrument(name = "heroes", level = "trace", skip_all)]
 #[allow(clippy::type_complexity)]
 async fn calculate_heroes(
 	services: &Services,
 	sender_user: &UserId,
 	room_id: &RoomId,
-	room_name: Option<&str>,
+	room_name: Option<&DisplayName>,
 	room_avatar: Option<&MxcUri>,
-) -> Result<(Option<Vec<response::Hero>>, Option<String>, Option<OwnedMxcUri>)> {
+) -> Result<(Option<Vec<response::Hero>>, Option<DisplayName>, Option<OwnedMxcUri>)> {
 	const MAX_HEROES: usize = 5;
 	let heroes: Vec<_> = services
 		.state_cache
@@ -275,8 +318,10 @@ async fn calculate_heroes(
 			let (name, avatar) = join(name, avatar).await;
 			let hero = response::Hero {
 				user_id,
-				name: name.unwrap_or(content.displayname),
 				avatar: avatar.unwrap_or(content.avatar_url),
+				name: name
+					.unwrap_or(content.displayname)
+					.map(Into::into),
 			};
 
 			Some(hero)
@@ -291,7 +336,7 @@ async fn calculate_heroes(
 			heroes[0]
 				.name
 				.clone()
-				.unwrap_or_else(|| heroes[0].user_id.to_string()),
+				.unwrap_or_else(|| heroes[0].user_id.as_str().into()),
 		),
 		| Ordering::Greater => {
 			let firsts = heroes[1..]
@@ -299,7 +344,7 @@ async fn calculate_heroes(
 				.map(|h| {
 					h.name
 						.clone()
-						.unwrap_or_else(|| h.user_id.to_string())
+						.unwrap_or_else(|| h.user_id.as_str().into())
 				})
 				.collect::<Vec<_>>()
 				.join(", ");
@@ -307,9 +352,9 @@ async fn calculate_heroes(
 			let last = heroes[0]
 				.name
 				.clone()
-				.unwrap_or_else(|| heroes[0].user_id.to_string());
+				.unwrap_or_else(|| heroes[0].user_id.as_str().into());
 
-			Some(format!("{firsts} and {last}"))
+			Some(format!("{firsts} and {last}")).map(Into::into)
 		},
 	};
 
