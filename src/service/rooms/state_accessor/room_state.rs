@@ -99,6 +99,30 @@ where
 		.await
 }
 
+/// Iterates the state_keys for an event_type in the state joined by the
+/// `event_id` from the current state.
+#[implement(super::Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub fn room_state_keys_with_ids<'a, Id>(
+	&'a self,
+	room_id: &'a RoomId,
+	event_type: &'a StateEventType,
+) -> impl Stream<Item = Result<(StateKey, Id)>> + Send + 'a
+where
+	Id: for<'de> Deserialize<'de> + Send + Sized + ToOwned + 'a,
+	<Id as ToOwned>::Owned: Borrow<EventId>,
+{
+	self.services
+		.state
+		.get_room_shortstatehash(room_id)
+		.map_ok(|shortstatehash| {
+			self.state_keys_with_ids(shortstatehash, event_type)
+				.map(Ok)
+		})
+		.map_err(move |e| err!(Database("Missing state for {room_id:?}: {e:?}")))
+		.try_flatten_stream()
+}
+
 /// Iterates the state_keys for an event_type in the state
 #[implement(super::Service)]
 #[tracing::instrument(skip(self), level = "debug")]
