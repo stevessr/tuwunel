@@ -1,3 +1,5 @@
+mod room_tags;
+
 use std::sync::Arc;
 
 use futures::{Stream, StreamExt, TryFutureExt};

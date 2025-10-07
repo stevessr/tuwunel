@@ -1,16 +1,13 @@
-use std::collections::BTreeMap;
-
 use futures::FutureExt;
 use ruma::{
-	RoomId, UserId,
+	UserId,
 	events::{
-		RoomAccountDataEventType, StateEventType,
+		StateEventType,
 		room::{
 			member::{MembershipState, RoomMemberEventContent},
 			message::RoomMessageEventContent,
 			power_levels::RoomPowerLevelsEventContent,
 		},
-		tag::{TagEvent, TagEventContent, TagInfo},
 	},
 };
 use tuwunel_core::{
@@ -137,7 +134,9 @@ pub async fn make_user_admin(&self, user_id: &UserId) -> Result {
 
 	if !room_tag.is_empty() {
 		if let Err(e) = self
-			.set_room_tag(&room_id, user_id, room_tag)
+			.services
+			.account_data
+			.set_room_tag(user_id, &room_id, room_tag.into(), None)
 			.await
 		{
 			error!(?room_id, ?user_id, ?room_tag, "Failed to set tag for admin grant: {e}");
@@ -162,33 +161,6 @@ pub async fn make_user_admin(&self, user_id: &UserId) -> Result {
 	}
 
 	Ok(())
-}
-
-#[implement(super::Service)]
-async fn set_room_tag(&self, room_id: &RoomId, user_id: &UserId, tag: &str) -> Result {
-	let mut event = self
-		.services
-		.account_data
-		.get_room(room_id, user_id, RoomAccountDataEventType::Tag)
-		.await
-		.unwrap_or_else(|_| TagEvent {
-			content: TagEventContent { tags: BTreeMap::new() },
-		});
-
-	event
-		.content
-		.tags
-		.insert(tag.to_owned().into(), TagInfo::new());
-
-	self.services
-		.account_data
-		.update(
-			Some(room_id),
-			user_id,
-			RoomAccountDataEventType::Tag,
-			&serde_json::to_value(event)?,
-		)
-		.await
 }
 
 /// Demote an admin, removing its rights.
