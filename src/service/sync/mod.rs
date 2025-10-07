@@ -6,13 +6,13 @@ use std::{
 };
 
 use ruma::{
-	OwnedDeviceId, OwnedRoomId, OwnedUserId,
+	DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, UserId,
 	api::client::sync::sync_events::v5::{
 		Request, request,
 		request::{AccountData, E2EE, Receipts, ToDevice, Typing},
 	},
 };
-use tuwunel_core::{Result, implement, smallstr::SmallString};
+use tuwunel_core::{Result, err, implement, is_equal_to, smallstr::SmallString};
 use tuwunel_database::Map;
 
 pub struct Service {
@@ -45,7 +45,8 @@ pub struct Cache {
 	extensions: request::Extensions,
 }
 
-type Connections = Mutex<BTreeMap<ConnectionKey, Arc<Mutex<Cache>>>>;
+type Connections = Mutex<BTreeMap<ConnectionKey, Connection>>;
+type Connection = Arc<Mutex<Cache>>;
 pub type ConnectionKey = (OwnedUserId, OwnedDeviceId, Option<ConnectionId>);
 pub type ConnectionId = SmallString<[u8; 16]>;
 
@@ -89,6 +90,7 @@ pub fn update_cache(&self, key: &ConnectionKey, request: &mut Request) -> KnownR
 	Self::update_cache_lists(request, &mut cached);
 	Self::update_cache_subscriptions(request, &mut cached);
 	Self::update_cache_extensions(request, &mut cached);
+
 	cached.known_rooms.clone()
 }
 
@@ -234,6 +236,40 @@ pub fn update_subscriptions(&self, key: &ConnectionKey, subscriptions: Subscript
 }
 
 #[implement(Service)]
+pub fn clear_connections(
+	&self,
+	user_id: Option<&UserId>,
+	device_id: Option<&DeviceId>,
+	conn_id: Option<&ConnectionId>,
+) {
+	self.connections.lock().expect("locked").retain(
+		|(conn_user_id, conn_device_id, conn_conn_id), _| {
+			!(user_id.is_none_or(is_equal_to!(conn_user_id))
+				&& device_id.is_none_or(is_equal_to!(conn_device_id))
+				&& (conn_id.is_none() || conn_id == conn_conn_id.as_ref()))
+		},
+	);
+}
+
+#[implement(Service)]
+pub fn drop_connection(&self, key: &ConnectionKey) {
+	self.connections
+		.lock()
+		.expect("locked")
+		.remove(key);
+}
+
+#[implement(Service)]
+pub fn list_connections(&self) -> Vec<ConnectionKey> {
+	self.connections
+		.lock()
+		.expect("locked")
+		.keys()
+		.cloned()
+		.collect()
+}
+
+#[implement(Service)]
 pub fn get_connection(&self, key: &ConnectionKey) -> Arc<Mutex<Cache>> {
 	self.connections
 		.lock()
@@ -244,11 +280,13 @@ pub fn get_connection(&self, key: &ConnectionKey) -> Arc<Mutex<Cache>> {
 }
 
 #[implement(Service)]
-pub fn forget_connection(&self, key: &ConnectionKey) {
+pub fn find_connection(&self, key: &ConnectionKey) -> Result<Arc<Mutex<Cache>>> {
 	self.connections
 		.lock()
 		.expect("locked")
-		.remove(key);
+		.get(key)
+		.cloned()
+		.ok_or_else(|| err!(Request(NotFound("Connection not found."))))
 }
 
 #[implement(Service)]

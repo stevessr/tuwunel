@@ -112,7 +112,7 @@ pub(crate) async fn sync_events_v5_route(
 
 	// Client / User requested an initial sync
 	if globalsince == 0 {
-		services.sync.forget_connection(&conn_key);
+		services.sync.drop_connection(&conn_key);
 	}
 
 	// Get sticky parameters from cache
