@@ -60,7 +60,7 @@ where
 	}
 }
 
-pub async fn and<I, F>(args: I) -> impl Future<Output = bool> + Send
+pub fn and<I, F>(args: I) -> impl Future<Output = bool> + Send
 where
 	I: Iterator<Item = F> + Send,
 	F: Future<Output = bool> + Send,
@@ -72,7 +72,7 @@ where
 	try_join_all(args).map(|result| result.is_ok())
 }
 
-pub async fn or<I, F>(args: I) -> impl Future<Output = bool> + Send
+pub fn or<I, F>(args: I) -> impl Future<Output = bool> + Send
 where
 	I: Iterator<Item = F> + Send,
 	F: Future<Output = bool> + Send + Unpin,
