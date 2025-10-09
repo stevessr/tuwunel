@@ -396,9 +396,7 @@ pub fn all_user_memberships<'a>(
 	&'a self,
 	user_id: &'a UserId,
 ) -> impl Stream<Item = (MembershipState, &RoomId)> + Send + 'a {
-	use MembershipState::*;
-
-	self.user_memberships(user_id, &[Join, Invite, Knock, Leave])
+	self.user_memberships(user_id, None)
 }
 
 /// Returns an iterator over all specified memberships for a user.
@@ -407,13 +405,13 @@ pub fn all_user_memberships<'a>(
 pub fn user_memberships<'a>(
 	&'a self,
 	user_id: &'a UserId,
-	filter: &[MembershipState],
+	mask: Option<&[MembershipState]>,
 ) -> impl Stream<Item = (MembershipState, &RoomId)> + Send + 'a {
 	use MembershipState::*;
 	use futures::stream::select;
 
-	let joined: OptionFuture<_> = filter
-		.contains(&Join)
+	let joined: OptionFuture<_> = mask
+		.is_none_or(|mask| mask.contains(&Join))
 		.then(|| {
 			self.rooms_joined(user_id)
 				.map(|room_id| (Join, room_id))
@@ -421,8 +419,8 @@ pub fn user_memberships<'a>(
 		})
 		.into();
 
-	let invited: OptionFuture<_> = filter
-		.contains(&Invite)
+	let invited: OptionFuture<_> = mask
+		.is_none_or(|mask| mask.contains(&Invite))
 		.then(|| {
 			self.rooms_invited(user_id)
 				.map(|room_id| (Invite, room_id))
@@ -430,8 +428,8 @@ pub fn user_memberships<'a>(
 		})
 		.into();
 
-	let knocked: OptionFuture<_> = filter
-		.contains(&Knock)
+	let knocked: OptionFuture<_> = mask
+		.is_none_or(|mask| mask.contains(&Knock))
 		.then(|| {
 			self.rooms_knocked(user_id)
 				.map(|room_id| (Knock, room_id))
@@ -439,8 +437,8 @@ pub fn user_memberships<'a>(
 		})
 		.into();
 
-	let left: OptionFuture<_> = filter
-		.contains(&Leave)
+	let left: OptionFuture<_> = mask
+		.is_none_or(|mask| mask.contains(&Leave))
 		.then(|| {
 			self.rooms_left(user_id)
 				.map(|room_id| (Leave, room_id))
