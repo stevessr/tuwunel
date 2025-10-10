@@ -146,6 +146,17 @@ impl Service {
 			.await
 	}
 
+	pub async fn last_receipt_count(
+		&self,
+		room_id: &RoomId,
+		user_id: Option<&UserId>,
+		since: Option<u64>,
+	) -> Result<u64> {
+		self.db
+			.last_receipt_count(room_id, since, user_id)
+			.await
+	}
+
 	pub async fn delete_all_read_receipts(&self, room_id: &RoomId) -> Result {
 		self.db.delete_all_read_receipts(room_id).await
 	}
