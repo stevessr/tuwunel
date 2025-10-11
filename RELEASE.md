@@ -1,57 +1,50 @@
-# Tuwunel 1.4.2
+# Tuwunel 1.4.3
 
-September 12, 2025
+October 10, 2025
 
-Users running maubot, neochat, or any client or bridge not excluded below should update to this patch as soon as possible to reduce unnecessary resource consumption. (see: Bug Fixes)
+### Featured
 
-### New Features
+**Sync Tokens have been eliminated** now with stateless sync. Users should notice a reduction in database size after running this version. Long-time users, including from conduwuit and even Conduit will benefit the most. New users may not notice reductions, but nevertheless will be preventing database growth going forward. With the prior addition of room deletions courtesy of @dasha-uwu, only enhanced media retention remains between Tuwunel and sustainable cost-of-ownership.
 
-- Requested by @alaviss an alternative DNS resolver has been implemented for use with appservices and other configured targets intended for local networks. This passthru performs minimal caching and cannot be used for federation. Enable with `dns_passthru_appservices = true` or specifying hosts in `dns_passthru_domains` (#158)
-
-- Contributed by @tototomate123 a nifty experimental feature can disable push notifications when you're active on one device from being sent to others. This can be enabled with `suppress_push_when_active`. Please thank them when your pocket stops vibrating while chatting on your desktop! (#150)
-
-- Thanks to a report by @DetermineAbsurd the `m.federate` field can be defaulted to false when creating a room using the new `federate_created_rooms` config option. (#151)
-
-- At the request of @grinapo verbose logging builds are now bundled with this release. These builds are found with the feature-set `-logging-` which is otherwise similar to `-all-`. This contains more messages at all levels optimized away in other release modes; it comes at some performance penalty.
-
-- JWT tokens can now be used for authentication on any endpoint which supports UIA. For example: an external forgot-password service can send a token to the `client/account/password` endpoint to reset a user's password. This feature was commissioned and made public by an enterprise sponsor.
+**Sliding Sync has been fixed (Element X)** after a third pass was made to install an entirely new architecture based on the latest evolution of the highly active MSC4186. For background, the first work done earlier this year was for optimization without logical changes to what was inherited from conduwuit. The existing implementation worked by all appearances, but didn't meet specific production quality demands. The second pass made last month to rapidly prepare this passé implementation for production use against highly developed modern clients did not turn out well. More tests passed; fewer things worked. This time the core logic had been rewritten. These three iterations have now modernized the entire module to keep up with the final stages of the specification's development. It is still not perfect, so your input and issue reports are greatly appreciated as always.
 
 ### Enhancements
 
-- Sliding-sync has been significantly refactored. Performance has massively increased with many bugs and compliance issues also fixed. Please be aware we are tracking an issue related to read-marker behavior in Element X. The 🟢 dot does not unconditionally clear at every touch. Whether this is a feature or a bug, or both, is being investigated for v1.5.
+- Configuration options passed after arguments `--option` or `-O` now accept dots to address the TOML tables found in the config file. Thanks to the suggestion by @lucat1 while trying to configure `ldap.bind_password_file` from the command line (#162). This was separately uncovered by @andrewerf trying to configure the `tls` section (#167).
 
-- Hydra backports are now enabled by default. The change should be completely transparent. If you do notice any increased load try to increase the `cache_capacity_modifier` above default.
+- Configuring `log_to_stderr` now provides an explicit way to redirect logging and tracing to stderr. This is often requested for use with systemd.
 
-- Room deletions now also purge synctokens which can be significant to the overall storage consumed by a room. Users who have already deleted rooms please be assured an update planned for v1.5 will deal with cleansing synctokens in general.
+- The `!admin query raw` commands no longer require the redundant `raw-` prefix on every command name.
 
-- Room version 1 and 2 support took a step forward, possibly working for some rooms but is not yet considered adequately supported and the ticket remains open. (#12)
+- Thanks to @SophiaH67 for pointing out that our new verbose-logging docker images aren't very useful without being pushed to registries, then taking the initiative to host it themselves until we corrected that.
 
-- Thanks to @AreYouLoco for contributing an updated Kubernetes [Helm Chart](https://github.com/AreYouLoco/tuwunel-helm); link added to docs.
+- After a report by @munkinasack in (#186), @dasha-uwu determined we could solve a lot of recurring network issues by clearing the well-known cache entry for a destination that becomes unreachable.
+
+- Thanks to @dasha-uwu for general improvements, refactoring and fixes for the room alias and presence subsystems.
+
+- Thanks to a report by @ohitsdylan a cryptic error message from the DNS resolver has now been caught and reworded to indicate a missing or empty `/etc/resolv.conf` (#179).
+
+- Inspired by @boarfish offering due confusion about our many build variants in (#175), some documentation about `x86_64-v1` `-v2` and `-v3` has been improved. Special thanks to @Hashbrown777 for providing a quick one-liner shell script which made its way to the documentation.
+
+- Various performance improvements took place in s2s request handlers, and the ubiquitous matrix event `Pdu` structure.
+
+- Nix builds have been added to CI.
 
 ### Bug Fixes
 
-- **Special thanks to @frebib for investigating a bug which triggers the uploading of unnecessary encryption one-time-keys.** Running over ten maubot instances it became obvious after observing increased resources and laggy bot response. This update removes any excess keys for a device. Thanks to @duckbuster for confirming neochat is affected. Clients confirmed unaffected include: Element, Element X, Nheko. Fractal, Cinny, matrix-rust-sdk and matrix-js-sdk clients and bots are probably unaffected. Mautrix-based bridges are probably affected. Users of unaffected clients should still upgrade.
+- Thanks to @harharlinks for reporting the Code of Conduct link on our github-pages was 404. Also thanks to @Tronde for reporting additional broken links in (#165). This helped discover pages had stopped deploying at some point and needed fixing.
 
-- Thanks @dasha_uwu for refactoring alias resolution logic with fixes to remain compatible with the upcoming element-web release. This was an incredibly valuable contribution which will spare all of us from impending grief; the kind of ahead-of-the-game initiative I don't think a project like this could exist without. (adadafa88f3)
+- Thanks to @agx for contributing a fix for the systemd units on multiple platforms which contained unknown or deprecated keys (#168). And thanks again for adding missing documentation to the well-known sections of the example configuration which many users will greatly appreciate (#173).
 
-- Room deletions now preserve a small number of records to properly synchronize with local clients and remote servers after the room vanishes. Prior behavior is maintained with a `--force` flag added to the command.
+- @mitch9911:matrix.org reported the `device_signing/upload` endpoint was omitted when adding JWT as a UIAA flow to other API's. This was subsequently patched (#169).
 
-- Thanks @scvalex for once again cleaning up our mess after Nix found the github CI was not running doctests. Thank you for contributing the patch 🙏  (#152).
+- The report by @orhtej2 of an invalid `?via` parameter sent by FluffyChat when joining a version 12 room was greatly appreciated, even though there was nothing more we could do on our end (#171). Thanks to @dasha-uwu for triaging and investigating this issue to conclusion.
 
-- Thanks @Tronde for reporting a broken link to the CoC in the mdbook documentation. (#155)
+- Thanks to a follow-up by @alaviss in (#176) the DNS-passthru feature was found to still be enforcing a large minimum-TTL for its DNS cache. This was subsequently corrected.
 
-- Specification compliance required the `/joined_rooms` endpoint be restricted to current members rather than including past members. (4b49aaad53a)
+- Thank you @canarysnort01 for the apropos and rather surgical off-by-one fix to sliding-sync range selection in (#188). Unfortunately this entire unit had to be rewritten for the latest iteration of sliding-sync, but the fix carried value in any case to improve the rewrite.
 
-- Specification compliance required state events be made visible to prior members of a room where `history_visibility=shared`. (86781522b68)
+### Notices
 
-- The `limit` parameter to the `/context` endpoint is now divided with de facto compatibility (matrix-org/matrix-spec#2202)
+It has come to our attention courtesy of @andrewerf that the Arch packages are built with `--no-default-features`. This may be a problem for an ideal experience. The backstory is that conduwuit underwent a "feature skew" over its lifetime which still remains today: our default-features are basically minimal requirements, while `--all-features` should be default features. Let us first take a moment to reiterate our gratitude to AUR package maintainers @drrossum and @kimiblock who have supported this project from the first hours of its existence. No action is required on their part as the plan now is to remove several optional features by the next release to make `--no-default-features` viable. We still recommend default features in general unless this conflicts with AUR policies or philosophies.
 
-- The room avatar in sliding sync is now computed with greater compliance to the specification (3deebeab78f). This builds off earlier work done by @tmayoff in (a340e6786db).
-
-- The canonical alias for a room is considered invalid if the primary alias is missing or removed (7221d466ce8). This is a T&S concern and we encourage reports for any other contexts where this condition should be applied.
-
-- Presence is no longer updated by the private read-receipt or read-marker paths, only public receipts.
-
-### Deprecations
-
-- Hardened Malloc support had to be removed after the build broke. We will gladly add support back upon request or contribution.
