@@ -47,12 +47,12 @@ This document tracks the implementation status of OAuth 2.0 / OIDC support in Tu
 ## Not Yet Implemented ❌
 
 ### Advanced Features
-- [ ] Multiple OAuth provider support (currently single provider)
+- [ ] Concurrent multi-provider support (currently single active provider)
 - [ ] Account linking for existing users
 - [ ] PKCE (Proof Key for Code Exchange) support
 - [ ] Token introspection endpoint
 - [ ] Dynamic client registration
-- [ ] Custom claim mapping rules
+- [ ] Advanced custom claim mapping rules (currently supports basic predefined claims)
 - [ ] OAuth provider metadata caching
 
 ### Testing
@@ -86,11 +86,12 @@ See `docs/oauth.md` for detailed configuration instructions.
 
 ## Known Limitations
 
-1. **Single Provider**: Currently only one OAuth provider can be configured at a time
+1. **Single Active Provider**: While configuration supports multiple provider types (Google, Keycloak, etc.), only one provider can be active at a time
 2. **Manual Routing**: OAuth endpoints need to be manually added to the router
 3. **No Account Linking**: Existing users cannot link their OAuth account
 4. **State Management**: OAuth state parameter is generated but not validated
 5. **Session Storage**: OAuth sessions are not persisted across server restarts
+6. **Basic Claim Mapping**: Only predefined claim fields (sub, name, email) are supported; custom mapping rules not yet implemented
 
 ## Future Work
 
