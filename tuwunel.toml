@@ -1,0 +1,63 @@
+[global]
+# Minimal local test configuration for tuwunel
+
+# MUST be set to a valid domain for Matrix identifiers. For local testing you
+# can use localhost or a dummy name but many clients expect a real-looking
+# hostname. Change as needed for your environment.
+server_name = "shit.aaca.eu.org"
+
+# Where tuwunel will store its database and media. Use a local directory
+# inside the repo for easy cleanup during tests.
+database_path = "./tuwunel-data"
+
+# Bind address and port for local testing. 0.0.0.0 lets you access from
+# other hosts on your network (useful for testing from another device).
+address = ["127.0.0.1"]
+port = 8077
+
+# Allow registration for local testing. If you set this true without a
+# registration token, registration is open to anyone. For quick tests this
+# is fine, but do NOT use in production.
+allow_registration = true
+
+# For local testing, set a registration token to avoid open registration shutdown.
+registration_token = "local-test-token-please-change"
+
+# Default timeouts kept small for tests
+request_conn_timeout = 5
+request_timeout = 15
+request_total_timeout = 60
+
+# Disable OAuth by default for local tests unless you configure it below
+[global.oauth]
+enable = true
+client_id = "NA9bfDF1HNFdBnPEdus1MoDMeVhvLc71"
+client_secret = "9hcZvVRruwi10PMg5iIYxIzJTwV6L1pl"
+# Redirect URI: change if your reverse proxy or client expects a different path.
+# For local testing the server will listen on http://localhost:8008
+redirect_uri = "https://test.aaca.eu.org/_matrix/client/v3/login/sso/callback"
+# Scopes requested from the provider. Keep openid if provider supports OIDC.
+scopes = ["openid", "profile", "email"]
+register_user = true
+enable_discovery = false
+authorization_endpoint = "https://connect.linux.do/oauth2/authorize"
+token_endpoint = "https://connect.linux.do/oauth2/token"
+userinfo_endpoint = "https://connect.linux.do/api/user"
+# Use the provider's unique id field as the subject/localpart for Matrix users
+subject_claim = "id"
+# Use the 'name' claim for displayname if available
+displayname_claim = "name"
+
+# Federation: enable for production; for most local tests you can disable it
+allow_federation = true
+
+# Keep logs human-friendly during local runs
+log = "debug"
+
+# Example: enable well-known client-server delegation checks for production
+# For local testing we leave the defaults.
+
+# Optional: registration token (commented out). If you want registrations
+# to require a token, set registration_token instead of allow_registration.
+# registration_token = "test-token"
+yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true
