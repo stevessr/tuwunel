@@ -1,4 +1,4 @@
-#![type_length_limit = "8192"]
+#![type_length_limit = "98304"]
 #![allow(refining_impl_trait)]
 
 mod manager;

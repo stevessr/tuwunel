@@ -29,7 +29,7 @@ license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/matrix-construct/tuwunel"
 rust-version = "1.88.0"
-version = "1.4.2"
+version = "1.4.3"
 
 [workspace.metadata.crane]
 name = "tuwunel"
@@ -320,7 +320,7 @@ default-features = false
 
 [workspace.dependencies.ruma]
 git = "https://github.com/matrix-construct/ruma"
-rev = "b245c8cb8ab07ebbf7bc250b40385334c3fbf146"
+rev = "3c26be1e4d670c2c71e2bc84b3f09c67c4188612"
 features = [
     "__compat",
     "appservice-api-c",
@@ -353,7 +353,6 @@ features = [
     "unstable-msc4310",
     "unstable-msc4311",
     "unstable-extensible-events",
-    "unstable-hydra",
 ]
 
 [workspace.dependencies.rustls]
@@ -907,6 +906,7 @@ option_if_let_else = { level = "allow", priority = 1 }               # TODO
 redundant_pub_crate = { level = "allow", priority = 1 }              # TODO
 significant_drop_in_scrutinee = { level = "allow", priority = 1 }    # TODO
 significant_drop_tightening = { level = "allow", priority = 1 }      # TODO
+tuple_array_conversions = { level = "allow", priority = 1 }
 
 ###################
 pedantic = { level = "warn", priority = -1 }
@@ -921,6 +921,7 @@ if_then_some_else_none = { level = "allow", priority = 1 }
 inline_always = { level = "allow", priority = 1 }
 map_unwrap_or = { level = "allow", priority = 1 }
 match_bool = { level = "allow", priority = 1 }
+match_same_arms = { level = "allow", priority = 1 }
 missing_docs_in_private_items = { level = "allow", priority = 1 }
 missing_errors_doc = { level = "allow", priority = 1 }
 missing_panics_doc = { level = "allow", priority = 1 }
@@ -966,7 +967,6 @@ pub_without_shorthand = "warn"
 rc_buffer = "warn"
 rc_mutex = "warn"
 redundant_type_annotations = "warn"
-rest_pat_in_fully_bound_structs = "warn"
 semicolon_outside_block = "warn"
 str_to_string = "warn"
 string_lit_chars_any = "warn"

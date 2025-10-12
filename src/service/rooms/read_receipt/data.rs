@@ -7,7 +7,7 @@ use ruma::{
 	serde::Raw,
 };
 use tuwunel_core::{
-	Result, trace,
+	Result, err, is_equal_to, trace,
 	utils::{ReadyExt, stream::TryIgnore},
 };
 use tuwunel_database::{Deserialized, Interfix, Json, Map};
@@ -82,6 +82,28 @@ impl Data {
 				Ok((user_id, count, Raw::from_json(event)))
 			})
 			.ignore_err()
+	}
+
+	#[inline]
+	pub(super) async fn last_receipt_count<'a>(
+		&'a self,
+		room_id: &'a RoomId,
+		since: Option<u64>,
+		user_id: Option<&'a UserId>,
+	) -> Result<u64> {
+		type Key<'a> = (&'a RoomId, u64, &'a UserId);
+
+		let key = (room_id, u64::MAX);
+		self.readreceiptid_readreceipt
+			.rev_keys_prefix(&key)
+			.ignore_err()
+			.ready_take_while(|(_, c, _): &Key<'_>| since.is_none_or(|since| since.gt(c)))
+			.ready_filter(|(_, _, u): &Key<'_>| user_id.as_ref().is_none_or(is_equal_to!(u)))
+			.map(|(_, c, _): Key<'_>| c)
+			.boxed()
+			.next()
+			.await
+			.ok_or_else(|| err!(Request(NotFound("No receipts found in room"))))
 	}
 
 	#[inline]

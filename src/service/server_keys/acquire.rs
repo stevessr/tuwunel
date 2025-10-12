@@ -56,17 +56,16 @@ where
 {
 	let notary_only = self
 		.services
-		.server
 		.config
 		.only_query_trusted_key_servers;
+
 	let notary_first_always = self
 		.services
-		.server
 		.config
 		.query_trusted_key_servers_first;
+
 	let notary_first_on_join = self
 		.services
-		.server
 		.config
 		.query_trusted_key_servers_first_on_join;
 

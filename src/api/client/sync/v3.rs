@@ -163,10 +163,14 @@ pub(crate) async fn sync_events_route(
 		.expect("configuration must limit maximum timeout");
 
 	loop {
-		let watchers = services.sync.watch(sender_user, sender_device);
-		let next_batch = services.globals.wait_pending().await?;
+		let watch_rooms = services.state_cache.rooms_joined(sender_user);
+		let watchers = services
+			.sync
+			.watch(sender_user, sender_device, watch_rooms);
 
+		let next_batch = services.globals.wait_pending().await?;
 		debug_assert!(since <= next_batch, "next_batch is monotonic");
+
 		if since < next_batch || body.body.full_state {
 			let response = build_sync_events(&services, &body, since, next_batch).await?;
 			let empty = response.rooms.is_empty()
@@ -279,7 +283,7 @@ async fn build_sync_events(
 
 	let left_rooms = services
 		.state_cache
-		.rooms_left(sender_user)
+		.rooms_left_state(sender_user)
 		.ready_filter(|(room_id, _)| filter.room.matches(room_id))
 		.broad_filter_map(|(room_id, _)| {
 			handle_left_room(
@@ -299,7 +303,7 @@ async fn build_sync_events(
 
 	let invited_rooms = services
 		.state_cache
-		.rooms_invited(sender_user)
+		.rooms_invited_state(sender_user)
 		.ready_filter(|(room_id, _)| filter.room.matches(room_id))
 		.fold_default(async |mut invited_rooms: BTreeMap<_, _>, (room_id, invite_state)| {
 			let invite_count = services
@@ -323,7 +327,7 @@ async fn build_sync_events(
 
 	let knocked_rooms = services
 		.state_cache
-		.rooms_knocked(sender_user)
+		.rooms_knocked_state(sender_user)
 		.ready_filter(|(room_id, _)| filter.room.matches(room_id))
 		.fold_default(async |mut knocked_rooms: BTreeMap<_, _>, (room_id, knock_state)| {
 			let knock_count = services
@@ -404,7 +408,7 @@ async fn build_sync_events(
 
 	// If the user doesn't share an encrypted room with the target anymore, we need
 	// to tell them
-	let device_list_left: HashSet<_> = left_encrypted_users
+	let device_list_left = left_encrypted_users
 		.into_iter()
 		.stream()
 		.broad_filter_map(async |user_id: OwnedUserId| {
@@ -427,8 +431,8 @@ async fn build_sync_events(
 	Ok(sync_events::v3::Response {
 		account_data: GlobalAccountData { events: account_data },
 		device_lists: DeviceLists {
+			left: device_list_left,
 			changed: device_list_updates.into_iter().collect(),
-			left: device_list_left.into_iter().collect(),
 		},
 		device_one_time_keys_count,
 		// Fallback keys are not yet supported
@@ -1126,11 +1130,8 @@ async fn calculate_state_changes<'a>(
 		.chain(lazy_state_ids.stream())
 		.broad_filter_map(|shorteventid| {
 			services
-				.short
-				.get_eventid_from_short(shorteventid)
-				.and_then(async |event_id: OwnedEventId| {
-					services.timeline.get_pdu(&event_id).await
-				})
+				.timeline
+				.get_pdu_from_shorteventid(shorteventid)
 				.ok()
 		})
 		.collect::<Vec<_>>()

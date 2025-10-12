@@ -1,3 +1,6 @@
+mod direct;
+mod room_tags;
+
 use std::sync::Arc;
 
 use futures::{Stream, StreamExt, TryFutureExt};
@@ -11,10 +14,10 @@ use ruma::{
 };
 use serde::Deserialize;
 use tuwunel_core::{
-	Err, Result, err, implement,
+	Err, Result, at, err, implement,
 	utils::{ReadyExt, result::LogErr, stream::TryIgnore},
 };
-use tuwunel_database::{Deserialized, Handle, Ignore, Json, Map};
+use tuwunel_database::{Deserialized, Handle, Ignore, Interfix, Json, Map};
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
@@ -158,4 +161,28 @@ pub fn changes_since<'a>(
 			.log_err()
 		})
 		.ignore_err()
+}
+
+/// Returns all changes to the account data that happened after `since`.
+#[implement(Service)]
+pub async fn last_count<'a>(
+	&'a self,
+	room_id: Option<&'a RoomId>,
+	user_id: &'a UserId,
+	upper: u64,
+) -> Result<u64> {
+	type Key<'a> = (Option<&'a RoomId>, &'a UserId, u64, Ignore);
+
+	let key = (room_id, user_id, upper, Interfix);
+	self.db
+		.roomuserdataid_accountdata
+		.rev_keys_from(&key)
+		.ignore_err()
+		.ready_take_while(move |(room_id_, user_id_, ..): &Key<'_>| {
+			room_id == *room_id_ && user_id == *user_id_
+		})
+		.map(at!(2))
+		.next()
+		.await
+		.ok_or_else(|| err!(Request(NotFound("No account data found."))))
 }

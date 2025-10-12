@@ -14,7 +14,7 @@ use tracing_subscriber::{
 	registry::LookupSpan,
 };
 
-use crate::{Config, Result, apply};
+use crate::{Config, Result, apply, is_equal_to};
 
 static SYSTEMD_MODE: LazyLock<bool> =
 	LazyLock::new(|| env::var("SYSTEMD_EXEC_PID").is_ok() && env::var("JOURNAL_STREAM").is_ok());
@@ -64,23 +64,16 @@ impl io::Write for &'_ ConsoleWriter {
 }
 
 pub struct ConsoleFormat {
-	_compact: Format<Compact>,
-	full: Format<Full>,
 	pretty: Format<Pretty>,
+	full: Format<Full>,
+	compact: Format<Compact>,
+	compact_mode: bool,
 }
 
 impl ConsoleFormat {
 	#[must_use]
 	pub fn new(config: &Config) -> Self {
 		Self {
-			_compact: fmt::format()
-				.compact()
-				.with_ansi(config.log_colors),
-
-			full: Format::<Full>::default()
-				.with_thread_ids(config.log_thread_ids)
-				.with_ansi(config.log_colors),
-
 			pretty: fmt::format()
 				.pretty()
 				.with_ansi(config.log_colors)
@@ -90,6 +83,16 @@ impl ConsoleFormat {
 				.with_file(true)
 				.with_line_number(true)
 				.with_source_location(true),
+
+			full: Format::<Full>::default()
+				.with_thread_ids(config.log_thread_ids)
+				.with_ansi(config.log_colors),
+
+			compact: fmt::format()
+				.compact()
+				.with_ansi(config.log_colors),
+
+			compact_mode: config.log_compact,
 		}
 	}
 }
@@ -108,9 +111,11 @@ where
 		let is_debug = cfg!(debug_assertions)
 			&& event
 				.fields()
-				.any(|field| field.name() == "_debug");
+				.map(|field| field.name())
+				.any(is_equal_to!("_debug"));
 
 		match *event.metadata().level() {
+			| _ if self.compact_mode => self.compact.format_event(ctx, writer, event),
 			| Level::ERROR if !is_debug => self.pretty.format_event(ctx, writer, event),
 			| _ => self.full.format_event(ctx, writer, event),
 		}

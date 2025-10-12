@@ -260,6 +260,7 @@ jobs:
           {"cargo_profile": "release", "rust_toolchain": "nightly"},
           {"rust_target": "aarch64-unknown-linux-gnu", "feat_set": "default"},
           {"rust_target": "aarch64-unknown-linux-gnu", "feat_set": "logging"},
+          {"rust_target": "aarch64-unknown-linux-gnu", "bake_target": "nix"},
           {"rust_target": "aarch64-unknown-linux-gnu", "sys_target": "x86_64-v1-linux-gnu"},
           {"rust_target": "aarch64-unknown-linux-gnu", "sys_target": "x86_64-v2-linux-gnu"},
           {"rust_target": "aarch64-unknown-linux-gnu", "sys_target": "x86_64-v3-linux-gnu"},
@@ -270,12 +271,15 @@ jobs:
           {"sys_target": "x86_64-v2-linux-gnu", "machine": "ARM64"},
           {"sys_target": "x86_64-v2-linux-gnu", "feat_set": "default"},
           {"sys_target": "x86_64-v2-linux-gnu", "feat_set": "logging"},
+          {"sys_target": "x86_64-v2-linux-gnu", "bake_target": "nix"},
           {"sys_target": "x86_64-v3-linux-gnu", "machine": "ARM64"},
           {"sys_target": "x86_64-v3-linux-gnu", "feat_set": "default"},
           {"sys_target": "x86_64-v3-linux-gnu", "feat_set": "logging"},
+          {"sys_target": "x86_64-v3-linux-gnu", "bake_target": "nix"},
           {"sys_target": "x86_64-v4-linux-gnu", "machine": "ARM64"},
           {"sys_target": "x86_64-v4-linux-gnu", "feat_set": "default"},
           {"sys_target": "x86_64-v4-linux-gnu", "feat_set": "logging"},
+          {"sys_target": "x86_64-v4-linux-gnu", "bake_target": "nix"},
         ]
 
   publish:
@@ -305,13 +309,13 @@ jobs:
       excludes: >
         [
           {"feat_set": "none"},
-          {"feat_set": "logging"},
+          {"feat_set": "default"},
           {"cargo_profile": "test"},
           {"cargo_profile": "bench"},
           {"cargo_profile": "release-debuginfo"},
           {"cargo_profile": "release-native"},
-          {"cargo_profile": "release", "rust_toolchain": "nightly"},
-          {"rust_target": "aarch64-unknown-linux-gnu", "feat_set": "default"},
+          {"rust_toolchain": "nightly"},
+          {"rust_target": "aarch64-unknown-linux-gnu", "feat_set": "logging"},
           {"rust_target": "aarch64-unknown-linux-gnu", "sys_target": "x86_64-v1-linux-gnu"},
           {"rust_target": "aarch64-unknown-linux-gnu", "sys_target": "x86_64-v2-linux-gnu"},
           {"rust_target": "aarch64-unknown-linux-gnu", "sys_target": "x86_64-v3-linux-gnu"},
@@ -320,11 +324,11 @@ jobs:
           {"sys_target": "aarch64-v8-linux-gnu", "machine": "X64"},
           {"sys_target": "x86_64-v1-linux-gnu", "machine": "ARM64"},
           {"sys_target": "x86_64-v2-linux-gnu", "machine": "ARM64"},
-          {"sys_target": "x86_64-v2-linux-gnu", "feat_set": "default"},
+          {"sys_target": "x86_64-v2-linux-gnu", "feat_set": "logging"},
           {"sys_target": "x86_64-v3-linux-gnu", "machine": "ARM64"},
-          {"sys_target": "x86_64-v3-linux-gnu", "feat_set": "default"},
+          {"sys_target": "x86_64-v3-linux-gnu", "feat_set": "logging"},
           {"sys_target": "x86_64-v4-linux-gnu", "machine": "ARM64"},
-          {"sys_target": "x86_64-v4-linux-gnu", "feat_set": "default"},
+          {"sys_target": "x86_64-v4-linux-gnu", "feat_set": "logging"},
         ]
 
     secrets:

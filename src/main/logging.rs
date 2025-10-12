@@ -33,8 +33,8 @@ pub(crate) fn init(
 		.with_ansi(config.log_colors)
 		.with_thread_ids(config.log_thread_ids)
 		.with_span_events(console_span_events)
-		.event_format(ConsoleFormat::new(config))
 		.fmt_fields(ConsoleFormat::new(config))
+		.event_format(ConsoleFormat::new(config))
 		.with_writer(ConsoleWriter::new(config));
 
 	let (console_reload_filter, console_reload_handle) =

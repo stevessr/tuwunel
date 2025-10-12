@@ -470,6 +470,25 @@ target "matrix-rust-sdk-integration" {
     }
 }
 
+target "integration-valgrind" {
+    name = elem("integration-valgrind", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("integration-valgrind", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
+    ]
+    matrix = cargo_rust_feat_sys
+    inherits = [
+        elem("integration", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:integration", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    }
+    args = {
+        VALGRINDFLAGS = "--error-exitcode=1 --exit-on-first-error=yes --undef-value-errors=no --leak-check=no"
+        cargo_cmd = "valgrind test"
+        cargo_args = "--test=*"
+    }
+}
+
 target "integration" {
     name = elem("integration", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
     tags = [
@@ -596,6 +615,26 @@ target "tests-smoke" {
 #
 # Unit tests
 #
+
+target "unit-valgrind" {
+    name = elem("unit-valgrind", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("unit-valgrind", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
+    ]
+    target = "cargo"
+    matrix = cargo_rust_feat_sys
+    inherits = [
+        elem("unit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:unit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    }
+    args = {
+        VALGRINDFLAGS = "--error-exitcode=1 --exit-on-first-error=yes --undef-value-errors=no --leak-check=no"
+        cargo_cmd = "valgrind test"
+        cargo_args = "--lib --bins"
+    }
+}
 
 target "unit" {
     name = elem("unit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -914,13 +953,13 @@ target "build-deb" {
 }
 
 target "nix" {
-    name = elem("nix", [sys_name, sys_version, sys_target])
+    name = elem("nix", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
     tags = [
-        elem_tag("nix", [sys_name, sys_version, sys_target], "latest"),
+        elem_tag("nix", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
     output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
     target = "nix-pkg"
-    matrix = sys
+    matrix = cargo_rust_feat_sys
     inherits = [
         elem("build-nix", [sys_name, sys_version, sys_target]),
     ]
@@ -1636,11 +1675,12 @@ rustup_components = [
 ]
 
 cargo_installs = [
-    "cargo-chef",
     "cargo-audit",
-    "cargo-deb",
     #"cargo-arch",
+    "cargo-chef",
+    "cargo-deb",
     "cargo-generate-rpm",
+    "cargo-valgrind",
     #"lychee",
     "mdbook",
     "typos-cli",
@@ -1737,6 +1777,7 @@ kitchen_packages = [
     "openssl",
     "pkg-config",
     "pkgconf",
+    "valgrind",
     "xz-utils",
 ]
 

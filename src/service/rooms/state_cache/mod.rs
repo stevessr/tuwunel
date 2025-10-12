@@ -6,7 +6,11 @@ use std::{
 	sync::{Arc, RwLock},
 };
 
-use futures::{Stream, StreamExt, future::join5, pin_mut};
+use futures::{
+	Stream, StreamExt,
+	future::{OptionFuture, join5},
+	pin_mut,
+};
 use ruma::{
 	OwnedRoomId, RoomId, ServerName, UserId,
 	events::{AnyStrippedStateEvent, AnySyncStateEvent, room::member::MembershipState},
@@ -16,7 +20,10 @@ use tuwunel_core::{
 	Result, implement,
 	result::LogErr,
 	trace,
-	utils::stream::{BroadbandExt, ReadyExt, TryIgnore},
+	utils::{
+		future::OptionStream,
+		stream::{BroadbandExt, ReadyExt, TryIgnore},
+	},
 	warn,
 };
 use tuwunel_database::{Deserialized, Ignore, Interfix, Map};
@@ -36,13 +43,13 @@ struct Data {
 	roomid_joinedcount: Arc<Map>,
 	roomserverids: Arc<Map>,
 	roomuserid_invitecount: Arc<Map>,
-	roomuserid_joined: Arc<Map>,
+	roomuserid_joinedcount: Arc<Map>,
 	roomuserid_leftcount: Arc<Map>,
 	roomuserid_knockedcount: Arc<Map>,
 	roomuseroncejoinedids: Arc<Map>,
 	serverroomids: Arc<Map>,
 	userroomid_invitestate: Arc<Map>,
-	userroomid_joined: Arc<Map>,
+	userroomid_joinedcount: Arc<Map>,
 	userroomid_leftstate: Arc<Map>,
 	userroomid_knockedstate: Arc<Map>,
 }
@@ -63,13 +70,13 @@ impl crate::Service for Service {
 				roomid_joinedcount: args.db["roomid_joinedcount"].clone(),
 				roomserverids: args.db["roomserverids"].clone(),
 				roomuserid_invitecount: args.db["roomuserid_invitecount"].clone(),
-				roomuserid_joined: args.db["roomuserid_joined"].clone(),
+				roomuserid_joinedcount: args.db["roomuserid_joined"].clone(),
 				roomuserid_leftcount: args.db["roomuserid_leftcount"].clone(),
 				roomuserid_knockedcount: args.db["roomuserid_knockedcount"].clone(),
 				roomuseroncejoinedids: args.db["roomuseroncejoinedids"].clone(),
 				serverroomids: args.db["serverroomids"].clone(),
 				userroomid_invitestate: args.db["userroomid_invitestate"].clone(),
-				userroomid_joined: args.db["userroomid_joined"].clone(),
+				userroomid_joinedcount: args.db["userroomid_joined"].clone(),
 				userroomid_leftstate: args.db["userroomid_leftstate"].clone(),
 				userroomid_knockedstate: args.db["userroomid_knockedstate"].clone(),
 			},
@@ -219,7 +226,7 @@ pub fn room_members<'a>(
 ) -> impl Stream<Item = &UserId> + Send + 'a {
 	let prefix = (room_id, Interfix);
 	self.db
-		.roomuserid_joined
+		.roomuserid_joinedcount
 		.keys_prefix(&prefix)
 		.ignore_err()
 		.map(|(_, user_id): (Ignore, &UserId)| user_id)
@@ -376,10 +383,73 @@ pub async fn get_left_count(&self, room_id: &RoomId, user_id: &UserId) -> Result
 pub async fn get_joined_count(&self, room_id: &RoomId, user_id: &UserId) -> Result<u64> {
 	let key = (room_id, user_id);
 	self.db
-		.roomuserid_joined
+		.roomuserid_joinedcount
 		.qry(&key)
 		.await
 		.deserialized()
+}
+
+/// Returns an iterator over all memberships for a user.
+#[implement(Service)]
+#[inline]
+pub fn all_user_memberships<'a>(
+	&'a self,
+	user_id: &'a UserId,
+) -> impl Stream<Item = (MembershipState, &RoomId)> + Send + 'a {
+	self.user_memberships(user_id, None)
+}
+
+/// Returns an iterator over all specified memberships for a user.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub fn user_memberships<'a>(
+	&'a self,
+	user_id: &'a UserId,
+	mask: Option<&[MembershipState]>,
+) -> impl Stream<Item = (MembershipState, &RoomId)> + Send + 'a {
+	use MembershipState::*;
+	use futures::stream::select;
+
+	let joined: OptionFuture<_> = mask
+		.is_none_or(|mask| mask.contains(&Join))
+		.then(|| {
+			self.rooms_joined(user_id)
+				.map(|room_id| (Join, room_id))
+				.into_future()
+		})
+		.into();
+
+	let invited: OptionFuture<_> = mask
+		.is_none_or(|mask| mask.contains(&Invite))
+		.then(|| {
+			self.rooms_invited(user_id)
+				.map(|room_id| (Invite, room_id))
+				.into_future()
+		})
+		.into();
+
+	let knocked: OptionFuture<_> = mask
+		.is_none_or(|mask| mask.contains(&Knock))
+		.then(|| {
+			self.rooms_knocked(user_id)
+				.map(|room_id| (Knock, room_id))
+				.into_future()
+		})
+		.into();
+
+	let left: OptionFuture<_> = mask
+		.is_none_or(|mask| mask.contains(&Leave))
+		.then(|| {
+			self.rooms_left(user_id)
+				.map(|room_id| (Leave, room_id))
+				.into_future()
+		})
+		.into();
+
+	select(
+		select(joined.stream(), left.stream()),
+		select(invited.stream(), knocked.stream()),
+	)
 }
 
 /// Returns an iterator over all rooms this user joined.
@@ -390,7 +460,7 @@ pub fn rooms_joined<'a>(
 	user_id: &'a UserId,
 ) -> impl Stream<Item = &RoomId> + Send + 'a {
 	self.db
-		.userroomid_joined
+		.userroomid_joinedcount
 		.keys_raw_prefix(user_id)
 		.ignore_err()
 		.map(|(_, room_id): (Ignore, &RoomId)| room_id)
@@ -400,6 +470,45 @@ pub fn rooms_joined<'a>(
 #[implement(Service)]
 #[tracing::instrument(skip(self), level = "debug")]
 pub fn rooms_invited<'a>(
+	&'a self,
+	user_id: &'a UserId,
+) -> impl Stream<Item = &RoomId> + Send + 'a {
+	self.db
+		.userroomid_invitestate
+		.keys_raw_prefix(user_id)
+		.ignore_err()
+		.map(|(_, room_id): (Ignore, &RoomId)| room_id)
+}
+
+/// Returns an iterator over all rooms a user is currently knocking.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub fn rooms_knocked<'a>(
+	&'a self,
+	user_id: &'a UserId,
+) -> impl Stream<Item = &RoomId> + Send + 'a {
+	self.db
+		.userroomid_knockedstate
+		.keys_raw_prefix(user_id)
+		.ignore_err()
+		.map(|(_, room_id): (Ignore, &RoomId)| room_id)
+}
+
+/// Returns an iterator over all rooms a user left.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub fn rooms_left<'a>(&'a self, user_id: &'a UserId) -> impl Stream<Item = &RoomId> + Send + 'a {
+	self.db
+		.userroomid_leftstate
+		.keys_raw_prefix(user_id)
+		.ignore_err()
+		.map(|(_, room_id): (Ignore, &RoomId)| room_id)
+}
+
+/// Returns an iterator over all rooms a user was invited to.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub fn rooms_invited_state<'a>(
 	&'a self,
 	user_id: &'a UserId,
 ) -> impl Stream<Item = StrippedStateEventItem> + Send + 'a {
@@ -419,7 +528,7 @@ pub fn rooms_invited<'a>(
 /// Returns an iterator over all rooms a user is currently knocking.
 #[implement(Service)]
 #[tracing::instrument(skip(self), level = "trace")]
-pub fn rooms_knocked<'a>(
+pub fn rooms_knocked_state<'a>(
 	&'a self,
 	user_id: &'a UserId,
 ) -> impl Stream<Item = StrippedStateEventItem> + Send + 'a {
@@ -429,6 +538,26 @@ pub fn rooms_knocked<'a>(
 	let prefix = (user_id, Interfix);
 	self.db
 		.userroomid_knockedstate
+		.stream_prefix(&prefix)
+		.ignore_err()
+		.map(|((_, room_id), state): KeyVal<'_>| (room_id.to_owned(), state))
+		.map(|(room_id, state)| Ok((room_id, state.deserialize_as_unchecked()?)))
+		.ignore_err()
+}
+
+/// Returns an iterator over all rooms a user left.
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub fn rooms_left_state<'a>(
+	&'a self,
+	user_id: &'a UserId,
+) -> impl Stream<Item = SyncStateEventItem> + Send + 'a {
+	type KeyVal<'a> = (Key<'a>, Raw<Vec<Raw<AnySyncStateEvent>>>);
+	type Key<'a> = (&'a UserId, &'a RoomId);
+
+	let prefix = (user_id, Interfix);
+	self.db
+		.userroomid_leftstate
 		.stream_prefix(&prefix)
 		.ignore_err()
 		.map(|((_, room_id), state): KeyVal<'_>| (room_id.to_owned(), state))
@@ -490,26 +619,6 @@ pub async fn left_state(
 		})
 }
 
-/// Returns an iterator over all rooms a user left.
-#[implement(Service)]
-#[tracing::instrument(skip(self), level = "debug")]
-pub fn rooms_left<'a>(
-	&'a self,
-	user_id: &'a UserId,
-) -> impl Stream<Item = SyncStateEventItem> + Send + 'a {
-	type KeyVal<'a> = (Key<'a>, Raw<Vec<Raw<AnySyncStateEvent>>>);
-	type Key<'a> = (&'a UserId, &'a RoomId);
-
-	let prefix = (user_id, Interfix);
-	self.db
-		.userroomid_leftstate
-		.stream_prefix(&prefix)
-		.ignore_err()
-		.map(|((_, room_id), state): KeyVal<'_>| (room_id.to_owned(), state))
-		.map(|(room_id, state)| Ok((room_id, state.deserialize_as_unchecked()?)))
-		.ignore_err()
-}
-
 #[implement(Service)]
 #[tracing::instrument(skip(self), level = "trace")]
 pub async fn user_membership(
@@ -540,18 +649,17 @@ pub async fn user_membership(
 #[tracing::instrument(skip(self), level = "debug")]
 pub async fn once_joined(&self, user_id: &UserId, room_id: &RoomId) -> bool {
 	let key = (user_id, room_id);
-	self.db
-		.roomuseroncejoinedids
-		.qry(&key)
-		.await
-		.is_ok()
+	self.db.roomuseroncejoinedids.contains(&key).await
 }
 
 #[implement(Service)]
 #[tracing::instrument(skip(self), level = "trace")]
 pub async fn is_joined<'a>(&'a self, user_id: &'a UserId, room_id: &'a RoomId) -> bool {
 	let key = (user_id, room_id);
-	self.db.userroomid_joined.qry(&key).await.is_ok()
+	self.db
+		.userroomid_joinedcount
+		.contains(&key)
+		.await
 }
 
 #[implement(Service)]
@@ -560,9 +668,8 @@ pub async fn is_knocked<'a>(&'a self, user_id: &'a UserId, room_id: &'a RoomId) 
 	let key = (user_id, room_id);
 	self.db
 		.userroomid_knockedstate
-		.qry(&key)
+		.contains(&key)
 		.await
-		.is_ok()
 }
 
 #[implement(Service)]
@@ -571,20 +678,15 @@ pub async fn is_invited(&self, user_id: &UserId, room_id: &RoomId) -> bool {
 	let key = (user_id, room_id);
 	self.db
 		.userroomid_invitestate
-		.qry(&key)
+		.contains(&key)
 		.await
-		.is_ok()
 }
 
 #[implement(Service)]
 #[tracing::instrument(skip(self), level = "trace")]
 pub async fn is_left(&self, user_id: &UserId, room_id: &RoomId) -> bool {
 	let key = (user_id, room_id);
-	self.db
-		.userroomid_leftstate
-		.qry(&key)
-		.await
-		.is_ok()
+	self.db.userroomid_leftstate.contains(&key).await
 }
 
 #[implement(Service)]
@@ -629,16 +731,16 @@ pub async fn delete_room_join_counts(&self, room_id: &RoomId, force: bool) -> Re
 		.await;
 
 	self.db
-		.roomuserid_joined
+		.roomuserid_joinedcount
 		.keys_prefix(&prefix)
 		.ignore_err()
 		.ready_for_each(|key: (&RoomId, &UserId)| {
 			trace!("Removing key: {key:?}");
-			self.db.roomuserid_joined.del(key);
+			self.db.roomuserid_joinedcount.del(key);
 
 			let reverse_key = (key.1, key.0);
 			trace!("Removing reverse key: {reverse_key:?}");
-			self.db.userroomid_joined.del(reverse_key);
+			self.db.userroomid_joinedcount.del(reverse_key);
 		})
 		.await;
 

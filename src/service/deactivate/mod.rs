@@ -124,13 +124,13 @@ impl Service {
 			.services
 			.state_cache
 			.rooms_invited(user_id)
-			.map(|(r, _)| r);
+			.map(ToOwned::to_owned);
 
 		let rooms_knocked = self
 			.services
 			.state_cache
 			.rooms_knocked(user_id)
-			.map(|(r, _)| r);
+			.map(ToOwned::to_owned);
 
 		let all_rooms: Vec<_> = rooms_joined
 			.chain(rooms_invited)

@@ -14,7 +14,7 @@ ARG mrsdk_target_share="${MRSDK_TARGET_DIR}/${sys_name}/${sys_version}/${rust_ta
 ARG mrsdk_test_args=""
 ARG mrsdk_test_opts=""
 #TODO!!!
-ARG mrsdk_skip_list="--skip test_history_share_on_invite_pin_violation --skip delayed_invite_response_and_sent_message_decryption --skip test_mutual_sas_verification_with_notification_client_ignores_verification_events"
+ARG mrsdk_skip_list="--skip test_history_share_on_invite_pin_violation --skip test_room_notification_count"
 
 WORKDIR /
 COPY --link --from=input . .

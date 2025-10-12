@@ -28,8 +28,8 @@ use ruma::{
 	room::RoomType,
 };
 use tuwunel_core::{
-	Result, err,
-	matrix::{Event, room_version, state_res::events::RoomCreateEvent},
+	Result, err, is_true,
+	matrix::{Pdu, room_version, state_res::events::RoomCreateEvent},
 };
 
 pub struct Service {
@@ -65,7 +65,7 @@ impl Service {
 		Ok(RoomPowerLevels::new(power_levels.into(), &rules.authorization, creators))
 	}
 
-	pub async fn get_create(&self, room_id: &RoomId) -> Result<RoomCreateEvent<impl Event>> {
+	pub async fn get_create(&self, room_id: &RoomId) -> Result<RoomCreateEvent<Pdu>> {
 		self.room_state_get(room_id, &StateEventType::RoomCreate, "")
 			.await
 			.map(RoomCreateEvent::new)
@@ -80,6 +80,14 @@ impl Service {
 	pub async fn get_avatar(&self, room_id: &RoomId) -> Result<RoomAvatarEventContent> {
 		self.room_state_get_content(room_id, &StateEventType::RoomAvatar, "")
 			.await
+	}
+
+	pub async fn is_direct(&self, room_id: &RoomId, user_id: &UserId) -> bool {
+		self.get_member(room_id, user_id)
+			.await
+			.ok()
+			.and_then(|content| content.is_direct)
+			.is_some_and(is_true!())
 	}
 
 	pub async fn get_member(

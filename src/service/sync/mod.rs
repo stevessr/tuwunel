@@ -1,21 +1,25 @@
 mod watch;
 
 use std::{
-	collections::{BTreeMap, BTreeSet},
-	sync::{Arc, Mutex, Mutex as StdMutex},
+	collections::BTreeMap,
+	sync::{Arc, Mutex as StdMutex},
 };
 
 use ruma::{
-	OwnedDeviceId, OwnedRoomId, OwnedUserId,
-	api::client::sync::sync_events::v5::{Request, request},
+	DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, UserId,
+	api::client::sync::sync_events::v5::{
+		ConnId as ConnectionId, ListId, Request, request,
+		request::{AccountData, E2EE, Receipts, ToDevice, Typing},
+	},
 };
-use tuwunel_core::{Result, implement, smallstr::SmallString};
+use tokio::sync::Mutex as TokioMutex;
+use tuwunel_core::{Result, err, implement, is_equal_to};
 use tuwunel_database::Map;
 
 pub struct Service {
-	db: Data,
 	services: Arc<crate::services::OnceServices>,
-	snake_connections: DbConnections<SnakeConnectionsKey, SnakeConnectionsVal>,
+	connections: Connections,
+	db: Data,
 }
 
 pub struct Data {
@@ -35,20 +39,27 @@ pub struct Data {
 }
 
 #[derive(Debug, Default)]
-struct SnakeSyncCache {
-	lists: BTreeMap<ListId, request::List>,
-	subscriptions: RoomSubscriptions,
-	known_rooms: KnownRooms,
-	extensions: request::Extensions,
+pub struct Connection {
+	pub lists: Lists,
+	pub rooms: Rooms,
+	pub subscriptions: Subscriptions,
+	pub extensions: request::Extensions,
+	pub globalsince: u64,
+	pub next_batch: u64,
 }
 
-pub type KnownRooms = BTreeMap<ListId, BTreeMap<OwnedRoomId, u64>>;
-pub type RoomSubscriptions = BTreeMap<OwnedRoomId, request::RoomSubscription>;
-pub type SnakeConnectionsKey = (OwnedUserId, OwnedDeviceId, Option<ConnId>);
-type SnakeConnectionsVal = Arc<Mutex<SnakeSyncCache>>;
-type DbConnections<K, V> = Mutex<BTreeMap<K, V>>;
-pub type ListId = SmallString<[u8; 16]>;
-pub type ConnId = SmallString<[u8; 16]>;
+#[derive(Clone, Debug, Default)]
+pub struct Room {
+	pub roomsince: u64,
+}
+
+type Connections = StdMutex<BTreeMap<ConnectionKey, ConnectionVal>>;
+pub type ConnectionVal = Arc<TokioMutex<Connection>>;
+pub type ConnectionKey = (OwnedUserId, OwnedDeviceId, Option<ConnectionId>);
+
+pub type Subscriptions = BTreeMap<OwnedRoomId, request::ListConfig>;
+pub type Lists = BTreeMap<ListId, request::List>;
+pub type Rooms = BTreeMap<OwnedRoomId, Room>;
 
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
@@ -69,208 +80,184 @@ impl crate::Service for Service {
 				userid_lastonetimekeyupdate: args.db["userid_lastonetimekeyupdate"].clone(),
 			},
 			services: args.services.clone(),
-			snake_connections: StdMutex::new(BTreeMap::new()),
+			connections: Default::default(),
 		}))
 	}
 
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
 
-#[implement(Service)]
-pub fn update_snake_sync_request_with_cache(
-	&self,
-	snake_key: &SnakeConnectionsKey,
-	request: &mut Request,
-) -> KnownRooms {
-	let mut cache = self.snake_connections.lock().expect("locked");
-	let cached = Arc::clone(
-		cache
-			.entry(snake_key.clone())
-			.or_insert_with(|| Arc::new(Mutex::new(SnakeSyncCache::default()))),
-	);
+#[implement(Connection)]
+pub fn update_cache(&mut self, request: &Request) {
+	Self::update_cache_lists(request, self);
+	Self::update_cache_subscriptions(request, self);
+	Self::update_cache_extensions(request, self);
+}
 
-	let cached = &mut cached.lock().expect("locked");
-	drop(cache);
-
-	//Request::try_from_http_request(req, path_args);
-	for (list_id, list) in &mut request.lists {
-		if let Some(cached_list) = cached.lists.get(list_id.as_str()) {
-			list_or_sticky(
-				&mut list.room_details.required_state,
-				&cached_list.room_details.required_state,
-			);
-
-			//some_or_sticky(&mut list.include_heroes, cached_list.include_heroes);
-
-			match (&mut list.filters, cached_list.filters.clone()) {
-				| (Some(filters), Some(cached_filters)) => {
-					some_or_sticky(&mut filters.is_invite, cached_filters.is_invite);
-					// TODO (morguldir): Find out how a client can unset this, probably need
-					// to change into an option inside ruma
-					list_or_sticky(&mut filters.not_room_types, &cached_filters.not_room_types);
-				},
-				| (_, Some(cached_filters)) => list.filters = Some(cached_filters),
-				| (Some(list_filters), _) => list.filters = Some(list_filters.clone()),
-				| (..) => {},
-			}
-		}
-
+#[implement(Connection)]
+fn update_cache_lists(request: &Request, cached: &mut Self) {
+	for (list_id, request_list) in &request.lists {
 		cached
 			.lists
-			.insert(list_id.as_str().into(), list.clone());
+			.entry(list_id.clone())
+			.and_modify(|cached_list| {
+				Self::update_cache_list(request_list, cached_list);
+			})
+			.or_insert_with(|| request_list.clone());
 	}
+}
 
+#[implement(Connection)]
+fn update_cache_list(request: &request::List, cached: &mut request::List) {
+	list_or_sticky(&request.room_details.required_state, &mut cached.room_details.required_state);
+
+	match (&request.filters, &mut cached.filters) {
+		| (None, None) => {},
+		| (None, Some(_cached)) => {},
+		| (Some(request), None) => cached.filters = Some(request.clone()),
+		| (Some(request), Some(cached)) => {
+			some_or_sticky(request.is_dm.as_ref(), &mut cached.is_dm);
+			some_or_sticky(request.is_encrypted.as_ref(), &mut cached.is_encrypted);
+			some_or_sticky(request.is_invite.as_ref(), &mut cached.is_invite);
+			list_or_sticky(&request.room_types, &mut cached.room_types);
+			list_or_sticky(&request.not_room_types, &mut cached.not_room_types);
+			list_or_sticky(&request.tags, &mut cached.not_tags);
+			list_or_sticky(&request.spaces, &mut cached.spaces);
+		},
+	}
+}
+
+#[implement(Connection)]
+fn update_cache_subscriptions(request: &Request, cached: &mut Self) {
 	cached
 		.subscriptions
 		.extend(request.room_subscriptions.clone());
-
-	request
-		.room_subscriptions
-		.extend(cached.subscriptions.clone());
-
-	request.extensions.e2ee.enabled = request
-		.extensions
-		.e2ee
-		.enabled
-		.or(cached.extensions.e2ee.enabled);
-
-	request.extensions.to_device.enabled = request
-		.extensions
-		.to_device
-		.enabled
-		.or(cached.extensions.to_device.enabled);
-
-	request.extensions.account_data.enabled = request
-		.extensions
-		.account_data
-		.enabled
-		.or(cached.extensions.account_data.enabled);
-	request.extensions.account_data.lists = request
-		.extensions
-		.account_data
-		.lists
-		.clone()
-		.or_else(|| cached.extensions.account_data.lists.clone());
-	request.extensions.account_data.rooms = request
-		.extensions
-		.account_data
-		.rooms
-		.clone()
-		.or_else(|| cached.extensions.account_data.rooms.clone());
-
-	{
-		let (request, cached) = (&mut request.extensions.typing, &cached.extensions.typing);
-		some_or_sticky(&mut request.enabled, cached.enabled);
-		some_or_sticky(&mut request.rooms, cached.rooms.clone());
-		some_or_sticky(&mut request.lists, cached.lists.clone());
-	};
-	{
-		let (request, cached) = (&mut request.extensions.receipts, &cached.extensions.receipts);
-		some_or_sticky(&mut request.enabled, cached.enabled);
-		some_or_sticky(&mut request.rooms, cached.rooms.clone());
-		some_or_sticky(&mut request.lists, cached.lists.clone());
-	};
-
-	cached.extensions = request.extensions.clone();
-	cached.known_rooms.clone()
 }
 
-#[implement(Service)]
-pub fn update_snake_sync_known_rooms(
-	&self,
-	key: &SnakeConnectionsKey,
-	list_id: ListId,
-	new_cached_rooms: BTreeSet<OwnedRoomId>,
-	globalsince: u64,
-) {
-	assert!(key.2.is_some(), "Some(conn_id) required for this call");
+#[implement(Connection)]
+fn update_cache_extensions(request: &Request, cached: &mut Self) {
+	let request = &request.extensions;
+	let cached = &mut cached.extensions;
 
-	let mut cache = self.snake_connections.lock().expect("locked");
-	let cached = Arc::clone(
-		cache
-			.entry(key.clone())
-			.or_insert_with(|| Arc::new(Mutex::new(SnakeSyncCache::default()))),
-	);
+	Self::update_cache_account_data(&request.account_data, &mut cached.account_data);
+	Self::update_cache_receipts(&request.receipts, &mut cached.receipts);
+	Self::update_cache_typing(&request.typing, &mut cached.typing);
+	Self::update_cache_to_device(&request.to_device, &mut cached.to_device);
+	Self::update_cache_e2ee(&request.e2ee, &mut cached.e2ee);
+}
 
-	let cached = &mut cached.lock().expect("locked");
-	drop(cache);
+#[implement(Connection)]
+fn update_cache_account_data(request: &AccountData, cached: &mut AccountData) {
+	some_or_sticky(request.enabled.as_ref(), &mut cached.enabled);
+	some_or_sticky(request.lists.as_ref(), &mut cached.lists);
+	some_or_sticky(request.rooms.as_ref(), &mut cached.rooms);
+}
 
-	for (room_id, lastsince) in cached
-		.known_rooms
-		.entry(list_id.clone())
-		.or_default()
-		.iter_mut()
-	{
-		if !new_cached_rooms.contains(room_id) {
-			*lastsince = 0;
-		}
+#[implement(Connection)]
+fn update_cache_receipts(request: &Receipts, cached: &mut Receipts) {
+	some_or_sticky(request.enabled.as_ref(), &mut cached.enabled);
+	some_or_sticky(request.rooms.as_ref(), &mut cached.rooms);
+	some_or_sticky(request.lists.as_ref(), &mut cached.lists);
+}
+
+#[implement(Connection)]
+fn update_cache_typing(request: &Typing, cached: &mut Typing) {
+	some_or_sticky(request.enabled.as_ref(), &mut cached.enabled);
+	some_or_sticky(request.rooms.as_ref(), &mut cached.rooms);
+	some_or_sticky(request.lists.as_ref(), &mut cached.lists);
+}
+
+#[implement(Connection)]
+fn update_cache_to_device(request: &ToDevice, cached: &mut ToDevice) {
+	some_or_sticky(request.enabled.as_ref(), &mut cached.enabled);
+}
+
+#[implement(Connection)]
+fn update_cache_e2ee(request: &E2EE, cached: &mut E2EE) {
+	some_or_sticky(request.enabled.as_ref(), &mut cached.enabled);
+}
+
+fn list_or_sticky<T: Clone>(target: &Vec<T>, cached: &mut Vec<T>) {
+	if !target.is_empty() {
+		cached.clone_from(target);
 	}
+}
 
-	let list = cached.known_rooms.entry(list_id).or_default();
-	for room_id in new_cached_rooms {
-		list.insert(room_id, globalsince);
+fn some_or_sticky<T: Clone>(target: Option<&T>, cached: &mut Option<T>) {
+	if let Some(target) = target {
+		cached.replace(target.clone());
 	}
 }
 
 #[implement(Service)]
-pub fn update_snake_sync_subscriptions(
+pub fn clear_connections(
 	&self,
-	key: &SnakeConnectionsKey,
-	subscriptions: RoomSubscriptions,
+	user_id: Option<&UserId>,
+	device_id: Option<&DeviceId>,
+	conn_id: Option<&ConnectionId>,
 ) {
-	let mut cache = self.snake_connections.lock().expect("locked");
-	let cached = Arc::clone(
-		cache
-			.entry(key.clone())
-			.or_insert_with(|| Arc::new(Mutex::new(SnakeSyncCache::default()))),
+	self.connections.lock().expect("locked").retain(
+		|(conn_user_id, conn_device_id, conn_conn_id), _| {
+			!(user_id.is_none_or(is_equal_to!(conn_user_id))
+				&& device_id.is_none_or(is_equal_to!(conn_device_id))
+				&& (conn_id.is_none() || conn_id == conn_conn_id.as_ref()))
+		},
 	);
-
-	let cached = &mut cached.lock().expect("locked");
-	drop(cache);
-
-	cached.subscriptions = subscriptions;
 }
 
 #[implement(Service)]
-pub fn forget_snake_sync_connection(&self, key: &SnakeConnectionsKey) {
-	self.snake_connections
+pub fn drop_connection(&self, key: &ConnectionKey) {
+	self.connections
 		.lock()
 		.expect("locked")
 		.remove(key);
 }
 
 #[implement(Service)]
-pub fn snake_connection_cached(&self, key: &SnakeConnectionsKey) -> bool {
-	self.snake_connections
+pub fn list_connections(&self) -> Vec<ConnectionKey> {
+	self.connections
+		.lock()
+		.expect("locked")
+		.keys()
+		.cloned()
+		.collect()
+}
+
+#[implement(Service)]
+pub fn init_connection(&self, key: &ConnectionKey) -> ConnectionVal {
+	self.connections
+		.lock()
+		.expect("locked")
+		.entry(key.clone())
+		.and_modify(|existing| *existing = ConnectionVal::default())
+		.or_default()
+		.clone()
+}
+
+#[implement(Service)]
+pub fn find_connection(&self, key: &ConnectionKey) -> Result<ConnectionVal> {
+	self.connections
+		.lock()
+		.expect("locked")
+		.get(key)
+		.cloned()
+		.ok_or_else(|| err!(Request(NotFound("Connection not found."))))
+}
+
+#[implement(Service)]
+pub fn contains_connection(&self, key: &ConnectionKey) -> bool {
+	self.connections
 		.lock()
 		.expect("locked")
 		.contains_key(key)
 }
 
 #[inline]
-pub fn into_snake_key<U, D, C>(
-	user_id: U,
-	device_id: D,
-	conn_id: Option<C>,
-) -> SnakeConnectionsKey
+pub fn into_connection_key<U, D, C>(user_id: U, device_id: D, conn_id: Option<C>) -> ConnectionKey
 where
 	U: Into<OwnedUserId>,
 	D: Into<OwnedDeviceId>,
-	C: Into<ConnId>,
+	C: Into<ConnectionId>,
 {
 	(user_id.into(), device_id.into(), conn_id.map(Into::into))
-}
-
-/// load params from cache if body doesn't contain it, as long as it's allowed
-/// in some cases we may need to allow an empty list as an actual value
-fn list_or_sticky<T: Clone>(target: &mut Vec<T>, cached: &Vec<T>) {
-	if target.is_empty() {
-		target.clone_from(cached);
-	}
-}
-
-fn some_or_sticky<T>(target: &mut Option<T>, cached: Option<T>) {
-	if target.is_none() {
-		*target = cached;
-	}
 }
