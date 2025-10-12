@@ -56,7 +56,7 @@ use crate::{
 ### For more information, see:
 ### https://tuwunel.chat/configuration.html
 "#,
-	ignore = "catchall well_known tls blurhashing allow_invalid_tls_certificates ldap jwt \
+	ignore = "catchall well_known tls blurhashing allow_invalid_tls_certificates ldap jwt oauth \
 	          appservice"
 )]
 pub struct Config {
