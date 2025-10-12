@@ -2116,6 +2116,10 @@ pub struct Config {
 
 	// external structure; separate section
 	#[serde(default)]
+	pub oauth: OAuthConfig,
+
+	// external structure; separate section
+	#[serde(default)]
 	pub appservice: BTreeMap<String, AppService>,
 
 	#[serde(flatten)]
@@ -2431,6 +2435,102 @@ pub struct JwtConfig {
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub validate_signature: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[config_example_generator(filename = "tuwunel-example.toml", section = "global.oauth")]
+pub struct OAuthConfig {
+	/// Enable OAuth 2.0 logins
+	///
+	/// default: false
+	#[serde(default)]
+	pub enable: bool,
+
+	/// OAuth 2.0 issuer URL (e.g., https://accounts.google.com)
+	///
+	/// This is the base URL of the OAuth 2.0 authorization server
+	///
+	/// default:
+	#[serde(default)]
+	pub issuer: String,
+
+	/// OAuth 2.0 client ID
+	///
+	/// display: sensitive
+	/// default:
+	#[serde(default)]
+	pub client_id: String,
+
+	/// OAuth 2.0 client secret
+	///
+	/// display: sensitive
+	/// default:
+	#[serde(default)]
+	pub client_secret: String,
+
+	/// OAuth 2.0 redirect URI
+	///
+	/// The redirect URI registered with the OAuth provider
+	///
+	/// default:
+	#[serde(default)]
+	pub redirect_uri: String,
+
+	/// OAuth 2.0 scopes to request
+	///
+	/// default: ["openid", "profile", "email"]
+	#[serde(default = "default_oauth_scopes")]
+	pub scopes: Vec<String>,
+
+	/// Automatically create new user from a valid OAuth claim
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub register_user: bool,
+
+	/// OAuth 2.0 authorization endpoint (optional, can be auto-discovered)
+	///
+	/// default:
+	#[serde(default)]
+	pub authorization_endpoint: Option<String>,
+
+	/// OAuth 2.0 token endpoint (optional, can be auto-discovered)
+	///
+	/// default:
+	#[serde(default)]
+	pub token_endpoint: Option<String>,
+
+	/// OAuth 2.0 userinfo endpoint (optional, can be auto-discovered)
+	///
+	/// default:
+	#[serde(default)]
+	pub userinfo_endpoint: Option<String>,
+
+	/// JWKS (JSON Web Key Set) URI for token verification
+	///
+	/// default:
+	#[serde(default)]
+	pub jwks_uri: Option<String>,
+
+	/// Enable OIDC discovery (.well-known/openid-configuration)
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub enable_discovery: bool,
+
+	/// Claim to use as the Matrix user ID localpart
+	///
+	/// Common values: "sub", "email", "preferred_username"
+	///
+	/// default: "sub"
+	#[serde(default = "default_oauth_subject_claim")]
+	pub subject_claim: String,
+
+	/// Claim to use as the display name
+	///
+	/// default: "name"
+	#[serde(default = "default_oauth_displayname_claim")]
+	pub displayname_claim: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -2963,6 +3063,14 @@ fn default_ldap_name_attribute() -> String { String::from("givenName") }
 fn default_jwt_algorithm() -> String { "HS256".to_owned() }
 
 fn default_jwt_format() -> String { "HMAC".to_owned() }
+
+fn default_oauth_scopes() -> Vec<String> {
+	vec!["openid".to_owned(), "profile".to_owned(), "email".to_owned()]
+}
+
+fn default_oauth_subject_claim() -> String { "sub".to_owned() }
+
+fn default_oauth_displayname_claim() -> String { "name".to_owned() }
 
 fn default_client_sync_timeout_min() -> u64 { 5000 }
 
