@@ -6,11 +6,10 @@ use serde_json::json;
 use tuwunel_core::{Err, Result, err, utils};
 use tuwunel_service::Services;
 
-use crate::Ruma;
 
 /// OAuth 2.0 token response
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OAuthTokenResponse {
+pub(super) struct OAuthTokenResponse {
 	pub access_token: String,
 	pub token_type: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -25,7 +24,7 @@ pub struct OAuthTokenResponse {
 
 /// OAuth 2.0 userinfo response
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OAuthUserInfo {
+pub(super) struct OAuthUserInfo {
 	pub sub: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub name: Option<String>,

@@ -28,7 +28,6 @@ use tuwunel_service::users::device::generate_refresh_token;
 use self::{ldap::ldap_login, password::password_login};
 pub(crate) use self::{
 	logout::{logout_all_route, logout_route},
-	oauth::oauth_redirect_route,
 	refresh::refresh_token_route,
 	token::login_token_route,
 };
