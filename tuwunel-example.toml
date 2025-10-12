@@ -2057,6 +2057,70 @@
 #
 #validate_signature = true
 
+#[global.oauth]
+
+# Enable OAuth 2.0 logins
+#
+#enable = false
+
+# OAuth 2.0 issuer URL (e.g., https://accounts.google.com)
+#
+# This is the base URL of the OAuth 2.0 authorization server
+#
+#issuer =
+
+# OAuth 2.0 client ID
+#
+#client_id =
+
+# OAuth 2.0 client secret
+#
+#client_secret =
+
+# OAuth 2.0 redirect URI
+#
+# The redirect URI registered with the OAuth provider
+#
+#redirect_uri =
+
+# OAuth 2.0 scopes to request
+#
+#scopes = ["openid", "profile", "email"]
+
+# Automatically create new user from a valid OAuth claim
+#
+#register_user = true
+
+# OAuth 2.0 authorization endpoint (optional, can be auto-discovered)
+#
+#authorization_endpoint =
+
+# OAuth 2.0 token endpoint (optional, can be auto-discovered)
+#
+#token_endpoint =
+
+# OAuth 2.0 userinfo endpoint (optional, can be auto-discovered)
+#
+#userinfo_endpoint =
+
+# JWKS (JSON Web Key Set) URI for token verification
+#
+#jwks_uri =
+
+# Enable OIDC discovery (.well-known/openid-configuration)
+#
+#enable_discovery = true
+
+# Claim to use as the Matrix user ID localpart
+#
+# Common values: "sub", "email", "preferred_username"
+#
+#subject_claim = "sub"
+
+# Claim to use as the display name
+#
+#displayname_claim = "name"
+
 #[global.appservice.<ID>]
 
 # The URL for the application service.

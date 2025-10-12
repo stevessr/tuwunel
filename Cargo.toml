@@ -312,7 +312,11 @@ features = [
 	"socks",
 	"hickory-dns",
 	"http2",
+	"json",
 ]
+
+[workspace.dependencies.urlencoding]
+version = "2.1"
 
 [workspace.dependencies.ring]
 version = "0.17"
