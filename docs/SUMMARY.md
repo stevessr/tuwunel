@@ -3,6 +3,7 @@
 - [Introduction](introduction.md)
 - [Configuration](configuration.md)
   - [Examples](configuration/examples.md)
+  - [OAuth 2.0 / OIDC](oauth.md)
 - [Deploying](deploying.md)
   - [Generic](deploying/generic.md)
     - [Reverse Proxy - Caddy](deploying/reverse-proxy-caddy.md)
