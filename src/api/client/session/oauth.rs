@@ -206,13 +206,14 @@ pub(crate) async fn get_or_create_user(
 		// Create new user
 		services
 			.users
-			.create(&user_id, None)
+			.create(&user_id, None, Some("oauth"))
 			.await
 			.map_err(|e| err!(Request(Unknown("Failed to create user: {e}"))))?;
 
 		// Set display name if available
 		if let Some(name) = &userinfo.name {
-			let _ = services.users.set_displayname(&user_id, Some(name.clone())).await;
+			// set_displayname is synchronous (writes to DB map), no await
+			let _ = services.users.set_displayname(&user_id, Some(name.clone()));
 		}
 	}
 
