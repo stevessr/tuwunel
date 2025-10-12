@@ -62,7 +62,6 @@ pub(super) use media::*;
 pub(super) use media_legacy::*;
 pub(super) use membership::*;
 pub(super) use message::*;
-pub(super) use oidc::*;
 pub(super) use openid::*;
 pub(super) use presence::*;
 pub(super) use profile::*;
