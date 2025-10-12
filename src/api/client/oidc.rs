@@ -3,11 +3,10 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use tuwunel_core::{Err, Result};
 
-use crate::Ruma;
 
 /// OIDC Discovery metadata
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct OidcDiscovery {
+pub(crate) struct OidcDiscovery {
 	pub issuer: String,
 	pub authorization_endpoint: String,
 	pub token_endpoint: String,
@@ -74,7 +73,7 @@ pub(crate) async fn oidc_discovery_route(
 
 /// Matrix OAuth 2.0 account metadata
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct MatrixOAuthAccount {
+pub(crate) struct MatrixOAuthAccount {
 	pub issuer: String,
 	pub account: String,
 }
