@@ -1,6 +1,6 @@
 use axum::{Json, extract::State, response::IntoResponse};
 use ruma::api::client::discovery::{
-	discover_homeserver::{self, HomeserverInfo, RtcFocusInfo},
+	discover_homeserver::{self, HomeserverInfo, RtcFocusInfo, IdentityServerInfo},
 	discover_support::{self, Contact},
 };
 use serde_json::Value as JsonValue;
@@ -22,9 +22,9 @@ struct ExtendedClientDiscovery {
 	#[serde(rename = "m.homeserver")]
 	homeserver: HomeserverInfo,
 	#[serde(rename = "m.identity_server", skip_serializing_if = "Option::is_none")]
-	identity_server: Option<ruma::api::client::discovery::discover_homeserver::IdentityServerInfo>,
+	identity_server: Option<IdentityServerInfo>,
 	#[serde(rename = "org.matrix.msc3575.proxy", skip_serializing_if = "Option::is_none")]
-	tile_server: Option<ruma::api::client::discovery::discover_homeserver::SlidingSyncProxyInfo>,
+	tile_server: Option<JsonValue>,
 	// MSC3861: OAuth authentication information
 	#[serde(rename = "org.matrix.msc2965.authentication", skip_serializing_if = "Option::is_none")]
 	authentication: Option<AuthenticationInfo>,

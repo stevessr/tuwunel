@@ -59,7 +59,13 @@ pub struct Room {
 
 type Connections = TokioMutex<BTreeMap<ConnectionKey, ConnectionVal>>;
 pub type ConnectionVal = Arc<TokioMutex<Connection>>;
-pub type ConnectionKey = (OwnedUserId, OwnedDeviceId, Option<ConnectionId>);
+/// ConnectionKey is used to identify client sync connections.
+///
+/// We include an optional `x_forwarded_for` string so that when the server is
+/// behind a proxy that sets `X-Forwarded-For` we can key the connection cache
+/// on that header as well. This allows caching/lookup to behave correctly when
+/// requests are forwarded and the client IP differs from the TCP peer.
+pub type ConnectionKey = (OwnedUserId, OwnedDeviceId, Option<ConnectionId>, Option<String>);
 
 pub type Subscriptions = BTreeMap<OwnedRoomId, request::ListConfig>;
 pub type Lists = BTreeMap<ListId, request::List>;
@@ -367,4 +373,88 @@ fn some_or_sticky<T: Clone>(target: Option<&T>, cached: &mut Option<T>) {
 	if let Some(target) = target {
 		cached.replace(target.clone());
 	}
+}
+
+#[implement(Service)]
+pub fn clear_connections(
+	&self,
+	user_id: Option<&UserId>,
+	device_id: Option<&DeviceId>,
+	conn_id: Option<&ConnectionId>,
+) {
+	self.connections.lock().expect("locked").retain(
+		|(conn_user_id, conn_device_id, conn_conn_id, _conn_xff), _| {
+			!(user_id.is_none_or(is_equal_to!(conn_user_id))
+				&& device_id.is_none_or(is_equal_to!(conn_device_id))
+				&& (conn_id.is_none() || conn_id == conn_conn_id.as_ref()))
+		},
+	);
+}
+
+#[implement(Service)]
+pub fn drop_connection(&self, key: &ConnectionKey) {
+	self.connections
+		.lock()
+		.expect("locked")
+		.remove(key);
+}
+
+#[implement(Service)]
+pub fn list_connections(&self) -> Vec<ConnectionKey> {
+	self.connections
+		.lock()
+		.expect("locked")
+		.keys()
+		.cloned()
+		.collect()
+}
+
+#[implement(Service)]
+pub fn init_connection(&self, key: &ConnectionKey) -> ConnectionVal {
+	self.connections
+		.lock()
+		.expect("locked")
+		.entry(key.clone())
+		.and_modify(|existing| *existing = ConnectionVal::default())
+		.or_default()
+		.clone()
+}
+
+#[implement(Service)]
+pub fn find_connection(&self, key: &ConnectionKey) -> Result<ConnectionVal> {
+	self.connections
+		.lock()
+		.expect("locked")
+		.get(key)
+		.cloned()
+		.ok_or_else(|| err!(Request(NotFound("Connection not found."))))
+}
+
+#[implement(Service)]
+pub fn contains_connection(&self, key: &ConnectionKey) -> bool {
+	self.connections
+		.lock()
+		.expect("locked")
+		.contains_key(key)
+}
+
+#[inline]
+pub fn into_connection_key<U, D, C, S>(
+	user_id: U,
+	device_id: D,
+	conn_id: Option<C>,
+	x_forwarded_for: Option<S>,
+) -> ConnectionKey
+where
+	U: Into<OwnedUserId>,
+	D: Into<OwnedDeviceId>,
+	C: Into<ConnectionId>,
+	S: Into<String>,
+{
+	(
+		user_id.into(),
+		device_id.into(),
+		conn_id.map(Into::into),
+		x_forwarded_for.map(Into::into),
+	)
 }
