@@ -2,6 +2,10 @@
 
 Tuwunel now supports OAuth 2.0 and OpenID Connect (OIDC) authentication, allowing users to log in using external identity providers like Google, GitHub, Keycloak, or any other OAuth 2.0/OIDC compliant provider.
 
+This implementation includes support for:
+- **MSC2965**: OIDC-aware clients discovery
+- **MSC3861**: Matrix + OIDC native integration for account management
+
 ## Configuration
 
 Add the following section to your `tuwunel.toml` configuration file:
@@ -55,7 +59,42 @@ subject_claim = "sub"
 # Claim to use as the display name
 # Default: "name"
 displayname_claim = "name"
+
+# MSC3861: Account management URL (optional)
+# URL where users can manage their account settings at the OAuth provider
+# account_management_url = "https://accounts.google.com/myaccount"
+
+# MSC3861: Enable experimental OAuth delegation mode (optional)
+# When enabled, provides additional OAuth delegation features
+# Default: false
+# experimental_msc3861 = false
 ```
+
+## MSC3861: Native OIDC Integration
+
+MSC3861 defines native integration between Matrix and OpenID Connect providers, enabling:
+
+- **Account Management**: Direct links to OAuth provider account pages
+- **Unified Authentication**: OAuth provider handles all authentication
+- **Better Client Experience**: Seamless integration with OIDC-aware Matrix clients
+
+### Enabling MSC3861 Features
+
+To enable experimental MSC3861 support, add to your configuration:
+
+```toml
+[global.oauth]
+enable = true
+experimental_msc3861 = true
+account_management_url = "https://your-provider.com/account"
+issuer = "https://your-provider.com"
+# ... other OAuth settings
+```
+
+This enables:
+- `/.well-known/matrix/client` includes authentication issuer information
+- `/_matrix/client/unstable/org.matrix.msc3861/account_management` endpoint
+- Account management actions in OIDC discovery
 
 ## Setting up with common providers
 

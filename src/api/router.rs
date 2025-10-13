@@ -40,6 +40,12 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 	.route("/_matrix/client/v3/login/sso/redirect", get(client::session::oauth::oauth_redirect_route))
 	// OAuth SSO callback endpoint: provider will redirect here with code & state
 	.route("/_matrix/client/v3/login/sso/callback", get(client::session::oauth::oauth_callback_route))
+	// MSC2965: OAuth issuer discovery
+	.route("/_matrix/client/unstable/org.matrix.msc2965/auth_issuer", get(client::oidc::oauth_issuer_route))
+	// MSC3861: Account management information
+	.route("/_matrix/client/unstable/org.matrix.msc3861/account_management", get(client::oidc::msc3861_account_management_route))
+	// OIDC discovery endpoint
+	.route("/.well-known/openid-configuration", get(client::oidc::oidc_discovery_route))
 		.ruma_route(&client::login_token_route)
 		.ruma_route(&client::refresh_token_route)
 		.ruma_route(&client::whoami_route)

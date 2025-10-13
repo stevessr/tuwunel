@@ -2531,6 +2531,22 @@ pub struct OAuthConfig {
 	/// default: "name"
 	#[serde(default = "default_oauth_displayname_claim")]
 	pub displayname_claim: String,
+
+	/// MSC3861: Account management URL
+	///
+	/// URL where users can manage their OAuth account
+	///
+	/// default:
+	#[serde(default)]
+	pub account_management_url: Option<String>,
+
+	/// MSC3861: Enable experimental OAuth delegation mode
+	///
+	/// When enabled, Matrix tokens are delegated to the OAuth provider
+	///
+	/// default: false
+	#[serde(default)]
+	pub experimental_msc3861: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
