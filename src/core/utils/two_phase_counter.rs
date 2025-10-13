@@ -192,7 +192,9 @@ impl<F: Fn(u64) -> Result + Sync> State<F> {
 
 	/// Check for `id` in the pending list sequentially (for debug and assertion
 	/// purposes only)
-	fn check_pending(&self, id: u64) -> bool { self.pending.iter().any(is_equal_to!(&id)) }
+	fn check_pending(&self, id: u64) -> bool {
+		self.pending.iter().any(is_equal_to!(&id))
+	}
 }
 
 impl<F: Fn(u64) -> Result + Sync> Permit<F> {
@@ -200,19 +202,25 @@ impl<F: Fn(u64) -> Result + Sync> Permit<F> {
 	/// This may be outdated prior to access. Obtained as a courtesy under lock.
 	#[inline]
 	#[must_use]
-	pub fn retired(&self) -> &u64 { &self.retired }
+	pub fn retired(&self) -> &u64 {
+		&self.retired
+	}
 
 	/// Access the sequence number obtained by this permit; a unique value
 	#[inline]
 	#[must_use]
-	pub fn id(&self) -> &u64 { &self.id }
+	pub fn id(&self) -> &u64 {
+		&self.id
+	}
 }
 
 impl<F: Fn(u64) -> Result + Sync> Deref for Permit<F> {
 	type Target = u64;
 
 	#[inline]
-	fn deref(&self) -> &Self::Target { self.id() }
+	fn deref(&self) -> &Self::Target {
+		self.id()
+	}
 }
 
 impl<F: Fn(u64) -> Result + Sync> Drop for Permit<F> {

@@ -9,7 +9,9 @@ fn dummy() {}
 
 #[test]
 #[should_panic = "dummy"]
-fn panic_dummy() { panic!("dummy") }
+fn panic_dummy() {
+	panic!("dummy")
+}
 
 #[test]
 fn smoke() -> Result {

@@ -184,8 +184,9 @@ pub async fn revoke_admin(&self, user_id: &UserId) -> Result {
 
 		| Err(e) => return Err!(error!(?e, "Failure occurred while attempting revoke.")),
 
-		| Ok(event) if !matches!(event.membership, Invite | Knock | Join) =>
-			return Err!("Cannot revoke {user_id} in membership state {:?}.", event.membership),
+		| Ok(event) if !matches!(event.membership, Invite | Knock | Join) => {
+			return Err!("Cannot revoke {user_id} in membership state {:?}.", event.membership);
+		},
 
 		| Ok(event) => {
 			assert!(
@@ -200,14 +201,17 @@ pub async fn revoke_admin(&self, user_id: &UserId) -> Result {
 	self.services
 		.timeline
 		.build_and_append_pdu(
-			PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-				membership: Leave,
-				reason: Some("Admin Revoked".into()),
-				is_direct: None,
-				join_authorized_via_users_server: None,
-				third_party_invite: None,
-				..event
-			}),
+			PduBuilder::state(
+				user_id.to_string(),
+				&RoomMemberEventContent {
+					membership: Leave,
+					reason: Some("Admin Revoked".into()),
+					is_direct: None,
+					join_authorized_via_users_server: None,
+					third_party_invite: None,
+					..event
+				},
+			),
 			self.services.globals.server_user.as_ref(),
 			&room_id,
 			&state_lock,
