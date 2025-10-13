@@ -156,16 +156,13 @@ pub async fn leave(
 		self.services
 			.timeline
 			.build_and_append_pdu(
-				PduBuilder::state(
-					user_id.to_string(),
-					&RoomMemberEventContent {
-						membership: MembershipState::Leave,
-						reason,
-						join_authorized_via_users_server: None,
-						is_direct: None,
-						..event
-					},
-				),
+				PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
+					membership: MembershipState::Leave,
+					reason,
+					join_authorized_via_users_server: None,
+					is_direct: None,
+					..event
+				}),
 				user_id,
 				room_id,
 				state_lock,

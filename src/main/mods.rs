@@ -163,6 +163,4 @@ fn restart_thresh() -> usize {
 		.unwrap_or(MODULE_NAMES.len())
 }
 
-const fn available() -> usize {
-	MODULE_NAMES.len()
-}
+const fn available() -> usize { MODULE_NAMES.len() }

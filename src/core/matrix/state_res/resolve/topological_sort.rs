@@ -31,9 +31,7 @@ impl Ord for TieBreaker<'_> {
 }
 
 impl PartialOrd for TieBreaker<'_> {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
 /// Sorts the given event graph using reverse topological power ordering.

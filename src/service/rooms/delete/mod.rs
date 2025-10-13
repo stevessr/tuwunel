@@ -21,9 +21,7 @@ impl crate::Service for Service {
 		Ok(Arc::new(Self { services: args.services.clone() }))
 	}
 
-	fn name(&self) -> &str {
-		crate::service::make_name(std::module_path!())
-	}
+	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
 
 impl Service {

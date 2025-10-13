@@ -15,9 +15,7 @@ pub struct RoomThirdPartyInviteEvent<E: Event>(E);
 
 impl<E: Event> RoomThirdPartyInviteEvent<E> {
 	/// Construct a new `RoomThirdPartyInviteEvent` around the given event.
-	pub fn new(event: E) -> Self {
-		Self(event)
-	}
+	pub fn new(event: E) -> Self { Self(event) }
 
 	/// The public keys of the identity server that might be used to sign the
 	/// third-party invite.
@@ -59,7 +57,5 @@ impl<E: Event> Deref for RoomThirdPartyInviteEvent<E> {
 	type Target = E;
 
 	#[inline]
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+	fn deref(&self) -> &Self::Target { &self.0 }
 }

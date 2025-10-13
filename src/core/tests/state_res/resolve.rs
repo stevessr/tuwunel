@@ -124,9 +124,7 @@ impl Ord for ResolvedStateEvent {
 }
 
 impl PartialOrd for ResolvedStateEvent {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
 /// Information to be captured in snapshot assertions

@@ -82,9 +82,7 @@ impl crate::Service for Service {
 		}
 	}
 
-	fn name(&self) -> &str {
-		crate::service::make_name(std::module_path!())
-	}
+	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
 
 impl Service {
@@ -185,18 +183,16 @@ impl Service {
 			&& user_id != self.services.globals.server_user
 		{
 			let timeout = match presence_state {
-				| PresenceState::Online => {
+				| PresenceState::Online =>
 					self.services
 						.server
 						.config
-						.presence_idle_timeout_s
-				},
-				| _ => {
+						.presence_idle_timeout_s,
+				| _ =>
 					self.services
 						.server
 						.config
-						.presence_offline_timeout_s
-				},
+						.presence_offline_timeout_s,
 			};
 
 			self.timer_channel
@@ -309,12 +305,10 @@ impl Service {
 		}
 
 		let new_state = match (&presence_state, last_active_ago.map(u64::from)) {
-			| (PresenceState::Online, Some(ago)) if ago >= self.idle_timeout => {
-				Some(PresenceState::Unavailable)
-			},
-			| (PresenceState::Unavailable, Some(ago)) if ago >= self.offline_timeout => {
-				Some(PresenceState::Offline)
-			},
+			| (PresenceState::Online, Some(ago)) if ago >= self.idle_timeout =>
+				Some(PresenceState::Unavailable),
+			| (PresenceState::Unavailable, Some(ago)) if ago >= self.offline_timeout =>
+				Some(PresenceState::Offline),
 			| _ => None,
 		};
 
