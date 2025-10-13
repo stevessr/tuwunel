@@ -4,28 +4,60 @@ use ruma::api::client::discovery::{
 	discover_support::{self, Contact},
 };
 use serde_json::Value as JsonValue;
+use serde::{Deserialize, Serialize};
 use tuwunel_core::{Err, Result, err, error::inspect_log};
-
 use crate::Ruma;
+
+/// MSC3861: Authentication information for .well-known/matrix/client
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AuthenticationInfo {
+	issuer: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	account: Option<String>,
+}
+
+/// Extended response for .well-known/matrix/client with MSC3861 support
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ExtendedClientDiscovery {
+	#[serde(rename = "m.homeserver")]
+	homeserver: HomeserverInfo,
+	#[serde(rename = "m.identity_server", skip_serializing_if = "Option::is_none")]
+	identity_server: Option<ruma::api::client::discovery::discover_homeserver::IdentityServerInfo>,
+	#[serde(rename = "org.matrix.msc3575.proxy", skip_serializing_if = "Option::is_none")]
+	tile_server: Option<ruma::api::client::discovery::discover_homeserver::SlidingSyncProxyInfo>,
+	// MSC3861: OAuth authentication information
+	#[serde(rename = "org.matrix.msc2965.authentication", skip_serializing_if = "Option::is_none")]
+	authentication: Option<AuthenticationInfo>,
+	// MSC4143: RTC transport configuration for Element Call
+	#[serde(rename = "org.matrix.msc4143.rtc_foci", skip_serializing_if = "Option::is_none")]
+	rtc_foci: Option<Vec<RtcFocusInfo>>,
+}
 
 /// # `GET /.well-known/matrix/client`
 ///
 /// Returns the .well-known URL if it is configured, otherwise returns 404.
-/// Also includes RTC transport configuration for Element Call (MSC4143).
+/// MSC3861: Includes OAuth authentication info; also adds RTC transports (MSC4143) when configured
 pub(crate) async fn well_known_client(
 	State(services): State<crate::State>,
 	_body: Ruma<discover_homeserver::Request>,
-) -> Result<discover_homeserver::Response> {
-	let homeserver = HomeserverInfo {
-		base_url: match services.server.config.well_known.client.as_ref() {
-			| Some(url) => url.to_string(),
-			| None => return Err!(Request(NotFound("Not found."))),
-		},
+) -> Result<impl IntoResponse> {
+	let client_url = match services.server.config.well_known.client.as_ref() {
+		| Some(url) => url.to_string(),
+		| None => return Err!(Request(NotFound("Not found."))),
 	};
 
-	// Add RTC transport configuration if available (MSC4143 / Element Call)
-	// Element Call has evolved through several versions with different field
-	// expectations
+	// MSC3861: Include OAuth authentication information if enabled
+	let authentication = if services.config.oauth.enable && services.config.oauth.experimental_msc3861 {
+		Some(AuthenticationInfo {
+			issuer: services.config.oauth.issuer.clone(),
+			account: Some(services.server.name.to_string()),
+		})
+	} else {
+		None
+	};
+
+	// MSC4143: Add RTC transport configuration for Element Call if available
+	// Element Call has evolved through several versions with different field expectations
 	let rtc_foci = services
 		.server
 		.config
@@ -45,16 +77,21 @@ pub(crate) async fn well_known_client(
 
 			RtcFocusInfo::new(focus_type, transport).map_err(Into::into)
 		})
-		.collect::<Result<_>>()
+		.collect::<Result<Vec<RtcFocusInfo>>>()
 		.map_err(|e| {
 			err!(Config("global.well_known.rtc_transports", "Malformed value(s): {e:?}"))
 		})
 		.inspect_err(inspect_log)?;
 
-	Ok(discover_homeserver::Response {
-		rtc_foci,
-		..discover_homeserver::Response::new(homeserver)
-	})
+	let response = ExtendedClientDiscovery {
+		homeserver: HomeserverInfo { base_url: client_url },
+		identity_server: None,
+		tile_server: None,
+		authentication,
+		rtc_foci: (!rtc_foci.is_empty()).then_some(rtc_foci),
+	};
+
+	Ok(Json(response))
 }
 
 /// # `GET /.well-known/matrix/support`
