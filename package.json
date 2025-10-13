@@ -1,0 +1,12 @@
+{
+  "name": "tuwunel-playwright-capture",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "capture": "node tests/capture-login.js"
+  },
+  "dependencies": {
+    "playwright": "^1.44.0"
+  }
+}

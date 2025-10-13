@@ -103,3 +103,4 @@ tests/complement/logs.jsonl
 *.save
 *.swp
 tuwunel-data
+node_modules

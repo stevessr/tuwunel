@@ -2121,6 +2121,18 @@
 #
 #displayname_claim = "name"
 
+# MSC3861: Account management URL
+#
+# URL where users can manage their OAuth account
+#
+#account_management_url =
+
+# MSC3861: Enable experimental OAuth delegation mode
+#
+# When enabled, Matrix tokens are delegated to the OAuth provider
+#
+#experimental_msc3861 = false
+
 #[global.appservice.<ID>]
 
 # The URL for the application service.
