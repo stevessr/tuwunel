@@ -93,7 +93,9 @@ pub fn ruma_from_usize(val: usize) -> ruma::UInt {
 #[inline]
 #[must_use]
 #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
-pub fn usize_from_u64_truncated(val: u64) -> usize { val as usize }
+pub fn usize_from_u64_truncated(val: u64) -> usize {
+	val as usize
+}
 
 #[inline]
 pub fn try_into<Dst: TryFrom<Src>, Src>(src: Src) -> Result<Dst> {

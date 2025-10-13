@@ -141,10 +141,14 @@ where
 	}
 
 	#[inline]
-	fn content(&self) -> &RawJsonValue { &self.content }
+	fn content(&self) -> &RawJsonValue {
+		&self.content
+	}
 
 	#[inline]
-	fn event_id(&self) -> &EventId { &self.event_id }
+	fn event_id(&self) -> &EventId {
+		&self.event_id
+	}
 
 	#[inline]
 	fn origin_server_ts(&self) -> MilliSecondsSinceUnixEpoch {
@@ -157,42 +161,66 @@ where
 	}
 
 	#[inline]
-	fn redacts(&self) -> Option<&EventId> { self.redacts.as_deref() }
+	fn redacts(&self) -> Option<&EventId> {
+		self.redacts.as_deref()
+	}
 
 	#[cfg(test)]
 	#[inline]
-	fn rejected(&self) -> bool { self.rejected }
+	fn rejected(&self) -> bool {
+		self.rejected
+	}
 
 	#[cfg(not(test))]
 	#[inline]
-	fn rejected(&self) -> bool { false }
+	fn rejected(&self) -> bool {
+		false
+	}
 
 	#[inline]
-	fn room_id(&self) -> &RoomId { &self.room_id }
+	fn room_id(&self) -> &RoomId {
+		&self.room_id
+	}
 
 	#[inline]
-	fn sender(&self) -> &UserId { &self.sender }
+	fn sender(&self) -> &UserId {
+		&self.sender
+	}
 
 	#[inline]
-	fn state_key(&self) -> Option<&str> { self.state_key.as_deref() }
+	fn state_key(&self) -> Option<&str> {
+		self.state_key.as_deref()
+	}
 
 	#[inline]
-	fn kind(&self) -> &TimelineEventType { &self.kind }
+	fn kind(&self) -> &TimelineEventType {
+		&self.kind
+	}
 
 	#[inline]
-	fn unsigned(&self) -> Option<&RawJsonValue> { self.unsigned.as_deref() }
+	fn unsigned(&self) -> Option<&RawJsonValue> {
+		self.unsigned.as_deref()
+	}
 
 	#[inline]
-	fn as_mut_pdu(&mut self) -> &mut Pdu { self }
+	fn as_mut_pdu(&mut self) -> &mut Pdu {
+		self
+	}
 
 	#[inline]
-	fn as_pdu(&self) -> &Pdu { self }
+	fn as_pdu(&self) -> &Pdu {
+		self
+	}
 
 	#[inline]
-	fn into_pdu(self) -> Pdu { self }
+	fn into_pdu(self) -> Pdu {
+		self
+	}
 
 	#[inline]
-	fn is_owned(&self) -> bool { true }
+	fn is_owned(&self) -> bool {
+		true
+	}
 }
 
 impl Event for &Pdu
@@ -212,10 +240,14 @@ where
 	}
 
 	#[inline]
-	fn content(&self) -> &RawJsonValue { &self.content }
+	fn content(&self) -> &RawJsonValue {
+		&self.content
+	}
 
 	#[inline]
-	fn event_id(&self) -> &EventId { &self.event_id }
+	fn event_id(&self) -> &EventId {
+		&self.event_id
+	}
 
 	#[inline]
 	fn origin_server_ts(&self) -> MilliSecondsSinceUnixEpoch {
@@ -228,39 +260,61 @@ where
 	}
 
 	#[inline]
-	fn redacts(&self) -> Option<&EventId> { self.redacts.as_deref() }
+	fn redacts(&self) -> Option<&EventId> {
+		self.redacts.as_deref()
+	}
 
 	#[cfg(test)]
 	#[inline]
-	fn rejected(&self) -> bool { self.rejected }
+	fn rejected(&self) -> bool {
+		self.rejected
+	}
 
 	#[cfg(not(test))]
 	#[inline]
-	fn rejected(&self) -> bool { false }
+	fn rejected(&self) -> bool {
+		false
+	}
 
 	#[inline]
-	fn room_id(&self) -> &RoomId { &self.room_id }
+	fn room_id(&self) -> &RoomId {
+		&self.room_id
+	}
 
 	#[inline]
-	fn sender(&self) -> &UserId { &self.sender }
+	fn sender(&self) -> &UserId {
+		&self.sender
+	}
 
 	#[inline]
-	fn state_key(&self) -> Option<&str> { self.state_key.as_deref() }
+	fn state_key(&self) -> Option<&str> {
+		self.state_key.as_deref()
+	}
 
 	#[inline]
-	fn kind(&self) -> &TimelineEventType { &self.kind }
+	fn kind(&self) -> &TimelineEventType {
+		&self.kind
+	}
 
 	#[inline]
-	fn unsigned(&self) -> Option<&RawJsonValue> { self.unsigned.as_deref() }
+	fn unsigned(&self) -> Option<&RawJsonValue> {
+		self.unsigned.as_deref()
+	}
 
 	#[inline]
-	fn as_pdu(&self) -> &Pdu { self }
+	fn as_pdu(&self) -> &Pdu {
+		self
+	}
 
 	#[inline]
-	fn into_pdu(self) -> Pdu { self.clone() }
+	fn into_pdu(self) -> Pdu {
+		self.clone()
+	}
 
 	#[inline]
-	fn is_owned(&self) -> bool { false }
+	fn is_owned(&self) -> bool {
+		false
+	}
 }
 
 /// Prevent derived equality which wouldn't limit itself to event_id
@@ -268,15 +322,21 @@ impl Eq for Pdu {}
 
 /// Equality determined by the Pdu's ID, not the memory representations.
 impl PartialEq for Pdu {
-	fn eq(&self, other: &Self) -> bool { self.event_id == other.event_id }
+	fn eq(&self, other: &Self) -> bool {
+		self.event_id == other.event_id
+	}
 }
 
 /// Ordering determined by the Pdu's ID, not the memory representations.
 impl Ord for Pdu {
-	fn cmp(&self, other: &Self) -> Ordering { self.event_id.cmp(&other.event_id) }
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.event_id.cmp(&other.event_id)
+	}
 }
 
 /// Ordering determined by the Pdu's ID, not the memory representations.
 impl PartialOrd for Pdu {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
 }

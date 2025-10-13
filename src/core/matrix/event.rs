@@ -149,7 +149,9 @@ pub trait Event: Clone + Debug + Send + Sync {
 	}
 
 	#[inline]
-	fn as_mut_pdu(&mut self) -> &mut Pdu { unimplemented!("not a mutable Pdu") }
+	fn as_mut_pdu(&mut self) -> &mut Pdu {
+		unimplemented!("not a mutable Pdu")
+	}
 
 	fn as_pdu(&self) -> &Pdu;
 
@@ -204,5 +206,7 @@ pub trait Event: Clone + Debug + Send + Sync {
 
 	//#[deprecated]
 	#[inline]
-	fn event_type(&self) -> &TimelineEventType { self.kind() }
+	fn event_type(&self) -> &TimelineEventType {
+		self.kind()
+	}
 }
