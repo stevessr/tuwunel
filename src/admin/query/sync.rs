@@ -46,7 +46,9 @@ pub(super) async fn show_connection(
 	device_id: OwnedDeviceId,
 	conn_id: Option<String>,
 ) -> Result {
-	let key = into_connection_key(user_id, device_id, conn_id);
+	// Admin CLI/backend calls don't have an X-Forwarded-For header context,
+	// so pass None for the forwarded-for field.
+	let key = into_connection_key(user_id, device_id, conn_id, None::<String>);
 	let cache = self.services.sync.find_connection(&key)?;
 
 	let out;
