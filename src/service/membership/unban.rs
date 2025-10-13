@@ -39,14 +39,17 @@ pub async fn unban(
 	self.services
 		.timeline
 		.build_and_append_pdu(
-			PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-				membership: MembershipState::Leave,
-				reason: reason.cloned(),
-				join_authorized_via_users_server: None,
-				third_party_invite: None,
-				is_direct: None,
-				..current_member_content
-			}),
+			PduBuilder::state(
+				user_id.to_string(),
+				&RoomMemberEventContent {
+					membership: MembershipState::Leave,
+					reason: reason.cloned(),
+					join_authorized_via_users_server: None,
+					third_party_invite: None,
+					is_direct: None,
+					..current_member_content
+				},
+			),
 			sender_user,
 			room_id,
 			state_lock,

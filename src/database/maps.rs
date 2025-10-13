@@ -11,7 +11,9 @@ pub(super) type Maps = BTreeMap<MapsKey, MapsVal>;
 pub(super) type MapsKey = &'static str;
 pub(super) type MapsVal = Arc<Map>;
 
-pub(super) fn open(engine: &Arc<Engine>) -> Result<Maps> { open_list(engine, MAPS) }
+pub(super) fn open(engine: &Arc<Engine>) -> Result<Maps> {
+	open_list(engine, MAPS)
+}
 
 #[tracing::instrument(name = "maps", level = "debug", skip_all)]
 pub(super) fn open_list(engine: &Arc<Engine>, maps: &[Descriptor]) -> Result<Maps> {

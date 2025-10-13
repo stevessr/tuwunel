@@ -19,7 +19,9 @@ pub struct RoomCreateEvent<E: Event>(E);
 impl<E: Event> RoomCreateEvent<E> {
 	/// Construct a new `RoomCreateEvent` around the given event.
 	#[inline]
-	pub fn new(event: E) -> Self { Self(event) }
+	pub fn new(event: E) -> Self {
+		Self(event)
+	}
 
 	/// The version of the room.
 	#[allow(dead_code)]
@@ -148,5 +150,7 @@ impl<E: Event> Deref for RoomCreateEvent<E> {
 	type Target = E;
 
 	#[inline]
-	fn deref(&self) -> &Self::Target { &self.0 }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }

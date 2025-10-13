@@ -62,7 +62,9 @@ impl crate::Service for Service {
 		}))
 	}
 
-	fn name(&self) -> &str { service::make_name(std::module_path!()) }
+	fn name(&self) -> &str {
+		service::make_name(std::module_path!())
+	}
 }
 
 impl Service {
@@ -72,7 +74,9 @@ impl Service {
 		ret,
 		fields(pending = ?self.pending_count()),
 	)]
-	pub async fn wait_pending(&self) -> Result<u64> { self.db.wait_pending().await }
+	pub async fn wait_pending(&self) -> Result<u64> {
+		self.db.wait_pending().await
+	}
 
 	#[tracing::instrument(
 		level = "trace",
@@ -80,7 +84,9 @@ impl Service {
 		ret,
 		fields(pending = ?self.pending_count()),
 	)]
-	pub async fn wait_count(&self, count: &u64) -> Result<u64> { self.db.wait_count(count).await }
+	pub async fn wait_count(&self, count: &u64) -> Result<u64> {
+		self.db.wait_count(count).await
+	}
 
 	#[tracing::instrument(
 		level = "debug",
@@ -88,17 +94,25 @@ impl Service {
 		fields(pending = ?self.pending_count()),
 	)]
 	#[must_use]
-	pub fn next_count(&self) -> data::Permit { self.db.next_count() }
+	pub fn next_count(&self) -> data::Permit {
+		self.db.next_count()
+	}
 
 	#[must_use]
-	pub fn current_count(&self) -> u64 { self.db.current_count() }
+	pub fn current_count(&self) -> u64 {
+		self.db.current_count()
+	}
 
 	#[must_use]
-	pub fn pending_count(&self) -> Range<u64> { self.db.pending_count() }
+	pub fn pending_count(&self) -> Range<u64> {
+		self.db.pending_count()
+	}
 
 	#[inline]
 	#[must_use]
-	pub fn server_name(&self) -> &ServerName { self.server.name.as_ref() }
+	pub fn server_name(&self) -> &ServerName {
+		self.server.name.as_ref()
+	}
 
 	/// checks if `user_id` is local to us via server_name comparison
 	#[inline]
@@ -121,5 +135,7 @@ impl Service {
 
 	#[inline]
 	#[must_use]
-	pub fn is_read_only(&self) -> bool { self.db.db.is_read_only() }
+	pub fn is_read_only(&self) -> bool {
+		self.db.db.is_read_only()
+	}
 }

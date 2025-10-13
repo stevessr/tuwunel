@@ -86,8 +86,9 @@ pub(crate) async fn login_route(
 		| LoginInfo::Password(info) => password::handle_login(&services, &body, info).await?,
 		| LoginInfo::Token(info) => token::handle_login(&services, &body, info).await?,
 		| LoginInfo::Jwt(info) => jwt::handle_login(&services, &body, info).await?,
-		| LoginInfo::ApplicationService(info) =>
-			appservice::handle_login(&services, &body, info).await?,
+		| LoginInfo::ApplicationService(info) => {
+			appservice::handle_login(&services, &body, info).await?
+		},
 		| _ => {
 			return Err!(Request(Unknown(debug_warn!(
 				?body.login_info,

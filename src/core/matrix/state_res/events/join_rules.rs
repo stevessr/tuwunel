@@ -16,7 +16,9 @@ pub struct RoomJoinRulesEvent<E: Event>(E);
 impl<E: Event> RoomJoinRulesEvent<E> {
 	/// Construct a new `RoomJoinRulesEvent` around the given event.
 	#[inline]
-	pub fn new(event: E) -> Self { Self(event) }
+	pub fn new(event: E) -> Self {
+		Self(event)
+	}
 
 	/// The join rule of the room.
 	pub fn join_rule(&self) -> Result<JoinRule> {
@@ -38,7 +40,9 @@ impl<E: Event> Deref for RoomJoinRulesEvent<E> {
 	type Target = E;
 
 	#[inline]
-	fn deref(&self) -> &Self::Target { &self.0 }
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
 }
 
 /// The possible values for the join rule of a room.

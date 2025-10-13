@@ -84,26 +84,29 @@ async fn remote_invite(
 	let response = self
 		.services
 		.sending
-		.send_federation_request(user_id.server_name(), create_invite::v2::Request {
-			room_id: room_id.to_owned(),
-			event_id: (*pdu.event_id).to_owned(),
-			room_version: room_version_id.clone(),
-			event: self
-				.services
-				.federation
-				.format_pdu_into(pdu_json.clone(), Some(&room_version_id))
-				.await,
-			invite_room_state: invite_room_state
-				.into_iter()
-				.map(Into::into)
-				.collect(),
-			via: self
-				.services
-				.state_cache
-				.servers_route_via(room_id)
-				.await
-				.ok(),
-		})
+		.send_federation_request(
+			user_id.server_name(),
+			create_invite::v2::Request {
+				room_id: room_id.to_owned(),
+				event_id: (*pdu.event_id).to_owned(),
+				room_version: room_version_id.clone(),
+				event: self
+					.services
+					.federation
+					.format_pdu_into(pdu_json.clone(), Some(&room_version_id))
+					.await,
+				invite_room_state: invite_room_state
+					.into_iter()
+					.map(Into::into)
+					.collect(),
+				via: self
+					.services
+					.state_cache
+					.servers_route_via(room_id)
+					.await
+					.ok(),
+			},
+		)
 		.await?;
 
 	// We do not add the event_id field to the pdu here because of signature and

@@ -1,16 +1,55 @@
 use axum::extract::State;
 use axum::response::{IntoResponse, Redirect};
-use std::collections::HashMap;
-use std::sync::LazyLock;
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
-use serde_json::json;
 use axum_client_ip::InsecureClientIp;
 use ruma::OwnedUserId;
 use serde::{Deserialize, Serialize};
+use std::{
+	collections::HashMap,
+	sync::{LazyLock, Mutex},
+	time::{Duration, Instant},
+};
 use tuwunel_core::{Err, Result, err, utils};
 use tuwunel_service::Services;
 
+const STATE_TTL: Duration = Duration::from_secs(300);
+
+#[derive(Debug, Clone)]
+struct StateEntry {
+	redirect_url: String,
+	expires_at: Instant,
+}
+
+static STATE_STORE: LazyLock<Mutex<HashMap<String, StateEntry>>> =
+	LazyLock::new(|| Mutex::new(HashMap::new()));
+
+fn purge_expired(store: &mut HashMap<String, StateEntry>) {
+	let now = Instant::now();
+	store.retain(|_, entry| entry.expires_at > now);
+}
+
+fn remember_redirect(state_token: &str, redirect_url: &str) {
+	let mut store = STATE_STORE
+		.lock()
+		.unwrap_or_else(|poison| poison.into_inner());
+	purge_expired(&mut store);
+	store.insert(
+		state_token.to_owned(),
+		StateEntry {
+			redirect_url: redirect_url.to_owned(),
+			expires_at: Instant::now() + STATE_TTL,
+		},
+	);
+}
+
+fn consume_redirect(state_token: &str) -> Option<String> {
+	let mut store = STATE_STORE
+		.lock()
+		.unwrap_or_else(|poison| poison.into_inner());
+	purge_expired(&mut store);
+	store
+		.remove(state_token)
+		.map(|entry| entry.redirect_url)
+}
 
 /// OAuth 2.0 token response
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -47,7 +86,7 @@ pub(super) struct OAuthUserInfo {
 #[tracing::instrument(skip_all, fields(%client), name = "oauth_redirect")]
 pub(crate) async fn oauth_redirect_route(
 	State(services): State<crate::State>,
-	InsecureClientIp(client): InsecureClientIp,
+	InsecureClientIp(_client): InsecureClientIp,
 	uri: http::Uri,
 ) -> Result<Redirect> {
 	if !services.config.oauth.enable {
@@ -57,24 +96,26 @@ pub(crate) async fn oauth_redirect_route(
 	let oauth_config = &services.config.oauth;
 
 	// Generate state parameter for CSRF protection
-	let rand = utils::random_string(32);
+	let state_token = utils::random_string(32);
 	let query = uri.query().unwrap_or_default();
-	let params = url::form_urlencoded::parse(query.as_bytes()).into_owned().collect::<std::collections::HashMap<_, _>>();
-	let redirect_url = params.get("redirectUrl").map(|s| s.as_str()).unwrap_or("");
+	let params = url::form_urlencoded::parse(query.as_bytes())
+		.into_owned()
+		.collect::<HashMap<_, _>>();
+	let redirect_url = params
+		.get("redirectUrl")
+		.map(|s| s.as_str())
+		.unwrap_or("");
 
 	// If redirect_url provided, store mapping state -> redirect_url with TTL
 	if !redirect_url.is_empty() {
-		// lazily-initialized in-memory store
-		static STATE_STORE: LazyLock<Mutex<HashMap<String, (String, Instant)>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
-		let mut store = STATE_STORE.lock().unwrap();
-		// purge expired entries
-		let now = Instant::now();
-		store.retain(|_, (_, exp)| *exp > now);
-		store.insert(rand.clone(), (redirect_url.to_string(), now + Duration::from_secs(300)));
+		remember_redirect(&state_token, redirect_url);
 	}
 
-	// state is just the random string
-	let state = rand.clone();
+	let state = if redirect_url.is_empty() {
+		state_token.clone()
+	} else {
+		format!("{}|{}", state_token, urlencoding::encode(redirect_url))
+	};
 
 	let auth_endpoint = oauth_config
 		.authorization_endpoint
@@ -110,7 +151,7 @@ pub(crate) async fn exchange_code_for_token(
 		.ok_or_else(|| err!(Request(Unknown("OAuth token endpoint not configured"))))?;
 
 	// Prepare token request parameters as form data (RFC 6749)
-	let mut params = std::collections::HashMap::new();
+	let mut params = HashMap::new();
 	params.insert("grant_type", "authorization_code");
 	params.insert("code", code);
 	params.insert("redirect_uri", redirect_uri);
@@ -197,8 +238,10 @@ pub(crate) async fn get_or_create_user(
 	let localpart = match oauth_config.subject_claim.as_str() {
 		| "sub" => &userinfo.sub,
 		| "email" => userinfo.email.as_deref().unwrap_or(&userinfo.sub),
-		| "preferred_username" =>
-			userinfo.preferred_username.as_deref().unwrap_or(&userinfo.sub),
+		| "preferred_username" => userinfo
+			.preferred_username
+			.as_deref()
+			.unwrap_or(&userinfo.sub),
 		| _ => &userinfo.sub,
 	};
 
@@ -230,7 +273,9 @@ pub(crate) async fn get_or_create_user(
 		// Set display name if available
 		if let Some(name) = &userinfo.name {
 			// set_displayname is synchronous (writes to DB map), no await
-			let _ = services.users.set_displayname(&user_id, Some(name.clone()));
+			let _ = services
+				.users
+				.set_displayname(&user_id, Some(name.clone()));
 		}
 	}
 
@@ -241,23 +286,33 @@ pub(crate) async fn get_or_create_user(
 #[tracing::instrument(skip_all, fields(%client), name = "oauth_callback")]
 pub(crate) async fn oauth_callback_route(
 	State(services): State<crate::State>,
-	InsecureClientIp(client): InsecureClientIp,
+	InsecureClientIp(_client): InsecureClientIp,
 	// query parameters will be parsed by Ruma wrapper normally; for minimal debug we read from Axum
 	uri: http::Uri,
 ) -> Result<axum::response::Response> {
 	// parse query
 	let query = uri.query().unwrap_or_default();
-	let params = url::form_urlencoded::parse(query.as_bytes()).into_owned().collect::<std::collections::HashMap<_, _>>();
+	let params = url::form_urlencoded::parse(query.as_bytes())
+		.into_owned()
+		.collect::<HashMap<_, _>>();
 
 	let code = match params.get("code") {
-		Some(c) => c.as_str(),
-		None => return Err!(Request(InvalidParam("Missing code query parameter"))),
+		| Some(c) => c.as_str(),
+		| None => return Err!(Request(InvalidParam("Missing code query parameter"))),
 	};
 
-	let state = params.get("state").map(|s| s.as_str()).unwrap_or("");
+	let state = params
+		.get("state")
+		.map(|s| s.as_str())
+		.unwrap_or("");
+	let state_token = state
+		.split_once('|')
+		.map(|(token, _)| token)
+		.unwrap_or(state);
 
 	// perform token exchange
-	let token = exchange_code_for_token(&services, code, &services.config.oauth.redirect_uri).await?;
+	let token =
+		exchange_code_for_token(&services, code, &services.config.oauth.redirect_uri).await?;
 
 	// validate / get userinfo
 	let userinfo = validate_oauth_token(&services, &token.access_token).await?;
@@ -266,10 +321,12 @@ pub(crate) async fn oauth_callback_route(
 	let user_id = get_or_create_user(&services, &userinfo).await?;
 
 	// If state contains an embedded redirect URL (we encoded it earlier), extract and redirect
-	let mut app_redirect: Option<String> = None;
-	if state.contains('|') {
+	let mut app_redirect: Option<String> = consume_redirect(state_token);
+
+	// Fall back to embedded state payload when not found in the map
+	if app_redirect.is_none() && state.contains('|') {
 		let mut parts = state.splitn(2, '|');
-		let _rand = parts.next().unwrap_or("");
+		let _ = parts.next();
 		if let Some(enc) = parts.next() {
 			if !enc.is_empty() {
 				if let Ok(decoded) = urlencoding::decode(enc) {
@@ -279,22 +336,17 @@ pub(crate) async fn oauth_callback_route(
 		}
 	}
 
-	// If not embedded in state, check global state store
-	if app_redirect.is_none() {
-		static STATE_STORE: LazyLock<Mutex<HashMap<String, (String, Instant)>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
-		let mut store = STATE_STORE.lock().unwrap();
-		let now = Instant::now();
-		store.retain(|_, (_, exp)| *exp > now);
-		if let Some((redir, _)) = store.remove(state) {
-			app_redirect = Some(redir);
-		}
-	}
-
 	if let Some(mut redirect_to) = app_redirect {
 		// append access_token and user_id as query params for the client to consume
 		let sep = if redirect_to.contains('?') { '&' } else { '?' };
-		redirect_to = format!("{}{}access_token={}&user_id={}", redirect_to, sep, token.access_token, user_id.to_string());
-		return Ok(Redirect::temporary(&redirect_to).into_response())
+		redirect_to = format!(
+			"{}{}access_token={}&user_id={}",
+			redirect_to,
+			sep,
+			token.access_token,
+			user_id.to_string()
+		);
+		return Ok(Redirect::temporary(&redirect_to).into_response());
 	}
 
 	// fallback: return JSON
@@ -308,6 +360,3 @@ pub(crate) async fn oauth_callback_route(
 
 	Ok(axum::response::Json(result).into_response())
 }
-
-
-

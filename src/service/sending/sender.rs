@@ -138,9 +138,10 @@ impl Service {
 	) {
 		match response {
 			| Err((dest, e)) => Self::handle_response_err(dest, statuses, &e),
-			| Ok(dest) =>
+			| Ok(dest) => {
 				self.handle_response_ok(&dest, futures, statuses)
-					.await,
+					.await
+			},
 		}
 	}
 
@@ -150,8 +151,9 @@ impl Service {
 			*e = match e {
 				| TransactionStatus::Running => TransactionStatus::Failed(1, Instant::now()),
 
-				| &mut TransactionStatus::Retrying(ref n) =>
-					TransactionStatus::Failed(n.saturating_add(1), Instant::now()),
+				| &mut TransactionStatus::Retrying(ref n) => {
+					TransactionStatus::Failed(n.saturating_add(1), Instant::now())
+				},
 
 				| TransactionStatus::Failed(..) => {
 					panic!("Request that was not even running failed?!")
@@ -738,14 +740,15 @@ impl Service {
 						pdu_jsons.push(pdu.to_format());
 					}
 				},
-				| SendingEvent::Edu(edu) =>
+				| SendingEvent::Edu(edu) => {
 					if appservice.receive_ephemeral {
 						if let Ok(edu) =
 							serde_json::from_slice(edu).and_then(|edu| Raw::new(&edu))
 						{
 							edu_jsons.push(edu);
 						}
-					},
+					}
+				},
 				| SendingEvent::Flush => {}, // flush only; no new content
 			}
 		}
