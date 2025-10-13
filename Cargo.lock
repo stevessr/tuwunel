@@ -5173,6 +5173,7 @@ dependencies = [
  "tracing",
  "tuwunel_core",
  "tuwunel_service",
+ "url",
  "urlencoding",
 ]
 

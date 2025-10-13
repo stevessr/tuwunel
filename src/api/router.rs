@@ -36,6 +36,10 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::register_route)
 		.ruma_route(&client::get_login_types_route)
 		.ruma_route(&client::login_route)
+	// OAuth SSO redirect endpoint: initiates OAuth authorization flow
+	.route("/_matrix/client/v3/login/sso/redirect", get(client::session::oauth::oauth_redirect_route))
+	// OAuth SSO callback endpoint: provider will redirect here with code & state
+	.route("/_matrix/client/v3/login/sso/callback", get(client::session::oauth::oauth_callback_route))
 		.ruma_route(&client::login_token_route)
 		.ruma_route(&client::refresh_token_route)
 		.ruma_route(&client::whoami_route)

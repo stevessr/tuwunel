@@ -2,7 +2,7 @@ mod appservice;
 pub(crate) mod jwt;
 mod ldap;
 mod logout;
-mod oauth;
+pub(crate) mod oauth;
 mod password;
 mod refresh;
 mod token;
