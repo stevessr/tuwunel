@@ -3,27 +3,64 @@ use ruma::api::client::discovery::{
 	discover_homeserver::{self, HomeserverInfo},
 	discover_support::{self, Contact},
 };
+use serde::{Deserialize, Serialize};
 use tuwunel_core::{Err, Result};
 
 use crate::Ruma;
 
+/// MSC3861: Authentication information for .well-known/matrix/client
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AuthenticationInfo {
+	issuer: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	account: Option<String>,
+}
+
+/// Extended response for .well-known/matrix/client with MSC3861 support
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct ExtendedClientDiscovery {
+	#[serde(rename = "m.homeserver")]
+	homeserver: HomeserverInfo,
+	#[serde(rename = "m.identity_server", skip_serializing_if = "Option::is_none")]
+	identity_server: Option<ruma::api::client::discovery::discover_homeserver::IdentityServerInfo>,
+	#[serde(rename = "org.matrix.msc3575.proxy", skip_serializing_if = "Option::is_none")]
+	tile_server: Option<ruma::api::client::discovery::discover_homeserver::SlidingSyncProxyInfo>,
+	// MSC3861: OAuth authentication information
+	#[serde(rename = "org.matrix.msc2965.authentication", skip_serializing_if = "Option::is_none")]
+	authentication: Option<AuthenticationInfo>,
+}
+
 /// # `GET /.well-known/matrix/client`
 ///
 /// Returns the .well-known URL if it is configured, otherwise returns 404.
+/// MSC3861: Includes OAuth authentication information if OAuth is enabled
 pub(crate) async fn well_known_client(
 	State(services): State<crate::State>,
 	_body: Ruma<discover_homeserver::Request>,
-) -> Result<discover_homeserver::Response> {
+) -> Result<impl IntoResponse> {
 	let client_url = match services.server.config.well_known.client.as_ref() {
 		| Some(url) => url.to_string(),
 		| None => return Err!(Request(NotFound("Not found."))),
 	};
 
-	Ok(discover_homeserver::Response {
+	// MSC3861: Include OAuth authentication information if enabled
+	let authentication = if services.config.oauth.enable && services.config.oauth.experimental_msc3861 {
+		Some(AuthenticationInfo {
+			issuer: services.config.oauth.issuer.clone(),
+			account: Some(services.server.name.to_string()),
+		})
+	} else {
+		None
+	};
+
+	let response = ExtendedClientDiscovery {
 		homeserver: HomeserverInfo { base_url: client_url },
 		identity_server: None,
 		tile_server: None,
-	})
+		authentication,
+	};
+
+	Ok(Json(response))
 }
 
 /// # `GET /.well-known/matrix/support`

@@ -23,6 +23,9 @@ This document tracks the implementation status of OAuth 2.0 / OIDC support in Tu
 - [x] OAuth redirect URL generation
 - [x] Token exchange functions
 - [x] User info validation
+- [x] MSC2965: OAuth issuer discovery endpoint
+- [x] MSC3861: Account management endpoint
+- [x] Enhanced .well-known/matrix/client with OAuth info
 
 ### Documentation
 - [x] Comprehensive OAuth setup guide (`docs/oauth.md`)
@@ -30,17 +33,20 @@ This document tracks the implementation status of OAuth 2.0 / OIDC support in Tu
 - [x] Security best practices
 - [x] Troubleshooting guide
 - [x] Documentation index updated
+- [x] MSC3861 configuration and usage guide
 
 ## Partially Implemented 🚧
 
 ### Routing
-- [ ] OAuth redirect endpoint routing (need to add to router.rs)
-- [ ] OAuth callback endpoint routing (need to add to router.rs)
-- [ ] OIDC discovery endpoint routing (need to add to router.rs)
+- [x] OAuth redirect endpoint routing (added to router.rs)
+- [x] OAuth callback endpoint routing (added to router.rs)
+- [x] OIDC discovery endpoint routing (added to router.rs)
+- [x] MSC2965 OAuth issuer endpoint routing
+- [x] MSC3861 account management endpoint routing
 
 ### Token Management
-- [ ] OAuth state parameter storage and validation
-- [ ] Session management for OAuth flow
+- [x] OAuth state parameter storage and validation (implemented with TTL-based storage)
+- [x] Session management for OAuth flow (state token mapping)
 - [ ] Token refresh support
 - [ ] Token revocation endpoint
 
@@ -50,10 +56,11 @@ This document tracks the implementation status of OAuth 2.0 / OIDC support in Tu
 - [ ] Concurrent multi-provider support (currently single active provider)
 - [ ] Account linking for existing users
 - [ ] PKCE (Proof Key for Code Exchange) support
-- [ ] Token introspection endpoint
+- [ ] Token introspection endpoint (MSC3861)
 - [ ] Dynamic client registration
 - [ ] Advanced custom claim mapping rules (currently supports basic predefined claims)
 - [ ] OAuth provider metadata caching
+- [ ] MSC3861: Full OAuth delegation mode (partial support)
 
 ### Testing
 - [ ] Unit tests for OAuth flow
