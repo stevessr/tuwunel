@@ -11,18 +11,6 @@
       "sameSite": "Lax"
     },
     {
-      "name": "cf_clearance",
-      "value": "VfwtDK6bsS1SBNOdk.HmSbTZTgCZhdmdHrIPw3MCmUs-1760324314-1.2.1.1-t3r9K61Opj_NGDY.FMebgI8G5cbS2VTUtaLyp0UViiJoMLalGWjRgxFWAxHHkVpZnaNcTKwDOTprXAoR8PKx9uOWonv_U1hSvtaM5x7f5_wDXRImLWg1nOra9rj.zxoH.JGdhz.HXNoKUYP19ikpwAzFeQS1i4lnUVv0.UOC.Lp02Ozaf97_x4vSU3dYUiY5r2vk_KFcoVTbJfsJgpEdi_BH4HlgnNV75IkVMfdGm00",
-      "domain": ".linux.do",
-      "path": "/",
-      "expires": 1791860314.960347,
-      "httpOnly": true,
-      "secure": true,
-      "sameSite": "None",
-      "partitionKey": "https://linux.do",
-      "_crHasCrossSiteAncestor": false
-    },
-    {
       "name": "g_state",
       "value": "{\"i_l\":0,\"i_ll\":1760324315424,\"i_b\":\"sNTlcN2e3hTfmsiAdibQIkxO5gnEQoB1j2Ki4k3PkSw\"}",
       "domain": "linux.do",
@@ -48,16 +36,6 @@
       "domain": ".linux.do",
       "path": "/",
       "expires": 1791860315,
-      "httpOnly": false,
-      "secure": true,
-      "sameSite": "Strict"
-    },
-    {
-      "name": "__stripe_sid",
-      "value": "90f4275d-15bb-4e46-9967-7afe5a18061f3eea34",
-      "domain": ".linux.do",
-      "path": "/",
-      "expires": 1760326115,
       "httpOnly": false,
       "secure": true,
       "sameSite": "Strict"
@@ -109,6 +87,18 @@
       "path": "/",
       "expires": 1760327931,
       "httpOnly": false,
+      "secure": true,
+      "sameSite": "None",
+      "partitionKey": "https://linux.do",
+      "_crHasCrossSiteAncestor": false
+    },
+    {
+      "name": "cf_clearance",
+      "value": "AJtnTPxu5vOyBfGB2Ng0zEVvq2Wvfy35A1_sr_4Dgc8-1760326620-1.2.1.1-8hyS9zk3rWL16lvE6czHuRRj.MZTy8.U7j_SinOFAz7JkJt23YIPyIcmGIeR2f3.knjY5eWnCa0KDvUAtEeAJuKvUXkR96bywzCaHUrsyW3nfMoX1DIPvEYCloWmF0uui0SGcDghKM9zpErZlmvamNQ.KhrmkKFVlxGUBo7uQVssjsLxYfTzVymWGa1oJ4VOFMPdapBohX.6ZolM2oo5RgPfeCIXAhdiCmM6fOjdTFc",
+      "domain": ".linux.do",
+      "path": "/",
+      "expires": 1791862620.74102,
+      "httpOnly": true,
       "secure": true,
       "sameSite": "None",
       "partitionKey": "https://linux.do",

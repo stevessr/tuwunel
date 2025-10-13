@@ -14,6 +14,7 @@ function parseArg(name, def) {
 async function main() {
   const homeserver = parseArg('homeserver', null);
   const redirectUrl = parseArg('redirectUrl', 'https://fluffychat.im/web/%23/home');
+  const noEncodeRedirect = parseArg('noEncodeRedirect', 'false') === 'true';
   const headlessArg = parseArg('headless', 'true');
   const headless = headlessArg !== 'false';
   const stealthArg = parseArg('stealth', 'false');
@@ -115,7 +116,8 @@ async function main() {
 
   if (homeserver) {
     // Try opening the homeserver's SSO redirect endpoint to trigger the flow
-    const url = `${homeserver.replace(/\/+$/,'')}/_matrix/client/v3/login/sso/redirect?redirectUrl=${encodeURIComponent(redirectUrl)}`;
+    const redirectParam = noEncodeRedirect ? redirectUrl : encodeURIComponent(redirectUrl);
+    const url = `${homeserver.replace(/\/+$/,'')}/_matrix/client/v3/login/sso/redirect?redirectUrl=${redirectParam}`;
     console.log('Opening homeserver SSO redirect URL:', url);
     try {
       await page.goto(url, { waitUntil: 'networkidle' });
