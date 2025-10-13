@@ -65,7 +65,7 @@ where
 
 	match target_membership {
 		// Since v1, if membership is join:
-		| MembershipState::Join => {
+		| MembershipState::Join =>
 			check_room_member_join(
 				room_member_event,
 				target_user,
@@ -73,11 +73,10 @@ where
 				room_create_event,
 				fetch_state,
 			)
-			.await
-		},
+			.await,
 
 		// Since v1, if membership is invite:
-		| MembershipState::Invite => {
+		| MembershipState::Invite =>
 			check_room_member_invite(
 				room_member_event,
 				target_user,
@@ -85,11 +84,10 @@ where
 				room_create_event,
 				fetch_state,
 			)
-			.await
-		},
+			.await,
 
 		// Since v1, if membership is leave:
-		| MembershipState::Leave => {
+		| MembershipState::Leave =>
 			check_room_member_leave(
 				room_member_event,
 				target_user,
@@ -97,11 +95,10 @@ where
 				room_create_event,
 				fetch_state,
 			)
-			.await
-		},
+			.await,
 
 		// Since v1, if membership is ban:
-		| MembershipState::Ban => {
+		| MembershipState::Ban =>
 			check_room_member_ban(
 				room_member_event,
 				target_user,
@@ -109,13 +106,11 @@ where
 				room_create_event,
 				fetch_state,
 			)
-			.await
-		},
+			.await,
 
 		// Since v7, if membership is knock:
-		| MembershipState::Knock if rules.knocking => {
-			check_room_member_knock(room_member_event, target_user, rules, fetch_state).await
-		},
+		| MembershipState::Knock if rules.knocking =>
+			check_room_member_knock(room_member_event, target_user, rules, fetch_state).await,
 
 		// Since v1, otherwise, the membership is unknown. Reject.
 		| _ => Err!("unknown membership"),

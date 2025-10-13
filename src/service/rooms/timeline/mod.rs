@@ -100,9 +100,7 @@ impl crate::Service for Service {
 		Ok(())
 	}
 
-	fn name(&self) -> &str {
-		crate::service::make_name(std::module_path!())
-	}
+	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
 
 /// Removes a pdu and creates a new one with the same id.

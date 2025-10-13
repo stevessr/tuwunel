@@ -72,9 +72,7 @@ impl crate::Service for Service {
 			.clear();
 	}
 
-	fn name(&self) -> &str {
-		crate::service::make_name(std::module_path!())
-	}
+	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
 
 #[implement(Service)]

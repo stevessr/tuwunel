@@ -45,6 +45,4 @@ pub fn u64_from_u8(bytes: &[u8]) -> u64 {
 
 /// Parses the big-endian bytes into an u64.
 #[inline]
-pub fn u64_from_bytes(bytes: &[u8]) -> Result<u64> {
-	Ok(u64::from_be_bytes(bytes.try_into()?))
-}
+pub fn u64_from_bytes(bytes: &[u8]) -> Result<u64> { Ok(u64::from_be_bytes(bytes.try_into()?)) }

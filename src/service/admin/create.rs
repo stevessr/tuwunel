@@ -60,9 +60,8 @@ pub async fn create_admin_room(services: &Services) -> Result {
 	let create_content = {
 		use RoomVersionId::*;
 		match room_version {
-			| V1 | V2 | V3 | V4 | V5 | V6 | V7 | V8 | V9 | V10 => {
-				RoomCreateEventContent::new_v1(server_user.into())
-			},
+			| V1 | V2 | V3 | V4 | V5 | V6 | V7 | V8 | V9 | V10 =>
+				RoomCreateEventContent::new_v1(server_user.into()),
 			| _ => RoomCreateEventContent::new_v11(),
 		}
 	};
@@ -71,15 +70,12 @@ pub async fn create_admin_room(services: &Services) -> Result {
 	services
 		.timeline
 		.build_and_append_pdu(
-			PduBuilder::state(
-				String::new(),
-				&RoomCreateEventContent {
-					federate: services.config.federate_admin_room,
-					predecessor: None,
-					room_version: room_version.clone(),
-					..create_content
-				},
-			),
+			PduBuilder::state(String::new(), &RoomCreateEventContent {
+				federate: services.config.federate_admin_room,
+				predecessor: None,
+				room_version: room_version.clone(),
+				..create_content
+			}),
 			server_user,
 			&room_id,
 			&state_lock,
@@ -108,10 +104,10 @@ pub async fn create_admin_room(services: &Services) -> Result {
 	services
 		.timeline
 		.build_and_append_pdu(
-			PduBuilder::state(
-				String::new(),
-				&RoomPowerLevelsEventContent { users, ..Default::default() },
-			),
+			PduBuilder::state(String::new(), &RoomPowerLevelsEventContent {
+				users,
+				..Default::default()
+			}),
 			server_user,
 			&room_id,
 			&state_lock,
@@ -194,13 +190,10 @@ pub async fn create_admin_room(services: &Services) -> Result {
 	services
 		.timeline
 		.build_and_append_pdu(
-			PduBuilder::state(
-				String::new(),
-				&RoomCanonicalAliasEventContent {
-					alias: Some(alias.clone()),
-					alt_aliases: Vec::new(),
-				},
-			),
+			PduBuilder::state(String::new(), &RoomCanonicalAliasEventContent {
+				alias: Some(alias.clone()),
+				alt_aliases: Vec::new(),
+			}),
 			server_user,
 			&room_id,
 			&state_lock,

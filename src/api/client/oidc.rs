@@ -1,7 +1,8 @@
-use axum::Json;
 use axum::extract::State;
+use axum::Json;
 use serde::{Deserialize, Serialize};
 use tuwunel_core::{Err, Result};
+
 
 /// OIDC Discovery metadata
 #[derive(Clone, Debug, Serialize, Deserialize)]

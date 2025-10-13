@@ -67,14 +67,10 @@ impl Data {
 	}
 
 	#[inline]
-	pub(super) fn current_count(&self) -> u64 {
-		self.counter.current()
-	}
+	pub(super) fn current_count(&self) -> u64 { self.counter.current() }
 
 	#[inline]
-	pub(super) fn pending_count(&self) -> Range<u64> {
-		self.counter.range()
-	}
+	pub(super) fn pending_count(&self) -> Range<u64> { self.counter.range() }
 
 	#[tracing::instrument(name = "retire", level = "debug", skip(sender))]
 	fn handle_retire(sender: &Sender<u64>, count: u64) -> Result {

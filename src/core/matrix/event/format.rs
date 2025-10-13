@@ -15,9 +15,7 @@ pub struct Owned<E: Event>(pub(super) E);
 pub struct Ref<'a, E: Event>(pub(super) &'a E);
 
 impl<E: Event> From<Owned<E>> for Raw<AnySyncTimelineEvent> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnySyncTimelineEvent> {
@@ -47,9 +45,7 @@ impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnySyncTimelineEvent> {
 }
 
 impl<E: Event> From<Owned<E>> for Raw<AnyTimelineEvent> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnyTimelineEvent> {
@@ -80,9 +76,7 @@ impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnyTimelineEvent> {
 }
 
 impl<E: Event> From<Owned<E>> for Raw<AnyMessageLikeEvent> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnyMessageLikeEvent> {
@@ -113,9 +107,7 @@ impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnyMessageLikeEvent> {
 }
 
 impl<E: Event> From<Owned<E>> for Raw<AnySyncMessageLikeEvent> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnySyncMessageLikeEvent> {
@@ -145,9 +137,7 @@ impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnySyncMessageLikeEvent> {
 }
 
 impl<E: Event> From<Owned<E>> for Raw<AnyStateEvent> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnyStateEvent> {
@@ -172,9 +162,7 @@ impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnyStateEvent> {
 }
 
 impl<E: Event> From<Owned<E>> for Raw<AnySyncStateEvent> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnySyncStateEvent> {
@@ -198,9 +186,7 @@ impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnySyncStateEvent> {
 }
 
 impl<E: Event> From<Owned<E>> for Raw<AnyStrippedStateEvent> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnyStrippedStateEvent> {
@@ -218,9 +204,7 @@ impl<'a, E: Event> From<Ref<'a, E>> for Raw<AnyStrippedStateEvent> {
 }
 
 impl<E: Event> From<Owned<E>> for Raw<HierarchySpaceChildEvent> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<HierarchySpaceChildEvent> {
@@ -239,9 +223,7 @@ impl<'a, E: Event> From<Ref<'a, E>> for Raw<HierarchySpaceChildEvent> {
 }
 
 impl<E: Event> From<Owned<E>> for Raw<StateEvent<RoomMemberEventContent>> {
-	fn from(event: Owned<E>) -> Self {
-		Ref(&event.0).into()
-	}
+	fn from(event: Owned<E>) -> Self { Ref(&event.0).into() }
 }
 
 impl<'a, E: Event> From<Ref<'a, E>> for Raw<StateEvent<RoomMemberEventContent>> {
