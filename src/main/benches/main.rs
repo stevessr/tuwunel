@@ -11,7 +11,9 @@ criterion_group!(
 
 criterion_main!(benches);
 
-fn dummy(c: &mut Criterion) { c.bench_function("dummy", |c| c.iter(|| {})); }
+fn dummy(c: &mut Criterion) {
+	c.bench_function("dummy", |c| c.iter(|| {}));
+}
 
 fn smoke(c: &mut Criterion) {
 	let args = Args::default_test(&["fresh", "cleanup"]);

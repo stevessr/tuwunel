@@ -24,16 +24,19 @@ pub async fn ban(
 	self.services
 		.timeline
 		.build_and_append_pdu(
-			PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-				membership: MembershipState::Ban,
-				reason: reason.cloned(),
-				displayname: None,
-				avatar_url: None,
-				blurhash: None,
-				is_direct: None,
-				join_authorized_via_users_server: None,
-				third_party_invite: None,
-			}),
+			PduBuilder::state(
+				user_id.to_string(),
+				&RoomMemberEventContent {
+					membership: MembershipState::Ban,
+					reason: reason.cloned(),
+					displayname: None,
+					avatar_url: None,
+					blurhash: None,
+					is_direct: None,
+					join_authorized_via_users_server: None,
+					third_party_invite: None,
+				},
+			),
 			sender_user,
 			room_id,
 			state_lock,

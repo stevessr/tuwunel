@@ -39,10 +39,14 @@ pub fn recursion_depth(args: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn rustc_flags_capture(args: TokenStream) -> TokenStream { rustc::flags_capture(args) }
+pub fn rustc_flags_capture(args: TokenStream) -> TokenStream {
+	rustc::flags_capture(args)
+}
 
 #[proc_macro]
-pub fn rustc_version(args: TokenStream) -> TokenStream { rustc::version(args) }
+pub fn rustc_version(args: TokenStream) -> TokenStream {
+	rustc::version(args)
+}
 
 #[proc_macro_attribute]
 pub fn implement(args: TokenStream, input: TokenStream) -> TokenStream {
@@ -55,10 +59,14 @@ pub fn config_example_generator(args: TokenStream, input: TokenStream) -> TokenS
 }
 
 #[proc_macro]
-pub fn git_semantic(args: TokenStream) -> TokenStream { git::semantic(args) }
+pub fn git_semantic(args: TokenStream) -> TokenStream {
+	git::semantic(args)
+}
 
 #[proc_macro]
-pub fn git_commit(args: TokenStream) -> TokenStream { git::commit(args) }
+pub fn git_commit(args: TokenStream) -> TokenStream {
+	git::commit(args)
+}
 
 fn attribute_macro<I, F>(args: TokenStream, input: TokenStream, func: F) -> TokenStream
 where

@@ -2676,15 +2676,23 @@ impl Config {
 		}
 	}
 
-	pub fn check(&self) -> Result<(), Error> { check(self) }
+	pub fn check(&self) -> Result<(), Error> {
+		check(self)
+	}
 }
 
-fn true_fn() -> bool { true }
+fn true_fn() -> bool {
+	true
+}
 
 #[cfg(test)]
-fn default_server_name() -> OwnedServerName { ruma::owned_server_name!("localhost") }
+fn default_server_name() -> OwnedServerName {
+	ruma::owned_server_name!("localhost")
+}
 
-fn default_database_path() -> PathBuf { "/var/lib/tuwunel".to_owned().into() }
+fn default_database_path() -> PathBuf {
+	"/var/lib/tuwunel".to_owned().into()
+}
 
 fn default_address() -> ListeningAddr {
 	ListeningAddr {
@@ -2692,19 +2700,33 @@ fn default_address() -> ListeningAddr {
 	}
 }
 
-fn default_port() -> ListeningPort { ListeningPort { ports: Left(8008) } }
+fn default_port() -> ListeningPort {
+	ListeningPort { ports: Left(8008) }
+}
 
-fn default_unix_socket_perms() -> u32 { 660 }
+fn default_unix_socket_perms() -> u32 {
+	660
+}
 
-fn default_database_backups_to_keep() -> i16 { 1 }
+fn default_database_backups_to_keep() -> i16 {
+	1
+}
 
-fn default_db_write_buffer_capacity_mb() -> f64 { 48.0 + parallelism_scaled_f64(4.0) }
+fn default_db_write_buffer_capacity_mb() -> f64 {
+	48.0 + parallelism_scaled_f64(4.0)
+}
 
-fn default_db_cache_capacity_mb() -> f64 { 128.0 + parallelism_scaled_f64(64.0) }
+fn default_db_cache_capacity_mb() -> f64 {
+	128.0 + parallelism_scaled_f64(64.0)
+}
 
-fn default_pdu_cache_capacity() -> u32 { parallelism_scaled_u32(10_000).saturating_add(100_000) }
+fn default_pdu_cache_capacity() -> u32 {
+	parallelism_scaled_u32(10_000).saturating_add(100_000)
+}
 
-fn default_cache_capacity_modifier() -> f64 { 1.0 }
+fn default_cache_capacity_modifier() -> f64 {
+	1.0
+}
 
 fn default_auth_chain_cache_capacity() -> u32 {
 	parallelism_scaled_u32(10_000).saturating_add(100_000)
@@ -2734,59 +2756,109 @@ fn default_servernameevent_data_cache_capacity() -> u32 {
 	parallelism_scaled_u32(100_000).saturating_add(500_000)
 }
 
-fn default_stateinfo_cache_capacity() -> u32 { parallelism_scaled_u32(100) }
+fn default_stateinfo_cache_capacity() -> u32 {
+	parallelism_scaled_u32(100)
+}
 
-fn default_roomid_spacehierarchy_cache_capacity() -> u32 { parallelism_scaled_u32(1000) }
+fn default_roomid_spacehierarchy_cache_capacity() -> u32 {
+	parallelism_scaled_u32(1000)
+}
 
-fn default_dns_cache_entries() -> u32 { 32768 }
+fn default_dns_cache_entries() -> u32 {
+	32768
+}
 
-fn default_dns_min_ttl() -> u64 { 60 * 180 }
+fn default_dns_min_ttl() -> u64 {
+	60 * 180
+}
 
-fn default_dns_min_ttl_nxdomain() -> u64 { 60 * 60 * 24 * 3 }
+fn default_dns_min_ttl_nxdomain() -> u64 {
+	60 * 60 * 24 * 3
+}
 
-fn default_dns_attempts() -> u16 { 10 }
+fn default_dns_attempts() -> u16 {
+	10
+}
 
-fn default_dns_timeout() -> u64 { 10 }
+fn default_dns_timeout() -> u64 {
+	10
+}
 
-fn default_ip_lookup_strategy() -> u8 { 5 }
+fn default_ip_lookup_strategy() -> u8 {
+	5
+}
 
 fn default_max_request_size() -> usize {
 	20 * 1024 * 1024 // Default to 20 MB
 }
 
-fn default_request_conn_timeout() -> u64 { 10 }
+fn default_request_conn_timeout() -> u64 {
+	10
+}
 
-fn default_request_timeout() -> u64 { 35 }
+fn default_request_timeout() -> u64 {
+	35
+}
 
-fn default_request_total_timeout() -> u64 { 320 }
+fn default_request_total_timeout() -> u64 {
+	320
+}
 
-fn default_request_idle_timeout() -> u64 { 5 }
+fn default_request_idle_timeout() -> u64 {
+	5
+}
 
-fn default_request_idle_per_host() -> u16 { 1 }
+fn default_request_idle_per_host() -> u16 {
+	1
+}
 
-fn default_well_known_conn_timeout() -> u64 { 6 }
+fn default_well_known_conn_timeout() -> u64 {
+	6
+}
 
-fn default_well_known_timeout() -> u64 { 10 }
+fn default_well_known_timeout() -> u64 {
+	10
+}
 
-fn default_federation_timeout() -> u64 { 25 }
+fn default_federation_timeout() -> u64 {
+	25
+}
 
-fn default_federation_idle_timeout() -> u64 { 25 }
+fn default_federation_idle_timeout() -> u64 {
+	25
+}
 
-fn default_federation_idle_per_host() -> u16 { 1 }
+fn default_federation_idle_per_host() -> u16 {
+	1
+}
 
-fn default_sender_timeout() -> u64 { 180 }
+fn default_sender_timeout() -> u64 {
+	180
+}
 
-fn default_sender_idle_timeout() -> u64 { 180 }
+fn default_sender_idle_timeout() -> u64 {
+	180
+}
 
-fn default_sender_retry_backoff_limit() -> u64 { 86400 }
+fn default_sender_retry_backoff_limit() -> u64 {
+	86400
+}
 
-fn default_appservice_timeout() -> u64 { 35 }
+fn default_appservice_timeout() -> u64 {
+	35
+}
 
-fn default_appservice_idle_timeout() -> u64 { 300 }
+fn default_appservice_idle_timeout() -> u64 {
+	300
+}
 
-fn default_pusher_idle_timeout() -> u64 { 15 }
+fn default_pusher_idle_timeout() -> u64 {
+	15
+}
 
-fn default_max_fetch_prev_events() -> u16 { 192_u16 }
+fn default_max_fetch_prev_events() -> u16 {
+	192_u16
+}
 
 fn default_tracing_flame_filter() -> String {
 	cfg!(debug_assertions)
@@ -2802,7 +2874,9 @@ fn default_jaeger_filter() -> String {
 		.to_owned()
 }
 
-fn default_tracing_flame_output_path() -> String { "./tracing.folded".to_owned() }
+fn default_tracing_flame_output_path() -> String {
+	"./tracing.folded".to_owned()
+}
 
 fn default_trusted_servers() -> Vec<OwnedServerName> {
 	vec![OwnedServerName::try_from("matrix.org").unwrap()]
@@ -2818,40 +2892,70 @@ pub fn default_log() -> String {
 }
 
 #[must_use]
-pub fn default_log_span_events() -> String { "none".into() }
+pub fn default_log_span_events() -> String {
+	"none".into()
+}
 
-fn default_notification_push_path() -> String { "/_matrix/push/v1/notify".to_owned() }
+fn default_notification_push_path() -> String {
+	"/_matrix/push/v1/notify".to_owned()
+}
 
-fn default_openid_token_ttl() -> u64 { 60 * 60 }
+fn default_openid_token_ttl() -> u64 {
+	60 * 60
+}
 
-fn default_login_token_ttl() -> u64 { 2 * 60 * 1000 }
+fn default_login_token_ttl() -> u64 {
+	2 * 60 * 1000
+}
 
-fn default_turn_ttl() -> u64 { 60 * 60 * 24 }
+fn default_turn_ttl() -> u64 {
+	60 * 60 * 24
+}
 
-fn default_presence_idle_timeout_s() -> u64 { 5 * 60 }
+fn default_presence_idle_timeout_s() -> u64 {
+	5 * 60
+}
 
-fn default_presence_offline_timeout_s() -> u64 { 30 * 60 }
+fn default_presence_offline_timeout_s() -> u64 {
+	30 * 60
+}
 
-fn default_typing_federation_timeout_s() -> u64 { 30 }
+fn default_typing_federation_timeout_s() -> u64 {
+	30
+}
 
-fn default_typing_client_timeout_min_s() -> u64 { 15 }
+fn default_typing_client_timeout_min_s() -> u64 {
+	15
+}
 
-fn default_typing_client_timeout_max_s() -> u64 { 45 }
+fn default_typing_client_timeout_max_s() -> u64 {
+	45
+}
 
-fn default_rocksdb_recovery_mode() -> u8 { 1 }
+fn default_rocksdb_recovery_mode() -> u8 {
+	1
+}
 
-fn default_rocksdb_log_level() -> String { "error".to_owned() }
+fn default_rocksdb_log_level() -> String {
+	"error".to_owned()
+}
 
-fn default_rocksdb_log_time_to_roll() -> usize { 0 }
+fn default_rocksdb_log_time_to_roll() -> usize {
+	0
+}
 
-fn default_rocksdb_max_log_files() -> usize { 3 }
+fn default_rocksdb_max_log_files() -> usize {
+	3
+}
 
 fn default_rocksdb_max_log_file_size() -> usize {
 	// 4 megabytes
 	4 * 1024 * 1024
 }
 
-fn default_rocksdb_parallelism_threads() -> usize { 0 }
+fn default_rocksdb_parallelism_threads() -> usize {
+	0
+}
 
 fn default_rocksdb_compression_algo() -> String {
 	cfg!(feature = "zstd_compression")
@@ -2864,20 +2968,28 @@ fn default_rocksdb_compression_algo() -> String {
 /// RocksDB as the default magic number and translated to the library's default
 /// compression level as they all differ. See their `kDefaultCompressionLevel`.
 #[allow(clippy::doc_markdown)]
-fn default_rocksdb_compression_level() -> i32 { 32767 }
+fn default_rocksdb_compression_level() -> i32 {
+	32767
+}
 
 /// Default RocksDB compression level is 32767, which is internally read by
 /// RocksDB as the default magic number and translated to the library's default
 /// compression level as they all differ. See their `kDefaultCompressionLevel`.
 #[allow(clippy::doc_markdown)]
-fn default_rocksdb_bottommost_compression_level() -> i32 { 32767 }
+fn default_rocksdb_bottommost_compression_level() -> i32 {
+	32767
+}
 
-fn default_rocksdb_stats_level() -> u8 { 1 }
+fn default_rocksdb_stats_level() -> u8 {
+	1
+}
 
 // I know, it's a great name
 #[must_use]
 #[inline]
-pub fn default_default_room_version() -> RoomVersionId { RoomVersionId::V11 }
+pub fn default_default_room_version() -> RoomVersionId {
+	RoomVersionId::V11
+}
 
 fn default_ip_range_denylist() -> Vec<String> {
 	vec![
@@ -2907,7 +3019,9 @@ fn default_url_preview_max_spider_size() -> usize {
 	256_000 // 256KB
 }
 
-fn default_new_user_displayname_suffix() -> String { "💕".to_owned() }
+fn default_new_user_displayname_suffix() -> String {
+	"💕".to_owned()
+}
 
 fn default_sentry_endpoint() -> Option<Url> {
 	let url = "https://8994b1762a6a95af9502a7900edabc4c@o4509498990067712.ingest.us.sentry.io/4509498993213440"
@@ -2917,11 +3031,17 @@ fn default_sentry_endpoint() -> Option<Url> {
 	Some(url)
 }
 
-fn default_sentry_traces_sample_rate() -> f32 { 0.15 }
+fn default_sentry_traces_sample_rate() -> f32 {
+	0.15
+}
 
-fn default_sentry_filter() -> String { "info".to_owned() }
+fn default_sentry_filter() -> String {
+	"info".to_owned()
+}
 
-fn default_startup_netburst_keep() -> i64 { 50 }
+fn default_startup_netburst_keep() -> i64 {
+	50
+}
 
 fn default_admin_log_capture() -> String {
 	cfg!(debug_assertions)
@@ -2930,10 +3050,14 @@ fn default_admin_log_capture() -> String {
 		.to_owned()
 }
 
-fn default_admin_room_tag() -> String { "m.server_notice".to_owned() }
+fn default_admin_room_tag() -> String {
+	"m.server_notice".to_owned()
+}
 
 #[allow(clippy::as_conversions, clippy::cast_precision_loss)]
-fn parallelism_scaled_f64(val: f64) -> f64 { val * (sys::available_parallelism() as f64) }
+fn parallelism_scaled_f64(val: f64) -> f64 {
+	val * (sys::available_parallelism() as f64)
+}
 
 fn parallelism_scaled_u32(val: u32) -> u32 {
 	let val = val
@@ -2944,9 +3068,13 @@ fn parallelism_scaled_u32(val: u32) -> u32 {
 		.unwrap_or(u32::MAX)
 }
 
-fn parallelism_scaled(val: usize) -> usize { val.saturating_mul(sys::available_parallelism()) }
+fn parallelism_scaled(val: usize) -> usize {
+	val.saturating_mul(sys::available_parallelism())
+}
 
-fn default_trusted_server_batch_size() -> usize { 256 }
+fn default_trusted_server_batch_size() -> usize {
+	256
+}
 
 fn default_db_pool_workers() -> usize {
 	sys::available_parallelism()
@@ -2954,64 +3082,116 @@ fn default_db_pool_workers() -> usize {
 		.clamp(32, 1024)
 }
 
-fn default_db_pool_workers_limit() -> usize { 64 }
+fn default_db_pool_workers_limit() -> usize {
+	64
+}
 
-fn default_db_pool_queue_mult() -> usize { 4 }
+fn default_db_pool_queue_mult() -> usize {
+	4
+}
 
-fn default_stream_width_default() -> usize { 32 }
+fn default_stream_width_default() -> usize {
+	32
+}
 
-fn default_stream_width_scale() -> f32 { 1.0 }
+fn default_stream_width_scale() -> f32 {
+	1.0
+}
 
-fn default_stream_amplification() -> usize { 1024 }
+fn default_stream_amplification() -> usize {
+	1024
+}
 
-fn default_client_receive_timeout() -> u64 { 75 }
+fn default_client_receive_timeout() -> u64 {
+	75
+}
 
-fn default_client_request_timeout() -> u64 { 180 }
+fn default_client_request_timeout() -> u64 {
+	180
+}
 
-fn default_client_response_timeout() -> u64 { 120 }
+fn default_client_response_timeout() -> u64 {
+	120
+}
 
-fn default_client_shutdown_timeout() -> u64 { 15 }
+fn default_client_shutdown_timeout() -> u64 {
+	15
+}
 
-fn default_sender_shutdown_timeout() -> u64 { 5 }
+fn default_sender_shutdown_timeout() -> u64 {
+	5
+}
 
 // blurhashing defaults recommended by https://blurha.sh/
 // 2^25
-fn default_blurhash_max_raw_size() -> u64 { 33_554_432 }
+fn default_blurhash_max_raw_size() -> u64 {
+	33_554_432
+}
 
-fn default_blurhash_x_component() -> u32 { 4 }
+fn default_blurhash_x_component() -> u32 {
+	4
+}
 
-fn default_blurhash_y_component() -> u32 { 3 }
+fn default_blurhash_y_component() -> u32 {
+	3
+}
 
-fn default_ldap_search_filter() -> String { "(objectClass=*)".to_owned() }
+fn default_ldap_search_filter() -> String {
+	"(objectClass=*)".to_owned()
+}
 
-fn default_ldap_uid_attribute() -> String { String::from("uid") }
+fn default_ldap_uid_attribute() -> String {
+	String::from("uid")
+}
 
-fn default_ldap_mail_attribute() -> String { String::from("mail") }
+fn default_ldap_mail_attribute() -> String {
+	String::from("mail")
+}
 
-fn default_ldap_name_attribute() -> String { String::from("givenName") }
+fn default_ldap_name_attribute() -> String {
+	String::from("givenName")
+}
 
-fn default_jwt_algorithm() -> String { "HS256".to_owned() }
+fn default_jwt_algorithm() -> String {
+	"HS256".to_owned()
+}
 
-fn default_jwt_format() -> String { "HMAC".to_owned() }
+fn default_jwt_format() -> String {
+	"HMAC".to_owned()
+}
 
 fn default_oauth_scopes() -> Vec<String> {
 	vec!["openid".to_owned(), "profile".to_owned(), "email".to_owned()]
 }
 
-fn default_oauth_subject_claim() -> String { "sub".to_owned() }
+fn default_oauth_subject_claim() -> String {
+	"sub".to_owned()
+}
 
-fn default_oauth_displayname_claim() -> String { "name".to_owned() }
+fn default_oauth_displayname_claim() -> String {
+	"name".to_owned()
+}
 
-fn default_client_sync_timeout_min() -> u64 { 5000 }
+fn default_client_sync_timeout_min() -> u64 {
+	5000
+}
 
-fn default_client_sync_timeout_default() -> u64 { 30000 }
+fn default_client_sync_timeout_default() -> u64 {
+	30000
+}
 
-fn default_client_sync_timeout_max() -> u64 { 90000 }
+fn default_client_sync_timeout_max() -> u64 {
+	90000
+}
 
-fn default_access_token_ttl() -> u64 { 604_800 }
+fn default_access_token_ttl() -> u64 {
+	604_800
+}
 
 fn default_deprioritize_joins_through_servers() -> RegexSet {
 	RegexSet::new([r"matrix\.org"]).unwrap()
 }
 
-fn default_one_time_key_limit() -> usize { 256 }
+fn default_one_time_key_limit() -> usize {
+	256
+}

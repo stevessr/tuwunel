@@ -104,11 +104,15 @@ pub fn panic_str(p: &Box<dyn Any + Send>) -> &'static str {
 
 #[inline(always)]
 #[must_use]
-pub fn rttype_name<T: ?Sized>(_: &T) -> &'static str { type_name::<T>() }
+pub fn rttype_name<T: ?Sized>(_: &T) -> &'static str {
+	type_name::<T>()
+}
 
 #[inline(always)]
 #[must_use]
-pub fn type_name<T: ?Sized>() -> &'static str { std::any::type_name::<T>() }
+pub fn type_name<T: ?Sized>() -> &'static str {
+	std::any::type_name::<T>()
+}
 
 /// Returns true if debug logging is enabled. In this mode extra logging calls
 /// are made at all log levels, not just DEBUG and TRACE. These logs are demoted

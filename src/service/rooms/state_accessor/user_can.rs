@@ -47,12 +47,13 @@ pub async fn user_can_redact(
 		| Ok(power_levels) => Ok(power_levels.user_can_redact_event_of_other(sender)
 			|| power_levels.user_can_redact_own_event(sender)
 				&& match redacting_event {
-					| Ok(redacting_event) =>
+					| Ok(redacting_event) => {
 						if federation {
 							redacting_event.sender().server_name() == sender.server_name()
 						} else {
 							redacting_event.sender() == sender
-						},
+						}
+					},
 					| _ => false,
 				}),
 		| _ => {
@@ -144,16 +145,18 @@ pub async fn user_can_see_state_events(&self, user_id: &UserId, room_id: &RoomId
 
 	match history_visibility {
 		| HistoryVisibility::WorldReadable => true,
-		| HistoryVisibility::Shared =>
+		| HistoryVisibility::Shared => {
 			self.services
 				.state_cache
 				.once_joined(user_id, room_id)
-				.await,
-		| HistoryVisibility::Invited =>
+				.await
+		},
+		| HistoryVisibility::Invited => {
 			self.services
 				.state_cache
 				.is_invited(user_id, room_id)
-				.await,
+				.await
+		},
 		| _ => false,
 	}
 }

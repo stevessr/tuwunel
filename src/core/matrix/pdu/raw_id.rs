@@ -28,7 +28,9 @@ impl RawId {
 
 	#[inline]
 	#[must_use]
-	pub fn is_room_eq(self, other: Self) -> bool { self.shortroomid() == other.shortroomid() }
+	pub fn is_room_eq(self, other: Self) -> bool {
+		self.shortroomid() == other.shortroomid()
+	}
 
 	#[inline]
 	#[must_use]
@@ -95,7 +97,9 @@ impl serde::de::Visitor<'_> for RawIdVisitor {
 	}
 
 	#[inline]
-	fn visit_bytes<E>(self, buf: &[u8]) -> Result<RawId, E> { Ok(RawId::from(buf)) }
+	fn visit_bytes<E>(self, buf: &[u8]) -> Result<RawId, E> {
+		Ok(RawId::from(buf))
+	}
 }
 
 impl From<Id> for RawId {
@@ -150,15 +154,21 @@ impl From<&[u8]> for RawId {
 
 impl From<&[u8; Self::NORMAL_LEN]> for RawId {
 	#[inline]
-	fn from(id: &[u8; Self::NORMAL_LEN]) -> Self { Self::Normal(*id) }
+	fn from(id: &[u8; Self::NORMAL_LEN]) -> Self {
+		Self::Normal(*id)
+	}
 }
 
 impl From<&[u8; Self::BACKFILLED_LEN]> for RawId {
 	#[inline]
-	fn from(id: &[u8; Self::BACKFILLED_LEN]) -> Self { Self::Backfilled(*id) }
+	fn from(id: &[u8; Self::BACKFILLED_LEN]) -> Self {
+		Self::Backfilled(*id)
+	}
 }
 
 impl AsRef<[u8]> for RawId {
 	#[inline]
-	fn as_ref(&self) -> &[u8] { self.as_bytes() }
+	fn as_ref(&self) -> &[u8] {
+		self.as_bytes()
+	}
 }

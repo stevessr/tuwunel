@@ -389,15 +389,25 @@ fn event_id(id: &str) -> OwnedEventId {
 	format!("${id}:foo").try_into().unwrap()
 }
 
-fn alice() -> &'static UserId { user_id!("@alice:foo") }
+fn alice() -> &'static UserId {
+	user_id!("@alice:foo")
+}
 
-fn bob() -> &'static UserId { user_id!("@bob:foo") }
+fn bob() -> &'static UserId {
+	user_id!("@bob:foo")
+}
 
-fn charlie() -> &'static UserId { user_id!("@charlie:foo") }
+fn charlie() -> &'static UserId {
+	user_id!("@charlie:foo")
+}
 
-fn ella() -> &'static UserId { user_id!("@ella:foo") }
+fn ella() -> &'static UserId {
+	user_id!("@ella:foo")
+}
 
-fn room_id() -> &'static RoomId { room_id!("!test:foo") }
+fn room_id() -> &'static RoomId {
+	room_id!("!test:foo")
+}
 
 fn member_content_ban() -> Box<RawJsonValue> {
 	to_raw_json_value(&RoomMemberEventContent::new(MembershipState::Ban)).unwrap()

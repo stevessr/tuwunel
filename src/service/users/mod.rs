@@ -87,7 +87,9 @@ impl crate::Service for Service {
 		}))
 	}
 
-	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
+	fn name(&self) -> &str {
+		crate::service::make_name(std::module_path!())
+	}
 }
 
 impl Service {
@@ -177,7 +179,9 @@ impl Service {
 
 	/// Returns the number of users registered on this server.
 	#[inline]
-	pub async fn count(&self) -> usize { self.db.userid_password.count().await }
+	pub async fn count(&self) -> usize {
+		self.db.userid_password.count().await
+	}
 
 	/// Returns an iterator over all users on this homeserver (offered for
 	/// compatibility)
@@ -476,16 +480,19 @@ impl Service {
 			.iter()
 			.try_stream()
 			.and_then(async |room_id: &OwnedRoomId| {
-				let pdu = PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-					displayname: displayname.clone(),
-					membership: MembershipState::Join,
-					avatar_url: avatar_url.clone(),
-					blurhash: blurhash.clone(),
-					join_authorized_via_users_server: None,
-					reason: None,
-					is_direct: None,
-					third_party_invite: None,
-				});
+				let pdu = PduBuilder::state(
+					user_id.to_string(),
+					&RoomMemberEventContent {
+						displayname: displayname.clone(),
+						membership: MembershipState::Join,
+						avatar_url: avatar_url.clone(),
+						blurhash: blurhash.clone(),
+						join_authorized_via_users_server: None,
+						reason: None,
+						is_direct: None,
+						third_party_invite: None,
+					},
+				);
 
 				Ok((pdu, room_id))
 			})
@@ -531,16 +538,19 @@ impl Service {
 			.iter()
 			.try_stream()
 			.and_then(async |room_id: &OwnedRoomId| {
-				let pdu = PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-					avatar_url: avatar_url.clone(),
-					blurhash: blurhash.clone(),
-					membership: MembershipState::Join,
-					displayname: displayname.clone(),
-					join_authorized_via_users_server: None,
-					reason: None,
-					is_direct: None,
-					third_party_invite: None,
-				});
+				let pdu = PduBuilder::state(
+					user_id.to_string(),
+					&RoomMemberEventContent {
+						avatar_url: avatar_url.clone(),
+						blurhash: blurhash.clone(),
+						membership: MembershipState::Join,
+						displayname: displayname.clone(),
+						join_authorized_via_users_server: None,
+						reason: None,
+						is_direct: None,
+						third_party_invite: None,
+					},
+				);
 
 				Ok((pdu, room_id))
 			})
