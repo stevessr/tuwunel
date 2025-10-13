@@ -38,4 +38,8 @@ Example:
 
    node tests/capture-login.js --stealth=true --headless=false --homeserver=https://test.aaca.eu.org
 
+If your redirect URL contains a fragment (#) and you want to pass it unencoded to the server, use `--noEncodeRedirect=true` and quote the argument in fish shell, for example:
+
+   node tests/capture-login.js --stealth=true --headless=false --homeserver=https://test.aaca.eu.org --redirectUrl 'https://fluffychat.im/web/#/home' --noEncodeRedirect=true
+
 

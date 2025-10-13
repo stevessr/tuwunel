@@ -349,15 +349,34 @@ pub(crate) async fn oauth_callback_route(
 	}
 
 	if let Some(mut redirect_to) = app_redirect {
-		// 拼接 token 和 user_id，字段名为 token
-		let sep = if redirect_to.contains('?') { '&' } else { '?' };
-		redirect_to = format!(
-			"{}{}token={}&user_id={}",
-			redirect_to,
-			sep,
-			login_token,
-			user_id.to_string()
-		);
+		// If the redirect URL contains a fragment (hash routing, e.g. /#/home),
+		// append the token inside the fragment so single-page apps that
+		// use hash routing can read it (e.g. https://app.example/#/home?token=...)
+		if redirect_to.contains('#') {
+			let mut parts = redirect_to.splitn(2, '#');
+			let base = parts.next().unwrap_or("");
+			let frag = parts.next().unwrap_or("");
+			let frag_sep = if frag.contains('?') { '&' } else { '?' };
+			redirect_to = format!(
+				"{}#{}{}token={}&user_id={}",
+				base,
+				frag,
+				frag_sep,
+				urlencoding::encode(&login_token),
+				urlencoding::encode(&user_id.to_string())
+			);
+		} else {
+			// 拼接 token 和 user_id，字段名为 token (query param)
+			let sep = if redirect_to.contains('?') { '&' } else { '?' };
+			redirect_to = format!(
+				"{}{}token={}&user_id={}",
+				redirect_to,
+				sep,
+				urlencoding::encode(&login_token),
+				urlencoding::encode(&user_id.to_string())
+			);
+		}
+
 		return Ok(Redirect::temporary(&redirect_to).into_response());
 	}
 
