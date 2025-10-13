@@ -1,3 +1,4 @@
+use crate::client::TOKEN_LENGTH;
 use axum::extract::State;
 use axum::response::{IntoResponse, Redirect};
 use axum_client_ip::InsecureClientIp;
@@ -86,7 +87,7 @@ pub(super) struct OAuthUserInfo {
 #[tracing::instrument(skip_all, fields(%client), name = "oauth_redirect")]
 pub(crate) async fn oauth_redirect_route(
 	State(services): State<crate::State>,
-	InsecureClientIp(_client): InsecureClientIp,
+	InsecureClientIp(client): InsecureClientIp,
 	uri: http::Uri,
 ) -> Result<Redirect> {
 	if !services.config.oauth.enable {
@@ -286,7 +287,7 @@ pub(crate) async fn get_or_create_user(
 #[tracing::instrument(skip_all, fields(%client), name = "oauth_callback")]
 pub(crate) async fn oauth_callback_route(
 	State(services): State<crate::State>,
-	InsecureClientIp(_client): InsecureClientIp,
+	InsecureClientIp(client): InsecureClientIp,
 	// query parameters will be parsed by Ruma wrapper normally; for minimal debug we read from Axum
 	uri: http::Uri,
 ) -> Result<axum::response::Response> {
@@ -320,6 +321,17 @@ pub(crate) async fn oauth_callback_route(
 	// get or create local user
 	let user_id = get_or_create_user(&services, &userinfo).await?;
 
+	// 生成一次性 SSO login_token
+	let login_token = {
+		use ruma::UserId;
+		let user_id_ref: &UserId = user_id.as_ref();
+		let token = utils::random_string(TOKEN_LENGTH);
+		services
+			.users
+			.create_login_token(user_id_ref, &token);
+		token
+	};
+
 	// If state contains an embedded redirect URL (we encoded it earlier), extract and redirect
 	let mut app_redirect: Option<String> = consume_redirect(state_token);
 
@@ -337,23 +349,22 @@ pub(crate) async fn oauth_callback_route(
 	}
 
 	if let Some(mut redirect_to) = app_redirect {
-		// append access_token and user_id as query params for the client to consume
+		// 拼接 token 和 user_id，字段名为 token
 		let sep = if redirect_to.contains('?') { '&' } else { '?' };
 		redirect_to = format!(
-			"{}{}access_token={}&user_id={}",
+			"{}{}token={}&user_id={}",
 			redirect_to,
 			sep,
-			token.access_token,
+			login_token,
 			user_id.to_string()
 		);
 		return Ok(Redirect::temporary(&redirect_to).into_response());
 	}
 
-	// fallback: return JSON
+	// fallback: return JSON（同样用 token 字段）
 	let result = serde_json::json!({
 		"user_id": user_id.to_string(),
-		"access_token": token.access_token,
-		"token_type": token.token_type,
+		"token": login_token,
 		"state": state,
 		"userinfo": userinfo,
 	});
