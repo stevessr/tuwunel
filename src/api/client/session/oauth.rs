@@ -358,7 +358,7 @@ pub(crate) async fn oauth_callback_route(
 			let frag = parts.next().unwrap_or("");
 			let frag_sep = if frag.contains('?') { '&' } else { '?' };
 			redirect_to = format!(
-				"{}#{}{}token={}&user_id={}",
+				"{}#{}{}loginToken={}&user_id={}",
 				base,
 				frag,
 				frag_sep,
@@ -366,10 +366,10 @@ pub(crate) async fn oauth_callback_route(
 				urlencoding::encode(&user_id.to_string())
 			);
 		} else {
-			// 拼接 token 和 user_id，字段名为 token (query param)
+			// 拼接 token 和 user_id，字段名为 loginToken (query param)
 			let sep = if redirect_to.contains('?') { '&' } else { '?' };
 			redirect_to = format!(
-				"{}{}token={}&user_id={}",
+				"{}{}loginToken={}&user_id={}",
 				redirect_to,
 				sep,
 				urlencoding::encode(&login_token),
@@ -380,10 +380,10 @@ pub(crate) async fn oauth_callback_route(
 		return Ok(Redirect::temporary(&redirect_to).into_response());
 	}
 
-	// fallback: return JSON（同样用 token 字段）
+	// fallback: return JSON（同样用 loginToken 字段）
 	let result = serde_json::json!({
 		"user_id": user_id.to_string(),
-		"token": login_token,
+		"loginToken": login_token,
 		"state": state,
 		"userinfo": userinfo,
 	});
