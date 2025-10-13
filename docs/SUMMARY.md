@@ -4,6 +4,7 @@
 - [Configuration](configuration.md)
   - [Examples](configuration/examples.md)
   - [OAuth 2.0 / OIDC](oauth.md)
+  - [MSC3861 Implementation](msc3861-implementation.md)
 - [Deploying](deploying.md)
   - [Generic](deploying/generic.md)
     - [Reverse Proxy - Caddy](deploying/reverse-proxy-caddy.md)
