@@ -103,13 +103,12 @@ pub fn check_pdu_format(pdu: &CanonicalJsonObject, rules: &EventFormatRules) -> 
 
 	// Check the presence, type and value of the `depth` field.
 	match pdu.get("depth") {
-		| Some(CanonicalJsonValue::Integer(value)) => {
+		| Some(CanonicalJsonValue::Integer(value)) =>
 			if *value < int!(0) {
 				return Err!(Request(InvalidParam(
 					"invalid `depth` field in PDU: cannot be a negative integer"
 				)));
-			}
-		},
+			},
 		| Some(value) => {
 			return Err!(Request(InvalidParam(
 				"unexpected format of `depth` field in PDU: expected integer, got {value:?}"
@@ -132,7 +131,7 @@ fn extract_optional_string_field<'a>(
 	field: &'a str,
 ) -> Result<Option<&'a String>> {
 	match object.get(field) {
-		| Some(CanonicalJsonValue::String(value)) => {
+		| Some(CanonicalJsonValue::String(value)) =>
 			if value.len() > ID_MAX_BYTES {
 				Err!(Request(InvalidParam(
 					"invalid `{field}` field in PDU: string length is larger than maximum of \
@@ -140,8 +139,7 @@ fn extract_optional_string_field<'a>(
 				)))
 			} else {
 				Ok(Some(value))
-			}
-		},
+			},
 
 		| Some(value) => Err!(Request(InvalidParam(
 			"unexpected format of `{field}` field in PDU: expected string, got {value:?}"
@@ -177,7 +175,7 @@ fn extract_required_array_field<'a>(
 	max_len: usize,
 ) -> Result<&'a [CanonicalJsonValue]> {
 	match object.get(field) {
-		| Some(CanonicalJsonValue::Array(value)) => {
+		| Some(CanonicalJsonValue::Array(value)) =>
 			if value.len() > max_len {
 				Err!(Request(InvalidParam(
 					"invalid `{field}` field in PDU: array length is larger than maximum of \
@@ -185,8 +183,7 @@ fn extract_required_array_field<'a>(
 				)))
 			} else {
 				Ok(value)
-			}
-		},
+			},
 
 		| Some(value) => Err!(Request(InvalidParam(
 			"unexpected format of `{field}` field in PDU: expected array, got {value:?}"

@@ -250,7 +250,7 @@ async fn append_pdu_effects(
 				},
 			}
 		},
-		| TimelineEventType::SpaceChild => {
+		| TimelineEventType::SpaceChild =>
 			if let Some(_state_key) = pdu.state_key() {
 				self.services
 					.spaces
@@ -258,8 +258,7 @@ async fn append_pdu_effects(
 					.lock()
 					.await
 					.remove(pdu.room_id());
-			}
-		},
+			},
 		| TimelineEventType::RoomMember => {
 			if let Some(state_key) = pdu.state_key() {
 				// if the state_key fails

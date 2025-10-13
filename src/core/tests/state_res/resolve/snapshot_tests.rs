@@ -9,10 +9,10 @@ snapshot_test!(minimal_private_chat, ["bootstrap-private-chat.json"]);
 // have the tiebreaking algorithm applied. The ordering should be decided by
 // the `origin_server_ts` fields of these events, not the `event_id` fields. The
 // power levels of these events are equivalent, so they don't really matter.
-snapshot_test!(
-	origin_server_ts_tiebreak,
-	["bootstrap-private-chat.json", "origin-server-ts-tiebreak.json"],
-);
+snapshot_test!(origin_server_ts_tiebreak, [
+	"bootstrap-private-chat.json",
+	"origin-server-ts-tiebreak.json"
+],);
 
 // Test that state res v2.0 is implemented starting from the unconflicted set,
 // and NOT the empty set, leading to there being no join rules state.

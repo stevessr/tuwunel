@@ -180,16 +180,12 @@ impl Args {
 }
 
 impl Default for Args {
-	fn default() -> Self {
-		Self::parse()
-	}
+	fn default() -> Self { Self::parse() }
 }
 
 /// Parse commandline arguments into structured data
 #[must_use]
-pub fn parse() -> Args {
-	Args::parse()
-}
+pub fn parse() -> Args { Args::parse() }
 
 /// Synthesize any command line options with configuration file options.
 pub fn update(mut config: Figment, args: &Args) -> Result<Figment> {

@@ -36,9 +36,7 @@ use crate::{
 
 static SERVER_TIMESTAMP: AtomicU64 = AtomicU64::new(0);
 
-pub(super) fn not_found() -> Error {
-	err!(Request(NotFound("Test event not found")))
-}
+pub(super) fn not_found() -> Error { err!(Request(NotFound("Test event not found"))) }
 
 pub(super) fn event_not_found(event_id: &EventId) -> Error {
 	err!(Request(NotFound("Test event not found: {event_id:?}")))
@@ -400,33 +398,19 @@ pub(super) fn event_id(id: &str) -> OwnedEventId {
 	format!("${id}:foo").try_into().unwrap()
 }
 
-pub(super) fn alice() -> &'static UserId {
-	user_id!("@alice:foo")
-}
+pub(super) fn alice() -> &'static UserId { user_id!("@alice:foo") }
 
-pub(super) fn bob() -> &'static UserId {
-	user_id!("@bob:foo")
-}
+pub(super) fn bob() -> &'static UserId { user_id!("@bob:foo") }
 
-pub(super) fn charlie() -> &'static UserId {
-	user_id!("@charlie:foo")
-}
+pub(super) fn charlie() -> &'static UserId { user_id!("@charlie:foo") }
 
-pub(super) fn ella() -> &'static UserId {
-	user_id!("@ella:foo")
-}
+pub(super) fn ella() -> &'static UserId { user_id!("@ella:foo") }
 
-pub(super) fn zara() -> &'static UserId {
-	user_id!("@zara:foo")
-}
+pub(super) fn zara() -> &'static UserId { user_id!("@zara:foo") }
 
-pub(super) fn room_id() -> &'static RoomId {
-	room_id!("!test:foo")
-}
+pub(super) fn room_id() -> &'static RoomId { room_id!("!test:foo") }
 
-pub(crate) fn hydra_room_id() -> &'static RoomId {
-	room_id!("!CREATE")
-}
+pub(crate) fn hydra_room_id() -> &'static RoomId { room_id!("!CREATE") }
 
 pub(super) fn member_content_ban() -> Box<RawJsonValue> {
 	to_raw_json_value(&RoomMemberEventContent::new(MembershipState::Ban)).unwrap()

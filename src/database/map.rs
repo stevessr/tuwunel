@@ -78,19 +78,13 @@ impl Map {
 	}
 
 	#[inline]
-	pub fn name(&self) -> &str {
-		self.name
-	}
+	pub fn name(&self) -> &str { self.name }
 
 	#[inline]
-	pub(crate) fn engine(&self) -> &Arc<Engine> {
-		&self.engine
-	}
+	pub(crate) fn engine(&self) -> &Arc<Engine> { &self.engine }
 
 	#[inline]
-	pub(crate) fn cf(&self) -> impl AsColumnFamilyRef + '_ {
-		&*self.cf
-	}
+	pub(crate) fn cf(&self) -> impl AsColumnFamilyRef + '_ { &*self.cf }
 }
 
 impl Debug for Map {
@@ -100,7 +94,5 @@ impl Debug for Map {
 }
 
 impl Display for Map {
-	fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(out, "{0}", self.name)
-	}
+	fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result { write!(out, "{0}", self.name) }
 }

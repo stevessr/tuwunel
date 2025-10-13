@@ -377,9 +377,8 @@ async fn user_can_publish_room(
 		.get_power_levels(room_id)
 		.await
 	{
-		| Ok(power_levels) => {
-			Ok(power_levels.user_can_send_state(user_id, StateEventType::RoomHistoryVisibility))
-		},
+		| Ok(power_levels) =>
+			Ok(power_levels.user_can_send_state(user_id, StateEventType::RoomHistoryVisibility)),
 		| _ => {
 			match services
 				.state_accessor

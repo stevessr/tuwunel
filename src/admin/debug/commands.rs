@@ -237,17 +237,15 @@ pub(super) async fn get_remote_pdu(
 	match self
 		.services
 		.sending
-		.send_federation_request(
-			&server,
-			ruma::api::federation::event::get_event::v1::Request { event_id: event_id.clone() },
-		)
+		.send_federation_request(&server, ruma::api::federation::event::get_event::v1::Request {
+			event_id: event_id.clone(),
+		})
 		.await
 	{
-		| Err(e) => {
+		| Err(e) =>
 			return Err!(
 				"Remote server did not have PDU or failed sending request to remote server: {e}"
-			);
-		},
+			),
 		| Ok(response) => {
 			let json: CanonicalJsonObject =
 				serde_json::from_str(response.pdu.get()).map_err(|e| {
@@ -388,9 +386,8 @@ pub(super) async fn change_log_level(&self, filter: Option<String>, reset: bool)
 			.reload
 			.reload(&old_filter_layer, Some(handles))
 		{
-			| Err(e) => {
-				return Err!("Failed to modify and reload the global tracing log level: {e}");
-			},
+			| Err(e) =>
+				return Err!("Failed to modify and reload the global tracing log level: {e}"),
 			| Ok(()) => {
 				let value = &self.services.server.config.log;
 				let out = format!("Successfully changed log level back to config value {value}");
@@ -412,14 +409,12 @@ pub(super) async fn change_log_level(&self, filter: Option<String>, reset: bool)
 			.reload
 			.reload(&new_filter_layer, Some(handles))
 		{
-			| Ok(()) => {
+			| Ok(()) =>
 				return self
 					.write_str("Successfully changed log level")
-					.await;
-			},
-			| Err(e) => {
-				return Err!("Failed to modify and reload the global tracing log level: {e}");
-			},
+					.await,
+			| Err(e) =>
+				return Err!("Failed to modify and reload the global tracing log level: {e}"),
 		}
 	}
 
@@ -577,13 +572,10 @@ pub(super) async fn force_set_room_state_from_server(
 	let remote_state_response = self
 		.services
 		.sending
-		.send_federation_request(
-			&server_name,
-			get_room_state::v1::Request {
-				room_id: room_id.clone(),
-				event_id: first_pdu.event_id().to_owned(),
-			},
-		)
+		.send_federation_request(&server_name, get_room_state::v1::Request {
+			room_id: room_id.clone(),
+			event_id: first_pdu.event_id().to_owned(),
+		})
 		.await?;
 
 	for pdu in remote_state_response.pdus.clone() {

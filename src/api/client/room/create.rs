@@ -103,16 +103,14 @@ pub(crate) async fn create_room_route(
 
 	// 1. Create the create event.
 	let (room_id, state_lock) = match version_rules.room_id_format {
-		| RoomIdFormatVersion::V1 => {
-			create_create_event_legacy(&services, &body, room_version, &version_rules).await?
-		},
-		| RoomIdFormatVersion::V2 => {
+		| RoomIdFormatVersion::V1 =>
+			create_create_event_legacy(&services, &body, room_version, &version_rules).await?,
+		| RoomIdFormatVersion::V2 =>
 			create_create_event(&services, &body, &preset, room_version, &version_rules)
 				.await
 				.map_err(|e| {
 					err!(Request(InvalidParam("Error while creating m.room.create event: {e}")))
-				})?
-		},
+				})?,
 	};
 
 	// 2. Let the room creator join
@@ -120,16 +118,13 @@ pub(crate) async fn create_room_route(
 	services
 		.timeline
 		.build_and_append_pdu(
-			PduBuilder::state(
-				sender_user.to_string(),
-				&RoomMemberEventContent {
-					displayname: services.users.displayname(sender_user).await.ok(),
-					avatar_url: services.users.avatar_url(sender_user).await.ok(),
-					blurhash: services.users.blurhash(sender_user).await.ok(),
-					is_direct: Some(body.is_direct),
-					..RoomMemberEventContent::new(MembershipState::Join)
-				},
-			),
+			PduBuilder::state(sender_user.to_string(), &RoomMemberEventContent {
+				displayname: services.users.displayname(sender_user).await.ok(),
+				avatar_url: services.users.avatar_url(sender_user).await.ok(),
+				blurhash: services.users.blurhash(sender_user).await.ok(),
+				is_direct: Some(body.is_direct),
+				..RoomMemberEventContent::new(MembershipState::Join)
+			}),
 			sender_user,
 			&room_id,
 			&state_lock,
@@ -202,13 +197,10 @@ pub(crate) async fn create_room_route(
 		services
 			.timeline
 			.build_and_append_pdu(
-				PduBuilder::state(
-					String::new(),
-					&RoomCanonicalAliasEventContent {
-						alias: Some(room_alias_id.to_owned()),
-						alt_aliases: vec![],
-					},
-				),
+				PduBuilder::state(String::new(), &RoomCanonicalAliasEventContent {
+					alias: Some(room_alias_id.to_owned()),
+					alt_aliases: vec![],
+				}),
 				sender_user,
 				&room_id,
 				&state_lock,
@@ -359,13 +351,10 @@ pub(crate) async fn create_room_route(
 		services
 			.timeline
 			.build_and_append_pdu(
-				PduBuilder::state(
-					String::new(),
-					&RoomTopicEventContent {
-						topic: topic.clone(),
-						topic_block: TopicContentBlock::default(),
-					},
-				),
+				PduBuilder::state(String::new(), &RoomTopicEventContent {
+					topic: topic.clone(),
+					topic_block: TopicContentBlock::default(),
+				}),
 				sender_user,
 				&room_id,
 				&state_lock,
@@ -609,9 +598,8 @@ async fn create_create_event_legacy(
 			use RoomVersionId::*;
 
 			let content = match room_version {
-				| V1 | V2 | V3 | V4 | V5 | V6 | V7 | V8 | V9 | V10 => {
-					RoomCreateEventContent::new_v1(body.sender_user().to_owned())
-				},
+				| V1 | V2 | V3 | V4 | V5 | V6 | V7 | V8 | V9 | V10 =>
+					RoomCreateEventContent::new_v1(body.sender_user().to_owned()),
 				| _ => RoomCreateEventContent::new_v11(),
 			};
 

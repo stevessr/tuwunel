@@ -20,9 +20,7 @@ pub struct RoomMemberEvent<E: Event>(E);
 impl<E: Event> RoomMemberEvent<E> {
 	/// Construct a new `RoomMemberEvent` around the given event.
 	#[inline]
-	pub fn new(event: E) -> Self {
-		Self(event)
-	}
+	pub fn new(event: E) -> Self { Self(event) }
 
 	/// The membership of the user.
 	#[inline]
@@ -49,9 +47,7 @@ impl<E: Event> Deref for RoomMemberEvent<E> {
 	type Target = E;
 
 	#[inline]
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+	fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Helper trait for `Option<RoomMemberEvent<E>>`.
@@ -84,9 +80,7 @@ impl<'a> RoomMemberEventContent<'a> {
 	/// content.
 	#[inline]
 	#[must_use]
-	pub fn new(content: &'a RawJsonValue) -> Self {
-		Self(content)
-	}
+	pub fn new(content: &'a RawJsonValue) -> Self { Self(content) }
 }
 
 impl RoomMemberEventContent<'_> {

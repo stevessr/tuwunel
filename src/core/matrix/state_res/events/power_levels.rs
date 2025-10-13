@@ -28,9 +28,7 @@ pub struct RoomPowerLevelsEvent<E: Event>(E);
 impl<E: Event> RoomPowerLevelsEvent<E> {
 	/// Construct a new `RoomPowerLevelsEvent` around the given event.
 	#[inline]
-	pub fn new(event: E) -> Self {
-		Self(event)
-	}
+	pub fn new(event: E) -> Self { Self(event) }
 
 	/// The deserialized content of the event.
 	fn deserialized_content(&self) -> Result<JsonObject> {
@@ -206,9 +204,7 @@ impl<E: Event> Deref for RoomPowerLevelsEvent<E> {
 	type Target = E;
 
 	#[inline]
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+	fn deref(&self) -> &Self::Target { &self.0 }
 }
 
 /// Helper trait for `Option<RoomPowerLevelsEvent<E>>`.
@@ -376,9 +372,7 @@ impl RoomPowerLevelsIntField {
 	/// The string representation of this field.
 	#[inline]
 	#[must_use]
-	pub fn as_str(&self) -> &str {
-		self.as_ref()
-	}
+	pub fn as_str(&self) -> &str { self.as_ref() }
 
 	/// The default value for this field if it is absent.
 	#[inline]

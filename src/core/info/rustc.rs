@@ -24,9 +24,7 @@ pub static FLAGS: Mutex<BTreeMap<&str, &[&str]>> = Mutex::new(BTreeMap::new());
 static FEATURES: OnceLock<Vec<&'static str>> = OnceLock::new();
 
 /// List of features enabled for the project.
-pub fn features() -> &'static Vec<&'static str> {
-	FEATURES.get_or_init(init_features)
-}
+pub fn features() -> &'static Vec<&'static str> { FEATURES.get_or_init(init_features) }
 
 /// Version of the rustc compiler used during build.
 #[inline]

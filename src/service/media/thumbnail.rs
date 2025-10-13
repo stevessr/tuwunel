@@ -72,10 +72,9 @@ impl super::Service {
 				.search_file_metadata(mxc, &Dim::default())
 				.await
 			{
-				| Ok(metadata) => {
+				| Ok(metadata) =>
 					self.get_thumbnail_generate(mxc, &dim, metadata)
-						.await
-				},
+						.await,
 				| _ => Ok(None),
 			},
 		}
@@ -257,9 +256,7 @@ impl Dim {
 	/// Returns true if the method is Crop.
 	#[inline]
 	#[must_use]
-	pub fn crop(&self) -> bool {
-		self.method == Method::Crop
-	}
+	pub fn crop(&self) -> bool { self.method == Method::Crop }
 }
 
 impl Default for Dim {

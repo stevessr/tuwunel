@@ -27,9 +27,7 @@ impl Deref for OnceServices {
 	type Target = Arc<Services>;
 
 	#[inline]
-	fn deref(&self) -> &Self::Target {
-		self.get()
-	}
+	fn deref(&self) -> &Self::Target { self.get() }
 }
 
 // SAFETY: Services has a lot of circularity inherited from Conduit's original

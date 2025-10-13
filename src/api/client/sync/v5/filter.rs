@@ -27,12 +27,11 @@ pub(super) async fn filter_room(
 			| (Some(MembershipState::Invite), false) => false,
 			| (Some(_), true) => false,
 			| (Some(_), false) => true,
-			| _ => {
+			| _ =>
 				services
 					.state_cache
 					.is_invited(sender_user, room_id)
-					.await == is_invite
-			},
+					.await == is_invite,
 		})
 		.into();
 

@@ -19,15 +19,11 @@ pub enum Count {
 impl Count {
 	#[inline]
 	#[must_use]
-	pub fn to_be_bytes(self) -> [u8; size_of::<u64>()] {
-		self.into_unsigned().to_be_bytes()
-	}
+	pub fn to_be_bytes(self) -> [u8; size_of::<u64>()] { self.into_unsigned().to_be_bytes() }
 
 	#[inline]
 	#[must_use]
-	pub fn from_unsigned(unsigned: u64) -> Self {
-		Self::from_signed(unsigned as i64)
-	}
+	pub fn from_unsigned(unsigned: u64) -> Self { Self::from_signed(unsigned as i64) }
 
 	#[inline]
 	#[must_use]
@@ -133,15 +129,11 @@ impl Count {
 
 	#[inline]
 	#[must_use]
-	pub const fn min() -> Self {
-		Self::Backfilled(i64::MIN)
-	}
+	pub const fn min() -> Self { Self::Backfilled(i64::MIN) }
 
 	#[inline]
 	#[must_use]
-	pub const fn max() -> Self {
-		Self::Normal(i64::MAX as u64)
-	}
+	pub const fn max() -> Self { Self::Normal(i64::MAX as u64) }
 
 	#[inline]
 	pub(crate) fn debug_assert_valid(&self) {
@@ -163,40 +155,28 @@ impl Display for Count {
 
 impl From<i64> for Count {
 	#[inline]
-	fn from(signed: i64) -> Self {
-		Self::from_signed(signed)
-	}
+	fn from(signed: i64) -> Self { Self::from_signed(signed) }
 }
 
 impl From<u64> for Count {
 	#[inline]
-	fn from(unsigned: u64) -> Self {
-		Self::from_unsigned(unsigned)
-	}
+	fn from(unsigned: u64) -> Self { Self::from_unsigned(unsigned) }
 }
 
 impl FromStr for Count {
 	type Err = Error;
 
-	fn from_str(token: &str) -> Result<Self, Self::Err> {
-		Ok(Self::from_signed(token.parse()?))
-	}
+	fn from_str(token: &str) -> Result<Self, Self::Err> { Ok(Self::from_signed(token.parse()?)) }
 }
 
 impl PartialOrd for Count {
-	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> { Some(self.cmp(other)) }
 }
 
 impl Ord for Count {
-	fn cmp(&self, other: &Self) -> Ordering {
-		self.into_signed().cmp(&other.into_signed())
-	}
+	fn cmp(&self, other: &Self) -> Ordering { self.into_signed().cmp(&other.into_signed()) }
 }
 
 impl Default for Count {
-	fn default() -> Self {
-		Self::Normal(0)
-	}
+	fn default() -> Self { Self::Normal(0) }
 }
