@@ -1,8 +1,13 @@
 use axum::extract::State;
+use axum::response::{IntoResponse, Redirect};
+use std::collections::HashMap;
+use std::sync::LazyLock;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
+use serde_json::json;
 use axum_client_ip::InsecureClientIp;
 use ruma::OwnedUserId;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tuwunel_core::{Err, Result, err, utils};
 use tuwunel_service::Services;
 
@@ -43,7 +48,8 @@ pub(super) struct OAuthUserInfo {
 pub(crate) async fn oauth_redirect_route(
 	State(services): State<crate::State>,
 	InsecureClientIp(client): InsecureClientIp,
-) -> Result<String> {
+	uri: http::Uri,
+) -> Result<Redirect> {
 	if !services.config.oauth.enable {
 		return Err!(Request(Unknown("OAuth login is not enabled.")));
 	}
@@ -51,10 +57,24 @@ pub(crate) async fn oauth_redirect_route(
 	let oauth_config = &services.config.oauth;
 
 	// Generate state parameter for CSRF protection
-	let state = utils::random_string(32);
+	let rand = utils::random_string(32);
+	let query = uri.query().unwrap_or_default();
+	let params = url::form_urlencoded::parse(query.as_bytes()).into_owned().collect::<std::collections::HashMap<_, _>>();
+	let redirect_url = params.get("redirectUrl").map(|s| s.as_str()).unwrap_or("");
 
-	// Store state in session (would need to be implemented)
-	// For now, we'll just generate the authorization URL
+	// If redirect_url provided, store mapping state -> redirect_url with TTL
+	if !redirect_url.is_empty() {
+		// lazily-initialized in-memory store
+		static STATE_STORE: LazyLock<Mutex<HashMap<String, (String, Instant)>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+		let mut store = STATE_STORE.lock().unwrap();
+		// purge expired entries
+		let now = Instant::now();
+		store.retain(|_, (_, exp)| *exp > now);
+		store.insert(rand.clone(), (redirect_url.to_string(), now + Duration::from_secs(300)));
+	}
+
+	// state is just the random string
+	let state = rand.clone();
 
 	let auth_endpoint = oauth_config
 		.authorization_endpoint
@@ -72,7 +92,8 @@ pub(crate) async fn oauth_redirect_route(
 		urlencoding::encode(&state)
 	);
 
-	Ok(auth_url)
+	// Redirect the client to the authorization URL
+	Ok(Redirect::temporary(&auth_url))
 }
 
 /// Exchange OAuth authorization code for access token
@@ -88,21 +109,18 @@ pub(crate) async fn exchange_code_for_token(
 		.as_deref()
 		.ok_or_else(|| err!(Request(Unknown("OAuth token endpoint not configured"))))?;
 
-	// Prepare token request parameters
-	let params = json!({
-		"grant_type": "authorization_code",
-		"code": code,
-		"redirect_uri": redirect_uri,
-		"client_id": &oauth_config.client_id,
-		"client_secret": &oauth_config.client_secret,
-	});
+	// Prepare token request parameters as form data (RFC 6749)
+	let mut params = std::collections::HashMap::new();
+	params.insert("grant_type", "authorization_code");
+	params.insert("code", code);
+	params.insert("redirect_uri", redirect_uri);
 
-	// Make HTTP POST request to token endpoint
-	let response = services
-		.client
-		.default
+	// Make HTTP POST request to token endpoint using form encoding and HTTP Basic auth
+	let client = &services.client.default;
+	let response = client
 		.post(token_endpoint)
-		.json(&params)
+		.basic_auth(&oauth_config.client_id, Some(&oauth_config.client_secret))
+		.form(&params)
 		.send()
 		.await
 		.map_err(|e| err!(Request(Unknown("Failed to request OAuth token: {e}"))))?;
@@ -217,6 +235,78 @@ pub(crate) async fn get_or_create_user(
 	}
 
 	Ok(user_id)
+}
+
+/// OAuth callback handler for provider redirects
+#[tracing::instrument(skip_all, fields(%client), name = "oauth_callback")]
+pub(crate) async fn oauth_callback_route(
+	State(services): State<crate::State>,
+	InsecureClientIp(client): InsecureClientIp,
+	// query parameters will be parsed by Ruma wrapper normally; for minimal debug we read from Axum
+	uri: http::Uri,
+) -> Result<axum::response::Response> {
+	// parse query
+	let query = uri.query().unwrap_or_default();
+	let params = url::form_urlencoded::parse(query.as_bytes()).into_owned().collect::<std::collections::HashMap<_, _>>();
+
+	let code = match params.get("code") {
+		Some(c) => c.as_str(),
+		None => return Err!(Request(InvalidParam("Missing code query parameter"))),
+	};
+
+	let state = params.get("state").map(|s| s.as_str()).unwrap_or("");
+
+	// perform token exchange
+	let token = exchange_code_for_token(&services, code, &services.config.oauth.redirect_uri).await?;
+
+	// validate / get userinfo
+	let userinfo = validate_oauth_token(&services, &token.access_token).await?;
+
+	// get or create local user
+	let user_id = get_or_create_user(&services, &userinfo).await?;
+
+	// If state contains an embedded redirect URL (we encoded it earlier), extract and redirect
+	let mut app_redirect: Option<String> = None;
+	if state.contains('|') {
+		let mut parts = state.splitn(2, '|');
+		let _rand = parts.next().unwrap_or("");
+		if let Some(enc) = parts.next() {
+			if !enc.is_empty() {
+				if let Ok(decoded) = urlencoding::decode(enc) {
+					app_redirect = Some(decoded.into_owned());
+				}
+			}
+		}
+	}
+
+	// If not embedded in state, check global state store
+	if app_redirect.is_none() {
+		static STATE_STORE: LazyLock<Mutex<HashMap<String, (String, Instant)>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+		let mut store = STATE_STORE.lock().unwrap();
+		let now = Instant::now();
+		store.retain(|_, (_, exp)| *exp > now);
+		if let Some((redir, _)) = store.remove(state) {
+			app_redirect = Some(redir);
+		}
+	}
+
+	if let Some(mut redirect_to) = app_redirect {
+		// append access_token and user_id as query params for the client to consume
+		let sep = if redirect_to.contains('?') { '&' } else { '?' };
+		redirect_to = format!("{}{}access_token={}&user_id={}", redirect_to, sep, token.access_token, user_id.to_string());
+		return Ok(Redirect::temporary(&redirect_to).into_response())
+	}
+
+	// fallback: return JSON
+	let result = serde_json::json!({
+		"user_id": user_id.to_string(),
+		"access_token": token.access_token,
+		"token_type": token.token_type,
+		"state": state,
+		"userinfo": userinfo,
+	});
+
+	Ok(axum::response::Json(result).into_response())
 }
 
 
