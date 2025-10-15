@@ -23,7 +23,7 @@ use ruma::{
 };
 use tokio::time::{Instant, timeout_at};
 use tuwunel_core::{
-	Result, apply, at,
+	Err, Result, apply, at,
 	debug::INFO_SPAN_LEVEL,
 	err,
 	error::inspect_log,
@@ -118,6 +118,10 @@ pub(crate) async fn sync_events_v5_route(
 		.ok();
 
 	let (mut conn, _) = join(conn, ping_presence).await;
+
+	if conn.next_batch != since {
+		return Err!(Request(UnknownPos("Requesting unknown or duplicate 'pos' parameter.")));
+	}
 
 	conn.update_cache(request);
 	conn.globalsince = since;
