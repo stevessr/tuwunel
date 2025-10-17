@@ -55,7 +55,13 @@ pub struct Room {
 
 type Connections = StdMutex<BTreeMap<ConnectionKey, ConnectionVal>>;
 pub type ConnectionVal = Arc<TokioMutex<Connection>>;
-pub type ConnectionKey = (OwnedUserId, OwnedDeviceId, Option<ConnectionId>);
+/// ConnectionKey is used to identify client sync connections.
+///
+/// We include an optional `x_forwarded_for` string so that when the server is
+/// behind a proxy that sets `X-Forwarded-For` we can key the connection cache
+/// on that header as well. This allows caching/lookup to behave correctly when
+/// requests are forwarded and the client IP differs from the TCP peer.
+pub type ConnectionKey = (OwnedUserId, OwnedDeviceId, Option<ConnectionId>, Option<String>);
 
 pub type Subscriptions = BTreeMap<OwnedRoomId, request::ListConfig>;
 pub type Lists = BTreeMap<ListId, request::List>;
@@ -197,7 +203,7 @@ pub fn clear_connections(
 	conn_id: Option<&ConnectionId>,
 ) {
 	self.connections.lock().expect("locked").retain(
-		|(conn_user_id, conn_device_id, conn_conn_id), _| {
+		|(conn_user_id, conn_device_id, conn_conn_id, _conn_xff), _| {
 			!(user_id.is_none_or(is_equal_to!(conn_user_id))
 				&& device_id.is_none_or(is_equal_to!(conn_device_id))
 				&& (conn_id.is_none() || conn_id == conn_conn_id.as_ref()))
@@ -253,11 +259,22 @@ pub fn contains_connection(&self, key: &ConnectionKey) -> bool {
 }
 
 #[inline]
-pub fn into_connection_key<U, D, C>(user_id: U, device_id: D, conn_id: Option<C>) -> ConnectionKey
+pub fn into_connection_key<U, D, C, S>(
+	user_id: U,
+	device_id: D,
+	conn_id: Option<C>,
+	x_forwarded_for: Option<S>,
+) -> ConnectionKey
 where
 	U: Into<OwnedUserId>,
 	D: Into<OwnedDeviceId>,
 	C: Into<ConnectionId>,
+	S: Into<String>,
 {
-	(user_id.into(), device_id.into(), conn_id.map(Into::into))
+	(
+		user_id.into(),
+		device_id.into(),
+		conn_id.map(Into::into),
+		x_forwarded_for.map(Into::into),
+	)
 }

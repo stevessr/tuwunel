@@ -10,6 +10,7 @@ mod typing;
 use std::{collections::BTreeMap, fmt::Debug, time::Duration};
 
 use axum::extract::State;
+use axum_client_ip::InsecureClientIp;
 use futures::{
 	FutureExt, TryFutureExt, TryStreamExt,
 	future::{OptionFuture, join, join5, try_join},
@@ -92,6 +93,7 @@ type ListIds = SmallVec<[ListId; 1]>;
 )]
 pub(crate) async fn sync_events_v5_route(
 	State(ref services): State<crate::State>,
+	InsecureClientIp(client): InsecureClientIp,
 	body: Ruma<Request>,
 ) -> Result<Response> {
 	let request = &body.body;
@@ -103,7 +105,17 @@ pub(crate) async fn sync_events_v5_route(
 		.unwrap_or(0);
 
 	let (sender_user, sender_device) = body.sender();
-	let conn_key = into_connection_key(sender_user, sender_device, request.conn_id.as_deref());
+	// Use the client IP we extracted via the `axum_client_ip` extractor. This
+	// respects the trusted `SecureClientIpSource` set in our middleware and
+	// will take X-Forwarded-For into account when configured.
+	let x_forwarded_for = Some(client.to_string());
+
+	let conn_key = into_connection_key(
+		sender_user,
+		sender_device,
+		request.conn_id.as_deref(),
+		x_forwarded_for,
+	);
 	let conn_val = since
 		.ne(&0)
 		.then(|| services.sync.find_connection(&conn_key))
