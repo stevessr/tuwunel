@@ -39,7 +39,7 @@ use tuwunel_core::{
 	Error, Result, at,
 	debug::INFO_SPAN_LEVEL,
 	err, error,
-	error::inspect_debug_log,
+	error::{inspect_debug_log, inspect_log},
 	extract_variant, is_equal_to,
 	matrix::{
 		Event,
@@ -53,7 +53,6 @@ use tuwunel_core::{
 		self, BoolExt, FutureBoolExt, IterStream, ReadyExt, TryFutureExtExt,
 		future::{OptionStream, ReadyEqExt},
 		math::ruma_from_u64,
-		result::LogErr,
 		stream::{BroadbandExt, Tools, TryExpect, WidebandExt},
 	},
 	warn,
@@ -129,15 +128,16 @@ pub(crate) async fn sync_events_route(
 ) -> Result<sync_events::v3::Response, RumaResponse<UiaaResponse>> {
 	let (sender_user, sender_device) = body.sender();
 
-	services
+	let ping_presence = services
 		.presence
 		.maybe_ping_presence(sender_user, &body.body.set_presence)
-		.await
-		.log_err()
+		.inspect_err(inspect_log)
 		.ok();
 
 	// Record user as actively syncing for push suppression heuristic.
-	services.presence.note_sync(sender_user).await;
+	let note_sync = services.presence.note_sync(sender_user);
+
+	join(ping_presence, note_sync).await;
 
 	let mut since = body
 		.body
