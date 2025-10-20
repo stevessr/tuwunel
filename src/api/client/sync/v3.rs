@@ -163,7 +163,11 @@ pub(crate) async fn sync_events_route(
 		.expect("configuration must limit maximum timeout");
 
 	loop {
-		let watch_rooms = services.state_cache.rooms_joined(sender_user);
+		let watch_rooms = services
+			.state_cache
+			.rooms_joined(sender_user)
+			.chain(services.state_cache.rooms_invited(sender_user));
+
 		let watchers = services
 			.sync
 			.watch(sender_user, sender_device, watch_rooms);
