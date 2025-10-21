@@ -94,6 +94,7 @@ pub(crate) async fn sync_events_v5_route(
 	State(ref services): State<crate::State>,
 	body: Ruma<Request>,
 ) -> Result<Response> {
+	let (sender_user, sender_device) = body.sender();
 	let request = &body.body;
 	let since = request
 		.pos
@@ -101,38 +102,6 @@ pub(crate) async fn sync_events_v5_route(
 		.or(request.pos_qrs_.as_ref())
 		.and_then(|string| string.parse().ok())
 		.unwrap_or(0);
-
-	let (sender_user, sender_device) = body.sender();
-	let conn_key = into_connection_key(sender_user, sender_device, request.conn_id.as_deref());
-	let conn_val = since
-		.ne(&0)
-		.then(|| services.sync.find_connection(&conn_key))
-		.unwrap_or_else(|| Ok(services.sync.init_connection(&conn_key)))
-		.map_err(|_| err!(Request(UnknownPos("Connection lost; restarting sync stream."))))?;
-
-	let conn = conn_val.lock();
-	let ping_presence = services
-		.presence
-		.maybe_ping_presence(sender_user, &request.set_presence)
-		.inspect_err(inspect_log)
-		.ok();
-
-	let (mut conn, _) = join(conn, ping_presence).await;
-
-	if conn.next_batch != since {
-		return Err!(Request(UnknownPos("Requesting unknown or duplicate 'pos' parameter.")));
-	}
-
-	conn.update_cache(request);
-	conn.globalsince = since;
-	conn.next_batch = since;
-
-	let sync_info = SyncInfo {
-		services,
-		sender_user,
-		sender_device,
-		request,
-	};
 
 	let timeout = request
 		.timeout
@@ -149,6 +118,49 @@ pub(crate) async fn sync_events_v5_route(
 		.checked_add(Duration::from_millis(timeout))
 		.expect("configuration must limit maximum timeout");
 
+	let conn_key = into_connection_key(sender_user, sender_device, request.conn_id.as_deref());
+	let conn_val = since
+		.ne(&0)
+		.then(|| services.sync.find_connection(&conn_key))
+		.unwrap_or_else(|| Ok(services.sync.init_connection(&conn_key)))
+		.map_err(|_| err!(Request(UnknownPos("Connection lost; restarting sync stream."))))?;
+
+	let conn = conn_val.lock();
+	let ping_presence = services
+		.presence
+		.maybe_ping_presence(sender_user, &request.set_presence)
+		.inspect_err(inspect_log)
+		.ok();
+
+	let (mut conn, _) = join(conn, ping_presence).await;
+
+	// The client must either use the last returned next_batch or replay the
+	// next_batch from the penultimate request: it's either up-to-date or
+	// one-behind. If we receive anything else we can boot them.
+	let advancing = since == conn.next_batch;
+	let replaying = since == conn.globalsince;
+	if !advancing && !replaying {
+		return Err!(Request(UnknownPos("Requesting unknown or stale stream position.")));
+	}
+
+	debug_assert!(
+		advancing || replaying,
+		"Request should either be advancing or replaying the last request."
+	);
+
+	// Update parameters regardless of replay or advance
+	conn.update_cache(request);
+	conn.update_rooms_prologue(advancing);
+	conn.globalsince = since;
+	conn.next_batch = services.globals.current_count();
+
+	let sync_info = SyncInfo {
+		services,
+		sender_user,
+		sender_device,
+		request,
+	};
+
 	let mut response = Response {
 		txn_id: request.txn_id.clone(),
 		lists: Default::default(),
@@ -158,19 +170,20 @@ pub(crate) async fn sync_events_v5_route(
 	};
 
 	loop {
+		debug_assert!(
+			conn.globalsince <= conn.next_batch,
+			"next_batch should not be greater than since."
+		);
+
 		let window;
 		(window, response.lists) = selector(&mut conn, sync_info).boxed().await;
+
 		let watch_rooms = window.keys().map(AsRef::as_ref).stream();
 		let watchers = services
 			.sync
 			.watch(sender_user, sender_device, watch_rooms);
 
 		conn.next_batch = services.globals.wait_pending().await?;
-		debug_assert!(
-			conn.globalsince <= conn.next_batch,
-			"next_batch should not be greater than since."
-		);
-
 		if conn.globalsince < conn.next_batch {
 			let rooms =
 				handle_rooms(sync_info, &conn, &window).map_ok(|rooms| response.rooms = rooms);
@@ -180,12 +193,7 @@ pub(crate) async fn sync_events_v5_route(
 
 			try_join(rooms, extensions).boxed().await?;
 
-			for room_id in window.keys() {
-				conn.rooms
-					.entry(room_id.into())
-					.or_default()
-					.roomsince = conn.next_batch;
-			}
+			conn.update_rooms_epilogue(window.keys().map(AsRef::as_ref));
 
 			if !is_empty_response(&response) {
 				response.pos = conn.next_batch.to_string().into();

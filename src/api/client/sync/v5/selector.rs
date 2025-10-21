@@ -95,26 +95,16 @@ where
 				.map(move |range| (id.clone(), range))
 		})
 		.flat_map(|(id, (start, end))| {
-			let list = rooms
+			rooms
 				.clone()
-				.filter(move |&room| room.lists.contains(&id));
-
-			let cycled = list.clone().all(|room| {
-				conn.rooms
-					.get(&room.room_id)
-					.is_some_and(|room| room.roomsince != 0)
-			});
-
-			list.enumerate()
+				.filter(move |&room| room.lists.contains(&id))
+				.enumerate()
 				.skip_while(move |&(i, room)| {
 					i < start
 						|| conn
 							.rooms
 							.get(&room.room_id)
-							.is_some_and(|conn_room| {
-								conn_room.roomsince >= room.last_count
-									|| (!cycled && conn_room.roomsince != 0)
-							})
+							.is_some_and(|conn_room| conn_room.roomsince >= room.last_count)
 				})
 				.take(end.saturating_add(1).saturating_sub(start))
 				.map(|(_, room)| (room.room_id.clone(), room.clone()))
@@ -193,7 +183,7 @@ async fn match_lists_for_room(
 		.then(|| {
 			services
 				.account_data
-				.last_count(Some(room_id.as_ref()), sender_user, conn.next_batch)
+				.last_count(Some(room_id.as_ref()), sender_user, None)
 				.ok()
 		})
 		.into();
@@ -204,7 +194,7 @@ async fn match_lists_for_room(
 		.then(|| {
 			services
 				.read_receipt
-				.last_receipt_count(&room_id, sender_user.into(), conn.globalsince.into())
+				.last_receipt_count(&room_id, sender_user.into(), None)
 				.map(Result::ok)
 		})
 		.into();

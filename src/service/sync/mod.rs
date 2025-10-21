@@ -6,7 +6,7 @@ use std::{
 };
 
 use ruma::{
-	DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, UserId,
+	DeviceId, OwnedDeviceId, OwnedRoomId, OwnedUserId, RoomId, UserId,
 	api::client::sync::sync_events::v5::{
 		ConnId as ConnectionId, ListId, Request, request,
 		request::{AccountData, E2EE, Receipts, ToDevice, Typing},
@@ -51,6 +51,8 @@ pub struct Connection {
 #[derive(Clone, Debug, Default)]
 pub struct Room {
 	pub roomsince: u64,
+	pub last_batch: u64,
+	pub next_batch: u64,
 }
 
 type Connections = StdMutex<BTreeMap<ConnectionKey, ConnectionVal>>;
@@ -85,6 +87,32 @@ impl crate::Service for Service {
 	}
 
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
+}
+
+#[implement(Connection)]
+pub fn update_rooms_prologue(&mut self, advance: bool) {
+	self.rooms.values_mut().for_each(|room| {
+		if advance {
+			room.roomsince = room.next_batch;
+			room.last_batch = room.next_batch;
+		} else {
+			room.roomsince = room.last_batch;
+			room.next_batch = room.last_batch;
+		}
+	});
+}
+
+#[implement(Connection)]
+pub fn update_rooms_epilogue<'a, Rooms>(&mut self, window: Rooms)
+where
+	Rooms: Iterator<Item = &'a RoomId> + Send + 'a,
+{
+	window.for_each(|room_id| {
+		let room = self.rooms.entry(room_id.into()).or_default();
+
+		room.roomsince = self.next_batch;
+		room.next_batch = self.next_batch;
+	});
 }
 
 #[implement(Connection)]

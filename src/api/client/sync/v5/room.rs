@@ -49,7 +49,7 @@ pub(super) async fn handle(
 ) -> Result<Option<response::Room>> {
 	debug_assert!(DEFAULT_BUMP_TYPES.is_sorted(), "DEFAULT_BUMP_TYPES is not sorted");
 
-	let &Room { roomsince } = conn
+	let &Room { roomsince, .. } = conn
 		.rooms
 		.get(room_id)
 		.ok_or_else(|| err!("Missing connection state for {room_id}"))?;
