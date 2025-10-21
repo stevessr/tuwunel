@@ -2,6 +2,7 @@ mod watch;
 
 use std::{
 	collections::BTreeMap,
+	ops::Bound::Included,
 	sync::{Arc, Mutex as StdMutex},
 };
 
@@ -13,7 +14,7 @@ use ruma::{
 	},
 };
 use tokio::sync::Mutex as TokioMutex;
-use tuwunel_core::{Result, err, implement, is_equal_to};
+use tuwunel_core::{Result, at, err, implement, is_equal_to, smallvec::SmallVec};
 use tuwunel_database::Map;
 
 pub struct Service {
@@ -242,16 +243,6 @@ pub fn drop_connection(&self, key: &ConnectionKey) {
 }
 
 #[implement(Service)]
-pub fn list_connections(&self) -> Vec<ConnectionKey> {
-	self.connections
-		.lock()
-		.expect("locked")
-		.keys()
-		.cloned()
-		.collect()
-}
-
-#[implement(Service)]
 pub fn init_connection(&self, key: &ConnectionKey) -> ConnectionVal {
 	self.connections
 		.lock()
@@ -260,6 +251,38 @@ pub fn init_connection(&self, key: &ConnectionKey) -> ConnectionVal {
 		.and_modify(|existing| *existing = ConnectionVal::default())
 		.or_default()
 		.clone()
+}
+
+#[implement(Service)]
+pub fn device_connections(
+	&self,
+	user_id: &UserId,
+	device_id: &DeviceId,
+	exclude: Option<&ConnectionId>,
+) -> impl Iterator<Item = ConnectionVal> + Send {
+	type Siblings = SmallVec<[ConnectionVal; 4]>;
+
+	let key = into_connection_key(user_id, device_id, None::<ConnectionId>);
+
+	self.connections
+		.lock()
+		.expect("locked")
+		.range((Included(&key), Included(&key)))
+		.filter(|((_, _, id), _)| id.as_ref() != exclude)
+		.map(at!(1))
+		.cloned()
+		.collect::<Siblings>()
+		.into_iter()
+}
+
+#[implement(Service)]
+pub fn list_connections(&self) -> Vec<ConnectionKey> {
+	self.connections
+		.lock()
+		.expect("locked")
+		.keys()
+		.cloned()
+		.collect()
 }
 
 #[implement(Service)]
