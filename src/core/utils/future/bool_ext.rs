@@ -1,4 +1,5 @@
 //! Extended external extensions to futures::FutureExt
+#![allow(clippy::many_single_char_names, clippy::impl_trait_in_params)]
 
 use std::marker::Unpin;
 
@@ -16,8 +17,6 @@ pub trait BoolExt
 where
 	Self: Future<Output = bool> + Send,
 {
-	type Result;
-
 	fn or<B>(self, b: B) -> impl Future<Output = bool> + Send
 	where
 		B: Future<Output = bool> + Send + Unpin,
@@ -46,15 +45,11 @@ impl<Fut> BoolExt for Fut
 where
 	Fut: Future<Output = bool> + Send,
 {
-	type Result = crate::Result<(), ()>;
-
 	fn or<B>(self, b: B) -> impl Future<Output = bool> + Send
 	where
 		B: Future<Output = bool> + Send + Unpin,
 		Self: Sized + Unpin,
 	{
-		let test = |test: bool| test.ok_or(Self::Result::Err(()));
-
 		select_ok([Left(self.map(test)), Right(b.map(test))]).map(|res| res.is_ok())
 	}
 
@@ -63,8 +58,6 @@ where
 		B: Future<Output = bool> + Send,
 		Self: Sized,
 	{
-		let test = |test: bool| test.ok_or(Self::Result::Err(()));
-
 		try_join(self.map(test), b.map(test)).map(|res| res.is_ok())
 	}
 
@@ -74,8 +67,6 @@ where
 		C: Future<Output = bool> + Send,
 		Self: Sized,
 	{
-		let test = |test: bool| test.ok_or(Self::Result::Err(()));
-
 		try_join3(self.map(test), b.map(test), c.map(test)).map(|res| res.is_ok())
 	}
 
@@ -86,8 +77,6 @@ where
 		D: Future<Output = bool> + Send,
 		Self: Sized,
 	{
-		let test = |test: bool| test.ok_or(Self::Result::Err(()));
-
 		try_join4(self.map(test), b.map(test), c.map(test), d.map(test)).map(|res| res.is_ok())
 	}
 }
@@ -97,9 +86,7 @@ where
 	I: Iterator<Item = F> + Send,
 	F: Future<Output = bool> + Send,
 {
-	type Result = crate::Result<(), ()>;
-
-	let args = args.map(|a| a.map(|a| a.ok_or(Result::Err(()))));
+	let args = args.map(|a| a.map(test));
 
 	try_join_all(args).map(|res| res.is_ok())
 }
@@ -109,9 +96,51 @@ where
 	I: Iterator<Item = F> + Send,
 	F: Future<Output = bool> + Send + Unpin,
 {
-	type Result = crate::Result<(), ()>;
-
-	let args = args.map(|a| a.map(|a| a.ok_or(Result::Err(()))));
+	let args = args.map(|a| a.map(test));
 
 	select_ok(args).map(|res| res.is_ok())
 }
+
+pub fn and4(
+	a: impl Future<Output = bool> + Send,
+	b: impl Future<Output = bool> + Send,
+	c: impl Future<Output = bool> + Send,
+	d: impl Future<Output = bool> + Send,
+) -> impl Future<Output = bool> + Send {
+	a.and3(b, c, d)
+}
+
+pub fn and5(
+	a: impl Future<Output = bool> + Send,
+	b: impl Future<Output = bool> + Send,
+	c: impl Future<Output = bool> + Send,
+	d: impl Future<Output = bool> + Send,
+	e: impl Future<Output = bool> + Send,
+) -> impl Future<Output = bool> + Send {
+	a.and2(b, c).and2(d, e)
+}
+
+pub fn and6(
+	a: impl Future<Output = bool> + Send,
+	b: impl Future<Output = bool> + Send,
+	c: impl Future<Output = bool> + Send,
+	d: impl Future<Output = bool> + Send,
+	e: impl Future<Output = bool> + Send,
+	f: impl Future<Output = bool> + Send,
+) -> impl Future<Output = bool> + Send {
+	a.and3(b, c, d).and2(e, f)
+}
+
+pub fn and7(
+	a: impl Future<Output = bool> + Send,
+	b: impl Future<Output = bool> + Send,
+	c: impl Future<Output = bool> + Send,
+	d: impl Future<Output = bool> + Send,
+	e: impl Future<Output = bool> + Send,
+	f: impl Future<Output = bool> + Send,
+	g: impl Future<Output = bool> + Send,
+) -> impl Future<Output = bool> + Send {
+	a.and3(b, c, d).and3(e, f, g)
+}
+
+fn test(test: bool) -> crate::Result<(), ()> { test.ok_or(()) }

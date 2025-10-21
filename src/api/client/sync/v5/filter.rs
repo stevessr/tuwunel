@@ -7,7 +7,7 @@ use tuwunel_core::{
 	is_equal_to, is_true,
 	utils::{
 		BoolExt, FutureBoolExt, IterStream, ReadyExt,
-		future::{OptionExt, ReadyEqExt},
+		future::{self, OptionExt, ReadyEqExt},
 	},
 };
 
@@ -115,19 +115,16 @@ pub(super) async fn filter_room(
 		})
 		.into();
 
-	match_encrypted
-		.is_none_or(is_true!())
-		.and3(
-			match_invite.is_none_or(is_true!()),
-			match_direct.is_none_or(is_true!()),
-			match_direct_member.is_none_or(is_true!()),
-		)
-		.and3(
-			match_space_child.is_none_or(is_true!()),
-			match_room_type.is_none_or(is_true!()),
-			match_room_tag.is_none_or(is_true!()),
-		)
-		.await
+	future::and7(
+		match_invite.is_none_or(is_true!()),
+		match_encrypted.is_none_or(is_true!()),
+		match_direct.is_none_or(is_true!()),
+		match_direct_member.is_none_or(is_true!()),
+		match_space_child.is_none_or(is_true!()),
+		match_room_type.is_none_or(is_true!()),
+		match_room_tag.is_none_or(is_true!()),
+	)
+	.await
 }
 
 #[tracing::instrument(name = "filter_meta", level = "trace", skip_all)]

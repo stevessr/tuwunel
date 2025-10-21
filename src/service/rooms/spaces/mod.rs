@@ -22,7 +22,7 @@ use ruma::{
 };
 use tokio::sync::{Mutex, MutexGuard};
 use tuwunel_core::{
-	Err, Error, Event, PduEvent, Result, implement,
+	Err, Error, Event, Result, implement,
 	utils::{
 		IterStream,
 		future::{BoolExt, TryExtExt},
@@ -513,12 +513,12 @@ async fn cache_insert(
 fn get_space_child_events<'a>(
 	&'a self,
 	room_id: &'a RoomId,
-) -> impl Stream<Item = PduEvent> + Send + 'a {
+) -> impl Stream<Item = impl Event> + Send + 'a {
 	self.services
 		.state_accessor
 		.room_state_keys_with_ids(room_id, &StateEventType::SpaceChild)
 		.ready_filter_map(Result::ok)
-		.broad_filter_map(async move |(state_key, event_id): (_, OwnedEventId)| {
+		.broad_filter_map(async |(state_key, event_id): (_, OwnedEventId)| {
 			self.services
 				.timeline
 				.get_pdu(&event_id)
@@ -526,7 +526,7 @@ fn get_space_child_events<'a>(
 				.ok()
 				.await
 		})
-		.ready_filter_map(move |(state_key, pdu)| {
+		.ready_filter_map(|(state_key, pdu)| {
 			if let Ok(content) = pdu.get_content::<SpaceChildEventContent>() {
 				if content.via.is_empty() {
 					return None;
