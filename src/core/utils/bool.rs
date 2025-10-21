@@ -4,6 +4,12 @@
 pub trait BoolExt {
 	fn and<T>(self, t: Option<T>) -> Option<T>;
 
+	#[must_use]
+	fn and_is(self, b: bool) -> bool;
+
+	#[must_use]
+	fn and_if<F: FnOnce() -> bool>(self, f: F) -> bool;
+
 	fn and_then<T, F: FnOnce() -> Option<T>>(self, f: F) -> Option<T>;
 
 	#[must_use]
@@ -54,6 +60,12 @@ pub trait BoolExt {
 impl BoolExt for bool {
 	#[inline]
 	fn and<T>(self, t: Option<T>) -> Option<T> { self.then_some(t).flatten() }
+
+	#[inline]
+	fn and_if<F: FnOnce() -> Self>(self, f: F) -> Self { self.and_is(f()) }
+
+	#[inline]
+	fn and_is(self, b: Self) -> Self { self && b }
 
 	#[inline]
 	fn and_then<T, F: FnOnce() -> Option<T>>(self, f: F) -> Option<T> { self.then(f).flatten() }
