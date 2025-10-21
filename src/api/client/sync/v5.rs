@@ -172,7 +172,7 @@ pub(crate) async fn sync_events_v5_route(
 	loop {
 		debug_assert!(
 			conn.globalsince <= conn.next_batch,
-			"next_batch should not be greater than since."
+			"since should not be greater than next_batch."
 		);
 
 		let window;
