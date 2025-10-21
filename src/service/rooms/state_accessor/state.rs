@@ -1,8 +1,8 @@
-use std::{borrow::Borrow, ops::Deref, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
 use futures::{FutureExt, Stream, StreamExt, TryFutureExt, future::try_join, pin_mut};
 use ruma::{
-	EventId, OwnedEventId, UserId,
+	OwnedEventId, UserId,
 	events::{
 		StateEventType,
 		room::member::{MembershipState, RoomMemberEventContent},
@@ -138,16 +138,12 @@ pub async fn state_get(
 /// Returns a single EventId from `room_id` with key (`event_type`,
 /// `state_key`).
 #[implement(super::Service)]
-pub async fn state_get_id<Id>(
+pub async fn state_get_id(
 	&self,
 	shortstatehash: ShortStateHash,
 	event_type: &StateEventType,
 	state_key: &str,
-) -> Result<Id>
-where
-	Id: for<'de> Deserialize<'de> + Send + Sized + ToOwned,
-	<Id as ToOwned>::Owned: Borrow<EventId>,
-{
+) -> Result<OwnedEventId> {
 	let shorteventid = self
 		.state_get_shortid(shortstatehash, event_type, state_key)
 		.await?;
@@ -209,15 +205,11 @@ pub fn state_type_pdus<'a>(
 /// Iterates the state_keys for an event_type in the state; current state
 /// event_id included.
 #[implement(super::Service)]
-pub fn state_keys_with_ids<'a, Id>(
+pub fn state_keys_with_ids<'a>(
 	&'a self,
 	shortstatehash: ShortStateHash,
 	event_type: &'a StateEventType,
-) -> impl Stream<Item = (StateKey, Id)> + Send + 'a
-where
-	Id: for<'de> Deserialize<'de> + Send + Sized + ToOwned + 'a,
-	<Id as ToOwned>::Owned: Borrow<EventId>,
-{
+) -> impl Stream<Item = (StateKey, OwnedEventId)> + Send + 'a {
 	let state_keys_with_short_ids = self
 		.state_keys_with_shortids(shortstatehash, event_type)
 		.unzip()
@@ -371,14 +363,10 @@ pub fn state_full_pdus(
 /// Builds a StateMap by iterating over all keys that start
 /// with state_hash, this gives the full state for the given state_hash.
 #[implement(super::Service)]
-pub fn state_full_ids<'a, Id>(
-	&'a self,
+pub fn state_full_ids(
+	&self,
 	shortstatehash: ShortStateHash,
-) -> impl Stream<Item = (ShortStateKey, Id)> + Send + 'a
-where
-	Id: for<'de> Deserialize<'de> + Send + Sized + ToOwned + 'a,
-	<Id as ToOwned>::Owned: Borrow<EventId>,
-{
+) -> impl Stream<Item = (ShortStateKey, OwnedEventId)> + Send + '_ {
 	let shortids = self
 		.state_full_shortids(shortstatehash)
 		.ignore_err()

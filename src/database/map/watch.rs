@@ -8,11 +8,12 @@ use std::{
 use futures::pin_mut;
 use serde::Serialize;
 use tokio::sync::watch::{Sender, channel};
-use tuwunel_core::implement;
+use tuwunel_core::{implement, smallvec::SmallVec};
 
 use crate::keyval::{KeyBuf, serialize_key};
 
 type Watchers = Mutex<BTreeMap<KeyBuf, Sender<()>>>;
+type KeyVec = SmallVec<[KeyBuf; 1]>;
 
 #[derive(Default)]
 pub(super) struct Watch {
@@ -71,7 +72,7 @@ where
 		.take_while(|(k, _)| key.as_ref().starts_with(k))
 		.filter_map(|(k, tx)| tx.send(()).is_err().then_some(k))
 		.cloned()
-		.collect::<Vec<_>>()
+		.collect::<KeyVec>()
 		.into_iter()
 		.for_each(|k| {
 			watchers.remove(&k);

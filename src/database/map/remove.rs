@@ -20,4 +20,6 @@ where
 	if !self.engine.corked() {
 		self.engine.flush().expect("database flush error");
 	}
+
+	self.notify(key.as_ref());
 }

@@ -169,10 +169,11 @@ pub async fn last_count<'a>(
 	&'a self,
 	room_id: Option<&'a RoomId>,
 	user_id: &'a UserId,
-	upper: u64,
+	upper: Option<u64>,
 ) -> Result<u64> {
 	type Key<'a> = (Option<&'a RoomId>, &'a UserId, u64, Ignore);
 
+	let upper = upper.unwrap_or(u64::MAX);
 	let key = (room_id, user_id, upper, Interfix);
 	self.db
 		.roomuserdataid_accountdata

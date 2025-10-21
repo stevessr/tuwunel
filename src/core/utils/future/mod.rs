@@ -5,7 +5,7 @@ mod option_stream;
 mod ready_eq_ext;
 mod try_ext_ext;
 
-pub use bool_ext::{BoolExt, and, or};
+pub use bool_ext::{BoolExt, and, and4, and5, and6, and7, or};
 pub use ext_ext::ExtExt;
 pub use option_ext::OptionExt;
 pub use option_stream::OptionStream;
