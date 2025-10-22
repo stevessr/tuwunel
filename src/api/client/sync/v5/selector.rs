@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use futures::{
 	FutureExt, StreamExt, TryFutureExt,
-	future::{OptionFuture, join3},
+	future::{OptionFuture, join5},
 };
 use ruma::{OwnedRoomId, UInt, events::room::member::MembershipState, uint};
 use tuwunel_core::{
@@ -48,6 +48,10 @@ pub(super) async fn selector(
 		.enumerate()
 		.for_each(|(i, room)| {
 			room.ranked = i;
+
+			conn.rooms
+				.entry(room.room_id.clone())
+				.or_default();
 		});
 
 	trace!(?rooms);
@@ -57,12 +61,6 @@ pub(super) async fn selector(
 	let window = select_window(sync_info, conn, rooms.iter(), &lists).await;
 
 	trace!(?window);
-	for room in &rooms {
-		conn.rooms
-			.entry(room.room_id.clone())
-			.or_default();
-	}
-
 	(window, lists)
 }
 
@@ -99,19 +97,20 @@ where
 			rooms
 				.clone()
 				.filter(move |&room| room.lists.contains(&id))
-				.enumerate()
-				.skip_while(move |&(i, room)| {
-					i < start
-						|| conn
-							.rooms
-							.get(&room.room_id)
-							.is_some_and(|conn_room| conn_room.roomsince >= room.last_count)
+				.filter(|&room| {
+					conn.rooms
+						.get(&room.room_id)
+						.is_some_and(|conn_room| room.last_count > conn_room.roomsince)
 				})
+				.enumerate()
+				.skip_while(move |&(i, _)| i < start)
 				.take(end.saturating_add(1).saturating_sub(start))
 				.map(|(_, room)| (room.room_id.clone(), room.clone()))
-		});
+		})
+		.stream();
 
-	conn.subscriptions
+	let subscriptions = conn
+		.subscriptions
 		.iter()
 		.stream()
 		.broad_filter_map(async |(room_id, _)| {
@@ -125,10 +124,9 @@ where
 					last_count: 0,
 				})
 		})
-		.map(|room| (room.room_id.clone(), room))
-		.chain(selections.stream())
-		.collect()
-		.await
+		.map(|room| (room.room_id.clone(), room));
+
+	subscriptions.chain(selections).collect().await
 }
 
 #[tracing::instrument(
@@ -145,7 +143,7 @@ async fn match_lists_for_room(
 ) -> Option<WindowRoom> {
 	let SyncInfo { services, sender_user, .. } = sync_info;
 
-	let lists = conn
+	let (matched, lists) = conn
 		.lists
 		.iter()
 		.stream()
@@ -164,56 +162,78 @@ async fn match_lists_for_room(
 				.then(|| id.clone())
 		})
 		.collect::<ListIds>()
+		.map(|lists| (lists.is_empty().is_false(), lists))
 		.await;
 
-	let last_timeline_count: OptionFuture<_> = lists
-		.is_empty()
-		.is_false()
+	let last_notification: OptionFuture<_> = matched
 		.then(|| {
 			services
-				.timeline
-				.last_timeline_count(None, &room_id, None)
-				.map_ok(PduCount::into_unsigned)
-				.ok()
+				.user
+				.last_notification_read(sender_user, &room_id)
+				.map(|count| count.min(conn.next_batch))
 		})
 		.into();
 
-	let last_account_count: OptionFuture<_> = lists
-		.is_empty()
-		.is_false()
+	let last_privateread: OptionFuture<_> = matched
 		.then(|| {
 			services
-				.account_data
-				.last_count(Some(room_id.as_ref()), sender_user, None)
-				.ok()
+				.read_receipt
+				.last_privateread_update(sender_user, &room_id)
+				.map(|count| count.min(conn.next_batch))
 		})
 		.into();
 
-	let last_receipt_count: OptionFuture<_> = lists
-		.is_empty()
-		.is_false()
+	let last_receipt: OptionFuture<_> = matched
+		.and_is(false) // masked out, maybe unnecessary
 		.then(|| {
 			services
 				.read_receipt
 				.last_receipt_count(&room_id, sender_user.into(), None)
-				.map(Result::ok)
+				.unwrap_or_default()
+				.map(|count| count.min(conn.next_batch))
 		})
 		.into();
 
-	let (last_timeline_count, last_account_count, last_receipt_count) =
-		join3(last_timeline_count, last_account_count, last_receipt_count).await;
+	let last_account: OptionFuture<_> = matched
+		.and_is(false) // masked out, maybe unnecessary
+		.then(|| {
+			services
+				.account_data
+				.last_count(Some(room_id.as_ref()), sender_user, Some(conn.next_batch))
+				.unwrap_or_default()
+		})
+		.into();
+
+	let last_timeline: OptionFuture<_> = matched
+		.then(|| {
+			services
+				.timeline
+				.last_timeline_count(None, &room_id, Some(conn.next_batch.into()))
+				.map_ok(PduCount::into_unsigned)
+				.unwrap_or_default()
+		})
+		.into();
+
+	let (last_timeline, last_notification, last_account, last_receipt, last_privateread) =
+		join5(last_timeline, last_notification, last_account, last_receipt, last_privateread)
+			.await;
 
 	Some(WindowRoom {
 		room_id: room_id.clone(),
 		membership,
 		lists,
 		ranked: 0,
-		last_count: [last_timeline_count, last_account_count, last_receipt_count]
-			.into_iter()
-			.map(Option::flatten)
-			.map(Option::unwrap_or_default)
-			.max()
-			.unwrap_or_default(),
+		last_count: [
+			last_timeline,
+			last_notification,
+			last_account,
+			last_receipt,
+			last_privateread,
+		]
+		.into_iter()
+		.map(Option::unwrap_or_default)
+		.max()
+		.unwrap_or_default(),
 	})
 }
 

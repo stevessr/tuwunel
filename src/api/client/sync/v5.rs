@@ -87,7 +87,7 @@ type ListIds = SmallVec<[ListId; 1]>;
 		user_id = %body.sender_user().localpart(),
 		device_id = %body.sender_device(),
 		conn_id = ?body.body.conn_id.clone().unwrap_or_default(),
-		since = ?body.body.pos.clone().or_else(|| body.body.pos_qrs_.clone()).unwrap_or_default(),
+		since = ?body.body.pos.clone().unwrap_or_default(),
 	)
 )]
 pub(crate) async fn sync_events_v5_route(
@@ -99,14 +99,12 @@ pub(crate) async fn sync_events_v5_route(
 	let since = request
 		.pos
 		.as_ref()
-		.or(request.pos_qrs_.as_ref())
 		.and_then(|string| string.parse().ok())
 		.unwrap_or(0);
 
 	let timeout = request
 		.timeout
 		.as_ref()
-		.or(request.timeout_qrs_.as_ref())
 		.map(Duration::as_millis)
 		.map(TryInto::try_into)
 		.flat_ok()
@@ -149,10 +147,10 @@ pub(crate) async fn sync_events_v5_route(
 	);
 
 	// Update parameters regardless of replay or advance
+	conn.next_batch = services.globals.wait_pending().await?;
+	conn.globalsince = since;
 	conn.update_cache(request);
 	conn.update_rooms_prologue(advancing);
-	conn.globalsince = since;
-	conn.next_batch = services.globals.current_count();
 
 	let sync_info = SyncInfo {
 		services,
@@ -177,13 +175,14 @@ pub(crate) async fn sync_events_v5_route(
 
 		let window;
 		(window, response.lists) = selector(&mut conn, sync_info).boxed().await;
-
 		let watch_rooms = window.keys().map(AsRef::as_ref).stream();
 		let watchers = services
 			.sync
 			.watch(sender_user, sender_device, watch_rooms);
 
+		let window;
 		conn.next_batch = services.globals.wait_pending().await?;
+		(window, response.lists) = selector(&mut conn, sync_info).boxed().await;
 		if conn.globalsince < conn.next_batch {
 			let rooms =
 				handle_rooms(sync_info, &conn, &window).map_ok(|rooms| response.rooms = rooms);
@@ -221,11 +220,7 @@ pub(crate) async fn sync_events_v5_route(
 }
 
 fn is_empty_response(response: &Response) -> bool {
-	response.extensions.is_empty()
-		&& response
-			.rooms
-			.iter()
-			.all(|(_, room)| room.timeline.is_empty() && room.invite_state.is_none())
+	response.extensions.is_empty() && response.rooms.is_empty()
 }
 
 #[tracing::instrument(

@@ -8,7 +8,7 @@ use ruma::{
 	JsOption, MxcUri, OwnedMxcUri, RoomId, UInt, UserId,
 	api::client::sync::sync_events::{
 		UnreadNotificationsCount,
-		v5::{DisplayName, response},
+		v5::{DisplayName, response, response::Heroes},
 	},
 	events::{
 		StateEventType,
@@ -45,7 +45,9 @@ static DEFAULT_BUMP_TYPES: [TimelineEventType; 6] =
 pub(super) async fn handle(
 	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
 	conn: &Connection,
-	WindowRoom { lists, membership, room_id, .. }: &WindowRoom,
+	WindowRoom {
+		lists, membership, room_id, last_count, ..
+	}: &WindowRoom,
 ) -> Result<Option<response::Room>> {
 	debug_assert!(DEFAULT_BUMP_TYPES.is_sorted(), "DEFAULT_BUMP_TYPES is not sorted");
 
@@ -53,6 +55,11 @@ pub(super) async fn handle(
 		.rooms
 		.get(room_id)
 		.ok_or_else(|| err!("Missing connection state for {room_id}"))?;
+
+	debug_assert!(
+		roomsince == 0 || *last_count > roomsince,
+		"Stale room shouldn't be in the window"
+	);
 
 	let is_invite = *membership == Some(MembershipState::Invite);
 	let default_details = (0_usize, HashSet::new());
@@ -92,10 +99,6 @@ pub(super) async fn handle(
 	let (timeline_pdus, limited, _lastcount) =
 		timeline.unwrap_or_else(|| (Vec::new(), true, PduCount::default()));
 
-	if roomsince != 0 && timeline_pdus.is_empty() && !is_invite {
-		return Ok(None);
-	}
-
 	let prev_batch = timeline_pdus
 		.first()
 		.map(at!(0))
@@ -112,9 +115,9 @@ pub(super) async fn handle(
 				.is_ok()
 		})
 		.fold(Option::<UInt>::None, |mut bump_stamp, (_, pdu)| {
-			let ts = pdu.origin_server_ts().0;
-			if bump_stamp.is_none_or(|bump_stamp| bump_stamp < ts) {
-				bump_stamp.replace(ts);
+			let ts = pdu.origin_server_ts();
+			if bump_stamp.is_none_or(|bump_stamp| bump_stamp < ts.get()) {
+				bump_stamp.replace(ts.get());
 			}
 
 			bump_stamp
@@ -235,15 +238,19 @@ pub(super) async fn handle(
 		.is_direct(room_id, sender_user)
 		.map(|is_dm| is_dm.then_some(is_dm));
 
+	let last_read_count = services
+		.user
+		.last_notification_read(sender_user, room_id);
+
 	let meta = join3(room_name, room_avatar, is_dm);
 	let events = join3(timeline, required_state, invite_state);
 	let member_counts = join(joined_count, invited_count);
-	let notification_counts = join(highlight_count, notification_count);
+	let notification_counts = join3(highlight_count, notification_count, last_read_count);
 	let (
 		(room_name, room_avatar, is_dm),
 		(timeline, required_state, invite_state),
 		(joined_count, invited_count),
-		(highlight_count, notification_count),
+		(highlight_count, notification_count, _last_notification_read),
 	) = join4(meta, events, member_counts, notification_counts)
 		.boxed()
 		.await;
@@ -288,9 +295,9 @@ async fn calculate_heroes(
 	room_id: &RoomId,
 	room_name: Option<&DisplayName>,
 	room_avatar: Option<&MxcUri>,
-) -> Result<(Option<Vec<response::Hero>>, Option<DisplayName>, Option<OwnedMxcUri>)> {
+) -> Result<(Option<Heroes>, Option<DisplayName>, Option<OwnedMxcUri>)> {
 	const MAX_HEROES: usize = 5;
-	let heroes: Vec<_> = services
+	let heroes: Heroes = services
 		.state_cache
 		.room_members(room_id)
 		.ready_filter(|&member| member != sender_user)
