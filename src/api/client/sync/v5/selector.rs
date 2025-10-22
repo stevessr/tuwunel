@@ -66,6 +66,7 @@ pub(super) async fn selector(
 	(window, lists)
 }
 
+#[tracing::instrument(name = "window", level = "debug", skip_all)]
 async fn select_window<'a, Rooms>(
 	sync_info: SyncInfo<'_>,
 	conn: &Connection,

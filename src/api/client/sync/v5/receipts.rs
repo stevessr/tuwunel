@@ -13,7 +13,7 @@ use tuwunel_service::{rooms::read_receipt::pack_receipts, sync::Room};
 
 use super::{Connection, SyncInfo, Window, extension_rooms_selector};
 
-#[tracing::instrument(level = "trace", skip_all)]
+#[tracing::instrument(name = "receipts", level = "trace", skip_all)]
 pub(super) async fn collect(
 	sync_info: SyncInfo<'_>,
 	conn: &Connection,

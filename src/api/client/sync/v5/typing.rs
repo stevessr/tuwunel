@@ -13,7 +13,7 @@ use tuwunel_core::{
 
 use super::{Connection, SyncInfo, Window, extension_rooms_selector};
 
-#[tracing::instrument(level = "trace", skip_all)]
+#[tracing::instrument(name = "typing", level = "trace", skip_all)]
 pub(super) async fn collect(
 	sync_info: SyncInfo<'_>,
 	conn: &Connection,
