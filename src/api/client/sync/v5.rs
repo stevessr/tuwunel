@@ -23,7 +23,7 @@ use ruma::{
 };
 use tokio::time::{Instant, timeout_at};
 use tuwunel_core::{
-	Err, Result, apply, at,
+	Err, Result, apply, at, debug,
 	debug::INFO_SPAN_LEVEL,
 	err,
 	error::inspect_log,
@@ -53,7 +53,6 @@ struct SyncInfo<'a> {
 	services: &'a Services,
 	sender_user: &'a UserId,
 	sender_device: &'a DeviceId,
-	request: &'a Request,
 }
 
 #[derive(Clone, Debug)]
@@ -152,13 +151,6 @@ pub(crate) async fn sync_events_v5_route(
 	conn.update_cache(request);
 	conn.update_rooms_prologue(advancing);
 
-	let sync_info = SyncInfo {
-		services,
-		sender_user,
-		sender_device,
-		request,
-	};
-
 	let mut response = Response {
 		txn_id: request.txn_id.clone(),
 		lists: Default::default(),
@@ -167,6 +159,7 @@ pub(crate) async fn sync_events_v5_route(
 		extensions: Default::default(),
 	};
 
+	let sync_info = SyncInfo { services, sender_user, sender_device };
 	loop {
 		debug_assert!(
 			conn.globalsince <= conn.next_batch,
@@ -203,15 +196,15 @@ pub(crate) async fn sync_events_v5_route(
 
 		if timeout_at(stop_at, watchers).await.is_err() || services.server.is_stopping() {
 			response.pos = conn.next_batch.to_string().into();
-			trace!(conn.globalsince, conn.next_batch, "timeout; empty response");
+			trace!(conn.globalsince, conn.next_batch, "timeout; empty response {response:?}");
 			return Ok(response);
 		}
 
-		trace!(
-			conn.globalsince,
-			last_batch = ?conn.next_batch,
-			count = ?services.globals.pending_count(),
-			stop_at = ?stop_at,
+		debug!(
+			?timeout,
+			last_since = conn.globalsince,
+			last_batch = conn.next_batch,
+			pend_count = ?services.globals.pending_count(),
 			"notified by watcher"
 		);
 

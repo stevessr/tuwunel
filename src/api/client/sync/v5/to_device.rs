@@ -4,7 +4,7 @@ use tuwunel_core::{self, Result};
 
 use super::{Connection, SyncInfo};
 
-#[tracing::instrument(name = "to_device", level = "trace", skip_all)]
+#[tracing::instrument(name = "to_device", level = "trace", skip_all, ret)]
 pub(super) async fn collect(
 	SyncInfo { services, sender_user, sender_device, .. }: SyncInfo<'_>,
 	conn: &Connection,

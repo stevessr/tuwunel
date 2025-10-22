@@ -94,7 +94,7 @@ pub(super) async fn collect(
 	})
 }
 
-#[tracing::instrument(level = "trace", skip_all, fields(room_id))]
+#[tracing::instrument(level = "trace", skip_all, fields(room_id), ret)]
 async fn collect_room(
 	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
 	conn: &Connection,

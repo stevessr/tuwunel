@@ -29,9 +29,8 @@ pub(super) async fn selector(
 ) -> (Window, ResponseLists) {
 	use MembershipState::*;
 
-	let SyncInfo { services, sender_user, request, .. } = sync_info;
+	let SyncInfo { services, sender_user, .. } = sync_info;
 
-	trace!(?request);
 	let mut rooms = services
 		.state_cache
 		.user_memberships(sender_user, Some(&[Join, Invite, Knock]))
@@ -64,7 +63,12 @@ pub(super) async fn selector(
 	(window, lists)
 }
 
-#[tracing::instrument(name = "window", level = "debug", skip_all)]
+#[tracing::instrument(
+	name = "window",
+	level = "debug",
+	skip_all,
+	fields(rooms = rooms.clone().count())
+)]
 async fn select_window<'a, Rooms>(
 	sync_info: SyncInfo<'_>,
 	conn: &Connection,
