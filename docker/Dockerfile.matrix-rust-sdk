@@ -13,8 +13,7 @@ ARG mrsdk_profile="release"
 ARG mrsdk_target_share="${MRSDK_TARGET_DIR}/${sys_name}/${sys_version}/${rust_target}/${rust_toolchain}/${mrsdk_profile}/_shared_cache"
 ARG mrsdk_test_args=""
 ARG mrsdk_test_opts=""
-#TODO!!!
-ARG mrsdk_skip_list="--skip test_history_share_on_invite_pin_violation --skip test_room_notification_count"
+ARG mrsdk_skip_list=""
 
 WORKDIR /
 COPY --link --from=input . .

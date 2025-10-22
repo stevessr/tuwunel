@@ -174,7 +174,6 @@ async fn match_lists_for_room(
 			services
 				.user
 				.last_notification_read(sender_user, &room_id)
-				.map(|count| count.min(conn.next_batch))
 		})
 		.into();
 
@@ -183,23 +182,19 @@ async fn match_lists_for_room(
 			services
 				.read_receipt
 				.last_privateread_update(sender_user, &room_id)
-				.map(|count| count.min(conn.next_batch))
 		})
 		.into();
 
 	let last_receipt: OptionFuture<_> = matched
-		.and_is(false) // masked out, maybe unnecessary
 		.then(|| {
 			services
 				.read_receipt
 				.last_receipt_count(&room_id, sender_user.into(), None)
 				.unwrap_or_default()
-				.map(|count| count.min(conn.next_batch))
 		})
 		.into();
 
 	let last_account: OptionFuture<_> = matched
-		.and_is(false) // masked out, maybe unnecessary
 		.then(|| {
 			services
 				.account_data
@@ -236,6 +231,7 @@ async fn match_lists_for_room(
 		]
 		.into_iter()
 		.map(Option::unwrap_or_default)
+		.filter(|count| conn.next_batch.ge(count))
 		.max()
 		.unwrap_or_default(),
 	})

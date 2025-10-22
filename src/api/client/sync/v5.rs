@@ -107,13 +107,12 @@ pub(crate) async fn sync_events_v5_route(
 		.map(Duration::as_millis)
 		.map(TryInto::try_into)
 		.flat_ok()
-		.unwrap_or(services.config.client_sync_timeout_default)
-		.max(services.config.client_sync_timeout_min)
-		.min(services.config.client_sync_timeout_max);
-
-	let stop_at = Instant::now()
-		.checked_add(Duration::from_millis(timeout))
-		.expect("configuration must limit maximum timeout");
+		.map(|timeout: u64| {
+			timeout
+				.max(services.config.client_sync_timeout_min)
+				.min(services.config.client_sync_timeout_max)
+		})
+		.unwrap_or(0);
 
 	let conn_key = into_connection_key(sender_user, sender_device, request.conn_id.as_deref());
 	let conn_val = since
@@ -147,7 +146,7 @@ pub(crate) async fn sync_events_v5_route(
 
 	// Update parameters regardless of replay or advance
 	conn.next_batch = services.globals.wait_pending().await?;
-	conn.globalsince = since;
+	conn.globalsince = since.min(conn.next_batch);
 	conn.update_cache(request);
 	conn.update_rooms_prologue(advancing);
 
@@ -159,6 +158,10 @@ pub(crate) async fn sync_events_v5_route(
 		extensions: Default::default(),
 	};
 
+	let stop_at = Instant::now()
+		.checked_add(Duration::from_millis(timeout))
+		.expect("configuration must limit maximum timeout");
+
 	let sync_info = SyncInfo { services, sender_user, sender_device };
 	loop {
 		debug_assert!(
@@ -167,21 +170,20 @@ pub(crate) async fn sync_events_v5_route(
 		);
 
 		let window;
-		(window, response.lists) = selector(&mut conn, sync_info).boxed().await;
-		let watch_rooms = window.keys().map(AsRef::as_ref).stream();
-		let watchers = services
-			.sync
-			.watch(sender_user, sender_device, watch_rooms);
+		let watchers = services.sync.watch(
+			sender_user,
+			sender_device,
+			services.state_cache.rooms_joined(sender_user),
+		);
 
-		let window;
 		conn.next_batch = services.globals.wait_pending().await?;
 		(window, response.lists) = selector(&mut conn, sync_info).boxed().await;
 		if conn.globalsince < conn.next_batch {
-			let rooms =
-				handle_rooms(sync_info, &conn, &window).map_ok(|rooms| response.rooms = rooms);
+			let rooms = handle_rooms(sync_info, &conn, &window)
+				.map_ok(|response_rooms| response.rooms = response_rooms);
 
 			let extensions = handle_extensions(sync_info, &conn, &window)
-				.map_ok(|extensions| response.extensions = extensions);
+				.map_ok(|response_extensions| response.extensions = response_extensions);
 
 			try_join(rooms, extensions).boxed().await?;
 
@@ -194,7 +196,13 @@ pub(crate) async fn sync_events_v5_route(
 			}
 		}
 
-		if timeout_at(stop_at, watchers).await.is_err() || services.server.is_stopping() {
+		if timeout == 0
+			|| services.server.is_stopping()
+			|| timeout_at(stop_at, watchers)
+				.boxed()
+				.await
+				.is_err()
+		{
 			response.pos = conn.next_batch.to_string().into();
 			trace!(conn.globalsince, conn.next_batch, "timeout; empty response {response:?}");
 			return Ok(response);

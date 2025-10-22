@@ -50,7 +50,7 @@ pub struct Connection {
 	pub next_batch: u64,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Room {
 	pub roomsince: u64,
 	pub last_batch: u64,

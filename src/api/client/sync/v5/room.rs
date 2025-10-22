@@ -99,11 +99,15 @@ pub(super) async fn handle(
 		.flat_ok()
 		.unwrap_or_else(|| (Vec::new(), true, PduCount::default()));
 
+	let required_state = required_state
+		.into_iter()
+		.filter(|_| !timeline_pdus.is_empty())
+		.collect::<Vec<_>>();
+
 	let prev_batch = timeline_pdus
 		.first()
 		.map(at!(0))
 		.map(PduCount::into_unsigned)
-		.or_else(|| roomsince.ne(&0).then_some(roomsince))
 		.as_ref()
 		.map(ToString::to_string);
 
@@ -151,14 +155,6 @@ pub(super) async fn handle(
 		.iter()
 		.map(|sender| (StateEventType::RoomMember, StateKey::from_str(sender.as_str())))
 		.stream();
-
-	let timeline = timeline_pdus
-		.iter()
-		.stream()
-		.filter_map(|item| ignored_filter(services, item.clone(), sender_user))
-		.map(at!(1))
-		.map(Event::into_format)
-		.collect();
 
 	let wildcard_state = required_state
 		.iter()
@@ -252,6 +248,14 @@ pub(super) async fn handle(
 	let last_read_count = services
 		.user
 		.last_notification_read(sender_user, room_id);
+
+	let timeline = timeline_pdus
+		.iter()
+		.stream()
+		.filter_map(|item| ignored_filter(services, item.clone(), sender_user))
+		.map(at!(1))
+		.map(Event::into_format)
+		.collect();
 
 	let meta = join3(room_name, room_avatar, is_dm);
 	let events = join4(timeline, num_live, required_state, invite_state);
