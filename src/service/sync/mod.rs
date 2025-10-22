@@ -37,6 +37,7 @@ pub struct Data {
 	roomusertype_roomuserdataid: Arc<Map>,
 	readreceiptid_readreceipt: Arc<Map>,
 	userid_lastonetimekeyupdate: Arc<Map>,
+	roomuserid_lastnotificationread: Arc<Map>,
 }
 
 #[derive(Debug, Default)]
@@ -81,6 +82,8 @@ impl crate::Service for Service {
 				roomusertype_roomuserdataid: args.db["roomusertype_roomuserdataid"].clone(),
 				readreceiptid_readreceipt: args.db["readreceiptid_readreceipt"].clone(),
 				userid_lastonetimekeyupdate: args.db["userid_lastonetimekeyupdate"].clone(),
+				roomuserid_lastnotificationread: args.db["roomuserid_lastnotificationread"]
+					.clone(),
 			},
 			services: args.services.clone(),
 			connections: Default::default(),

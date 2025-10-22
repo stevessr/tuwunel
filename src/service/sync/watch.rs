@@ -85,6 +85,11 @@ where
 		let roomuser_prefix = (room_id, user_id);
 		let typing_room_id = room_id.to_owned();
 		let watchers = [
+			// Notification clearance
+			self.db
+				.roomuserid_lastnotificationread
+				.watch_prefix(&roomuser_prefix)
+				.boxed(),
 			// Key changes
 			self.db
 				.keychangeid_userid
