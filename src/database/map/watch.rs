@@ -8,7 +8,7 @@ use std::{
 use futures::pin_mut;
 use serde::Serialize;
 use tokio::sync::watch::{Sender, channel};
-use tuwunel_core::{implement, smallvec::SmallVec};
+use tuwunel_core::{debug, implement, smallvec::SmallVec};
 
 use crate::keyval::{KeyBuf, serialize_key};
 
@@ -58,6 +58,14 @@ where
 }
 
 #[implement(super::Map)]
+#[tracing::instrument(
+	level = "trace",
+	skip_all,
+	fields(
+		map = self.name(),
+		key = str::from_utf8(key.as_ref()).unwrap_or("<binary>"),
+	)
+)]
 pub(crate) fn notify<K>(&self, key: &K)
 where
 	K: AsRef<[u8]> + Ord + ?Sized,
@@ -66,7 +74,7 @@ where
 
 	let mut watchers = self.watch.watchers.lock().expect("locked");
 
-	watchers
+	let num_notified = watchers
 		.range(range)
 		.rev()
 		.take_while(|(k, _)| key.as_ref().starts_with(k))
@@ -74,7 +82,12 @@ where
 		.cloned()
 		.collect::<KeyVec>()
 		.into_iter()
-		.for_each(|k| {
-			watchers.remove(&k);
+		.fold(0_usize, |num_notified, key| {
+			watchers.remove(&key);
+			num_notified.saturating_add(1)
 		});
+
+	if num_notified > 0 {
+		debug!(watchers = watchers.len(), num_notified, "notified");
+	}
 }
