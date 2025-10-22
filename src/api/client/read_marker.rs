@@ -42,7 +42,10 @@ pub(crate) async fn set_read_marker_route(
 			.await?;
 	}
 
-	if body.private_read_receipt.is_some() || body.read_receipt.is_some() {
+	if body.private_read_receipt.is_some()
+		|| body.read_receipt.is_some()
+		|| (body.fully_read.is_some() && cfg!(feature = "element_hacks"))
+	{
 		services
 			.user
 			.reset_notification_counts(sender_user, &body.room_id);
@@ -108,10 +111,21 @@ pub(crate) async fn create_receipt_route(
 ) -> Result<create_receipt::v3::Response> {
 	let sender_user = body.sender_user();
 
-	if matches!(
+	#[cfg(not(feature = "element_hacks"))]
+	let reset_counts = matches!(
 		&body.receipt_type,
 		create_receipt::v3::ReceiptType::Read | create_receipt::v3::ReceiptType::ReadPrivate
-	) {
+	);
+
+	#[cfg(feature = "element_hacks")]
+	let reset_counts = matches!(
+		&body.receipt_type,
+		create_receipt::v3::ReceiptType::Read
+			| create_receipt::v3::ReceiptType::ReadPrivate
+			| create_receipt::v3::ReceiptType::FullyRead
+	);
+
+	if reset_counts {
 		services
 			.user
 			.reset_notification_counts(sender_user, &body.room_id);
@@ -124,6 +138,7 @@ pub(crate) async fn create_receipt_route(
 					event_id: body.event_id.clone(),
 				},
 			};
+
 			services
 				.account_data
 				.update(
