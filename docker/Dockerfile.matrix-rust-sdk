@@ -19,7 +19,7 @@ WORKDIR /
 COPY --link --from=input . .
 
 WORKDIR /usr/src
-ADD --link https://github.com/matrix-construct/matrix-rust-sdk.git matrix-rust-sdk
+ADD --link https://github.com/matrix-construct/matrix-rust-sdk.git#integration matrix-rust-sdk
 
 WORKDIR /etc
 COPY <<EOF tuwunel.toml
