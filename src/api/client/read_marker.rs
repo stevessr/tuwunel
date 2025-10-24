@@ -26,6 +26,12 @@ pub(crate) async fn set_read_marker_route(
 ) -> Result<set_read_marker::v3::Response> {
 	let sender_user = body.sender_user();
 
+	if body.private_read_receipt.is_some() || body.read_receipt.is_some() {
+		services
+			.user
+			.reset_notification_counts(sender_user, &body.room_id);
+	}
+
 	if let Some(event) = &body.fully_read {
 		let fully_read_event = ruma::events::fully_read::FullyReadEvent {
 			content: ruma::events::fully_read::FullyReadEventContent { event_id: event.clone() },
@@ -39,21 +45,29 @@ pub(crate) async fn set_read_marker_route(
 				RoomAccountDataEventType::FullyRead,
 				&serde_json::to_value(fully_read_event)?,
 			)
-			.await?;
+			.await
+			.ok();
 	}
 
-	if body.private_read_receipt.is_some() || body.read_receipt.is_some() {
+	if let Some(event) = &body.private_read_receipt {
+		let count = services
+			.timeline
+			.get_pdu_count(event)
+			.await
+			.map_err(|_| err!(Request(NotFound("Event not found."))))?;
+
+		let PduCount::Normal(count) = count else {
+			return Err!(Request(InvalidParam(
+				"Event is a backfilled PDU and cannot be marked as read."
+			)));
+		};
+
 		services
-			.user
-			.reset_notification_counts(sender_user, &body.room_id);
+			.read_receipt
+			.private_read_set(&body.room_id, sender_user, count);
 	}
 
 	if let Some(event) = &body.read_receipt {
-		services
-			.presence
-			.maybe_ping_presence(sender_user, &ruma::presence::PresenceState::Online)
-			.await?;
-
 		let receipt_content = BTreeMap::from_iter([(
 			event.to_owned(),
 			BTreeMap::from_iter([(
@@ -76,24 +90,12 @@ pub(crate) async fn set_read_marker_route(
 				},
 			)
 			.await;
-	}
-
-	if let Some(event) = &body.private_read_receipt {
-		let count = services
-			.timeline
-			.get_pdu_count(event)
-			.await
-			.map_err(|_| err!(Request(NotFound("Event not found."))))?;
-
-		let PduCount::Normal(count) = count else {
-			return Err!(Request(InvalidParam(
-				"Event is a backfilled PDU and cannot be marked as read."
-			)));
-		};
 
 		services
-			.read_receipt
-			.private_read_set(&body.room_id, sender_user, count);
+			.presence
+			.maybe_ping_presence(sender_user, &ruma::presence::PresenceState::Online)
+			.await
+			.ok();
 	}
 
 	Ok(set_read_marker::v3::Response {})
@@ -135,11 +137,6 @@ pub(crate) async fn create_receipt_route(
 				.await?;
 		},
 		| create_receipt::v3::ReceiptType::Read => {
-			services
-				.presence
-				.maybe_ping_presence(sender_user, &ruma::presence::PresenceState::Online)
-				.await?;
-
 			let receipt_content = BTreeMap::from_iter([(
 				body.event_id.clone(),
 				BTreeMap::from_iter([(
@@ -165,6 +162,12 @@ pub(crate) async fn create_receipt_route(
 					},
 				)
 				.await;
+
+			services
+				.presence
+				.maybe_ping_presence(sender_user, &ruma::presence::PresenceState::Online)
+				.await
+				.ok();
 		},
 		| create_receipt::v3::ReceiptType::ReadPrivate => {
 			let count = services
