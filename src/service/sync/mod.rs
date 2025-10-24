@@ -53,8 +53,6 @@ pub struct Connection {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Room {
 	pub roomsince: u64,
-	pub last_batch: u64,
-	pub next_batch: u64,
 }
 
 type Connections = StdMutex<BTreeMap<ConnectionKey, ConnectionVal>>;
@@ -94,14 +92,12 @@ impl crate::Service for Service {
 }
 
 #[implement(Connection)]
-pub fn update_rooms_prologue(&mut self, advance: bool) {
+pub fn update_rooms_prologue(&mut self, retard_since: Option<u64>) {
 	self.rooms.values_mut().for_each(|room| {
-		if advance {
-			room.roomsince = room.next_batch;
-			room.last_batch = room.next_batch;
-		} else {
-			room.roomsince = room.last_batch;
-			room.next_batch = room.last_batch;
+		if let Some(retard_since) = retard_since {
+			if room.roomsince > retard_since {
+				room.roomsince = retard_since;
+			}
 		}
 	});
 }
@@ -115,7 +111,6 @@ where
 		let room = self.rooms.entry(room_id.into()).or_default();
 
 		room.roomsince = self.next_batch;
-		room.next_batch = self.next_batch;
 	});
 }
 

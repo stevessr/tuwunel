@@ -130,25 +130,22 @@ pub(crate) async fn sync_events_v5_route(
 
 	let (mut conn, _) = join(conn, ping_presence).await;
 
-	// The client must either use the last returned next_batch or replay the
-	// next_batch from the penultimate request: it's either up-to-date or
-	// one-behind. If we receive anything else we can boot them.
 	let advancing = since == conn.next_batch;
-	let replaying = since == conn.globalsince;
-	if !advancing && !replaying {
+	let retarding = since <= conn.globalsince;
+	if !advancing && !retarding {
 		return Err!(Request(UnknownPos("Requesting unknown or stale stream position.")));
 	}
 
 	debug_assert!(
-		advancing || replaying,
-		"Request should either be advancing or replaying the last request."
+		advancing || retarding,
+		"Request should either be advancing or replaying the since token."
 	);
 
 	// Update parameters regardless of replay or advance
 	conn.next_batch = services.globals.wait_pending().await?;
 	conn.globalsince = since.min(conn.next_batch);
 	conn.update_cache(request);
-	conn.update_rooms_prologue(advancing);
+	conn.update_rooms_prologue(retarding.then_some(since));
 
 	let mut response = Response {
 		txn_id: request.txn_id.clone(),
