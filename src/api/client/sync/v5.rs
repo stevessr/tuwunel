@@ -25,7 +25,7 @@ use tokio::time::{Instant, timeout_at};
 use tuwunel_core::{
 	Err, Result, apply, at, debug,
 	debug::INFO_SPAN_LEVEL,
-	err,
+	debug_warn,
 	error::inspect_log,
 	extract_variant,
 	smallvec::SmallVec,
@@ -115,11 +115,10 @@ pub(crate) async fn sync_events_v5_route(
 		.unwrap_or(0);
 
 	let conn_key = into_connection_key(sender_user, sender_device, request.conn_id.as_deref());
-	let conn_val = since
-		.ne(&0)
-		.then(|| services.sync.find_connection(&conn_key))
-		.unwrap_or_else(|| Ok(services.sync.init_connection(&conn_key)))
-		.map_err(|_| err!(Request(UnknownPos("Connection lost; restarting sync stream."))))?;
+	let conn_val = services
+		.sync
+		.load_or_init_connection(&conn_key)
+		.await;
 
 	let conn = conn_val.lock();
 	let ping_presence = services
@@ -130,10 +129,22 @@ pub(crate) async fn sync_events_v5_route(
 
 	let (mut conn, _) = join(conn, ping_presence).await;
 
+	if since != 0 && conn.next_batch == 0 {
+		return Err!(Request(UnknownPos(warn!("Connection lost; restarting sync stream."))));
+	}
+
+	if since == 0 {
+		*conn = Connection::default();
+		conn.store(&services.sync, &conn_key);
+		debug_warn!(?conn_key, "Client cleared cache and reloaded.");
+	}
+
 	let advancing = since == conn.next_batch;
-	let retarding = since <= conn.globalsince;
+	let retarding = since != 0 && since <= conn.globalsince;
 	if !advancing && !retarding {
-		return Err!(Request(UnknownPos("Requesting unknown or stale stream position.")));
+		return Err!(Request(UnknownPos(warn!(
+			"Requesting unknown or invalid stream position."
+		))));
 	}
 
 	debug_assert!(
@@ -189,6 +200,7 @@ pub(crate) async fn sync_events_v5_route(
 			if !is_empty_response(&response) {
 				response.pos = conn.next_batch.to_string().into();
 				trace!(conn.globalsince, conn.next_batch, "response {response:?}");
+				conn.store(&services.sync, &conn_key);
 				return Ok(response);
 			}
 		}
@@ -202,6 +214,7 @@ pub(crate) async fn sync_events_v5_route(
 		{
 			response.pos = conn.next_batch.to_string().into();
 			trace!(conn.globalsince, conn.next_batch, "timeout; empty response {response:?}");
+			conn.store(&services.sync, &conn_key);
 			return Ok(response);
 		}
 

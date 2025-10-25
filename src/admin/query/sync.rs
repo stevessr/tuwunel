@@ -29,7 +29,7 @@ pub(crate) enum SyncCommand {
 
 #[admin_command]
 pub(super) async fn list_connections(&self) -> Result {
-	let connections = self.services.sync.list_connections();
+	let connections = self.services.sync.list_loaded_connections().await;
 
 	for connection_key in connections {
 		self.write_str(&format!("{connection_key:?}\n"))
@@ -47,7 +47,11 @@ pub(super) async fn show_connection(
 	conn_id: Option<String>,
 ) -> Result {
 	let key = into_connection_key(user_id, device_id, conn_id);
-	let cache = self.services.sync.find_connection(&key)?;
+	let cache = self
+		.services
+		.sync
+		.get_loaded_connection(&key)
+		.await?;
 
 	let out;
 	{
@@ -65,11 +69,14 @@ pub(super) async fn drop_connections(
 	device_id: Option<OwnedDeviceId>,
 	conn_id: Option<String>,
 ) -> Result {
-	self.services.sync.clear_connections(
-		user_id.as_deref(),
-		device_id.as_deref(),
-		conn_id.map(Into::into).as_ref(),
-	);
+	self.services
+		.sync
+		.clear_connections(
+			user_id.as_deref(),
+			device_id.as_deref(),
+			conn_id.map(Into::into).as_ref(),
+		)
+		.await;
 
 	Ok(())
 }
