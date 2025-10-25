@@ -64,6 +64,25 @@ pub(super) async fn handle(
 		"Stale room shouldn't be in the window"
 	);
 
+	if *membership == Some(MembershipState::Leave) {
+		return Ok(Some(response::Room {
+			initial: roomsince.eq(&0).then_some(true),
+			lists: lists.clone(),
+			membership: membership.clone(),
+			prev_batch: Some(conn.next_batch.to_string().into()),
+			limited: true,
+			required_state: vec![
+				services
+					.state_accessor
+					.room_state_get(room_id, &StateEventType::RoomMember, sender_user.as_str())
+					.map_ok(Event::into_format)
+					.await?,
+			],
+
+			..Default::default()
+		}));
+	}
+
 	let is_invite = *membership == Some(MembershipState::Invite);
 	let default_details = (0_usize, HashSet::new());
 	let (timeline_limit, required_state) = lists
