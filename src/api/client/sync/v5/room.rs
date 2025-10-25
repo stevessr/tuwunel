@@ -114,6 +114,12 @@ pub(super) async fn handle(
 	let bump_stamp = timeline_pdus
 		.iter()
 		.filter(|(_, pdu)| {
+			if *pdu.event_type() == TimelineEventType::RoomMember {
+				return pdu
+					.state_key()
+					.is_some_and(is_equal_to!(sender_user.as_str()));
+			}
+
 			DEFAULT_BUMP_TYPES
 				.binary_search(pdu.event_type())
 				.is_ok()
