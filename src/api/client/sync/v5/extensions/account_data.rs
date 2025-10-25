@@ -6,7 +6,7 @@ use tuwunel_core::{
 };
 use tuwunel_service::sync::Room;
 
-use super::{Connection, SyncInfo, Window, extension_rooms_selector};
+use super::{Connection, SyncInfo, Window, selector};
 
 #[tracing::instrument(name = "account_data", level = "trace", skip_all)]
 pub(super) async fn collect(
@@ -30,7 +30,7 @@ pub(super) async fn collect(
 		.as_deref()
 		.map(<[_]>::iter);
 
-	let rooms = extension_rooms_selector(sync_info, conn, window, implicit, explicit)
+	let rooms = selector(sync_info, conn, window, implicit, explicit)
 		.stream()
 		.broad_filter_map(async |room_id| {
 			let &Room { roomsince, .. } = conn.rooms.get(room_id)?;

@@ -1,11 +1,14 @@
-use std::{cmp::Ordering, collections::HashSet};
+use std::{
+	cmp::Ordering,
+	collections::{BTreeMap, HashSet},
+};
 
 use futures::{
 	FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 	future::{OptionFuture, join, join3, join4},
 };
 use ruma::{
-	JsOption, MxcUri, OwnedMxcUri, RoomId, UserId,
+	JsOption, MxcUri, OwnedMxcUri, OwnedRoomId, RoomId, UserId,
 	api::client::sync::sync_events::{
 		UnreadNotificationsCount,
 		v5::{DisplayName, response, response::Heroes},
@@ -23,17 +26,47 @@ use tuwunel_core::{
 	matrix::{Event, StateKey, pdu::PduCount},
 	ref_at,
 	utils::{
-		BoolExt, IterStream, ReadyExt, TryFutureExtExt, math::usize_from_ruma, result::FlatOk,
-		stream::BroadbandExt,
+		BoolExt, IterStream, ReadyExt, TryFutureExtExt,
+		math::usize_from_ruma,
+		result::FlatOk,
+		stream::{BroadbandExt, TryBroadbandExt, TryReadyExt},
 	},
 };
 use tuwunel_service::{Services, sync::Room};
 
-use super::{super::load_timeline, Connection, SyncInfo, WindowRoom};
+use super::{super::load_timeline, Connection, SyncInfo, Window, WindowRoom};
 use crate::client::ignored_filter;
 
 static DEFAULT_BUMP_TYPES: [TimelineEventType; 6] =
 	[CallInvite, PollStart, Beacon, RoomEncrypted, RoomMessage, Sticker];
+
+#[tracing::instrument(
+    name = "rooms",
+    level = "debug",
+    skip_all,
+    fields(
+        next_batch = conn.next_batch,
+        window = window.len(),
+    )
+)]
+pub(super) async fn handle(
+	sync_info: SyncInfo<'_>,
+	conn: &Connection,
+	window: &Window,
+) -> Result<BTreeMap<OwnedRoomId, response::Room>> {
+	window
+		.iter()
+		.try_stream()
+		.broad_and_then(async |(room_id, room)| {
+			handle_room(sync_info, conn, room)
+				.map_ok(|room| (room_id, room))
+				.await
+		})
+		.ready_try_filter_map(|(room_id, room)| Ok(room.map(|room| (room_id, room))))
+		.map_ok(|(room_id, room)| (room_id.to_owned(), room))
+		.try_collect()
+		.await
+}
 
 #[tracing::instrument(
 	name = "room",
@@ -42,7 +75,7 @@ static DEFAULT_BUMP_TYPES: [TimelineEventType; 6] =
 	fields(room_id, roomsince)
 )]
 #[allow(clippy::too_many_arguments)]
-pub(super) async fn handle(
+async fn handle_room(
 	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
 	conn: &Connection,
 	WindowRoom {

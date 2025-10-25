@@ -11,7 +11,7 @@ use tuwunel_core::{
 	utils::{IterStream, ReadyExt},
 };
 
-use super::{Connection, SyncInfo, Window, extension_rooms_selector};
+use super::{Connection, SyncInfo, Window, selector};
 
 #[tracing::instrument(name = "typing", level = "trace", skip_all, ret)]
 pub(super) async fn collect(
@@ -37,7 +37,7 @@ pub(super) async fn collect(
 		.as_deref()
 		.map(<[_]>::iter);
 
-	extension_rooms_selector(sync_info, conn, window, implicit, explicit)
+	selector(sync_info, conn, window, implicit, explicit)
 		.stream()
 		.filter_map(async |room_id| {
 			services

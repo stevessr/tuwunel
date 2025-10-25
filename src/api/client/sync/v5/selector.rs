@@ -10,8 +10,7 @@ use tuwunel_core::{
 	matrix::PduCount,
 	trace,
 	utils::{
-		BoolExt,
-		future::TryExtExt,
+		BoolExt, TryFutureExtExt,
 		math::usize_from_ruma,
 		stream::{BroadbandExt, IterStream},
 	},
@@ -19,7 +18,8 @@ use tuwunel_core::{
 use tuwunel_service::sync::Connection;
 
 use super::{
-	ListIds, ResponseLists, SyncInfo, Window, WindowRoom, filter_room, filter_room_meta,
+	ListIds, ResponseLists, SyncInfo, Window, WindowRoom,
+	filter::{filter_room, filter_room_meta},
 };
 
 #[tracing::instrument(level = "debug", skip_all)]
@@ -35,9 +35,7 @@ pub(super) async fn selector(
 		.state_cache
 		.user_memberships(sender_user, Some(&[Join, Invite, Knock]))
 		.map(|(membership, room_id)| (room_id.to_owned(), Some(membership)))
-		.broad_filter_map(|(room_id, membership)| {
-			match_lists_for_room(sync_info, conn, room_id, membership)
-		})
+		.broad_filter_map(|(room_id, membership)| matcher(sync_info, conn, room_id, membership))
 		.collect::<Vec<_>>()
 		.await;
 
@@ -57,89 +55,10 @@ pub(super) async fn selector(
 	let lists = response_lists(rooms.iter());
 
 	trace!(?lists);
-	let window = select_window(sync_info, conn, rooms.iter(), &lists).await;
+	let window = window(sync_info, conn, rooms.iter(), &lists).await;
 
 	trace!(?window);
 	(window, lists)
-}
-
-#[tracing::instrument(
-	name = "window",
-	level = "debug",
-	skip_all,
-	fields(rooms = rooms.clone().count())
-)]
-async fn select_window<'a, Rooms>(
-	sync_info: SyncInfo<'_>,
-	conn: &Connection,
-	rooms: Rooms,
-	lists: &ResponseLists,
-) -> Window
-where
-	Rooms: Iterator<Item = &'a WindowRoom> + Clone + Send + Sync,
-{
-	static FULL_RANGE: (UInt, UInt) = (UInt::MIN, UInt::MAX);
-
-	let SyncInfo { services, sender_user, .. } = sync_info;
-
-	let selections = lists
-		.keys()
-		.cloned()
-		.filter_map(|id| conn.lists.get(&id).map(|list| (id, list)))
-		.flat_map(|(id, list)| {
-			let full_range = list
-				.ranges
-				.is_empty()
-				.then_some(&FULL_RANGE)
-				.into_iter();
-
-			list.ranges
-				.iter()
-				.chain(full_range)
-				.map(apply!(2, usize_from_ruma))
-				.map(move |range| (id.clone(), range))
-		})
-		.flat_map(|(id, (start, end))| {
-			rooms
-				.clone()
-				.filter(move |&room| room.lists.contains(&id))
-				.filter(|&room| {
-					conn.rooms
-						.get(&room.room_id)
-						.is_some_and(|conn_room| {
-							conn_room.roomsince == 0 || room.last_count > conn_room.roomsince
-						})
-				})
-				.enumerate()
-				.skip_while(move |&(i, _)| i < start)
-				.take(end.saturating_add(1).saturating_sub(start))
-				.map(|(_, room)| (room.room_id.clone(), room.clone()))
-		})
-		.stream();
-
-	let subscriptions = conn
-		.subscriptions
-		.iter()
-		.stream()
-		.broad_filter_map(async |(room_id, _)| {
-			filter_room_meta(sync_info, room_id)
-				.await
-				.into_option()?;
-
-			Some(WindowRoom {
-				room_id: room_id.clone(),
-				lists: Default::default(),
-				ranked: usize::MAX,
-				last_count: 0,
-				membership: services
-					.state_cache
-					.user_membership(sender_user, room_id)
-					.await,
-			})
-		})
-		.map(|room| (room.room_id.clone(), room));
-
-	subscriptions.chain(selections).collect().await
 }
 
 #[tracing::instrument(
@@ -148,7 +67,7 @@ where
 	skip_all,
 	fields(?room_id, ?membership)
 )]
-async fn match_lists_for_room(
+async fn matcher(
 	sync_info: SyncInfo<'_>,
 	conn: &Connection,
 	room_id: OwnedRoomId,
@@ -244,6 +163,84 @@ async fn match_lists_for_room(
 		.max()
 		.unwrap_or_default(),
 	})
+}
+
+#[tracing::instrument(
+	level = "debug",
+	skip_all,
+	fields(rooms = rooms.clone().count())
+)]
+async fn window<'a, Rooms>(
+	sync_info: SyncInfo<'_>,
+	conn: &Connection,
+	rooms: Rooms,
+	lists: &ResponseLists,
+) -> Window
+where
+	Rooms: Iterator<Item = &'a WindowRoom> + Clone + Send + Sync,
+{
+	static FULL_RANGE: (UInt, UInt) = (UInt::MIN, UInt::MAX);
+
+	let SyncInfo { services, sender_user, .. } = sync_info;
+
+	let selections = lists
+		.keys()
+		.cloned()
+		.filter_map(|id| conn.lists.get(&id).map(|list| (id, list)))
+		.flat_map(|(id, list)| {
+			let full_range = list
+				.ranges
+				.is_empty()
+				.then_some(&FULL_RANGE)
+				.into_iter();
+
+			list.ranges
+				.iter()
+				.chain(full_range)
+				.map(apply!(2, usize_from_ruma))
+				.map(move |range| (id.clone(), range))
+		})
+		.flat_map(|(id, (start, end))| {
+			rooms
+				.clone()
+				.filter(move |&room| room.lists.contains(&id))
+				.filter(|&room| {
+					conn.rooms
+						.get(&room.room_id)
+						.is_some_and(|conn_room| {
+							conn_room.roomsince == 0 || room.last_count > conn_room.roomsince
+						})
+				})
+				.enumerate()
+				.skip_while(move |&(i, _)| i < start)
+				.take(end.saturating_add(1).saturating_sub(start))
+				.map(|(_, room)| (room.room_id.clone(), room.clone()))
+		})
+		.stream();
+
+	let subscriptions = conn
+		.subscriptions
+		.iter()
+		.stream()
+		.broad_filter_map(async |(room_id, _)| {
+			filter_room_meta(sync_info, room_id)
+				.await
+				.into_option()?;
+
+			Some(WindowRoom {
+				room_id: room_id.clone(),
+				lists: Default::default(),
+				ranked: usize::MAX,
+				last_count: 0,
+				membership: services
+					.state_cache
+					.user_membership(sender_user, room_id)
+					.await,
+			})
+		})
+		.map(|room| (room.room_id.clone(), room));
+
+	subscriptions.chain(selections).collect().await
 }
 
 fn response_lists<'a, Rooms>(rooms: Rooms) -> ResponseLists
