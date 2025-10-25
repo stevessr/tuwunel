@@ -80,6 +80,8 @@ where
 {
 	static FULL_RANGE: (UInt, UInt) = (UInt::MIN, UInt::MAX);
 
+	let SyncInfo { services, sender_user, .. } = sync_info;
+
 	let selections = lists
 		.keys()
 		.cloned()
@@ -104,7 +106,9 @@ where
 				.filter(|&room| {
 					conn.rooms
 						.get(&room.room_id)
-						.is_some_and(|conn_room| room.last_count > conn_room.roomsince)
+						.is_some_and(|conn_room| {
+							conn_room.roomsince == 0 || room.last_count > conn_room.roomsince
+						})
 				})
 				.enumerate()
 				.skip_while(move |&(i, _)| i < start)
@@ -120,13 +124,18 @@ where
 		.broad_filter_map(async |(room_id, _)| {
 			filter_room_meta(sync_info, room_id)
 				.await
-				.then(|| WindowRoom {
-					room_id: room_id.clone(),
-					membership: None,
-					lists: Default::default(),
-					ranked: usize::MAX,
-					last_count: 0,
-				})
+				.into_option()?;
+
+			Some(WindowRoom {
+				room_id: room_id.clone(),
+				lists: Default::default(),
+				ranked: usize::MAX,
+				last_count: 0,
+				membership: services
+					.state_cache
+					.user_membership(sender_user, room_id)
+					.await,
+			})
 		})
 		.map(|room| (room.room_id.clone(), room));
 
@@ -254,15 +263,4 @@ where
 		})
 }
 
-fn room_sort(a: &WindowRoom, b: &WindowRoom) -> Ordering {
-	if a.membership != b.membership {
-		if a.membership == Some(MembershipState::Invite) {
-			return Ordering::Less;
-		}
-		if b.membership == Some(MembershipState::Invite) {
-			return Ordering::Greater;
-		}
-	}
-
-	b.last_count.cmp(&a.last_count)
-}
+fn room_sort(a: &WindowRoom, b: &WindowRoom) -> Ordering { b.last_count.cmp(&a.last_count) }
