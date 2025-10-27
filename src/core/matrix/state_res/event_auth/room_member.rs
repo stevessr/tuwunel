@@ -10,7 +10,7 @@ use ruma::{
 };
 
 use crate::{
-	Err, Result, debug, err, is_equal_to,
+	Err, Result, err, is_equal_to,
 	matrix::{Event, StateKey},
 };
 
