@@ -178,8 +178,7 @@ async fn handle_room(
 		})
 		.filter(|(_, pdu)| !pdu.is_redacted())
 		.map(at!(0))
-		.filter(|count| matches!(count, PduCount::Normal(_)))
-		.map(PduCount::into_unsigned)
+		.map(PduCount::into_signed)
 		.max()
 		.map(TryInto::try_into)
 		.flat_ok();
