@@ -54,7 +54,7 @@ pub fn reset_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
 }
 
 #[implement(Service)]
-#[tracing::instrument(level = "debug", skip(self), ret)]
+#[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
 pub async fn notification_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 	let key = (user_id, room_id);
 	self.db
@@ -66,7 +66,7 @@ pub async fn notification_count(&self, user_id: &UserId, room_id: &RoomId) -> u6
 }
 
 #[implement(Service)]
-#[tracing::instrument(level = "debug", skip(self), ret)]
+#[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
 pub async fn highlight_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 	let key = (user_id, room_id);
 	self.db
@@ -78,7 +78,7 @@ pub async fn highlight_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 }
 
 #[implement(Service)]
-#[tracing::instrument(level = "debug", skip(self), ret)]
+#[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
 pub async fn last_notification_read(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 	let key = (room_id, user_id);
 	self.db

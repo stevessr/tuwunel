@@ -130,7 +130,12 @@ impl Service {
 	}
 
 	/// Returns the private read marker PDU count.
-	#[tracing::instrument(skip(self), level = "debug", name = "get_private_count", ret)]
+	#[tracing::instrument(
+		name = "get_private_count",
+		level = "debug",
+		skip(self),
+		ret(level = "trace")
+	)]
 	pub async fn private_read_get_count(
 		&self,
 		room_id: &RoomId,
@@ -142,14 +147,24 @@ impl Service {
 	}
 
 	/// Returns the PDU count of the last typing update in this room.
-	#[tracing::instrument(skip(self), level = "debug", name = "get_private_last", ret)]
+	#[tracing::instrument(
+		name = "get_private_last",
+		level = "debug",
+		skip(self),
+		ret(level = "trace")
+	)]
 	pub async fn last_privateread_update(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 		self.db
 			.last_privateread_update(user_id, room_id)
 			.await
 	}
 
-	#[tracing::instrument(skip(self), level = "debug", name = "get_receipt_last", ret)]
+	#[tracing::instrument(
+		name = "get_receipt_last",
+		level = "debug",
+		skip(self),
+		ret(level = "trace")
+	)]
 	pub async fn last_receipt_count(
 		&self,
 		room_id: &RoomId,
