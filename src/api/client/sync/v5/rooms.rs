@@ -273,13 +273,13 @@ async fn handle_room(
 		.map(Option::flatten);
 
 	let highlight_count = services
-		.user
+		.pusher
 		.highlight_count(sender_user, room_id)
 		.map(TryInto::try_into)
 		.map(Result::ok);
 
 	let notification_count = services
-		.user
+		.pusher
 		.notification_count(sender_user, room_id)
 		.map(TryInto::try_into)
 		.map(Result::ok);
@@ -304,7 +304,7 @@ async fn handle_room(
 		.map(|is_dm| is_dm.then_some(is_dm));
 
 	let last_read_count = services
-		.user
+		.pusher
 		.last_notification_read(sender_user, room_id);
 
 	let timeline = timeline_pdus

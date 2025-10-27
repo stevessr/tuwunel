@@ -100,7 +100,7 @@ async fn matcher(
 	let last_notification: OptionFuture<_> = matched
 		.then(|| {
 			services
-				.user
+				.pusher
 				.last_notification_read(sender_user, &room_id)
 		})
 		.into();

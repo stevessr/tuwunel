@@ -1,40 +1,11 @@
-use std::sync::Arc;
-
 use ruma::{RoomId, UserId};
 use tuwunel_core::{
 	Result, implement, trace,
 	utils::stream::{ReadyExt, TryIgnore},
 };
-use tuwunel_database::{Deserialized, Interfix, Map};
+use tuwunel_database::{Deserialized, Interfix};
 
-pub struct Service {
-	db: Data,
-	services: Arc<crate::services::OnceServices>,
-}
-
-struct Data {
-	userroomid_notificationcount: Arc<Map>,
-	userroomid_highlightcount: Arc<Map>,
-	roomuserid_lastnotificationread: Arc<Map>,
-}
-
-impl crate::Service for Service {
-	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
-		Ok(Arc::new(Self {
-			db: Data {
-				userroomid_notificationcount: args.db["userroomid_notificationcount"].clone(),
-				userroomid_highlightcount: args.db["userroomid_highlightcount"].clone(),
-				roomuserid_lastnotificationread: args.db["roomuserid_lastnotificationread"]
-					.clone(),
-			},
-			services: args.services.clone(),
-		}))
-	}
-
-	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
-}
-
-#[implement(Service)]
+#[implement(super::Service)]
 #[tracing::instrument(level = "debug", skip(self))]
 pub fn reset_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
 	let count = self.services.globals.next_count();
@@ -53,7 +24,7 @@ pub fn reset_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
 		.put(roomuser_id, *count);
 }
 
-#[implement(Service)]
+#[implement(super::Service)]
 #[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
 pub async fn notification_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 	let key = (user_id, room_id);
@@ -65,7 +36,7 @@ pub async fn notification_count(&self, user_id: &UserId, room_id: &RoomId) -> u6
 		.unwrap_or(0)
 }
 
-#[implement(Service)]
+#[implement(super::Service)]
 #[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
 pub async fn highlight_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 	let key = (user_id, room_id);
@@ -77,7 +48,7 @@ pub async fn highlight_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 		.unwrap_or(0)
 }
 
-#[implement(Service)]
+#[implement(super::Service)]
 #[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
 pub async fn last_notification_read(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 	let key = (room_id, user_id);
@@ -89,7 +60,7 @@ pub async fn last_notification_read(&self, user_id: &UserId, room_id: &RoomId) -
 		.unwrap_or(0)
 }
 
-#[implement(Service)]
+#[implement(super::Service)]
 pub async fn delete_room_notification_read(&self, room_id: &RoomId) -> Result {
 	let key = (room_id, Interfix);
 	self.db

@@ -28,7 +28,7 @@ pub(crate) async fn set_read_marker_route(
 
 	if body.private_read_receipt.is_some() || body.read_receipt.is_some() {
 		services
-			.user
+			.pusher
 			.reset_notification_counts(sender_user, &body.room_id);
 	}
 
@@ -115,7 +115,7 @@ pub(crate) async fn create_receipt_route(
 		create_receipt::v3::ReceiptType::Read | create_receipt::v3::ReceiptType::ReadPrivate
 	) {
 		services
-			.user
+			.pusher
 			.reset_notification_counts(sender_user, &body.room_id);
 	}
 

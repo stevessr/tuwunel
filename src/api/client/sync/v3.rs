@@ -809,7 +809,7 @@ async fn load_joined_room(
 		.is_empty()
 		.then(|| {
 			services
-				.user
+				.pusher
 				.last_notification_read(sender_user, room_id)
 		})
 		.into();
@@ -877,7 +877,7 @@ async fn load_joined_room(
 	let notification_count: OptionFuture<_> = send_notification_counts
 		.then(|| {
 			services
-				.user
+				.pusher
 				.notification_count(sender_user, room_id)
 				.map(TryInto::try_into)
 				.unwrap_or(uint!(0))
@@ -887,7 +887,7 @@ async fn load_joined_room(
 	let highlight_count: OptionFuture<_> = send_notification_counts
 		.then(|| {
 			services
-				.user
+				.pusher
 				.highlight_count(sender_user, room_id)
 				.map(TryInto::try_into)
 				.unwrap_or(uint!(0))

@@ -168,7 +168,7 @@ where
 		.private_read_set(pdu.room_id(), pdu.sender(), *next_count2);
 
 	self.services
-		.user
+		.pusher
 		.reset_notification_counts(pdu.sender(), pdu.room_id());
 
 	let count = PduCount::Normal(*next_count1);
