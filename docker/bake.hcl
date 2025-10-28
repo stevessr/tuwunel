@@ -1390,7 +1390,7 @@ target "deps-base" {
                         "-C link-arg=-l:libgcc.a": "",
                 ]):
 
-            (cargo_profile == "release" || cargo_profile == "bench") && rust_toolchain == "nightly"?
+            (cargo_profile == "release" || cargo_profile == "bench") && substr(rust_toolchain, 0, 7) == "nightly"?
                 join(" ", [
                     join(" ", rustflags),
                     join(" ", nightly_rustflags),
@@ -1432,7 +1432,7 @@ target "deps-base" {
                         "-C link-arg=-l:libgcc.a": "",
                 ]):
 
-            rust_toolchain == "stable"?
+            substr(rust_toolchain, 0, 6) == "stable"?
                 join(" ", [
                     join(" ", rustflags),
                     join(" ", static_rustflags),
@@ -1452,7 +1452,7 @@ target "deps-base" {
                         "-C link-arg=-l:libgcc.a": "",
                 ]):
 
-            rust_toolchain == "nightly"?
+            substr(rust_toolchain, 0, 7) == "nightly"?
                 join(" ", [
                     join(" ", rustflags),
                     join(" ", nightly_rustflags),
