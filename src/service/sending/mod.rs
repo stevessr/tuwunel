@@ -1,4 +1,3 @@
-mod appservice;
 mod data;
 mod dest;
 mod sender;
@@ -29,7 +28,7 @@ pub use self::{
 	dest::Destination,
 	sender::{EDU_LIMIT, PDU_LIMIT},
 };
-use crate::rooms::timeline::RawPduId;
+use crate::{appservice, rooms::timeline::RawPduId};
 
 pub struct Service {
 	pub db: Data,

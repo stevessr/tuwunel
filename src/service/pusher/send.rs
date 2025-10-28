@@ -57,9 +57,9 @@ where
 		};
 
 		if notify.is_some() {
-			return Err!(Database(
+			return Err!(Request(BadJson(
 				r#"Malformed pushrule contains more than one of these actions: ["dont_notify", "notify", "coalesce"]"#
-			));
+			)));
 		}
 
 		notify = Some(n);

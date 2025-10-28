@@ -50,9 +50,8 @@ use tuwunel_core::{
 	warn,
 };
 
-use super::{
-	Destination, EduBuf, EduVec, Msg, SendingEvent, Service, appservice, data::QueueItem,
-};
+use super::{Destination, EduBuf, EduVec, Msg, SendingEvent, Service, data::QueueItem};
+use crate::appservice;
 
 #[derive(Debug)]
 enum TransactionStatus {
