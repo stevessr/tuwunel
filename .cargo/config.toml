@@ -8,7 +8,7 @@ RUSTFLAGS = "-C link-arg=-fuse-ld=mold"
 # Default number of parallel jobs for cargo. Tune to number of logical CPUs
 # or set via environment variable CARGO_BUILD_JOBS. 16 is a reasonable default
 # for developer machines with multiple cores.
-jobs = 16
+jobs = 4
 
 # Use mold as the linker for x86_64 Linux builds when available. Mold is a
 # high-performance, parallel linker that can greatly speed up linking for
