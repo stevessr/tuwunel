@@ -5,7 +5,7 @@ mod unquote;
 mod unquoted;
 
 pub use self::{between::Between, split::SplitInfallible, unquote::Unquote, unquoted::Unquoted};
-use crate::{Result, utils::exchange};
+use crate::{Result, smallstr::SmallString, utils::exchange};
 
 pub const EMPTY: &str = "";
 
@@ -103,6 +103,18 @@ pub fn common_prefix<'a>(choice: &'a [&str]) -> &'a str {
 				.count()]
 		})
 	})
+}
+
+pub fn to_small_string<const CAP: usize, T>(t: T) -> SmallString<[u8; CAP]>
+where
+	T: std::fmt::Display,
+{
+	use std::fmt::Write;
+
+	let mut ret = SmallString::<[u8; CAP]>::new();
+	write!(&mut ret, "{t}").expect("Failed to Display type in SmallString");
+
+	ret
 }
 
 /// Parses the bytes into a string.
