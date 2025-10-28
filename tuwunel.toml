@@ -50,7 +50,7 @@ displayname_claim = "name"
 
 # Federation: enable for production; for most local tests you can disable it
 allow_federation = true
-
+allow_legacy_media = true
 # Keep logs human-friendly during local runs
 log = "debug"
 
@@ -61,3 +61,8 @@ log = "debug"
 # to require a token, set registration_token instead of allow_registration.
 # registration_token = "test-token"
 yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true
+
+[global.well_known]
+client = "https://chat.aaca.eu.org/"
+server = "shit.aaca.eu.org:443"
+
