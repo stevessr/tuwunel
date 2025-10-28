@@ -335,7 +335,7 @@ pub(crate) async fn set_pushrule_actions_route(
 	if account_data
 		.content
 		.global
-		.set_actions(body.kind.clone(), &body.rule_id, body.actions.clone())
+		.set_actions(body.kind.clone(), &body.rule_id, body.actions.clone().into())
 		.is_err()
 	{
 		return Err!(Request(NotFound("Push rule not found.")));

@@ -54,6 +54,7 @@ use tuwunel_core::{
 		future::{OptionStream, ReadyEqExt},
 		math::ruma_from_u64,
 		stream::{BroadbandExt, Tools, TryExpect, WidebandExt},
+		string::to_small_string,
 	},
 	warn,
 };
@@ -218,7 +219,7 @@ async fn build_empty_response(
 			.count_one_time_keys(body.sender_user(), body.sender_device())
 			.await,
 
-		..sync_events::v3::Response::new(next_batch.to_string())
+		..sync_events::v3::Response::new(to_small_string(next_batch))
 	}
 }
 
@@ -442,7 +443,7 @@ async fn build_sync_events(
 		device_one_time_keys_count,
 		// Fallback keys are not yet supported
 		device_unused_fallback_key_types: None,
-		next_batch: next_batch.to_string(),
+		next_batch: to_small_string(next_batch),
 		presence: Presence { events: presence_events },
 		rooms: Rooms {
 			leave: left_rooms,
