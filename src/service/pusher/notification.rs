@@ -50,14 +50,13 @@ pub async fn highlight_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 
 #[implement(super::Service)]
 #[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
-pub async fn last_notification_read(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
+pub async fn last_notification_read(&self, user_id: &UserId, room_id: &RoomId) -> Result<u64> {
 	let key = (room_id, user_id);
 	self.db
 		.roomuserid_lastnotificationread
 		.qry(&key)
 		.await
 		.deserialized()
-		.unwrap_or(0)
 }
 
 #[implement(super::Service)]

@@ -102,6 +102,7 @@ async fn matcher(
 			services
 				.pusher
 				.last_notification_read(sender_user, &room_id)
+				.unwrap_or_default()
 		})
 		.into();
 

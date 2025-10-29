@@ -812,6 +812,7 @@ async fn load_joined_room(
 			services
 				.pusher
 				.last_notification_read(sender_user, room_id)
+				.ok()
 		})
 		.into();
 
@@ -872,8 +873,9 @@ async fn load_joined_room(
 			.map(Into::into)
 	});
 
-	let send_notification_counts =
-		last_notification_read.is_none_or(|last_count| last_count.gt(&since));
+	let send_notification_counts = last_notification_read
+		.flatten()
+		.is_none_or(|last_count| last_count.gt(&since));
 
 	let notification_count: OptionFuture<_> = send_notification_counts
 		.then(|| {
