@@ -105,6 +105,10 @@ pub(crate) async fn append_pdu(&self, pdu_id: RawPduId, pdu: &Pdu) -> Result {
 			highlights.push(user.clone());
 		}
 
+		if !notify && !highlight {
+			continue;
+		}
+
 		self.services
 			.pusher
 			.get_pushkeys(user)
