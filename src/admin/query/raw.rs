@@ -37,15 +37,6 @@ pub(crate) enum RawCommand {
 		base64: bool,
 	},
 
-	/// - Raw database delete (for string keys)
-	Del {
-		/// Map name
-		map: String,
-
-		/// Key
-		key: String,
-	},
-
 	/// - Raw database keys iteration
 	Keys {
 		/// Map name
@@ -135,7 +126,26 @@ pub(crate) enum RawCommand {
 		prefix: Option<String>,
 	},
 
-	/// - Compact database
+	/// - Raw database delete (for string keys) DANGER!!!
+	Del {
+		/// Map name
+		map: String,
+
+		/// Key
+		key: String,
+	},
+
+	/// - Clear database table DANGER!!!
+	Clear {
+		/// Map name
+		map: String,
+
+		/// Confirm
+		#[arg(long)]
+		confirm: bool,
+	},
+
+	/// - Compact database DANGER!!!
 	Compact {
 		#[arg(short, long, alias("column"))]
 		map: Option<Vec<String>>,
@@ -420,6 +430,28 @@ pub(super) async fn raw_del(&self, map: String, key: String) -> Result {
 	let timer = Instant::now();
 	map.remove(&key);
 
+	let query_time = timer.elapsed();
+	self.write_str(&format!("Operation completed in {query_time:?}"))
+		.await
+}
+
+#[admin_command]
+pub(super) async fn raw_clear(&self, map: String, confirm: bool) -> Result {
+	let map = self.services.db.get(&map)?;
+
+	if !confirm {
+		return Err!("Are you really sure you want to clear all data? Add the --confirm option.");
+	}
+
+	let timer = Instant::now();
+	let cork = self.services.db.cork();
+	map.raw_keys()
+		.ignore_err()
+		.ready_for_each(|key| map.remove(&key))
+		.boxed()
+		.await;
+
+	drop(cork);
 	let query_time = timer.elapsed();
 	self.write_str(&format!("Operation completed in {query_time:?}"))
 		.await
