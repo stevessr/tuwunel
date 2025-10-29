@@ -415,6 +415,11 @@ pub(super) static MAPS: &[Descriptor] = &[
 		..descriptor::RANDOM_SMALL
 	},
 	Descriptor {
+		name: "useridcount_notification",
+		limit_size: 1024 * 1024 * 256,
+		..descriptor::RANDOM_SMALL_CACHE
+	},
+	Descriptor {
 		name: "useridprofilekey_value",
 		..descriptor::RANDOM_SMALL
 	},

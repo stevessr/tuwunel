@@ -47,6 +47,7 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::request_3pid_management_token_via_email_route)
 		.ruma_route(&client::request_3pid_management_token_via_msisdn_route)
 		.ruma_route(&client::check_registration_token_validity)
+		.ruma_route(&client::get_notifications_route)
 		.ruma_route(&client::get_capabilities_route)
 		.ruma_route(&client::get_pushrules_all_route)
 		.ruma_route(&client::get_pushrules_global_route)

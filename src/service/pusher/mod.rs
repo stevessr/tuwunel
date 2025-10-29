@@ -17,9 +17,11 @@ use ruma::{
 };
 use tuwunel_core::{
 	Err, Result, err, implement,
-	utils::stream::{BroadbandExt, TryIgnore},
+	utils::stream::{BroadbandExt, ReadyExt, TryIgnore},
 };
 use tuwunel_database::{Database, Deserialized, Ignore, Interfix, Json, Map};
+
+pub use self::append::Notified;
 
 pub struct Service {
 	db: Data,
@@ -29,6 +31,7 @@ pub struct Service {
 struct Data {
 	senderkey_pusher: Arc<Map>,
 	pushkey_deviceid: Arc<Map>,
+	useridcount_notification: Arc<Map>,
 	userroomid_highlightcount: Arc<Map>,
 	userroomid_notificationcount: Arc<Map>,
 	roomuserid_lastnotificationread: Arc<Map>,
@@ -41,6 +44,7 @@ impl crate::Service for Service {
 			db: Data {
 				senderkey_pusher: args.db["senderkey_pusher"].clone(),
 				pushkey_deviceid: args.db["pushkey_deviceid"].clone(),
+				useridcount_notification: args.db["useridcount_notification"].clone(),
 				userroomid_highlightcount: args.db["userroomid_highlightcount"].clone(),
 				userroomid_notificationcount: args.db["userroomid_notificationcount"].clone(),
 				roomuserid_lastnotificationread: args.db["roomuserid_lastnotificationread"]
@@ -191,6 +195,27 @@ pub fn get_pushkeys<'a>(&'a self, sender: &'a UserId) -> impl Stream<Item = &str
 		.keys_prefix(&prefix)
 		.ignore_err()
 		.map(|(_, pushkey): (Ignore, &str)| pushkey)
+}
+
+#[implement(Service)]
+#[tracing::instrument(level = "debug", skip_all)]
+#[inline]
+pub fn get_notifications<'a>(
+	&'a self,
+	sender: &'a UserId,
+	from: Option<u64>,
+) -> impl Stream<Item = (u64, Notified)> + Send + 'a {
+	let from = from
+		.map(|from| from.saturating_sub(1))
+		.unwrap_or(u64::MAX);
+
+	self.db
+		.useridcount_notification
+		.rev_stream_from(&(sender, from))
+		.ignore_err()
+		.map(|item: ((&UserId, u64), _)| (item.0, item.1))
+		.ready_take_while(move |((user_id, _count), _)| sender == *user_id)
+		.map(|((_, count), notified)| (count, notified))
 }
 
 #[implement(Service)]

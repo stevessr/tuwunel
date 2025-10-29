@@ -3,18 +3,41 @@ use std::{collections::HashSet, sync::Arc};
 use futures::StreamExt;
 use ruma::{
 	OwnedUserId, RoomId, UserId,
+	api::client::push::ProfileTag,
 	events::{GlobalAccountDataEventType, TimelineEventType, push_rules::PushRulesEvent},
-	push::{Action, Ruleset, Tweak},
+	push::{Action, Actions, Ruleset, Tweak},
 };
+use serde::{Deserialize, Serialize};
 use tuwunel_core::{
 	Result, implement,
 	matrix::{
 		event::Event,
-		pdu::{Pdu, RawPduId},
+		pdu::{Count, Pdu, PduId, RawPduId},
 	},
-	utils::{self, ReadyExt},
+	utils::{self, ReadyExt, time::now_millis},
 };
-use tuwunel_database::Map;
+use tuwunel_database::{Json, Map};
+
+use crate::rooms::short::ShortRoomId;
+
+/// Succinct version of Ruma's Notification. Appended to the database when the
+/// user is notified. The PduCount is part of the database key so only the
+/// shortroomid is included. Together they  make the PduId.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Notified {
+	/// Milliseconds time at which the event notification was sent.
+	pub ts: u64,
+
+	/// ShortRoomId
+	pub sroomid: ShortRoomId,
+
+	/// The profile tag of the rule that matched this event.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tag: Option<ProfileTag>,
+
+	/// Actions vector
+	pub actions: Actions,
+}
 
 /// Called by timeline append_pdu.
 #[implement(super::Service)]
@@ -77,12 +100,13 @@ pub(crate) async fn append_pdu(&self, pdu_id: RawPduId, pdu: &Pdu) -> Result {
 			.get_power_levels(pdu.room_id())
 			.await?;
 
-		for action in self
+		let actions = self
 			.services
 			.pusher
 			.get_actions(user, &rules_for_user, &power_levels, &serialized, pdu.room_id())
-			.await
-		{
+			.await;
+
+		for action in actions {
 			match action {
 				| Action::Notify => notify = true,
 				| Action::SetTweak(Tweak::Highlight(true)) => {
@@ -107,6 +131,20 @@ pub(crate) async fn append_pdu(&self, pdu_id: RawPduId, pdu: &Pdu) -> Result {
 
 		if !notify && !highlight {
 			continue;
+		}
+
+		let id: PduId = pdu_id.into();
+		let notified = Notified {
+			ts: now_millis(),
+			sroomid: id.shortroomid,
+			tag: None,
+			actions: actions.into(),
+		};
+
+		if matches!(id.count, Count::Normal(_)) {
+			self.db
+				.useridcount_notification
+				.put((user, id.count.into_unsigned()), Json(notified));
 		}
 
 		self.services
