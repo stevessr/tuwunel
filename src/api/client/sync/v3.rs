@@ -21,7 +21,6 @@ use ruma::{
 				State as RoomState, StateEvents, Timeline, ToDevice,
 			},
 		},
-		uiaa::UiaaResponse,
 	},
 	events::{
 		AnyRawAccountDataEvent, AnySyncEphemeralRoomEvent, StateEventType,
@@ -68,7 +67,7 @@ use tuwunel_service::{
 };
 
 use super::{load_timeline, share_encrypted_room};
-use crate::{Ruma, RumaResponse, client::ignored_filter};
+use crate::{Ruma, client::ignored_filter};
 
 #[derive(Default)]
 struct StateChanges {
@@ -126,7 +125,7 @@ type PresenceUpdates = HashMap<OwnedUserId, PresenceEventContent>;
 pub(crate) async fn sync_events_route(
 	State(services): State<crate::State>,
 	body: Ruma<sync_events::v3::Request>,
-) -> Result<sync_events::v3::Response, RumaResponse<UiaaResponse>> {
+) -> Result<sync_events::v3::Response> {
 	let (sender_user, sender_device) = body.sender();
 
 	let ping_presence = services

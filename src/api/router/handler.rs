@@ -41,7 +41,7 @@ macro_rules! ruma_handler {
 			Fun: Fn($($tx,)* Ruma<Req>,) -> Fut + Send + Sync + 'static,
 			Fut: Future<Output = Result<Req::OutgoingResponse, Err>> + Send,
 			Req: IncomingRequest + Debug + Send + Sync + 'static,
-			Err: IntoResponse + Send,
+			Err: IntoResponse + Debug + Send,
 			<Req as IncomingRequest>::OutgoingResponse: Send,
 			$( $tx: FromRequestParts<State> + Send + Sync + 'static, )*
 		{
