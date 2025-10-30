@@ -199,7 +199,6 @@ pub fn get_pushkeys<'a>(&'a self, sender: &'a UserId) -> impl Stream<Item = &str
 
 #[implement(Service)]
 #[tracing::instrument(level = "debug", skip_all)]
-#[inline]
 pub fn get_notifications<'a>(
 	&'a self,
 	sender: &'a UserId,
