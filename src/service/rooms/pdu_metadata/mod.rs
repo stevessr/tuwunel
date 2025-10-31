@@ -92,8 +92,9 @@ impl Service {
 					stack.push((relation.clone(), stack_pdu.1.saturating_add(1)));
 				}
 
-				pdus.push(relation);
-				if pdus.len() >= limit {
+				if pdus.len() < limit {
+					pdus.push(relation);
+				} else {
 					break 'limit;
 				}
 			}

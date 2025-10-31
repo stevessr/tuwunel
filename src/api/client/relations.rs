@@ -154,13 +154,11 @@ async fn paginate_relations_with_filter(
 		.collect()
 		.await;
 
-	let next_batch = match dir {
-		| Direction::Forward => events.last(),
-		| Direction::Backward => events.first(),
-	}
-	.map(at!(0))
-	.as_ref()
-	.map(ToString::to_string);
+	let next_batch = events
+		.last()
+		.map(at!(0))
+		.as_ref()
+		.map(ToString::to_string);
 
 	Ok(get_relating_events::v1::Response {
 		next_batch,
