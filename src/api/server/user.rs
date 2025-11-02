@@ -58,7 +58,7 @@ pub(crate) async fn get_devices_route(
 				.allow_device_name_federation
 				.then_some(display_name)
 				.flatten()
-				.or_else(|| Some(device_id.as_str().to_owned()));
+				.or_else(|| Some(device_id.as_str().into()));
 
 			services
 				.users

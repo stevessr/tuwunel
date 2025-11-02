@@ -43,8 +43,8 @@ pub async fn create_device(
 	let notify = true;
 	self.put_device_metadata(user_id, notify, &Device {
 		device_id: device_id.into(),
-		display_name: initial_device_display_name,
-		last_seen_ip: client_ip,
+		display_name: initial_device_display_name.map(Into::into),
+		last_seen_ip: client_ip.map(Into::into),
 		last_seen_ts: Some(MilliSecondsSinceUnixEpoch::now()),
 	});
 

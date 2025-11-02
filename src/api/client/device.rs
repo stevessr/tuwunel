@@ -7,7 +7,7 @@ use ruma::{
 		self, delete_device, delete_devices, get_device, get_devices, update_device,
 	},
 };
-use tuwunel_core::{Err, Result, debug, err, utils};
+use tuwunel_core::{Err, Result, debug, err, utils, utils::string::to_small_string};
 
 use crate::{Ruma, client::DEVICE_ID_LENGTH, router::auth_uiaa};
 
@@ -66,7 +66,7 @@ pub(crate) async fn update_device_route(
 
 			device
 				.last_seen_ip
-				.clone_from(&Some(client.to_string()));
+				.clone_from(&Some(to_small_string(client)));
 
 			device
 				.last_seen_ts

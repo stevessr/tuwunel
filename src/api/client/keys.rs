@@ -571,7 +571,7 @@ fn add_unsigned_device_display_name(
 			.or_insert_with(|| CanonicalJsonObject::default().into())
 		{
 			let display_name = if include_display_names {
-				CanonicalJsonValue::String(display_name)
+				CanonicalJsonValue::String(display_name.to_string())
 			} else {
 				CanonicalJsonValue::String(metadata.device_id.into())
 			};
