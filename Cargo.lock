@@ -5079,6 +5079,7 @@ dependencies = [
  "criterion",
  "ctor",
  "futures",
+ "itertools 0.14.0",
  "log",
  "minicbor",
  "minicbor-serde",

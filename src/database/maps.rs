@@ -16,6 +16,7 @@ pub(super) fn open(engine: &Arc<Engine>) -> Result<Maps> { open_list(engine, MAP
 #[tracing::instrument(name = "maps", level = "debug", skip_all)]
 pub(super) fn open_list(engine: &Arc<Engine>, maps: &[Descriptor]) -> Result<Maps> {
 	maps.iter()
+		.filter(|desc| !desc.dropped)
 		.map(|desc| Ok((desc.name, Map::open(engine, desc.name)?)))
 		.collect()
 }
@@ -163,6 +164,10 @@ pub(super) static MAPS: &[Descriptor] = &[
 	},
 	Descriptor {
 		name: "roomid_joinedcount",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
+		name: "roomid_maxremotepowerlevel",
 		..descriptor::RANDOM_SMALL
 	},
 	Descriptor {
@@ -446,9 +451,5 @@ pub(super) static MAPS: &[Descriptor] = &[
 	Descriptor {
 		name: "userroomid_notificationcount",
 		..descriptor::RANDOM
-	},
-	Descriptor {
-		name: "roomid_maxremotepowerlevel",
-		..descriptor::RANDOM_SMALL
 	},
 ];

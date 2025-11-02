@@ -1288,19 +1288,20 @@ pub struct Config {
 	#[serde(default = "default_rocksdb_stats_level")]
 	pub rocksdb_stats_level: u8,
 
-	/// Erases data no longer reachable in the current schema. The developers
-	/// expect this to be set to true which simplifies the schema and prevents
-	/// accumulation of old schemas remaining in the codebase forever. If this
-	/// is set to false, old columns which are not described in the current
-	/// schema will be ignored rather than erased, leaking their space.
+	/// Ignores the list of dropped columns set by developers.
 	///
-	/// This can be set to false when moving between versions in ways which are
-	/// not recommended or otherwise forbidden, or for diagnostic and
-	/// development purposes; requiring preservation across such movements.
+	/// This should be set to true when knowingly moving between versions in
+	/// ways which are not recommended or otherwise forbidden, or for
+	/// diagnostic and development purposes; requiring preservation across such
+	/// movements.
 	///
-	/// default: true
-	#[serde(default = "true_fn")]
-	pub rocksdb_drop_missing_columns: bool,
+	/// The developer's list of dropped columns is meant to safely reduce space
+	/// by erasing data no longer in use. If this is set to true that storage
+	/// will not be reclaimed as intended.
+	///
+	/// default: false
+	#[serde(default)]
+	pub rocksdb_never_drop_columns: bool,
 
 	/// This is a password that can be configured that will let you login to the
 	/// server bot account (currently `@conduit`) for emergency troubleshooting
