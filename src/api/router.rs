@@ -146,6 +146,7 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 			get(client::get_state_events_for_empty_key_route)
 				.put(client::send_state_event_for_empty_key_route),
 		)
+		.ruma_route(&client::events_route)
 		.ruma_route(&client::sync_events_route)
 		.ruma_route(&client::sync_events_v5_route)
 		.ruma_route(&client::get_context_route)
