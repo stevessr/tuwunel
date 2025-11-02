@@ -290,7 +290,7 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 
 	// TODO: Is origin needed?
 	leave_event_stub.insert(
-		"origin".to_owned(),
+		"origin".into(),
 		CanonicalJsonValue::String(
 			self.services
 				.globals
@@ -300,7 +300,7 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 		),
 	);
 	leave_event_stub.insert(
-		"origin_server_ts".to_owned(),
+		"origin_server_ts".into(),
 		CanonicalJsonValue::Integer(
 			utils::millis_since_unix_epoch()
 				.try_into()

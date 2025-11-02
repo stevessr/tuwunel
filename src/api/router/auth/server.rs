@@ -1,6 +1,9 @@
 use axum::RequestPartsExt;
 use axum_extra::{TypedHeader, headers::Authorization, typed_header::TypedHeaderRejectionReason};
-use ruma::{CanonicalJsonObject, CanonicalJsonValue, api::federation::authentication::XMatrix};
+use ruma::{
+	CanonicalJsonName, CanonicalJsonObject, CanonicalJsonValue,
+	api::federation::authentication::XMatrix,
+};
 use tuwunel_core::{Err, Result, debug_error, err, warn};
 use tuwunel_service::{
 	Services,
@@ -14,7 +17,7 @@ pub(super) async fn auth_server(
 	request: &mut Request,
 	body: Option<&CanonicalJsonValue>,
 ) -> Result<Auth> {
-	type Member = (String, CanonicalJsonValue);
+	type Member = (CanonicalJsonName, CanonicalJsonValue);
 	type Object = CanonicalJsonObject;
 	type Value = CanonicalJsonValue;
 
@@ -66,7 +69,7 @@ pub(super) async fn auth_server(
 			err!(Request(Forbidden(debug_warn!("Failed to fetch signing keys: {e}"))))
 		})?;
 
-	let keys: PubKeys = [(x_matrix.key.to_string(), key.key)].into();
+	let keys: PubKeys = [(x_matrix.key.as_str().into(), key.key)].into();
 	let keys: PubKeyMap = [(origin.as_str().into(), keys)].into();
 	if let Err(e) = ruma::signatures::verify_json(&keys, &authorization) {
 		debug_error!("Failed to verify federation request from {origin}: {e}");

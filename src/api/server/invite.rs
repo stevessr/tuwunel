@@ -100,7 +100,7 @@ pub(crate) async fn create_invite_route(
 	let event_id = gen_event_id(&signed_event, &body.room_version)?;
 
 	// Add event_id back
-	signed_event.insert("event_id".to_owned(), CanonicalJsonValue::String(event_id.to_string()));
+	signed_event.insert("event_id".into(), CanonicalJsonValue::String(event_id.to_string()));
 
 	let sender: &UserId = signed_event
 		.get("sender")
@@ -127,7 +127,7 @@ pub(crate) async fn create_invite_route(
 	let mut event: JsonObject = serde_json::from_str(body.event.get())
 		.map_err(|e| err!(Request(BadJson("Invalid invite event PDU: {e}"))))?;
 
-	event.insert("event_id".to_owned(), "$placeholder".into());
+	event.insert("event_id".into(), "$placeholder".into());
 
 	let pdu: PduEvent = serde_json::from_value(event.into())
 		.map_err(|e| err!(Request(BadJson("Invalid invite event PDU: {e}"))))?;

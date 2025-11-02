@@ -106,7 +106,7 @@ where
 	// clients can easily interpret things like membership changes
 	if let Some(state_key) = pdu.state_key() {
 		if let CanonicalJsonValue::Object(unsigned) = pdu_json
-			.entry("unsigned".to_owned())
+			.entry("unsigned".into())
 			.or_insert_with(|| CanonicalJsonValue::Object(BTreeMap::default()))
 		{
 			if let Ok(shortstatehash) = self
@@ -122,7 +122,7 @@ where
 					.await
 				{
 					unsigned.insert(
-						"prev_content".to_owned(),
+						"prev_content".into(),
 						CanonicalJsonValue::Object(
 							utils::to_canonical_object(prev_state.get_content_as_value())
 								.map_err(|e| {
@@ -133,11 +133,11 @@ where
 						),
 					);
 					unsigned.insert(
-						String::from("prev_sender"),
+						"prev_sender".into(),
 						CanonicalJsonValue::String(prev_state.sender().to_string()),
 					);
 					unsigned.insert(
-						String::from("replaces_state"),
+						"replaces_state".into(),
 						CanonicalJsonValue::String(prev_state.event_id().to_string()),
 					);
 				}

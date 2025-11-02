@@ -5,7 +5,7 @@ use http::{HeaderValue, header::AUTHORIZATION};
 use ipaddress::IPAddress;
 use reqwest::{Client, Method, Request, Response, Url};
 use ruma::{
-	CanonicalJsonObject, CanonicalJsonValue, ServerName, ServerSigningKeyId,
+	CanonicalJsonName, CanonicalJsonObject, CanonicalJsonValue, ServerName, ServerSigningKeyId,
 	api::{
 		EndpointError, IncomingResponse, MatrixVersion, OutgoingRequest, SendAccessToken,
 		SupportedVersions, client::error::Error as RumaError,
@@ -232,7 +232,7 @@ fn handle_error(
 
 #[implement(super::Service)]
 fn sign_request(&self, http_request: &mut http::Request<Vec<u8>>, dest: &ServerName) {
-	type Member = (String, Value);
+	type Member = (CanonicalJsonName, Value);
 	type Value = CanonicalJsonValue;
 	type Object = CanonicalJsonObject;
 
