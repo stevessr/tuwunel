@@ -16,7 +16,9 @@ use ruma::{
 	events::GlobalAccountDataEventType,
 	push,
 };
-use tuwunel_core::{Err, Error, Result, debug_info, error, info, is_equal_to, utils, warn};
+use tuwunel_core::{
+	Err, Error, Result, debug_info, debug_warn, error, info, is_equal_to, utils, warn,
+};
 use tuwunel_service::users::device::generate_refresh_token;
 
 use super::{DEVICE_ID_LENGTH, SESSION_ID_LENGTH};
@@ -181,31 +183,33 @@ pub(crate) async fn register_route(
 		return Err!(Request(Forbidden("Registration has been disabled.")));
 	}
 
-	if is_guest
-		&& (!services.config.allow_guest_registration
-			|| (services.config.allow_registration
-				&& services.globals.registration_token.is_some()))
-	{
-		info!(
+	if is_guest && !services.config.allow_guest_registration {
+		let display_name = body
+			.initial_device_display_name
+			.as_deref()
+			.unwrap_or("");
+
+		debug_warn!(
 			"Guest registration disabled / registration enabled with token configured, \
-			 rejecting guest registration attempt, initial device name: \"{}\"",
-			body.initial_device_display_name
-				.as_deref()
-				.unwrap_or("")
+			 rejecting guest registration attempt, initial device name: \"{display_name}\""
 		);
+
 		return Err!(Request(GuestAccessForbidden("Guest registration is disabled.")));
 	}
 
 	// forbid guests from registering if there is not a real admin user yet. give
 	// generic user error.
 	if is_guest && services.users.count().await < 2 {
+		let display_name = body
+			.initial_device_display_name
+			.as_deref()
+			.unwrap_or("");
+
 		warn!(
 			"Guest account attempted to register before a real admin user has been registered, \
-			 rejecting registration. Guest's initial device name: \"{}\"",
-			body.initial_device_display_name
-				.as_deref()
-				.unwrap_or("")
+			 rejecting registration. Guest's initial device name: \"{display_name}\""
 		);
+
 		return Err!(Request(Forbidden("Registration is temporarily disabled.")));
 	}
 
@@ -309,7 +313,7 @@ pub(crate) async fn register_route(
 
 	// UIAA
 	let mut uiaainfo;
-	let skip_auth = if services.globals.registration_token.is_some() {
+	let skip_auth = if services.globals.registration_token.is_some() && !is_guest {
 		// Registration token required
 		uiaainfo = UiaaInfo {
 			flows: vec![AuthFlow {
@@ -320,6 +324,7 @@ pub(crate) async fn register_route(
 			session: None,
 			auth_error: None,
 		};
+
 		body.appservice_info.is_some()
 	} else {
 		// No registration token necessary, but clients must still go through the flow
@@ -330,6 +335,7 @@ pub(crate) async fn register_route(
 			session: None,
 			auth_error: None,
 		};
+
 		body.appservice_info.is_some() || is_guest
 	};
 
