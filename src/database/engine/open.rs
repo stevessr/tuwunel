@@ -6,11 +6,11 @@ use std::{
 
 use itertools::Itertools;
 use rocksdb::{ColumnFamilyDescriptor, Options};
-use tuwunel_core::{Result, debug, debug_warn, implement, info, warn};
+use tuwunel_core::{Result, debug, debug_warn, implement, info, trace, warn};
 
 use super::{
-	Db, Engine, cf_opts::cf_options, context, db_opts::db_options, descriptor::Descriptor,
-	repair::repair,
+	Db, Engine, cf_opts::cf_options, context, db_opts::db_options, descriptor,
+	descriptor::Descriptor, repair::repair,
 };
 use crate::{Context, or_else};
 
@@ -87,6 +87,7 @@ fn configure_cfds(
 	// Found columns which are not described.
 	let missing = existing
 		.iter()
+		.map(String::as_str)
 		.filter(|&name| name != "default")
 		.filter(|&name| !desc.iter().any(|desc| desc.name == name));
 
@@ -123,13 +124,19 @@ fn configure_cfds(
 		debug_warn!("Found undescribed column {name:?} in existing database.");
 	});
 
-	dropped.map(|desc| desc.name).for_each(|name| {
-		debug!("Previously dropped column {name:?} no longer found in database.");
-	});
+	dropped
+		.clone()
+		.map(|desc| desc.name)
+		.for_each(|name| {
+			debug!("Previously dropped column {name:?} no longer found in database.");
+		});
 
-	creating.map(|desc| desc.name).for_each(|name| {
-		debug!("Creating new column {name:?} not previously found in existing database.");
-	});
+	creating
+		.clone()
+		.map(|desc| desc.name)
+		.for_each(|name| {
+			debug!("Creating new column {name:?} not previously found in existing database.");
+		});
 
 	dropping
 		.clone()
@@ -141,23 +148,44 @@ fn configure_cfds(
 			);
 		});
 
-	let dropping_names: Vec<_> = dropping
-		.clone()
+	let not_dropped = |desc: &&Descriptor| {
+		!dropped
+			.clone()
+			.any(|dropped| desc.name == dropped.name)
+	};
+
+	let dropping = dropping
 		.map(|desc| desc.name)
 		.map(ToOwned::to_owned)
 		.collect();
 
+	let cfnames = desc
+		.iter()
+		.filter(not_dropped)
+		.map(|desc| desc.name)
+		.chain(missing.clone());
+
 	let cfds: Vec<_> = desc
 		.iter()
-		.filter(|desc| !desc.dropped)
-		.chain(dropping)
+		.filter(not_dropped)
 		.copied()
-		.inspect(|desc| debug!(name = desc.name, "Described column"))
-		.map(|desc| Ok((desc.name.to_owned(), cf_options(ctx, db_opts.clone(), &desc)?)))
+		.chain(missing.map(|_| descriptor::IGNORED))
+		.zip(cfnames)
+		.inspect(|&(desc, name)| {
+			assert!(
+				desc.ignored || desc.name == name,
+				"{name:?} does not match descriptor {:?}",
+				desc.name
+			);
+		})
+		.inspect(|&(_, name)| debug!(name, "Described column"))
+		.map(|(desc, name)| (desc, name.to_owned()))
+		.map(|(desc, name)| Ok((name, cf_options(ctx, db_opts.clone(), &desc)?)))
 		.map_ok(|(name, opts)| ColumnFamilyDescriptor::new(name, opts))
 		.collect::<Result<_>>()?;
 
-	Ok((cfds, dropping_names))
+	trace!(?dropping);
+	Ok((cfds, dropping))
 }
 
 #[implement(Engine)]

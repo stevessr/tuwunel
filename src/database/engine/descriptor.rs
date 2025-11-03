@@ -10,6 +10,7 @@ use super::cf_opts::SENTINEL_COMPRESSION_LEVEL;
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Descriptor {
 	pub(crate) name: &'static str,
+	pub(crate) ignored: bool,
 	pub(crate) dropped: bool,
 	pub(crate) cache_disp: CacheDisp,
 	pub(crate) key_size_hint: Option<usize>,
@@ -52,6 +53,7 @@ pub(crate) enum CacheDisp {
 /// Base descriptor supplying common defaults to all derived descriptors.
 static BASE: Descriptor = Descriptor {
 	name: EMPTY,
+	ignored: false,
 	dropped: false,
 	cache_disp: CacheDisp::Shared,
 	key_size_hint: None,
@@ -83,8 +85,14 @@ static BASE: Descriptor = Descriptor {
 	auto_readahead_max: 1024 * 1024 * 2,
 };
 
+/// Placeholder descriptor for existing columns which have no description.
+/// Automatically generated on db open; should not appear in any schema.
+pub(crate) static IGNORED: Descriptor = Descriptor { ignored: true, ..BASE };
+
 /// Tombstone descriptor for columns which have been or will be deleted.
-pub(crate) static DROPPED: Descriptor = Descriptor { dropped: true, ..BASE };
+/// Descriptors of this kind are explicitly set to delete data. Care should be
+/// taken when using this as it inhibits downgrading and other migrations.
+pub(crate) static DROPPED: Descriptor = Descriptor { dropped: true, ..IGNORED };
 
 /// Descriptor for large datasets with random updates across the keyspace.
 pub(crate) static RANDOM: Descriptor = Descriptor {
