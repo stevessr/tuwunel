@@ -1,7 +1,10 @@
 use axum::{Json, extract::State, response::IntoResponse};
-use ruma::api::client::discovery::discover_support::{self, Contact};
-use serde_json::{Value, json};
-use tuwunel_core::{Err, Result};
+use ruma::api::client::discovery::{
+	discover_homeserver::{self, HomeserverInfo, RtcFocusInfo},
+	discover_support::{self, Contact},
+};
+use serde_json::Value as JsonValue;
+use tuwunel_core::{Err, Result, err, error::inspect_log};
 
 use crate::Ruma;
 
@@ -11,55 +14,47 @@ use crate::Ruma;
 /// Also includes RTC transport configuration for Element Call (MSC4143).
 pub(crate) async fn well_known_client(
 	State(services): State<crate::State>,
-) -> Result<Json<Value>> {
-	let client_url = match services.server.config.well_known.client.as_ref() {
-		| Some(url) => url.to_string(),
-		| None => return Err!(Request(NotFound("Not found."))),
+	_body: Ruma<discover_homeserver::Request>,
+) -> Result<discover_homeserver::Response> {
+	let homeserver = HomeserverInfo {
+		base_url: match services.server.config.well_known.client.as_ref() {
+			| Some(url) => url.to_string(),
+			| None => return Err!(Request(NotFound("Not found."))),
+		},
 	};
-
-	let mut response = json!({
-		"m.homeserver": {
-			"base_url": client_url
-		}
-	});
 
 	// Add RTC transport configuration if available (MSC4143 / Element Call)
 	// Element Call has evolved through several versions with different field
 	// expectations
-	if !services
+	let rtc_foci = services
 		.server
 		.config
 		.well_known
 		.rtc_transports
-		.is_empty()
-	{
-		if let Some(obj) = response.as_object_mut() {
-			// Element Call expects "org.matrix.msc4143.rtc_foci" (not rtc_foci_preferred)
-			// with an array of transport objects
-			obj.insert(
-				"org.matrix.msc4143.rtc_foci".to_owned(),
-				json!(services.server.config.well_known.rtc_transports),
-			);
+		.iter()
+		.map(|transport| {
+			let focus_type = transport
+				.get("type")
+				.and_then(JsonValue::as_str)
+				.ok_or_else(|| err!("`type` is not a valid string"))?;
 
-			// Also add the LiveKit URL directly for backward compatibility
-			if let Some(first_transport) = services
-				.server
-				.config
-				.well_known
-				.rtc_transports
-				.first()
-			{
-				if let Some(livekit_url) = first_transport.get("livekit_service_url") {
-					obj.insert(
-						"org.matrix.msc4143.livekit_service_url".to_owned(),
-						livekit_url.clone(),
-					);
-				}
-			}
-		}
-	}
+			let transport = transport
+				.as_object()
+				.cloned()
+				.ok_or_else(|| err!("`rtc_transport` is not a valid object"))?;
 
-	Ok(Json(response))
+			RtcFocusInfo::new(focus_type, transport).map_err(Into::into)
+		})
+		.collect::<Result<_>>()
+		.map_err(|e| {
+			err!(Config("global.well_known.rtc_transports", "Malformed value(s): {e:?}"))
+		})
+		.inspect_err(inspect_log)?;
+
+	Ok(discover_homeserver::Response {
+		rtc_foci,
+		..discover_homeserver::Response::new(homeserver)
+	})
 }
 
 /// # `GET /.well-known/matrix/support`
