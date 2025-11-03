@@ -19,7 +19,7 @@ pub(super) async fn auth_appservice(
 	let Ok(user_id) = request
 		.query
 		.user_id
-		.clone()
+		.as_deref()
 		.map_or_else(user_id_default, OwnedUserId::parse)
 	else {
 		return Err!(Request(InvalidUsername("Username is invalid.")));

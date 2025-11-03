@@ -4,21 +4,27 @@ use axum::{RequestExt, RequestPartsExt, extract::Path};
 use bytes::Bytes;
 use http::request::Parts;
 use serde::Deserialize;
-use tuwunel_core::{Result, err};
+use tuwunel_core::{Result, err, smallstr::SmallString, smallvec::SmallVec};
 use tuwunel_service::Services;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 pub(super) struct QueryParams {
 	pub(super) access_token: Option<String>,
-	pub(super) user_id: Option<String>,
+	pub(super) user_id: Option<UserId>,
 }
 
+pub(super) type UserId = SmallString<[u8; 48]>;
+
+#[derive(Debug)]
 pub(super) struct Request {
-	pub(super) path: Path<Vec<String>>,
+	pub(super) path: Path<PathParams>,
 	pub(super) query: QueryParams,
 	pub(super) body: Bytes,
 	pub(super) parts: Parts,
 }
+
+pub(super) type PathParams = SmallVec<[PathParam; 8]>;
+pub(super) type PathParam = SmallString<[u8; 32]>;
 
 pub(super) async fn from(
 	services: &Services,
@@ -27,7 +33,7 @@ pub(super) async fn from(
 	let limited = request.with_limited_body();
 	let (mut parts, body) = limited.into_parts();
 
-	let path: Path<Vec<String>> = parts.extract().await?;
+	let path: Path<PathParams> = parts.extract().await?;
 	let query = parts.uri.query().unwrap_or_default();
 	let query = serde_html_form::from_str(query)
 		.map_err(|e| err!(Request(Unknown("Failed to read query parameters: {e}"))))?;
