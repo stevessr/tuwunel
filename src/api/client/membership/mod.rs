@@ -195,12 +195,10 @@ async fn get_join_params(
 	);
 
 	// shuffle additionals, append to base servers
-	additional_servers.sort_unstable();
-	additional_servers.dedup();
-	shuffle(&mut additional_servers);
+	servers.append(&mut additional_servers);
 	servers.sort_unstable();
 	servers.dedup();
-	servers.append(&mut additional_servers);
+	shuffle(&mut servers);
 
 	// sort deprioritized servers last
 	servers.sort_by(|a, b| {
