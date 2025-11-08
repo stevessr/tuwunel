@@ -80,7 +80,7 @@ pub(crate) async fn sync_events_v5_route(
 	InsecureClientIp(client): InsecureClientIp,
 	body: Ruma<Request>,
 ) -> Result<Response> {
-	let (sender_user, sender_device) = body.sender();
+	let (_sender_user, _sender_device) = body.sender();
 	let request = &body.body;
 	let since = request
 		.pos
@@ -113,11 +113,12 @@ pub(crate) async fn sync_events_v5_route(
 		request.conn_id.as_deref(),
 		x_forwarded_for,
 	);
-	let conn_val = since
-		.ne(&0)
-		.then(|| services.sync.find_connection(&conn_key))
-		.unwrap_or_else(|| Ok(services.sync.init_connection(&conn_key)))
-		.map_err(|_| err!(Request(UnknownPos("Connection lost; restarting sync stream."))))?;
+	let conn_val = if since.ne(&0) {
+		services.sync.find_connection(&conn_key).boxed()
+	} else {
+		async { Ok(services.sync.init_connection(&conn_key).await) }.boxed()
+	}
+	.await?;
 
 	let conn = conn_val.lock();
 	let ping_presence = services

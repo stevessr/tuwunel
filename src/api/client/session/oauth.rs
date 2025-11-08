@@ -54,7 +54,7 @@ fn consume_redirect(state_token: &str) -> Option<String> {
 
 /// OAuth 2.0 token response
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(super) struct OAuthTokenResponse {
+pub(crate) struct OAuthTokenResponse {
 	pub access_token: String,
 	pub token_type: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -69,7 +69,7 @@ pub(super) struct OAuthTokenResponse {
 
 /// OAuth 2.0 userinfo response
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub(super) struct OAuthUserInfo {
+pub(crate) struct OAuthUserInfo {
 	pub sub: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub name: Option<String>,
@@ -326,7 +326,7 @@ pub(crate) async fn oauth_callback_route(
 		use ruma::UserId;
 		let user_id_ref: &UserId = user_id.as_ref();
 		let token = utils::random_string(TOKEN_LENGTH);
-		services
+		let _ = services
 			.users
 			.create_login_token(user_id_ref, &token);
 		token
