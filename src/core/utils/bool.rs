@@ -70,6 +70,7 @@ impl BoolExt for bool {
 	#[inline]
 	fn and_then<T, F: FnOnce() -> Option<T>>(self, f: F) -> Option<T> { self.then(f).flatten() }
 
+
 	#[inline]
 	fn clone_or<T: Clone>(self, err: T, t: &T) -> T { self.map_or(err, || t.clone()) }
 

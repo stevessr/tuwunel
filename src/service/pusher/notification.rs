@@ -5,24 +5,9 @@ use tuwunel_core::{
 };
 use tuwunel_database::{Deserialized, Interfix};
 
-#[implement(super::Service)]
-#[tracing::instrument(level = "debug", skip(self))]
-pub fn reset_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
-	let count = self.services.globals.next_count();
 
-	let userroom_id = (user_id, room_id);
-	self.db
-		.userroomid_highlightcount
-		.put(userroom_id, 0_u64);
-	self.db
-		.userroomid_notificationcount
-		.put(userroom_id, 0_u64);
 
-	let roomuser_id = (room_id, user_id);
-	self.db
-		.roomuserid_lastnotificationread
-		.put(roomuser_id, *count);
-}
+
 
 #[implement(super::Service)]
 #[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
