@@ -62,6 +62,25 @@ impl crate::Service for Service {
 }
 
 #[implement(Service)]
+#[tracing::instrument(level = "debug", skip(self))]
+pub async fn reset_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
+	let count = self.services.globals.next_count();
+
+	let userroom_id = (user_id, room_id);
+	self.db
+		.userroomid_highlightcount
+		.put(userroom_id, 0_u64);
+	self.db
+		.userroomid_notificationcount
+		.put(userroom_id, 0_u64);
+
+	let roomuser_id = (room_id, user_id);
+	self.db
+		.roomuserid_lastnotificationread
+		.put(roomuser_id, *count);
+}
+
+#[implement(Service)]
 pub async fn set_pusher(
 	&self,
 	sender: &UserId,

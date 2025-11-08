@@ -6,21 +6,17 @@ mod profile;
 
 use std::sync::Arc;
 
-use futures::{Stream, StreamExt, TryFutureExt, FutureExt, future::join3};
+use futures::{Stream, StreamExt, TryFutureExt};
 use ruma::{
-	OwnedMxcUri, OwnedRoomId, OwnedUserId, UserId,
+	OwnedRoomId, OwnedUserId, UserId,
 	api::client::filter::FilterDefinition,
-	events::{
-		GlobalAccountDataEventType,
-		ignored_user_list::IgnoredUserListEvent,
-		room::member::{MembershipState, RoomMemberEventContent},
-	},
+	events::{GlobalAccountDataEventType, ignored_user_list::IgnoredUserListEvent},
 };
 use tuwunel_core::{
 	Err, Result, debug_warn, err, is_equal_to,
 	pdu::PduBuilder,
 	trace,
-	utils::{self, ReadyExt, stream::TryIgnore, future::TryExtExt},
+	utils::{self, ReadyExt, stream::TryIgnore},
 	warn,
 };
 use tuwunel_database::{Deserialized, Json, Map};
@@ -388,111 +384,7 @@ impl Service {
 		Err!(FeatureDisabled("ldap"))
 	}
 
-	pub async fn update_displayname(
-		&self,
-		user_id: &UserId,
-		displayname: Option<String>,
-		rooms: &[OwnedRoomId],
-	) {
-		let (current_avatar_url, current_blurhash, current_displayname) = join3(
-			self.services.users.avatar_url(user_id).ok(),
-			self.services.users.blurhash(user_id).ok(),
-			self.services.users.displayname(user_id).ok(),
-		)
-		.await;
 
-		if displayname == current_displayname {
-			return;
-		}
-
-		self.services
-			.users
-			.set_displayname(user_id, displayname.clone());
-
-		// Send a new join membership event into rooms
-		let avatar_url = &current_avatar_url;
-		let blurhash = &current_blurhash;
-		let displayname = &displayname;
-		let rooms: Vec<_> = rooms
-			.iter()
-			.try_stream()
-			.and_then(async |room_id: &OwnedRoomId| {
-				let pdu = PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-					displayname: displayname.clone(),
-					membership: MembershipState::Join,
-					avatar_url: avatar_url.clone(),
-					blurhash: blurhash.clone(),
-					join_authorized_via_users_server: None,
-					reason: None,
-					is_direct: None,
-					third_party_invite: None,
-				});
-
-				Ok((pdu, room_id))
-			})
-			.ignore_err()
-			.collect()
-			.await;
-
-		self.update_all_rooms(user_id, rooms)
-			.boxed()
-			.await;
-	}
-
-	pub async fn update_avatar_url(
-		&self,
-		user_id: &UserId,
-		avatar_url: Option<OwnedMxcUri>,
-		blurhash: Option<String>,
-		rooms: &[OwnedRoomId],
-	) {
-		let (current_avatar_url, current_blurhash, current_displayname) = join3(
-			self.services.users.avatar_url(user_id).ok(),
-			self.services.users.blurhash(user_id).ok(),
-			self.services.users.displayname(user_id).ok(),
-		)
-		.await;
-
-		if current_avatar_url == avatar_url && current_blurhash == blurhash {
-			return;
-		}
-
-		self.services
-			.users
-			.set_avatar_url(user_id, avatar_url.clone());
-		self.services
-			.users
-			.set_blurhash(user_id, blurhash.clone());
-
-		// Send a new join membership event into rooms
-		let avatar_url = &avatar_url;
-		let blurhash = &blurhash;
-		let displayname = &current_displayname;
-		let rooms: Vec<_> = rooms
-			.iter()
-			.try_stream()
-			.and_then(async |room_id: &OwnedRoomId| {
-				let pdu = PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-					avatar_url: avatar_url.clone(),
-					blurhash: blurhash.clone(),
-					membership: MembershipState::Join,
-					displayname: displayname.clone(),
-					join_authorized_via_users_server: None,
-					reason: None,
-					is_direct: None,
-					third_party_invite: None,
-				});
-
-				Ok((pdu, room_id))
-			})
-			.ignore_err()
-			.collect()
-			.await;
-
-		self.update_all_rooms(user_id, rooms)
-			.boxed()
-			.await;
-	}
 
 	async fn update_all_rooms(&self, user_id: &UserId, rooms: Vec<(PduBuilder, &OwnedRoomId)>) {
 		for (pdu_builder, room_id) in rooms {

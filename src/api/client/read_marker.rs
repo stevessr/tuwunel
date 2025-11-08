@@ -29,7 +29,8 @@ pub(crate) async fn set_read_marker_route(
 	if body.private_read_receipt.is_some() || body.read_receipt.is_some() {
 		services
 			.pusher
-			.reset_notification_counts(sender_user, &body.room_id);
+			.reset_notification_counts(sender_user, &body.room_id)
+			.await;
 	}
 
 	if let Some(event) = &body.fully_read {
@@ -120,7 +121,8 @@ pub(crate) async fn create_receipt_route(
 	) {
 		services
 			.pusher
-			.reset_notification_counts(sender_user, &body.room_id);
+			.reset_notification_counts(sender_user, &body.room_id)
+			.await;
 	}
 
 	match body.receipt_type {

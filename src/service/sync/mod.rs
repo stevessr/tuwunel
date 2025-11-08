@@ -111,7 +111,7 @@ pub async fn clear_connections(
 	self.connections
 		.lock()
 		.await
-		.retain(|(conn_user_id, conn_device_id, conn_conn_id), _| {
+		.retain(|(conn_user_id, conn_device_id, conn_conn_id, conn_xff), _| {
 			let retain = user_id.is_none_or(is_equal_to!(conn_user_id))
 				&& device_id.is_none_or(is_equal_to!(conn_device_id))
 				&& (conn_id.is_none() || conn_id == conn_conn_id.as_ref());
@@ -119,7 +119,7 @@ pub async fn clear_connections(
 			if !retain {
 				self.db
 					.userdeviceconnid_conn
-					.del((conn_user_id, conn_device_id, conn_conn_id));
+					.del((conn_user_id, conn_device_id, conn_conn_id, conn_xff));
 			}
 
 			retain
@@ -129,10 +129,10 @@ pub async fn clear_connections(
 #[implement(Service)]
 #[tracing::instrument(level = "debug", skip(self))]
 pub async fn drop_connection(&self, key: &ConnectionKey) {
-	let mut cache = self.connections.lock().await;
-
-	self.db.userdeviceconnid_conn.del(key);
-	cache.remove(key);
+	self.connections
+		.lock()
+		.await
+		.remove(key);
 }
 
 #[implement(Service)]
@@ -220,15 +220,7 @@ pub async fn is_connection_stored(&self, key: &ConnectionKey) -> bool {
 	self.db.userdeviceconnid_conn.contains(key).await
 }
 
-#[inline]
-pub fn into_connection_key<U, D, C>(user_id: U, device_id: D, conn_id: Option<C>) -> ConnectionKey
-where
-	U: Into<OwnedUserId>,
-	D: Into<OwnedDeviceId>,
-	C: Into<ConnectionId>,
-{
-	(user_id.into(), device_id.into(), conn_id.map(Into::into))
-}
+
 
 #[implement(Connection)]
 #[tracing::instrument(level = "debug", skip(self, service))]
@@ -373,45 +365,25 @@ fn some_or_sticky<T: Clone>(target: Option<&T>, cached: &mut Option<T>) {
 	}
 }
 
-#[implement(Service)]
-pub fn clear_connections(
-	&self,
-	user_id: Option<&UserId>,
-	device_id: Option<&DeviceId>,
-	conn_id: Option<&ConnectionId>,
-) {
-	self.connections.lock().expect("locked").retain(
-		|(conn_user_id, conn_device_id, conn_conn_id, _conn_xff), _| {
-			!(user_id.is_none_or(is_equal_to!(conn_user_id))
-				&& device_id.is_none_or(is_equal_to!(conn_device_id))
-				&& (conn_id.is_none() || conn_id == conn_conn_id.as_ref()))
-		},
-	);
-}
+
 
 #[implement(Service)]
-pub fn drop_connection(&self, key: &ConnectionKey) {
+#[tracing::instrument(level = "trace", skip(self))]
+pub async fn list_connections(&self) -> Vec<ConnectionKey> {
 	self.connections
 		.lock()
-		.expect("locked")
-		.remove(key);
-}
-
-#[implement(Service)]
-pub fn list_connections(&self) -> Vec<ConnectionKey> {
-	self.connections
-		.lock()
-		.expect("locked")
+		.await
 		.keys()
 		.cloned()
 		.collect()
 }
 
 #[implement(Service)]
-pub fn init_connection(&self, key: &ConnectionKey) -> ConnectionVal {
+#[tracing::instrument(level = "debug", skip(self))]
+pub async fn init_connection(&self, key: &ConnectionKey) -> ConnectionVal {
 	self.connections
 		.lock()
-		.expect("locked")
+		.await
 		.entry(key.clone())
 		.and_modify(|existing| *existing = ConnectionVal::default())
 		.or_default()
@@ -419,20 +391,22 @@ pub fn init_connection(&self, key: &ConnectionKey) -> ConnectionVal {
 }
 
 #[implement(Service)]
-pub fn find_connection(&self, key: &ConnectionKey) -> Result<ConnectionVal> {
+#[tracing::instrument(level = "debug", skip(self))]
+pub async fn find_connection(&self, key: &ConnectionKey) -> Result<ConnectionVal> {
 	self.connections
 		.lock()
-		.expect("locked")
+		.await
 		.get(key)
 		.cloned()
 		.ok_or_else(|| err!(Request(NotFound("Connection not found."))))
 }
 
 #[implement(Service)]
-pub fn contains_connection(&self, key: &ConnectionKey) -> bool {
+#[tracing::instrument(level = "trace", skip(self))]
+pub async fn contains_connection(&self, key: &ConnectionKey) -> bool {
 	self.connections
 		.lock()
-		.expect("locked")
+		.await
 		.contains_key(key)
 }
 
