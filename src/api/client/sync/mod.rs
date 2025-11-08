@@ -1,7 +1,7 @@
 mod v3;
 mod v5;
 
-use futures::{StreamExt, pin_mut};
+use futures::{FutureExt, StreamExt, pin_mut};
 use ruma::{RoomId, UserId};
 use tuwunel_core::{
 	Error, PduCount, Result,
@@ -42,9 +42,11 @@ async fn load_timeline(
 		.by_ref()
 		.take(limit)
 		.collect()
+		.map(|mut pdus: Vec<_>| {
+			pdus.reverse();
+			pdus
+		})
 		.await;
-
-	let timeline_pdus: Vec<_> = timeline_pdus.into_iter().rev().collect();
 
 	// They /sync response doesn't always return all messages, so we say the output
 	// is limited unless there are events in non_timeline_pdus

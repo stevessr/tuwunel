@@ -210,11 +210,11 @@ async fn knock_room_helper_local(
 	})?;
 
 	knock_event_stub.insert(
-		"origin".to_owned(),
+		"origin".into(),
 		CanonicalJsonValue::String(services.globals.server_name().as_str().to_owned()),
 	);
 	knock_event_stub.insert(
-		"origin_server_ts".to_owned(),
+		"origin_server_ts".into(),
 		CanonicalJsonValue::Integer(
 			utils::millis_since_unix_epoch()
 				.try_into()
@@ -222,7 +222,7 @@ async fn knock_room_helper_local(
 		),
 	);
 	knock_event_stub.insert(
-		"content".to_owned(),
+		"content".into(),
 		to_canonical_value(RoomMemberEventContent {
 			displayname: services.users.displayname(sender_user).await.ok(),
 			avatar_url: services.users.avatar_url(sender_user).await.ok(),
@@ -244,7 +244,7 @@ async fn knock_room_helper_local(
 
 	// Add event_id
 	knock_event_stub
-		.insert("event_id".to_owned(), CanonicalJsonValue::String(event_id.clone().into()));
+		.insert("event_id".into(), CanonicalJsonValue::String(event_id.clone().into()));
 
 	// It has enough fields to be called a proper event now
 	let knock_event = knock_event_stub;
@@ -346,11 +346,11 @@ async fn knock_room_helper_remote(
 		})?;
 
 	knock_event_stub.insert(
-		"origin".to_owned(),
+		"origin".into(),
 		CanonicalJsonValue::String(services.globals.server_name().as_str().to_owned()),
 	);
 	knock_event_stub.insert(
-		"origin_server_ts".to_owned(),
+		"origin_server_ts".into(),
 		CanonicalJsonValue::Integer(
 			utils::millis_since_unix_epoch()
 				.try_into()
@@ -358,7 +358,7 @@ async fn knock_room_helper_remote(
 		),
 	);
 	knock_event_stub.insert(
-		"content".to_owned(),
+		"content".into(),
 		to_canonical_value(RoomMemberEventContent {
 			displayname: services.users.displayname(sender_user).await.ok(),
 			avatar_url: services.users.avatar_url(sender_user).await.ok(),
@@ -380,7 +380,7 @@ async fn knock_room_helper_remote(
 
 	// Add event_id
 	knock_event_stub
-		.insert("event_id".to_owned(), CanonicalJsonValue::String(event_id.clone().into()));
+		.insert("event_id".into(), CanonicalJsonValue::String(event_id.clone().into()));
 
 	// It has enough fields to be called a proper event now
 	let knock_event = knock_event_stub;

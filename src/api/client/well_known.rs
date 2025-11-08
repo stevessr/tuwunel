@@ -1,28 +1,59 @@
 use axum::{Json, extract::State, response::IntoResponse};
 use ruma::api::client::discovery::{
-	discover_homeserver::{self, HomeserverInfo},
+	discover_homeserver::{self, HomeserverInfo, RtcFocusInfo},
 	discover_support::{self, Contact},
 };
-use tuwunel_core::{Err, Result};
+use serde_json::Value as JsonValue;
+use tuwunel_core::{Err, Result, err, error::inspect_log};
 
 use crate::Ruma;
 
 /// # `GET /.well-known/matrix/client`
 ///
 /// Returns the .well-known URL if it is configured, otherwise returns 404.
+/// Also includes RTC transport configuration for Element Call (MSC4143).
 pub(crate) async fn well_known_client(
 	State(services): State<crate::State>,
 	_body: Ruma<discover_homeserver::Request>,
 ) -> Result<discover_homeserver::Response> {
-	let client_url = match services.server.config.well_known.client.as_ref() {
-		| Some(url) => url.to_string(),
-		| None => return Err!(Request(NotFound("Not found."))),
+	let homeserver = HomeserverInfo {
+		base_url: match services.server.config.well_known.client.as_ref() {
+			| Some(url) => url.to_string(),
+			| None => return Err!(Request(NotFound("Not found."))),
+		},
 	};
 
+	// Add RTC transport configuration if available (MSC4143 / Element Call)
+	// Element Call has evolved through several versions with different field
+	// expectations
+	let rtc_foci = services
+		.server
+		.config
+		.well_known
+		.rtc_transports
+		.iter()
+		.map(|transport| {
+			let focus_type = transport
+				.get("type")
+				.and_then(JsonValue::as_str)
+				.ok_or_else(|| err!("`type` is not a valid string"))?;
+
+			let transport = transport
+				.as_object()
+				.cloned()
+				.ok_or_else(|| err!("`rtc_transport` is not a valid object"))?;
+
+			RtcFocusInfo::new(focus_type, transport).map_err(Into::into)
+		})
+		.collect::<Result<_>>()
+		.map_err(|e| {
+			err!(Config("global.well_known.rtc_transports", "Malformed value(s): {e:?}"))
+		})
+		.inspect_err(inspect_log)?;
+
 	Ok(discover_homeserver::Response {
-		homeserver: HomeserverInfo { base_url: client_url },
-		identity_server: None,
-		tile_server: None,
+		rtc_foci,
+		..discover_homeserver::Response::new(homeserver)
 	})
 }
 

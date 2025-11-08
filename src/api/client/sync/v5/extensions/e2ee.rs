@@ -26,7 +26,7 @@ use tuwunel_service::sync::Connection;
 
 use super::{SyncInfo, share_encrypted_room};
 
-#[tracing::instrument(level = "trace", skip_all)]
+#[tracing::instrument(name = "e2ee", level = "trace", skip_all)]
 pub(super) async fn collect(
 	sync_info: SyncInfo<'_>,
 	conn: &Connection,
@@ -94,7 +94,7 @@ pub(super) async fn collect(
 	})
 }
 
-#[tracing::instrument(level = "trace", skip_all, fields(room_id))]
+#[tracing::instrument(level = "trace", skip_all, fields(room_id), ret)]
 async fn collect_room(
 	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
 	conn: &Connection,

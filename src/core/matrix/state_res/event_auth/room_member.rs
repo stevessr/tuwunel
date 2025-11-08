@@ -10,7 +10,7 @@ use ruma::{
 };
 
 use crate::{
-	Err, Result, debug, err, is_equal_to,
+	Err, Result, err, is_equal_to,
 	matrix::{Event, StateKey},
 };
 
@@ -45,8 +45,6 @@ where
 	Fut: Future<Output = Result<Pdu>> + Send,
 	Pdu: Event,
 {
-	debug!("starting m.room.member check");
-
 	// Since v1, if there is no state_key property, or no membership property in
 	// content, reject.
 	let Some(state_key) = room_member_event.state_key() else {

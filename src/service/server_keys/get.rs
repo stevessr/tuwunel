@@ -39,7 +39,7 @@ where
 	let mut keys = PubKeyMap::new();
 	for (server, key_ids) in batch {
 		let pubkeys = self.get_pubkeys_for(server, key_ids).await;
-		keys.insert(server.into(), pubkeys);
+		keys.insert(server.as_str().into(), pubkeys);
 	}
 
 	keys
@@ -53,7 +53,7 @@ where
 	let mut keys = PubKeys::new();
 	for key_id in key_ids {
 		if let Ok(verify_key) = self.get_verify_key(origin, key_id).await {
-			keys.insert(key_id.into(), verify_key.key);
+			keys.insert(key_id.as_str().into(), verify_key.key);
 		}
 	}
 
@@ -71,6 +71,7 @@ pub async fn get_verify_key(
 		.server
 		.config
 		.query_trusted_key_servers_first;
+
 	let notary_only = self
 		.services
 		.server

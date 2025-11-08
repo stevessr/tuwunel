@@ -43,6 +43,7 @@ fn descriptor_cf_options(
 	opts.set_max_bytes_for_level_multiplier(1.0);
 	opts.set_max_bytes_for_level_multiplier_additional(&desc.level_shape);
 
+	opts.set_disable_auto_compactions(desc.ignored);
 	opts.set_compaction_style(desc.compaction);
 	opts.set_compaction_pri(desc.compaction_pri);
 	opts.set_universal_compaction_options(&uc_options(&desc));

@@ -590,6 +590,17 @@ pub struct Config {
 	#[serde(default = "true_fn")]
 	pub allow_encryption: bool,
 
+	/// Controls whether locally-created rooms should be end-to-end encrypted by
+	/// default. This option is equivalent to the one found in Synapse.
+	///
+	/// Options:
+	/// - "all": All created rooms are encrypted.
+	/// - "invite": Any room created with `private_chat` or
+	///   `trusted_private_chat` presets.
+	/// - Other values default to no effect.
+	#[serde(default)]
+	pub encryption_enabled_by_default_for_room_type: Option<String>,
+
 	/// Controls whether federation is allowed or not. It is not recommended to
 	/// disable this after installation due to potential federation breakage but
 	/// this is technically not a permanent setting.
@@ -1277,26 +1288,28 @@ pub struct Config {
 	#[serde(default = "default_rocksdb_stats_level")]
 	pub rocksdb_stats_level: u8,
 
-	/// Erases data no longer reachable in the current schema. The developers
-	/// expect this to be set to true which simplifies the schema and prevents
-	/// accumulation of old schemas remaining in the codebase forever. If this
-	/// is set to false, old columns which are not described in the current
-	/// schema will be ignored rather than erased, leaking their space.
+	/// Ignores the list of dropped columns set by developers.
 	///
-	/// This can be set to false when moving between versions in ways which are
-	/// not recommended or otherwise forbidden, or for diagnostic and
-	/// development purposes; requiring preservation across such movements.
+	/// This should be set to true when knowingly moving between versions in
+	/// ways which are not recommended or otherwise forbidden, or for
+	/// diagnostic and development purposes; requiring preservation across such
+	/// movements.
 	///
-	/// default: true
-	#[serde(default = "true_fn")]
-	pub rocksdb_drop_missing_columns: bool,
+	/// The developer's list of dropped columns is meant to safely reduce space
+	/// by erasing data no longer in use. If this is set to true that storage
+	/// will not be reclaimed as intended.
+	///
+	/// default: false
+	#[serde(default)]
+	pub rocksdb_never_drop_columns: bool,
 
 	/// This is a password that can be configured that will let you login to the
 	/// server bot account (currently `@conduit`) for emergency troubleshooting
 	/// purposes such as recovering/recreating your admin room, or inviting
 	/// yourself back.
 	///
-	/// See https://tuwunel.chat/troubleshooting.html#lost-access-to-admin-room for other ways to get back into your admin room.
+	/// See https://tuwunel.chat/troubleshooting.html#lost-access-to-admin-room
+	/// for other ways to get back into your admin room.
 	///
 	/// Once this password is unset, all sessions will be logged out for
 	/// security purposes.
@@ -1309,6 +1322,19 @@ pub struct Config {
 	/// default: "/_matrix/push/v1/notify"
 	#[serde(default = "default_notification_push_path")]
 	pub notification_push_path: String,
+
+	/// For compatibility and special purpose use only. Setting this option to
+	/// true will not filter messages sent to pushers based on rules or actions.
+	/// Everything will be sent to the pusher. This option is offered for
+	/// several reasons, but should not be necessary:
+	/// - Bypass to workaround bugs or outdated server-side ruleset support.
+	/// - Allow clients to evaluate pushrules themselves (due to the above).
+	/// - Hosting or companies which have custom pushers and internal needs.
+	///
+	/// Note that setting this option to true will not affect the record of
+	/// notifications found in the notifications pane.
+	#[serde(default)]
+	pub push_everything: bool,
 
 	/// Allow local (your server only) presence updates/requests.
 	///
@@ -2134,6 +2160,28 @@ pub struct WellKnownConfig {
 	///
 	/// example "@admin:example.com"
 	pub support_mxid: Option<OwnedUserId>,
+
+	/// Element Call / MatrixRTC configuration (MSC4143).
+	/// Configures the LiveKit SFU server for voice/video calls.
+	///
+	/// Requires a LiveKit server with JWT authentication.
+	/// The `livekit_service_url` should point to your LiveKit JWT endpoint.
+	///
+	/// Note: You must also set `client` above to your homeserver URL.
+	///
+	/// Example:
+	/// ```toml
+	/// [global.well_known]
+	/// client = "https://matrix.yourdomain.com"
+	///
+	/// [[global.well_known.rtc_transports]]
+	/// type = "livekit"
+	/// livekit_service_url = "https://livekit.yourdomain.com"
+	/// ```
+	///
+	/// default: []
+	#[serde(default)]
+	pub rtc_transports: Vec<serde_json::Value>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Default)]

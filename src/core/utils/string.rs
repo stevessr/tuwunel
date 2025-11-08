@@ -5,7 +5,7 @@ mod unquote;
 mod unquoted;
 
 pub use self::{between::Between, split::SplitInfallible, unquote::Unquote, unquoted::Unquoted};
-use crate::{Result, utils::exchange};
+use crate::{Result, smallstr::SmallString, utils::exchange};
 
 pub const EMPTY: &str = "";
 
@@ -93,16 +93,32 @@ where
 /// ```
 #[must_use]
 #[allow(clippy::string_slice)]
-pub fn common_prefix<'a>(choice: &'a [&str]) -> &'a str {
+pub fn common_prefix<T: AsRef<str>>(choice: &[T]) -> &str {
 	choice.first().map_or(EMPTY, move |best| {
-		choice.iter().skip(1).fold(*best, |best, choice| {
-			&best[0..choice
-				.char_indices()
-				.zip(best.char_indices())
-				.take_while(|&(a, b)| a == b)
-				.count()]
-		})
+		choice
+			.iter()
+			.skip(1)
+			.fold(best.as_ref(), |best, choice| {
+				&best[0..choice
+					.as_ref()
+					.char_indices()
+					.zip(best.char_indices())
+					.take_while(|&(a, b)| a == b)
+					.count()]
+			})
 	})
+}
+
+pub fn to_small_string<const CAP: usize, T>(t: T) -> SmallString<[u8; CAP]>
+where
+	T: std::fmt::Display,
+{
+	use std::fmt::Write;
+
+	let mut ret = SmallString::<[u8; CAP]>::new();
+	write!(&mut ret, "{t}").expect("Failed to Display type in SmallString");
+
+	ret
 }
 
 /// Parses the bytes into a string.

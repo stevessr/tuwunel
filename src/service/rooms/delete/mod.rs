@@ -159,7 +159,7 @@ impl Service {
 
 		debug!("Deleting the room's last notifications read.");
 		self.services
-			.user
+			.pusher
 			.delete_room_notification_read(room_id)
 			.await
 			.log_err()

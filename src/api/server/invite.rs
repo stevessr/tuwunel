@@ -1,13 +1,19 @@
 use axum::extract::State;
 use axum_client_ip::InsecureClientIp;
 use base64::{Engine as _, engine::general_purpose};
+use futures::StreamExt;
 use ruma::{
 	CanonicalJsonValue, OwnedUserId, UserId,
 	api::{
 		client::error::ErrorKind,
 		federation::membership::{RawStrippedState, create_invite},
 	},
-	events::room::member::{MembershipState, RoomMemberEventContent},
+	events::{
+		GlobalAccountDataEventType,
+		push_rules::PushRulesEvent,
+		room::member::{MembershipState, RoomMemberEventContent},
+	},
+	push,
 	serde::JsonObject,
 };
 use tuwunel_core::{
@@ -100,7 +106,7 @@ pub(crate) async fn create_invite_route(
 	let event_id = gen_event_id(&signed_event, &body.room_version)?;
 
 	// Add event_id back
-	signed_event.insert("event_id".to_owned(), CanonicalJsonValue::String(event_id.to_string()));
+	signed_event.insert("event_id".into(), CanonicalJsonValue::String(event_id.to_string()));
 
 	let sender: &UserId = signed_event
 		.get("sender")
@@ -127,7 +133,7 @@ pub(crate) async fn create_invite_route(
 	let mut event: JsonObject = serde_json::from_str(body.event.get())
 		.map_err(|e| err!(Request(BadJson("Invalid invite event PDU: {e}"))))?;
 
-	event.insert("event_id".to_owned(), "$placeholder".into());
+	event.insert("event_id".into(), "$placeholder".into());
 
 	let pdu: PduEvent = serde_json::from_value(event.into())
 		.map_err(|e| err!(Request(BadJson("Invalid invite event PDU: {e}"))))?;
@@ -158,6 +164,36 @@ pub(crate) async fn create_invite_route(
 			)
 			.await?;
 		drop(count);
+
+		services
+			.pusher
+			.get_pushkeys(&invited_user)
+			.map(ToOwned::to_owned)
+			.for_each(async |pushkey| {
+				let Ok(pusher) = services
+					.pusher
+					.get_pusher(&invited_user, &pushkey)
+					.await
+				else {
+					return;
+				};
+
+				let ruleset = services
+					.account_data
+					.get_global(&invited_user, GlobalAccountDataEventType::PushRules)
+					.await
+					.map_or_else(
+						|_| push::Ruleset::server_default(&invited_user),
+						|ev: PushRulesEvent| ev.content.global,
+					);
+
+				services
+					.pusher
+					.send_push_notice(&invited_user, &pusher, &ruleset, &pdu)
+					.await
+					.ok();
+			})
+			.await;
 
 		for appservice in services.appservice.read().await.values() {
 			if appservice.is_user_match(&invited_user) {

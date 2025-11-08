@@ -1,12 +1,10 @@
 # syntax = docker/dockerfile:1.11-labs
 
 FROM input AS nix-base
-ARG sys_name
-ARG sys_version
-ARG sys_target
 
 WORKDIR /
 COPY --link --from=input . .
+
 RUN \
 --mount=type=cache,dst=/nix,sharing=shared \
 --mount=type=cache,dst=/root/.cache/nix,sharing=shared \
@@ -20,9 +18,6 @@ EOF
 
 
 FROM nix-base AS build-nix
-ARG sys_name
-ARG sys_version
-ARG sys_target
 
 WORKDIR /usr/src/tuwunel
 COPY --link --from=source /usr/src/tuwunel .
@@ -44,15 +39,13 @@ RUN \
 EOF
 
 
-FROM build-nix AS smoke-nix
-ARG sys_name
-ARG sys_version
-ARG sys_target
+FROM input AS smoke-nix
 
 WORKDIR /
-COPY --link --from=build-nix . .
+COPY --link --from=nix-base . .
 
-WORKDIR /opt/tuwunel
+WORKDIR /usr/src/tuwunel
+COPY --link --from=source /usr/src/tuwunel .
 ENV TUWUNEL_DATABASE_PATH="/tmp/tuwunel/smoketest.db"
 ENV TUWUNEL_LOG="info"
 RUN \
@@ -61,29 +54,38 @@ RUN \
 --mount=type=cache,dst=/root/.local/state/nix,sharing=shared \
 <<EOF
     set -eux
+    alias nix="nix --extra-experimental-features nix-command --extra-experimental-features flakes"
 
-    bin/tuwunel \
-        -Otest='["smoke", "fresh"]' \
-        -Oserver_name=\"localhost\" \
+    nix run \
+        --verbose \
+        --cores 0 \
+        --max-jobs $(nproc) \
+        --log-format raw \
+        .#all-features \
+            -- \
+            -Otest='["smoke", "fresh"]' \
+            -Oserver_name=\"localhost\" \
 EOF
 
 
-FROM build-nix AS nix-pkg
-ARG sys_name
-ARG sys_version
-ARG sys_target
+FROM input AS nix-pkg
 
 WORKDIR /
-COPY --link --from=build-nix . .
+COPY --link --from=nix-base . .
 
 WORKDIR /usr/src/tuwunel
+COPY --link --from=source /usr/src/tuwunel .
 RUN \
 --mount=type=cache,dst=/nix,sharing=shared \
 --mount=type=cache,dst=/root/.cache/nix,sharing=shared \
 --mount=type=cache,dst=/root/.local/state/nix,sharing=shared \
 <<EOF
-	set -eux
-    #TODO: extract derivation?
-    mkdir -p /opt/tuwunel
-    touch /opt/tuwunel/tuwunel.drv
+    set -eux
+    alias nix="nix --extra-experimental-features nix-command --extra-experimental-features flakes"
+
+    ID=$(nix-store --realise $(nix path-info --derivation))
+
+    mkdir -p tuwunel
+    nix-store --export $ID > tuwunel/tuwunel.drv
+    tar -cvf /opt/tuwunel.nix.tar tuwunel
 EOF

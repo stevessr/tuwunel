@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use futures::{
 	FutureExt, StreamExt, TryFutureExt,
-	future::{OptionFuture, join3},
+	future::{OptionFuture, join5},
 };
 use ruma::{OwnedRoomId, UInt, events::room::member::MembershipState, uint};
 use tuwunel_core::{
@@ -10,8 +10,7 @@ use tuwunel_core::{
 	matrix::PduCount,
 	trace,
 	utils::{
-		BoolExt,
-		future::TryExtExt,
+		BoolExt, TryFutureExtExt,
 		math::usize_from_ruma,
 		stream::{BroadbandExt, IterStream},
 	},
@@ -19,7 +18,8 @@ use tuwunel_core::{
 use tuwunel_service::sync::Connection;
 
 use super::{
-	ListIds, ResponseLists, SyncInfo, Window, WindowRoom, filter_room, filter_room_meta,
+	ListIds, ResponseLists, SyncInfo, Window, WindowRoom,
+	filter::{filter_room, filter_room_meta},
 };
 
 #[tracing::instrument(level = "debug", skip_all)]
@@ -29,16 +29,13 @@ pub(super) async fn selector(
 ) -> (Window, ResponseLists) {
 	use MembershipState::*;
 
-	let SyncInfo { services, sender_user, request, .. } = sync_info;
+	let SyncInfo { services, sender_user, .. } = sync_info;
 
-	trace!(?request);
 	let mut rooms = services
 		.state_cache
 		.user_memberships(sender_user, Some(&[Join, Invite, Knock]))
 		.map(|(membership, room_id)| (room_id.to_owned(), Some(membership)))
-		.broad_filter_map(|(room_id, membership)| {
-			match_lists_for_room(sync_info, conn, room_id, membership)
-		})
+		.broad_filter_map(|(room_id, membership)| matcher(sync_info, conn, room_id, membership))
 		.collect::<Vec<_>>()
 		.await;
 
@@ -48,25 +45,133 @@ pub(super) async fn selector(
 		.enumerate()
 		.for_each(|(i, room)| {
 			room.ranked = i;
+
+			conn.rooms
+				.entry(room.room_id.clone())
+				.or_default();
 		});
 
 	trace!(?rooms);
 	let lists = response_lists(rooms.iter());
 
 	trace!(?lists);
-	let window = select_window(sync_info, conn, rooms.iter(), &lists).await;
+	let window = window(sync_info, conn, rooms.iter(), &lists).await;
 
 	trace!(?window);
-	for room in &rooms {
-		conn.rooms
-			.entry(room.room_id.clone())
-			.or_default();
-	}
-
 	(window, lists)
 }
 
-async fn select_window<'a, Rooms>(
+#[tracing::instrument(
+	name = "matcher",
+	level = "trace",
+	skip_all,
+	fields(?room_id, ?membership)
+)]
+async fn matcher(
+	sync_info: SyncInfo<'_>,
+	conn: &Connection,
+	room_id: OwnedRoomId,
+	membership: Option<MembershipState>,
+) -> Option<WindowRoom> {
+	let SyncInfo { services, sender_user, .. } = sync_info;
+
+	let (matched, lists) = conn
+		.lists
+		.iter()
+		.stream()
+		.filter_map(async |(id, list)| {
+			let filter: OptionFuture<_> = list
+				.filters
+				.clone()
+				.map(async |filters| {
+					filter_room(sync_info, &filters, &room_id, membership.as_ref()).await
+				})
+				.into();
+
+			filter
+				.await
+				.is_none_or(is_true!())
+				.then(|| id.clone())
+		})
+		.collect::<ListIds>()
+		.map(|lists| (lists.is_empty().is_false(), lists))
+		.await;
+
+	let last_notification: OptionFuture<_> = matched
+		.then(|| {
+			services
+				.pusher
+				.last_notification_read(sender_user, &room_id)
+				.unwrap_or_default()
+		})
+		.into();
+
+	let last_privateread: OptionFuture<_> = matched
+		.then(|| {
+			services
+				.read_receipt
+				.last_privateread_update(sender_user, &room_id)
+		})
+		.into();
+
+	let last_receipt: OptionFuture<_> = matched
+		.then(|| {
+			services
+				.read_receipt
+				.last_receipt_count(&room_id, sender_user.into(), None)
+				.unwrap_or_default()
+		})
+		.into();
+
+	let last_account: OptionFuture<_> = matched
+		.then(|| {
+			services
+				.account_data
+				.last_count(Some(room_id.as_ref()), sender_user, Some(conn.next_batch))
+				.unwrap_or_default()
+		})
+		.into();
+
+	let last_timeline: OptionFuture<_> = matched
+		.then(|| {
+			services
+				.timeline
+				.last_timeline_count(None, &room_id, Some(conn.next_batch.into()))
+				.map_ok(PduCount::into_unsigned)
+				.unwrap_or_default()
+		})
+		.into();
+
+	let (last_timeline, last_notification, last_account, last_receipt, last_privateread) =
+		join5(last_timeline, last_notification, last_account, last_receipt, last_privateread)
+			.await;
+
+	Some(WindowRoom {
+		room_id: room_id.clone(),
+		membership,
+		lists,
+		ranked: 0,
+		last_count: [
+			last_timeline,
+			last_notification,
+			last_account,
+			last_receipt,
+			last_privateread,
+		]
+		.into_iter()
+		.map(Option::unwrap_or_default)
+		.filter(|count| conn.next_batch.ge(count))
+		.max()
+		.unwrap_or_default(),
+	})
+}
+
+#[tracing::instrument(
+	level = "debug",
+	skip_all,
+	fields(rooms = rooms.clone().count())
+)]
+async fn window<'a, Rooms>(
 	sync_info: SyncInfo<'_>,
 	conn: &Connection,
 	rooms: Rooms,
@@ -76,6 +181,8 @@ where
 	Rooms: Iterator<Item = &'a WindowRoom> + Clone + Send + Sync,
 {
 	static FULL_RANGE: (UInt, UInt) = (UInt::MIN, UInt::MAX);
+
+	let SyncInfo { services, sender_user, .. } = sync_info;
 
 	let selections = lists
 		.keys()
@@ -98,122 +205,43 @@ where
 			rooms
 				.clone()
 				.filter(move |&room| room.lists.contains(&id))
-				.enumerate()
-				.skip_while(move |&(i, room)| {
-					i < start
-						|| conn
-							.rooms
-							.get(&room.room_id)
-							.is_some_and(|conn_room| conn_room.roomsince >= room.last_count)
+				.filter(|&room| {
+					conn.rooms
+						.get(&room.room_id)
+						.is_some_and(|conn_room| {
+							conn_room.roomsince == 0 || room.last_count > conn_room.roomsince
+						})
 				})
+				.enumerate()
+				.skip_while(move |&(i, _)| i < start)
 				.take(end.saturating_add(1).saturating_sub(start))
 				.map(|(_, room)| (room.room_id.clone(), room.clone()))
-		});
+		})
+		.stream();
 
-	conn.subscriptions
+	let subscriptions = conn
+		.subscriptions
 		.iter()
 		.stream()
 		.broad_filter_map(async |(room_id, _)| {
 			filter_room_meta(sync_info, room_id)
 				.await
-				.then(|| WindowRoom {
-					room_id: room_id.clone(),
-					membership: None,
-					lists: Default::default(),
-					ranked: usize::MAX,
-					last_count: 0,
-				})
+				.into_option()?;
+
+			Some(WindowRoom {
+				room_id: room_id.clone(),
+				lists: Default::default(),
+				ranked: usize::MAX,
+				last_count: 0,
+				membership: services
+					.state_cache
+					.user_membership(sender_user, room_id)
+					.await,
+			})
 		})
-		.map(|room| (room.room_id.clone(), room))
-		.chain(selections.stream())
-		.collect()
-		.await
-}
+		.map(|room| (room.room_id.clone(), room));
 
-#[tracing::instrument(
-	name = "matcher",
-	level = "trace",
-	skip_all,
-	fields(?room_id, ?membership)
-)]
-async fn match_lists_for_room(
-	sync_info: SyncInfo<'_>,
-	conn: &Connection,
-	room_id: OwnedRoomId,
-	membership: Option<MembershipState>,
-) -> Option<WindowRoom> {
-	let SyncInfo { services, sender_user, .. } = sync_info;
-
-	let lists = conn
-		.lists
-		.iter()
-		.stream()
-		.filter_map(async |(id, list)| {
-			let filter: OptionFuture<_> = list
-				.filters
-				.clone()
-				.map(async |filters| {
-					filter_room(sync_info, &filters, &room_id, membership.as_ref()).await
-				})
-				.into();
-
-			filter
-				.await
-				.is_none_or(is_true!())
-				.then(|| id.clone())
-		})
-		.collect::<ListIds>()
-		.await;
-
-	let last_timeline_count: OptionFuture<_> = lists
-		.is_empty()
-		.is_false()
-		.then(|| {
-			services
-				.timeline
-				.last_timeline_count(None, &room_id, None)
-				.map_ok(PduCount::into_unsigned)
-				.ok()
-		})
-		.into();
-
-	let last_account_count: OptionFuture<_> = lists
-		.is_empty()
-		.is_false()
-		.then(|| {
-			services
-				.account_data
-				.last_count(Some(room_id.as_ref()), sender_user, None)
-				.ok()
-		})
-		.into();
-
-	let last_receipt_count: OptionFuture<_> = lists
-		.is_empty()
-		.is_false()
-		.then(|| {
-			services
-				.read_receipt
-				.last_receipt_count(&room_id, sender_user.into(), None)
-				.map(Result::ok)
-		})
-		.into();
-
-	let (last_timeline_count, last_account_count, last_receipt_count) =
-		join3(last_timeline_count, last_account_count, last_receipt_count).await;
-
-	Some(WindowRoom {
-		room_id: room_id.clone(),
-		membership,
-		lists,
-		ranked: 0,
-		last_count: [last_timeline_count, last_account_count, last_receipt_count]
-			.into_iter()
-			.map(Option::flatten)
-			.map(Option::unwrap_or_default)
-			.max()
-			.unwrap_or_default(),
-	})
+	subscriptions.chain(selections).collect().await
 }
 
 fn response_lists<'a, Rooms>(rooms: Rooms) -> ResponseLists
@@ -233,15 +261,4 @@ where
 		})
 }
 
-fn room_sort(a: &WindowRoom, b: &WindowRoom) -> Ordering {
-	if a.membership != b.membership {
-		if a.membership == Some(MembershipState::Invite) {
-			return Ordering::Less;
-		}
-		if b.membership == Some(MembershipState::Invite) {
-			return Ordering::Greater;
-		}
-	}
-
-	b.last_count.cmp(&a.last_count)
-}
+fn room_sort(a: &WindowRoom, b: &WindowRoom) -> Ordering { b.last_count.cmp(&a.last_count) }

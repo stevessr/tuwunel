@@ -257,7 +257,9 @@ async fn db_lt_12(services: &Services) -> Result {
 
 			if let Some(rule) = rule {
 				let mut rule = rule.clone();
-				content_rule_transformation[1].clone_into(&mut rule.rule_id);
+				let mut rule_id = String::new();
+				content_rule_transformation[1].clone_into(&mut rule_id);
+				rule.rule_id = rule_id.into();
 				rules_list
 					.content
 					.shift_remove(content_rule_transformation[0]);
@@ -280,7 +282,9 @@ async fn db_lt_12(services: &Services) -> Result {
 				let rule = rules_list.underride.get(transformation[0]);
 				if let Some(rule) = rule {
 					let mut rule = rule.clone();
-					transformation[1].clone_into(&mut rule.rule_id);
+					let mut rule_id = String::new();
+					transformation[1].clone_into(&mut rule_id);
+					rule.rule_id = rule_id.into();
 					rules_list
 						.underride
 						.shift_remove(transformation[0]);

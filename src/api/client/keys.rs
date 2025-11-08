@@ -37,30 +37,16 @@ pub(crate) async fn upload_keys_route(
 ) -> Result<upload_keys::v3::Response> {
 	let (sender_user, sender_device) = body.sender();
 
-	for (key_id, one_time_key) in body
+	let one_time_keys = body
 		.one_time_keys
 		.iter()
 		.take(services.config.one_time_key_limit)
-	{
-		if one_time_key
-			.deserialize()
-			.inspect_err(|e| {
-				debug_warn!(
-					?key_id,
-					?one_time_key,
-					"Invalid one time key JSON submitted by client, skipping: {e}"
-				);
-			})
-			.is_err()
-		{
-			continue;
-		}
+		.map(|(id, val)| (id.as_ref(), val));
 
-		services
-			.users
-			.add_one_time_key(sender_user, sender_device, key_id, one_time_key)
-			.await?;
-	}
+	services
+		.users
+		.add_one_time_keys(sender_user, sender_device, one_time_keys)
+		.await?;
 
 	if let Some(device_keys) = &body.device_keys {
 		let deser_device_keys = device_keys.deserialize().map_err(|e| {
@@ -85,8 +71,11 @@ pub(crate) async fn upload_keys_route(
 			.users
 			.get_device_keys(sender_user, sender_device)
 			.await
+			.and_then(|keys| keys.deserialize().map_err(Into::into))
 		{
-			if existing_keys.json().get() == device_keys.json().get() {
+			// NOTE: also serves as a workaround for a nheko bug which omits cross-signing
+			// NOTE: signatures when re-uploading the same DeviceKeys.
+			if existing_keys.keys == deser_device_keys.keys {
 				debug!(
 					?sender_user,
 					?sender_device,
@@ -585,7 +574,7 @@ fn add_unsigned_device_display_name(
 			.or_insert_with(|| CanonicalJsonObject::default().into())
 		{
 			let display_name = if include_display_names {
-				CanonicalJsonValue::String(display_name)
+				CanonicalJsonValue::String(display_name.to_string())
 			} else {
 				CanonicalJsonValue::String(metadata.device_id.into())
 			};

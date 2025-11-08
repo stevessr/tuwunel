@@ -10,7 +10,7 @@ use ruma::{
 };
 use serde_json::json;
 use tuwunel_core::{
-	Err, Result, at, implement,
+	Err, Result, implement,
 	utils::{
 		self, ReadyExt,
 		stream::{IterStream, TryIgnore},
@@ -24,12 +24,12 @@ pub const TOKEN_LENGTH: usize = 32;
 
 /// Adds a new device to a user.
 #[implement(super::Service)]
-#[tracing::instrument(level = "debug", skip(self))]
+#[tracing::instrument(level = "info", skip(self, access_token))]
 pub async fn create_device(
 	&self,
 	user_id: &UserId,
 	device_id: &DeviceId,
-	(access_token, expires_in): (&str, Option<Duration>),
+	(access_token, expires_in): (Option<&str>, Option<Duration>),
 	refresh_token: Option<&str>,
 	initial_device_display_name: Option<String>,
 	client_ip: Option<String>,
@@ -40,23 +40,25 @@ pub async fn create_device(
 		))));
 	}
 
-	let key = (user_id, device_id);
-	let val = Device {
+	let notify = true;
+	self.put_device_metadata(user_id, notify, &Device {
 		device_id: device_id.into(),
-		display_name: initial_device_display_name,
-		last_seen_ip: client_ip,
+		display_name: initial_device_display_name.map(Into::into),
+		last_seen_ip: client_ip.map(Into::into),
 		last_seen_ts: Some(MilliSecondsSinceUnixEpoch::now()),
-	};
+	});
 
-	increment(&self.db.userid_devicelistversion, user_id.as_bytes());
-	self.db.userdeviceid_metadata.put(key, Json(val));
-	self.set_access_token(user_id, device_id, access_token, expires_in, refresh_token)
-		.await
+	if let Some(access_token) = access_token {
+		self.set_access_token(user_id, device_id, access_token, expires_in, refresh_token)
+			.await?;
+	}
+
+	Ok(())
 }
 
 /// Removes a device from a user.
 #[implement(super::Service)]
-#[tracing::instrument(level = "debug", skip(self))]
+#[tracing::instrument(level = "info", skip(self))]
 pub async fn remove_device(&self, user_id: &UserId, device_id: &DeviceId) {
 	// Remove access tokens
 	self.remove_tokens(user_id, device_id).await;
@@ -85,13 +87,18 @@ pub async fn remove_device(&self, user_id: &UserId, device_id: &DeviceId) {
 		})
 		.await;
 
-	// TODO: Remove onetimekeys
+	// Removes the dehydrated device if the ID matches, otherwise no-op
+	self.remove_dehydrated_device(user_id, Some(device_id))
+		.await
+		.ok();
 
-	increment(&self.db.userid_devicelistversion, user_id.as_bytes());
+	// TODO: Remove onetimekeys
 
 	let userdeviceid = (user_id, device_id);
 	self.db.userdeviceid_metadata.del(userdeviceid);
+
 	self.mark_device_key_update(user_id).await;
+	increment(&self.db.userid_devicelistversion, user_id.as_bytes());
 }
 
 /// Returns an iterator over all device ids of this user.
@@ -155,6 +162,11 @@ pub async fn set_access_token(
 	expires_in: Option<Duration>,
 	refresh_token: Option<&str>,
 ) -> Result {
+	assert!(
+		access_token.len() >= TOKEN_LENGTH,
+		"Caller must supply an access_token >= {TOKEN_LENGTH} chars."
+	);
+
 	if let Some(refresh_token) = refresh_token {
 		self.set_refresh_token(user_id, device_id, refresh_token)
 			.await?;
@@ -309,7 +321,7 @@ pub fn get_to_device_events<'a>(
 	device_id: &'a DeviceId,
 	since: Option<u64>,
 	to: Option<u64>,
-) -> impl Stream<Item = Raw<AnyToDeviceEvent>> + Send + 'a {
+) -> impl Stream<Item = (u64, Raw<AnyToDeviceEvent>)> + Send + 'a {
 	type Key<'a> = (&'a UserId, &'a DeviceId, u64);
 
 	let from = (user_id, device_id, since.map_or(0, |since| since.saturating_add(1)));
@@ -321,7 +333,7 @@ pub fn get_to_device_events<'a>(
 		.ready_take_while(move |((user_id_, device_id_, count), _): &(Key<'_>, _)| {
 			user_id == *user_id_ && device_id == *device_id_ && to.is_none_or(|to| *count <= to)
 		})
-		.map(at!(1))
+		.map(|((_, _, count), event)| (count, event))
 }
 
 #[implement(super::Service)]
@@ -351,20 +363,35 @@ pub async fn remove_to_device_events<Until>(
 }
 
 #[implement(super::Service)]
-pub async fn update_device_metadata(
+pub async fn update_device_last_seen(
 	&self,
 	user_id: &UserId,
 	device_id: &DeviceId,
-	device: &Device,
+	last_seen: Option<MilliSecondsSinceUnixEpoch>,
 ) -> Result {
-	increment(&self.db.userid_devicelistversion, user_id.as_bytes());
+	let mut device = self
+		.get_device_metadata(user_id, device_id)
+		.await?;
 
-	let key = (user_id, device_id);
+	device
+		.last_seen_ts
+		.replace(last_seen.unwrap_or_else(MilliSecondsSinceUnixEpoch::now));
+
+	self.put_device_metadata(user_id, false, &device);
+
+	Ok(())
+}
+
+#[implement(super::Service)]
+pub fn put_device_metadata(&self, user_id: &UserId, notify: bool, device: &Device) {
+	let key = (user_id, &device.device_id);
 	self.db
 		.userdeviceid_metadata
 		.put(key, Json(device));
 
-	Ok(())
+	if notify {
+		increment(&self.db.userid_devicelistversion, user_id.as_bytes());
+	}
 }
 
 /// Get device metadata.
@@ -379,6 +406,17 @@ pub async fn get_device_metadata(
 		.qry(&(user_id, device_id))
 		.await
 		.deserialized()
+		.inspect(|device: &Device| {
+			debug_assert_eq!(&device.device_id, device_id, "device_id mismatch");
+		})
+}
+
+#[implement(super::Service)]
+pub async fn device_exists(&self, user_id: &UserId, device_id: &DeviceId) -> bool {
+	self.db
+		.userdeviceid_metadata
+		.contains(&(user_id, device_id))
+		.await
 }
 
 #[implement(super::Service)]

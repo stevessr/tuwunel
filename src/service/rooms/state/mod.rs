@@ -471,7 +471,7 @@ pub async fn get_room_version_rules(&self, room_id: &RoomId) -> Result<RoomVersi
 #[tracing::instrument(
 	level = "debug"
 	skip(self),
-	ret,
+	ret(level = "trace"),
 )]
 pub async fn get_room_version(&self, room_id: &RoomId) -> Result<RoomVersionId> {
 	self.services
@@ -488,7 +488,7 @@ pub async fn get_room_version(&self, room_id: &RoomId) -> Result<RoomVersionId> 
 #[tracing::instrument(
 	level = "debug"
 	skip(self),
-	ret,
+	ret(level = "trace"),
 )]
 pub async fn get_room_shortstatehash(&self, room_id: &RoomId) -> Result<ShortStateHash> {
 	self.db
@@ -513,7 +513,7 @@ pub async fn pdu_shortstatehash(&self, event_id: &EventId) -> Result<ShortStateH
 #[tracing::instrument(
 	level = "debug"
 	skip(self),
-	ret,
+	ret(level = "trace"),
 )]
 pub async fn get_shortstatehash(&self, shorteventid: ShortEventId) -> Result<ShortStateHash> {
 	const BUFSIZE: usize = size_of::<ShortEventId>();

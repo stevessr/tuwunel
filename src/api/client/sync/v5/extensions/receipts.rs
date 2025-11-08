@@ -11,9 +11,9 @@ use tuwunel_core::{
 };
 use tuwunel_service::{rooms::read_receipt::pack_receipts, sync::Room};
 
-use super::{Connection, SyncInfo, Window, extension_rooms_selector};
+use super::{Connection, SyncInfo, Window, selector};
 
-#[tracing::instrument(level = "trace", skip_all)]
+#[tracing::instrument(name = "receipts", level = "trace", skip_all)]
 pub(super) async fn collect(
 	sync_info: SyncInfo<'_>,
 	conn: &Connection,
@@ -35,7 +35,7 @@ pub(super) async fn collect(
 		.as_deref()
 		.map(<[_]>::iter);
 
-	let rooms = extension_rooms_selector(sync_info, conn, window, implicit, explicit)
+	let rooms = selector(sync_info, conn, window, implicit, explicit)
 		.stream()
 		.broad_filter_map(|room_id| collect_room(sync_info, conn, window, room_id))
 		.collect()
@@ -44,7 +44,7 @@ pub(super) async fn collect(
 	Ok(response::Receipts { rooms })
 }
 
-#[tracing::instrument(level = "trace", skip_all, fields(room_id))]
+#[tracing::instrument(level = "trace", skip_all, fields(room_id), ret)]
 async fn collect_room(
 	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
 	conn: &Connection,

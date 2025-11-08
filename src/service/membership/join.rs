@@ -175,7 +175,7 @@ pub async fn join_remote(
 	};
 
 	join_event_stub.insert(
-		"origin".to_owned(),
+		"origin".into(),
 		CanonicalJsonValue::String(
 			self.services
 				.globals
@@ -185,7 +185,7 @@ pub async fn join_remote(
 		),
 	);
 	join_event_stub.insert(
-		"origin_server_ts".to_owned(),
+		"origin_server_ts".into(),
 		CanonicalJsonValue::Integer(
 			utils::millis_since_unix_epoch()
 				.try_into()
@@ -193,7 +193,7 @@ pub async fn join_remote(
 		),
 	);
 	join_event_stub.insert(
-		"content".to_owned(),
+		"content".into(),
 		to_canonical_value(RoomMemberEventContent {
 			displayname: self
 				.services
@@ -306,7 +306,7 @@ pub async fn join_remote(
 						.expect("we created a valid pdu")
 						.as_object_mut()
 						.expect("we created a valid pdu")
-						.insert(remote_server.to_string(), signature.clone());
+						.insert(remote_server.as_str().into(), signature.clone());
 				},
 				| Err(e) => {
 					warn!(
@@ -649,7 +649,7 @@ pub async fn join_local(
 		.and_then(|s| OwnedUserId::try_from(s.unwrap_or_default()).ok());
 
 	join_event_stub.insert(
-		"origin".to_owned(),
+		"origin".into(),
 		CanonicalJsonValue::String(
 			self.services
 				.globals
@@ -659,7 +659,7 @@ pub async fn join_local(
 		),
 	);
 	join_event_stub.insert(
-		"origin_server_ts".to_owned(),
+		"origin_server_ts".into(),
 		CanonicalJsonValue::Integer(
 			utils::millis_since_unix_epoch()
 				.try_into()
@@ -667,7 +667,7 @@ pub async fn join_local(
 		),
 	);
 	join_event_stub.insert(
-		"content".to_owned(),
+		"content".into(),
 		to_canonical_value(RoomMemberEventContent {
 			displayname: self
 				.services

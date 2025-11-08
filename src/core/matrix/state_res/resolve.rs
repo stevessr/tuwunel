@@ -25,6 +25,7 @@ use super::test_utils;
 use crate::{
 	Result, debug,
 	matrix::{Event, TypeStateKey},
+	trace,
 	utils::stream::{BroadbandExt, IterStream},
 };
 
@@ -87,7 +88,7 @@ where
 	// Split the unconflicted state map and the conflicted state set.
 	let (unconflicted_state, conflicted_states) = split_conflicted_state(state_maps).await;
 
-	debug!(?unconflicted_state, unconflicted = unconflicted_state.len(), "unresolved state");
+	trace!(?unconflicted_state, unconflicted = unconflicted_state.len(), "unresolved state");
 	debug!(?conflicted_states, conflicted = conflicted_states.len(), "unresolved states");
 
 	if conflicted_states.is_empty() {
@@ -120,7 +121,7 @@ where
 		.chain(conflicted_subgraph)
 		.collect::<AuthSet<_>>()
 		.inspect(|set| debug!(count = set.len(), "full conflicted set"))
-		.inspect(|set| debug!(?set, "full conflicted set"))
+		.inspect(|set| trace!(?set, "full conflicted set"))
 		.await;
 
 	// 1. Select the set X of all power events that appear in the full conflicted
@@ -129,7 +130,7 @@ where
 	//    a list using the reverse topological power ordering.
 	let sorted_power_events: Vec<_> = power_sort(rules, &full_conflicted_set, fetch)
 		.inspect_ok(|list| debug!(count = list.len(), "sorted power events"))
-		.inspect_ok(|list| debug!(?list, "sorted power events"))
+		.inspect_ok(|list| trace!(?list, "sorted power events"))
 		.await?;
 
 	let sorted_power_events_set: AuthSet<_> = sorted_power_events.iter().collect();
@@ -154,7 +155,7 @@ where
 	let partially_resolved_state =
 		iterative_auth_check(rules, sorted_power_events, initial_state, fetch)
 			.inspect_ok(|map| debug!(count = map.len(), "partially resolved power state"))
-			.inspect_ok(|map| debug!(?map, "partially resolved power state"))
+			.inspect_ok(|map| trace!(?map, "partially resolved power state"))
 			.await?;
 
 	// This "epochs" power level event
@@ -168,7 +169,7 @@ where
 		.collect();
 
 	debug!(count = remaining_events.len(), "remaining events");
-	debug!(list = ?remaining_events, "remaining events");
+	trace!(list = ?remaining_events, "remaining events");
 
 	let have_remaining_events = !remaining_events.is_empty();
 	let remaining_events = remaining_events
@@ -188,7 +189,7 @@ where
 		.unwrap_or(Ok(Vec::new()))?;
 
 	debug!(count = sorted_remaining_events.len(), "sorted remaining events");
-	debug!(list = ?sorted_remaining_events, "sorted remaining events");
+	trace!(list = ?sorted_remaining_events, "sorted remaining events");
 
 	let sorted_remaining_events = sorted_remaining_events
 		.iter()
@@ -207,7 +208,7 @@ where
 	resolved_state.extend(unconflicted_state);
 
 	debug!(resolved_state = resolved_state.len(), "resolved state");
-	debug!(?resolved_state, "resolved state");
+	trace!(?resolved_state, "resolved state");
 
 	Ok(resolved_state)
 }

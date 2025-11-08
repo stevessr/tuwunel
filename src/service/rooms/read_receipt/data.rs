@@ -97,8 +97,9 @@ impl Data {
 		self.readreceiptid_readreceipt
 			.rev_keys_prefix(&key)
 			.ignore_err()
-			.ready_take_while(|(_, c, _): &Key<'_>| since.is_none_or(|since| since.gt(c)))
-			.ready_filter(|(_, _, u): &Key<'_>| user_id.as_ref().is_none_or(is_equal_to!(u)))
+			.ready_take_while(|(_, c, u): &Key<'_>| {
+				since.is_none_or(|since| since.gt(c)) && user_id.is_none_or(is_equal_to!(*u))
+			})
 			.map(|(_, c, _): Key<'_>| c)
 			.boxed()
 			.next()

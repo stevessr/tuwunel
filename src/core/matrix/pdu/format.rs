@@ -62,7 +62,7 @@ fn mutate_outgoing_reference_format(value: &mut CanonicalJsonValue) {
 			if let Some(event_id) = value.as_str().map(ToOwned::to_owned) {
 				*value = CanonicalJsonValue::Array(vec![
 					CanonicalJsonValue::String(event_id),
-					CanonicalJsonValue::Object([(String::new(), "".into())].into()),
+					CanonicalJsonValue::Object([(Default::default(), "".into())].into()),
 				]);
 			}
 		});
@@ -92,7 +92,7 @@ pub fn from_incoming_federation(
 	}
 
 	if !room_rules.event_format.require_event_id {
-		pdu_json.insert("event_id".to_owned(), CanonicalJsonValue::String(event_id.into()));
+		pdu_json.insert("event_id".into(), CanonicalJsonValue::String(event_id.into()));
 	}
 
 	PduEvent::from_val(pdu_json)

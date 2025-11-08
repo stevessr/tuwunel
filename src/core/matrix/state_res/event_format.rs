@@ -364,7 +364,7 @@ mod tests {
 			.unwrap();
 
 		let long_string = repeat_n('a', 66_000).collect::<String>();
-		content.insert("big_data".to_owned(), long_string.into());
+		content.insert("big_data".into(), long_string.into());
 		check_pdu_format(&pdu, &EventFormatRules::V3).unwrap_err();
 	}
 
@@ -384,7 +384,7 @@ mod tests {
 		for field in &["event_id", "sender", "room_id", "type", "state_key"] {
 			let mut pdu = pdu_v1();
 			let value = repeat_n('a', 300).collect::<String>();
-			pdu.insert((*field).to_owned(), value.into());
+			pdu.insert((*field).into(), value.into());
 			check_pdu_format(&pdu, &EventFormatRules::V1).unwrap_err();
 		}
 	}
@@ -393,7 +393,7 @@ mod tests {
 	fn check_pdu_format_strings_wrong_format() {
 		for field in &["event_id", "sender", "room_id", "type", "state_key"] {
 			let mut pdu = pdu_v1();
-			pdu.insert((*field).to_owned(), true.into());
+			pdu.insert((*field).into(), true.into());
 			check_pdu_format(&pdu, &EventFormatRules::V1).unwrap_err();
 		}
 	}
@@ -405,7 +405,7 @@ mod tests {
 			let value: Vec<_> =
 				repeat_n(CanonicalJsonValue::from("$eventid".to_owned()), 30).collect();
 
-			pdu.insert((*field).to_owned(), value.into());
+			pdu.insert((*field).into(), value.into());
 			check_pdu_format(&pdu, &EventFormatRules::V3).unwrap_err();
 		}
 	}
@@ -414,7 +414,7 @@ mod tests {
 	fn check_pdu_format_arrays_wrong_format() {
 		for field in &["prev_events", "auth_events"] {
 			let mut pdu = pdu_v3();
-			pdu.insert((*field).to_owned(), true.into());
+			pdu.insert((*field).into(), true.into());
 			check_pdu_format(&pdu, &EventFormatRules::V3).unwrap_err();
 		}
 	}
@@ -422,7 +422,7 @@ mod tests {
 	#[test]
 	fn check_pdu_format_negative_depth() {
 		let mut pdu = pdu_v3();
-		pdu.insert("depth".to_owned(), int!(-1).into())
+		pdu.insert("depth".into(), int!(-1).into())
 			.unwrap();
 
 		check_pdu_format(&pdu, &EventFormatRules::V3).unwrap_err();
@@ -431,7 +431,7 @@ mod tests {
 	#[test]
 	fn check_pdu_format_depth_wrong_format() {
 		let mut pdu = pdu_v3();
-		pdu.insert("depth".to_owned(), true.into());
+		pdu.insert("depth".into(), true.into());
 		check_pdu_format(&pdu, &EventFormatRules::V3).unwrap_err();
 	}
 

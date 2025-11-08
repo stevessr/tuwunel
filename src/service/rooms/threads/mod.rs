@@ -68,7 +68,7 @@ impl Service {
 			.map_err(|e| err!(Request(InvalidParam("Thread root pdu not found: {e:?}"))))?;
 
 		if let CanonicalJsonValue::Object(unsigned) = root_pdu_json
-			.entry("unsigned".to_owned())
+			.entry("unsigned".into())
 			.or_insert_with(|| CanonicalJsonValue::Object(BTreeMap::default()))
 		{
 			if let Some(mut relations) = unsigned
@@ -85,7 +85,7 @@ impl Service {
 				let content = serde_json::to_value(relations).expect("to_value always works");
 
 				unsigned.insert(
-					"m.relations".to_owned(),
+					"m.relations".into(),
 					json!({ "m.thread": content })
 						.try_into()
 						.expect("thread is valid json"),
@@ -101,7 +101,7 @@ impl Service {
 				let content = serde_json::to_value(relations).expect("to_value always works");
 
 				unsigned.insert(
-					"m.relations".to_owned(),
+					"m.relations".into(),
 					json!({ "m.thread": content })
 						.try_into()
 						.expect("thread is valid json"),

@@ -8,7 +8,9 @@ use std::{
 };
 
 use tuwunel_core::{
-	Config, Result, debug, debug_info, debug_warn, error, info,
+	Config, Result, debug, debug_info, debug_warn, error,
+	error::inspect_debug_log,
+	info,
 	utils::{ReadyExt, stream::TryIgnore},
 	warn,
 };
@@ -70,7 +72,10 @@ pub(crate) async fn checkup_sha256_media(services: &Services) -> Result {
 	let timer = Instant::now();
 
 	let dir = media.get_media_dir();
-	let files: HashSet<OsString> = fs::read_dir(dir)?
+	let files: HashSet<OsString> = fs::read_dir(dir)
+		.inspect_err(inspect_debug_log)
+		.into_iter()
+		.flatten()
 		.filter_map(|ent| ent.map_or(None, |ent| Some(ent.path().into_os_string())))
 		.collect();
 

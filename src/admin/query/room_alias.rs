@@ -8,6 +8,13 @@ use crate::Context;
 #[derive(Debug, Subcommand)]
 /// All the getters and iterators from src/database/key_value/rooms/alias.rs
 pub(crate) enum RoomAliasCommand {
+	/// - Resolve any local or remote alias.
+	ResolveAlias {
+		/// Full room alias
+		alias: OwnedRoomAliasId,
+	},
+
+	/// - Resolve an alias on this server.
 	ResolveLocalAlias {
 		/// Full room alias
 		alias: OwnedRoomAliasId,
@@ -28,6 +35,13 @@ pub(super) async fn process(subcommand: RoomAliasCommand, context: &Context<'_>)
 	let services = context.services;
 
 	match subcommand {
+		| RoomAliasCommand::ResolveAlias { alias } => {
+			let timer = tokio::time::Instant::now();
+			let results = services.alias.resolve_alias(&alias).await;
+			let query_time = timer.elapsed();
+
+			write!(context, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```")
+		},
 		| RoomAliasCommand::ResolveLocalAlias { alias } => {
 			let timer = tokio::time::Instant::now();
 			let results = services.alias.resolve_local_alias(&alias).await;
