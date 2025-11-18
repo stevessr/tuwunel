@@ -5,7 +5,7 @@ use ruma::api::client::account::{
 	ThirdPartyIdRemovalStatus, change_password, deactivate, get_3pids,
 	request_3pid_management_token_via_email, request_3pid_management_token_via_msisdn, whoami,
 };
-use tuwunel_core::{Err, Result, info, utils::ReadyExt};
+use tuwunel_core::{Err, Result, err, info, utils::ReadyExt};
 
 use crate::{Ruma, router::auth_uiaa};
 
@@ -73,10 +73,12 @@ pub(crate) async fn whoami_route(
 	Ok(whoami::v3::Response {
 		user_id: body.sender_user().to_owned(),
 		device_id: body.sender_device.clone(),
-		is_guest: services
-			.users
-			.is_deactivated(body.sender_user())
-			.await? && body.appservice_info.is_none(),
+		is_guest: body.appservice_info.is_none()
+			&& services
+				.users
+				.is_deactivated(body.sender_user())
+				.await
+				.map_err(|_| err!(Request(Forbidden("User does not exist."))))?,
 	})
 }
 
