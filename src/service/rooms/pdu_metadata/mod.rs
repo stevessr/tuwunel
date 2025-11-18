@@ -1,137 +1,169 @@
-mod data;
 use std::sync::Arc;
 
-use futures::{StreamExt, future::try_join};
+use futures::{Stream, StreamExt, TryFutureExt};
 use ruma::{EventId, RoomId, UserId, api::Direction};
 use tuwunel_core::{
-	Result,
-	matrix::{Event, PduCount},
+	PduId, Result,
+	arrayvec::ArrayVec,
+	implement,
+	matrix::{Event, Pdu, PduCount, RawPduId},
+	result::LogErr,
+	trace,
+	utils::{
+		stream::{ReadyExt, TryIgnore, WidebandExt},
+		u64_from_u8,
+	},
 };
+use tuwunel_database::{Interfix, Map};
 
-use self::data::Data;
+use crate::rooms::short::ShortRoomId;
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
 	db: Data,
 }
 
+struct Data {
+	tofrom_relation: Arc<Map>,
+	referencedevents: Arc<Map>,
+	softfailedeventids: Arc<Map>,
+}
+
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
 			services: args.services.clone(),
-			db: Data::new(args),
+			db: Data {
+				tofrom_relation: args.db["tofrom_relation"].clone(),
+				referencedevents: args.db["referencedevents"].clone(),
+				softfailedeventids: args.db["softfailedeventids"].clone(),
+			},
 		}))
 	}
 
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
 
-impl Service {
-	#[tracing::instrument(skip(self, from, to), level = "debug")]
-	pub fn add_relation(&self, from: PduCount, to: PduCount) {
-		match (from, to) {
-			| (PduCount::Normal(f), PduCount::Normal(t)) => self.db.add_relation(f, t),
-			| _ => {
-				// TODO: Relations with backfilled pdus
-			},
-		}
+#[implement(Service)]
+#[tracing::instrument(skip(self, from, to), level = "debug")]
+pub fn add_relation(&self, from: PduCount, to: PduCount) {
+	const BUFSIZE: usize = size_of::<u64>() * 2;
+
+	match (from, to) {
+		| (PduCount::Normal(from), PduCount::Normal(to)) => {
+			let key: &[u64] = &[to, from];
+			self.db
+				.tofrom_relation
+				.aput_raw::<BUFSIZE, _, _>(key, []);
+		},
+		| _ => {}, // TODO: Relations with backfilled pdus
 	}
+}
 
-	#[allow(clippy::too_many_arguments)]
-	pub async fn get_relations<'a>(
-		&'a self,
-		user_id: &'a UserId,
-		room_id: &'a RoomId,
-		target: &'a EventId,
-		from: PduCount,
-		limit: usize,
-		max_depth: u8,
-		dir: Direction,
-	) -> Vec<(PduCount, impl Event)> {
-		let room_id = self.services.short.get_shortroomid(room_id);
+#[implement(Service)]
+pub fn get_relations<'a>(
+	&'a self,
+	shortroomid: ShortRoomId,
+	target: PduCount,
+	from: PduCount,
+	dir: Direction,
+	user_id: Option<&'a UserId>,
+) -> impl Stream<Item = (PduCount, Pdu)> + Send + '_ {
+	let target = target.to_be_bytes();
+	let from = from.saturating_inc(dir).to_be_bytes();
+	let mut buf = ArrayVec::<u8, 16>::new();
+	let start = {
+		buf.extend(target);
+		buf.extend(from);
+		buf.as_slice()
+	};
 
-		let target = self.services.timeline.get_pdu_count(target);
-
-		let Ok((room_id, target)) = try_join(room_id, target).await else {
-			return Vec::new();
-		};
-
-		let target = match target {
-			| PduCount::Normal(c) => c,
-			// TODO: Support backfilled relations
-			| _ => 0, // This will result in an empty iterator
-		};
-
-		let mut pdus: Vec<_> = self
+	match dir {
+		| Direction::Forward => self
 			.db
-			.get_relations(user_id, room_id, target.into(), from, dir)
-			.collect()
-			.await;
-
-		let mut stack: Vec<_> = pdus
-			.iter()
-			.filter(|_| max_depth > 0)
-			.map(|pdu| (pdu.clone(), 1))
-			.collect();
-
-		'limit: while let Some(stack_pdu) = stack.pop() {
-			let target = match stack_pdu.0.0 {
-				| PduCount::Normal(c) => c,
-				// TODO: Support backfilled relations
-				| PduCount::Backfilled(_) => 0, // This will result in an empty iterator
-			};
-
-			let relations: Vec<_> = self
-				.db
-				.get_relations(user_id, room_id, target.into(), from, dir)
-				.collect()
-				.await;
-
-			for relation in relations {
-				if stack_pdu.1 < max_depth {
-					stack.push((relation.clone(), stack_pdu.1.saturating_add(1)));
+			.tofrom_relation
+			.raw_keys_from(start)
+			.boxed(),
+		| Direction::Backward => self
+			.db
+			.tofrom_relation
+			.rev_raw_keys_from(start)
+			.boxed(),
+	}
+	.ignore_err()
+	.ready_take_while(move |key| key.starts_with(&target))
+	.map(|to_from| u64_from_u8(&to_from[8..16]))
+	.map(PduCount::from_unsigned)
+	.map(move |count| (user_id, shortroomid, count))
+	.wide_filter_map(async |(user_id, shortroomid, count)| {
+		let pdu_id: RawPduId = PduId { shortroomid, count }.into();
+		self.services
+			.timeline
+			.get_pdu_from_id(&pdu_id)
+			.map_ok(move |mut pdu| {
+				if user_id.is_none_or(|user_id| pdu.sender() != user_id) {
+					pdu.as_mut_pdu()
+						.remove_transaction_id()
+						.log_err()
+						.ok();
 				}
 
-				if pdus.len() < limit {
-					pdus.push(relation);
-				} else {
-					break 'limit;
-				}
-			}
-		}
-
-		pdus
-	}
-
-	#[tracing::instrument(skip_all, level = "debug")]
-	pub fn mark_as_referenced<'a, I>(&self, room_id: &RoomId, event_ids: I)
-	where
-		I: Iterator<Item = &'a EventId>,
-	{
-		self.db.mark_as_referenced(room_id, event_ids);
-	}
-
-	#[tracing::instrument(skip(self), level = "debug")]
-	pub async fn is_event_referenced(&self, room_id: &RoomId, event_id: &EventId) -> bool {
-		self.db
-			.is_event_referenced(room_id, event_id)
+				(count, pdu)
+			})
 			.await
-	}
+			.ok()
+	})
+}
 
-	#[tracing::instrument(skip(self), level = "debug")]
-	pub fn mark_event_soft_failed(&self, event_id: &EventId) {
-		self.db.mark_event_soft_failed(event_id);
+#[implement(Service)]
+#[tracing::instrument(skip_all, level = "debug")]
+pub fn mark_as_referenced<'a, I>(&self, room_id: &RoomId, event_ids: I)
+where
+	I: Iterator<Item = &'a EventId>,
+{
+	for prev in event_ids {
+		let key = (room_id, prev);
+		self.db.referencedevents.put_raw(key, []);
 	}
+}
 
-	#[tracing::instrument(skip(self), level = "debug")]
-	pub async fn is_event_soft_failed(&self, event_id: &EventId) -> bool {
-		self.db.is_event_soft_failed(event_id).await
-	}
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub async fn is_event_referenced(&self, room_id: &RoomId, event_id: &EventId) -> bool {
+	let key = (room_id, event_id);
+	self.db.referencedevents.qry(&key).await.is_ok()
+}
 
-	#[tracing::instrument(skip(self), level = "debug")]
-	pub async fn delete_all_referenced_for_room(&self, room_id: &RoomId) -> Result {
-		self.db
-			.delete_all_referenced_for_room(room_id)
-			.await
-	}
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub fn mark_event_soft_failed(&self, event_id: &EventId) {
+	self.db.softfailedeventids.insert(event_id, []);
+}
+
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub async fn is_event_soft_failed(&self, event_id: &EventId) -> bool {
+	self.db
+		.softfailedeventids
+		.get(event_id)
+		.await
+		.is_ok()
+}
+
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub async fn delete_all_referenced_for_room(&self, room_id: &RoomId) -> Result {
+	let prefix = (room_id, Interfix);
+
+	self.db
+		.referencedevents
+		.keys_prefix_raw(&prefix)
+		.ignore_err()
+		.ready_for_each(|key| {
+			trace!(?key, "Removing key");
+			self.db.referencedevents.remove(key);
+		})
+		.await;
+
+	Ok(())
 }

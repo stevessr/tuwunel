@@ -1,5 +1,5 @@
 use axum::extract::State;
-use futures::StreamExt;
+use futures::{Stream, StreamExt, TryFutureExt, future::try_join};
 use ruma::{
 	EventId, RoomId, UInt, UserId,
 	api::{
@@ -15,9 +15,12 @@ use tuwunel_core::{
 	Result, at,
 	matrix::{
 		event::{Event, RelationTypeEqual},
-		pdu::PduCount,
+		pdu::{Pdu, PduCount},
 	},
-	utils::{IterStream, ReadyExt, result::FlatOk, stream::WidebandExt},
+	utils::{
+		result::FlatOk,
+		stream::{IterStream, ReadyExt, WidebandExt},
+	},
 };
 use tuwunel_service::Services;
 
@@ -99,6 +102,13 @@ pub(crate) async fn get_relating_events_route(
 }
 
 #[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+	name = "relations",
+	level = "debug",
+	skip_all,
+	fields(room_id, target, from, to, dir, limit, recurse),
+	ret(level = "trace")
+)]
 async fn paginate_relations_with_filter(
 	services: &Services,
 	sender_user: &UserId,
@@ -132,27 +142,24 @@ async fn paginate_relations_with_filter(
 	// Spec (v1.10) recommends depth of at least 3
 	let depth: u8 = if recurse { 3 } else { 1 };
 
-	let events: Vec<_> = services
-		.pdu_metadata
-		.get_relations(sender_user, room_id, target, start, limit, depth, dir)
-		.await
-		.into_iter()
-		.filter(|(_, pdu)| {
-			filter_event_type
-				.as_ref()
-				.is_none_or(|kind| kind == pdu.kind())
-		})
-		.filter(|(_, pdu)| {
-			filter_rel_type
-				.as_ref()
-				.is_none_or(|rel_type| rel_type.relation_type_equal(pdu))
-		})
-		.stream()
-		.ready_take_while(|(count, _)| Some(*count) != to)
-		.wide_filter_map(|item| visibility_filter(services, sender_user, item))
-		.take(limit)
-		.collect()
-		.await;
+	let events: Vec<_> =
+		get_relations(services, sender_user, room_id, target, start, limit, depth, dir)
+			.await
+			.ready_filter(|(_, pdu)| {
+				filter_event_type
+					.as_ref()
+					.is_none_or(|kind| kind == pdu.kind())
+			})
+			.ready_filter(|(_, pdu)| {
+				filter_rel_type
+					.as_ref()
+					.is_none_or(|rel_type| rel_type.relation_type_equal(pdu))
+			})
+			.ready_take_while(|(count, _)| Some(*count) != to)
+			.wide_filter_map(|item| visibility_filter(services, sender_user, item))
+			.take(limit)
+			.collect()
+			.await;
 
 	let next_batch = events
 		.last()
@@ -170,6 +177,79 @@ async fn paginate_relations_with_filter(
 			.map(Event::into_format)
 			.collect(),
 	})
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn get_relations(
+	services: &Services,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	target: &EventId,
+	from: PduCount,
+	limit: usize,
+	max_depth: u8,
+	dir: Direction,
+) -> impl Stream<Item = (PduCount, Pdu)> + Send {
+	let room_id = services.short.get_shortroomid(room_id);
+
+	let target = services
+		.timeline
+		.get_pdu_count(target)
+		.map_ok(|target| {
+			match target {
+				| PduCount::Normal(count) => count,
+				| _ => {
+					// TODO: Support backfilled relations
+					0 // This will result in an empty iterator
+				},
+			}
+		});
+
+	let Ok((room_id, target)) = try_join(room_id, target).await else {
+		return Vec::new().into_iter().stream();
+	};
+
+	let mut pdus: Vec<_> = services
+		.pdu_metadata
+		.get_relations(room_id, target.into(), from, dir, Some(sender_user))
+		.collect()
+		.await;
+
+	let mut stack: Vec<_> = pdus
+		.iter()
+		.filter(|_| max_depth > 0)
+		.map(|pdu| (pdu.clone(), 1))
+		.collect();
+
+	'limit: while let Some(stack_pdu) = stack.pop() {
+		let target = match stack_pdu.0.0 {
+			| PduCount::Normal(c) => c,
+			| PduCount::Backfilled(_) => {
+				// TODO: Support backfilled relations
+				0 // This will result in an empty iterator
+			},
+		};
+
+		let relations: Vec<_> = services
+			.pdu_metadata
+			.get_relations(room_id, target.into(), from, dir, Some(sender_user))
+			.collect()
+			.await;
+
+		for relation in relations {
+			if stack_pdu.1 < max_depth {
+				stack.push((relation.clone(), stack_pdu.1.saturating_add(1)));
+			}
+
+			if pdus.len() < limit {
+				pdus.push(relation);
+			} else {
+				break 'limit;
+			}
+		}
+	}
+
+	pdus.into_iter().stream()
 }
 
 async fn visibility_filter<Pdu: Event>(
