@@ -395,7 +395,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: complement_output-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}.jsonl
-        path: ./complement.jsonl
+        path: ./tests/complement/logs.jsonl
         if-no-files-found: ignore
 
     - name: Accept

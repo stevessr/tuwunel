@@ -94,7 +94,7 @@ public/
 rustc-ice-*
 
 # complement test logs are huge
-tests/test_results/complement/test_logs.jsonl
+tests/complement/logs.jsonl
 
 # cargo profiles from -Z self-profile
 *.mm_profdata

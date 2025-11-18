@@ -82,7 +82,7 @@ if test "$CI" = "true"; then
 fi
 
 output_src="$cid:/usr/src/complement/full_output.jsonl"
-output_dst="complement.jsonl"
+output_dst="tests/complement/logs.jsonl"
 extract_output() {
 	docker cp "$output_src" "$output_dst"
 }
