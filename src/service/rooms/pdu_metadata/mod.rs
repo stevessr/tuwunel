@@ -65,12 +65,19 @@ pub fn get_relations<'a>(
 	&'a self,
 	shortroomid: ShortRoomId,
 	target: PduCount,
-	from: PduCount,
+	from: Option<PduCount>,
 	dir: Direction,
 	user_id: Option<&'a UserId>,
 ) -> impl Stream<Item = (PduCount, Pdu)> + Send + '_ {
 	let target = target.to_be_bytes();
-	let from = from.saturating_inc(dir).to_be_bytes();
+	let from = from
+		.map(|from| from.saturating_inc(dir))
+		.unwrap_or_else(|| match dir {
+			| Direction::Backward => PduCount::max(),
+			| Direction::Forward => PduCount::default(),
+		})
+		.to_be_bytes();
+
 	let mut buf = ArrayVec::<u8, 16>::new();
 	let start = {
 		buf.extend(target);
@@ -79,15 +86,15 @@ pub fn get_relations<'a>(
 	};
 
 	match dir {
-		| Direction::Forward => self
-			.db
-			.tofrom_relation
-			.raw_keys_from(start)
-			.boxed(),
 		| Direction::Backward => self
 			.db
 			.tofrom_relation
 			.rev_raw_keys_from(start)
+			.boxed(),
+		| Direction::Forward => self
+			.db
+			.tofrom_relation
+			.raw_keys_from(start)
 			.boxed(),
 	}
 	.ignore_err()
