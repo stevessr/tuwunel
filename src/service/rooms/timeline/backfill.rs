@@ -14,7 +14,7 @@ use ruma::{
 };
 use serde_json::value::RawValue as RawJsonValue;
 use tuwunel_core::{
-	Result, debug, debug_info, debug_warn, implement, is_false,
+	Result, at, debug, debug_info, debug_warn, implement, is_false,
 	matrix::{
 		event::Event,
 		pdu::{PduCount, PduId, RawPduId},
@@ -177,11 +177,19 @@ pub async fn backfill_pdu(
 
 	let ((_, event_id, value), mutex_lock) = try_join(parsed, mutex_lock).await?;
 
-	self.services
+	let existed = self
+		.services
 		.event_handler
 		.handle_incoming_pdu(origin, room_id, &event_id, value, false)
 		.boxed()
-		.await?;
+		.await?
+		.map(at!(1))
+		.is_some_and(is_false!());
+
+	// Bail if the PDU already exists; a duplicate insertion is not good.
+	if existed {
+		return Ok(());
+	}
 
 	let pdu = self.get_pdu(&event_id);
 
@@ -194,6 +202,8 @@ pub async fn backfill_pdu(
 	let (pdu, value, shortroomid, insert_lock) =
 		try_join4(pdu, value, shortroomid, insert_lock).await?;
 
+	// A pdu_id is not returned from handle_incoming_pdu() when accepting a new
+	// event on this codepath. The pdu_id is instead created here in ℤ−
 	let count = self.services.globals.next_count();
 	let count: i64 = (*count).try_into()?;
 	let pdu_id: RawPduId = PduId {
