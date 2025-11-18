@@ -218,12 +218,12 @@ async fn get_relations(
 	let mut stack: Vec<_> = pdus
 		.iter()
 		.filter(|_| max_depth > 0)
-		.map(|pdu| (pdu.clone(), 1))
+		.map(|(count, _)| (*count, 1))
 		.collect();
 
-	'limit: while let Some(stack_pdu) = stack.pop() {
-		let target = match stack_pdu.0.0 {
-			| PduCount::Normal(c) => c,
+	'limit: while let Some((count, depth)) = stack.pop() {
+		let target = match count {
+			| PduCount::Normal(count) => count,
 			| PduCount::Backfilled(_) => {
 				// TODO: Support backfilled relations
 				0 // This will result in an empty iterator
@@ -236,13 +236,13 @@ async fn get_relations(
 			.collect()
 			.await;
 
-		for relation in relations {
-			if stack_pdu.1 < max_depth {
-				stack.push((relation.clone(), stack_pdu.1.saturating_add(1)));
+		for (count, pdu) in relations {
+			if depth < max_depth {
+				stack.push((count, depth.saturating_add(1)));
 			}
 
 			if pdus.len() < limit {
-				pdus.push(relation);
+				pdus.push((count, pdu));
 			} else {
 				break 'limit;
 			}
