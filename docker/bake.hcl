@@ -1716,7 +1716,7 @@ cargo_installs = [
     "cargo-deb",
     "cargo-generate-rpm",
     "cargo-valgrind",
-    #"lychee",
+    "lychee",
     "mdbook",
     "typos-cli",
 ]
