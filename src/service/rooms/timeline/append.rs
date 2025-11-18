@@ -33,7 +33,7 @@ use crate::rooms::{short::ShortRoomId, state_compressor::CompressedState};
 	skip_all,
 	ret(Debug)
 )]
-pub async fn append_incoming_pdu<'a, Leafs>(
+pub(crate) async fn append_incoming_pdu<'a, Leafs>(
 	&'a self,
 	pdu: &'a PduEvent,
 	pdu_json: CanonicalJsonObject,

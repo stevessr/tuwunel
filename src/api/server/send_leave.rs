@@ -11,7 +11,7 @@ use ruma::{
 	},
 };
 use serde_json::value::RawValue as RawJsonValue;
-use tuwunel_core::{Err, Result, err, matrix::event::gen_event_id_canonical_json};
+use tuwunel_core::{Err, Result, at, err, matrix::event::gen_event_id_canonical_json};
 use tuwunel_service::Services;
 
 use crate::Ruma;
@@ -151,6 +151,7 @@ async fn create_leave_event(
 		.handle_incoming_pdu(origin, room_id, &event_id, value, true)
 		.boxed()
 		.await?
+		.map(at!(0))
 		.ok_or_else(|| err!(Request(InvalidParam("Could not accept as timeline event."))))?;
 
 	drop(mutex_lock);

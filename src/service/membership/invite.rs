@@ -5,7 +5,7 @@ use ruma::{
 	events::room::member::{MembershipState, RoomMemberEventContent},
 };
 use tuwunel_core::{
-	Err, Result, err, implement, matrix::event::gen_event_id_canonical_json, pdu::PduBuilder,
+	Err, Result, at, err, implement, matrix::event::gen_event_id_canonical_json, pdu::PduBuilder,
 };
 
 use super::Service;
@@ -135,6 +135,7 @@ async fn remote_invite(
 		.event_handler
 		.handle_incoming_pdu(&origin, room_id, &event_id, value, true)
 		.await?
+		.map(at!(0))
 		.ok_or_else(|| {
 			err!(Request(InvalidParam("Could not accept incoming PDU as timeline event.")))
 		})?;

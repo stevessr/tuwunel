@@ -57,11 +57,11 @@ pub async fn handle_incoming_pdu<'a>(
 	event_id: &'a EventId,
 	pdu: CanonicalJsonObject,
 	is_timeline_event: bool,
-) -> Result<Option<RawPduId>> {
+) -> Result<Option<(RawPduId, bool)>> {
 	// 1. Skip the PDU if we already have it as a timeline event
 	if let Ok(pdu_id) = self.services.timeline.get_pdu_id(event_id).await {
 		trace!(?event_id, "exists");
-		return Ok(Some(pdu_id));
+		return Ok(Some((pdu_id, false)));
 	}
 
 	// 1.1 Check the server is in the room

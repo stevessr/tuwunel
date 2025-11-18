@@ -11,7 +11,7 @@ use ruma::{
 	serde::JsonObject,
 };
 use tuwunel_core::{
-	Err, Result, err,
+	Err, Result, at, err,
 	matrix::{event::gen_event_id_canonical_json, pdu::PduEvent},
 	warn,
 };
@@ -170,6 +170,7 @@ pub(crate) async fn create_knock_event_v1_route(
 		.handle_incoming_pdu(&origin, &body.room_id, &event_id, value.clone(), true)
 		.boxed()
 		.await?
+		.map(at!(0))
 		.ok_or_else(|| err!(Request(InvalidParam("Could not accept as timeline event."))))?;
 
 	drop(mutex_lock);

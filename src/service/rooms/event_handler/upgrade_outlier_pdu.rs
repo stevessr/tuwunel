@@ -28,7 +28,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 	val: CanonicalJsonObject,
 	room_version: &RoomVersionId,
 	create_event_id: &EventId,
-) -> Result<Option<RawPduId>> {
+) -> Result<Option<(RawPduId, bool)>> {
 	// Skip the PDU if we already have it as a timeline event
 	if let Ok(pduid) = self
 		.services
@@ -36,7 +36,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 		.get_pdu_id(incoming_pdu.event_id())
 		.await
 	{
-		return Ok(Some(pduid));
+		return Ok(Some((pduid, false)));
 	}
 
 	if self
@@ -270,5 +270,5 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 		"Accepted",
 	);
 
-	Ok(pdu_id)
+	Ok(pdu_id.zip(Some(true)))
 }
