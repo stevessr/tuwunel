@@ -87,7 +87,7 @@ where
 		level = "debug",
 		skip(services),
 		err(level = "debug")
-		ret,
+		ret(level = "trace"),
 	)]
 	async fn from_request(
 		request: hyper::Request<Body>,

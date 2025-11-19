@@ -19,7 +19,7 @@ use tuwunel_service::Services;
 	name = "request",
 	level = "debug",
 	skip_all,
-	err(Debug)
+	err(Debug, level = "debug")
 	fields(
 		id = %services
 			.server
@@ -71,6 +71,7 @@ pub(crate) async fn handle(
 	level = "debug",
 	parent = parent,
 	skip_all,
+	ret(level = "trace"),
 )]
 #[allow(unused_variables)]
 async fn execute(
