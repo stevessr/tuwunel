@@ -327,20 +327,27 @@ async fn handle_room(
 		.boxed()
 		.await;
 
-	let (heroes, hero_name, heroes_avatar) = calculate_heroes(
-		services,
-		sender_user,
-		room_id,
-		room_name.as_ref(),
-		room_avatar.as_deref(),
-	)
-	.await?;
+	let heroes: OptionFuture<_> = services
+		.config
+		.calculate_heroes
+		.then(|| {
+			calculate_heroes(
+				services,
+				sender_user,
+				room_id,
+				room_name.as_ref(),
+				room_avatar.as_deref(),
+			)
+		})
+		.into();
+
+	let (heroes, heroes_name, heroes_avatar) = heroes.await.unwrap_or_default();
 
 	Ok(response::Room {
 		initial: roomsince.eq(&0).then_some(true),
 		lists: lists.clone(),
 		membership: membership.clone(),
-		name: room_name.or(hero_name),
+		name: room_name.or(heroes_name),
 		avatar: JsOption::from_option(room_avatar.or(heroes_avatar)),
 		is_dm,
 		heroes,
@@ -365,8 +372,9 @@ async fn calculate_heroes(
 	room_id: &RoomId,
 	room_name: Option<&DisplayName>,
 	room_avatar: Option<&MxcUri>,
-) -> Result<(Option<Heroes>, Option<DisplayName>, Option<OwnedMxcUri>)> {
+) -> (Option<Heroes>, Option<DisplayName>, Option<OwnedMxcUri>) {
 	const MAX_HEROES: usize = 5;
+
 	let heroes: Heroes = services
 		.state_cache
 		.room_members(room_id)
@@ -443,5 +451,5 @@ async fn calculate_heroes(
 		})
 		.flatten();
 
-	Ok((Some(heroes), hero_name, heroes_avatar))
+	(Some(heroes), hero_name, heroes_avatar)
 }

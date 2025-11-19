@@ -1262,7 +1262,10 @@ async fn calculate_counts(
 
 	let small_room = joined_member_count.saturating_add(invited_member_count) <= 5;
 
-	let heroes: OptionFuture<_> = small_room
+	let heroes: OptionFuture<_> = services
+		.config
+		.calculate_heroes
+		.and_is(small_room)
 		.then(|| calculate_heroes(services, room_id, sender_user))
 		.into();
 

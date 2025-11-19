@@ -1336,6 +1336,17 @@ pub struct Config {
 	#[serde(default)]
 	pub push_everything: bool,
 
+	/// Setting to false disables the heroes calculation made by sliding and
+	/// legacy client sync. The heroes calculation is mandated by the Matrix
+	/// specification and your client may not operate properly unless this
+	/// option is set to true.
+	///
+	/// This option is intended for custom software deployments seeking purely
+	/// to minimize unused resources; the overall savings are otherwise
+	/// negligible.
+	#[serde(default = "true_fn")]
+	pub calculate_heroes: bool,
+
 	/// Allow local (your server only) presence updates/requests.
 	///
 	/// Note that presence on tuwunel is very fast unlike Synapse's. If using
