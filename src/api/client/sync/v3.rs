@@ -1275,28 +1275,23 @@ async fn calculate_heroes(
 	sender_user: &UserId,
 ) -> Vec<OwnedUserId> {
 	services
-		.timeline
-		.all_pdus(sender_user, room_id)
-		.ready_filter(|(_, pdu)| pdu.kind == RoomMember)
-		.fold_default(|heroes: Vec<_>, (_, pdu)| {
+		.state_accessor
+		.room_state_type_pdus(room_id, &StateEventType::RoomMember)
+		.ready_filter_map(Result::ok)
+		.fold_default(|heroes: Vec<_>, pdu| {
 			fold_hero(heroes, services, room_id, sender_user, pdu)
 		})
 		.await
 }
 
-async fn fold_hero(
+async fn fold_hero<Pdu: Event>(
 	mut heroes: Vec<OwnedUserId>,
 	services: &Services,
 	room_id: &RoomId,
 	sender_user: &UserId,
-	pdu: PduEvent,
+	pdu: Pdu,
 ) -> Vec<OwnedUserId> {
-	let Some(user_id): Option<&UserId> = pdu
-		.state_key
-		.as_deref()
-		.map(TryInto::try_into)
-		.flat_ok()
-	else {
+	let Some(user_id): Option<&UserId> = pdu.state_key().map(TryInto::try_into).flat_ok() else {
 		return heroes;
 	};
 
