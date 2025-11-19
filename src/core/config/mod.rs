@@ -2044,6 +2044,17 @@ pub struct Config {
 	#[serde(default)]
 	pub allow_invalid_tls_certificates: bool,
 
+	/// Sets the `Access-Control-Allow-Origin` header included by this server in
+	/// all responses. A list of multiple values can be specified. The default
+	/// is an empty list. The actual header defaults to `*` upon an empty list.
+	///
+	/// There is no reason to configure this without specific intent. Incorrect
+	/// values may degrade or disrupt clients.
+	///
+	/// default: []
+	#[serde(default)]
+	pub access_control_allow_origin: BTreeSet<String>,
+
 	/// Backport state-reset security fixes to all room versions.
 	///
 	/// This option applies the State Resolution 2.1 mitigation developed during

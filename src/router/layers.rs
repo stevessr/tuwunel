@@ -12,7 +12,7 @@ use http::{
 use tower::ServiceBuilder;
 use tower_http::{
 	catch_panic::CatchPanicLayer,
-	cors::{self, CorsLayer},
+	cors::{AllowOrigin, CorsLayer},
 	sensitive_headers::SetSensitiveHeadersLayer,
 	set_header::SetResponseHeaderLayer,
 	timeout::{RequestBodyTimeoutLayer, ResponseBodyTimeoutLayer, TimeoutLayer},
@@ -138,30 +138,48 @@ fn compression_layer(server: &Server) -> tower_http::compression::CompressionLay
 	compression_layer
 }
 
-fn cors_layer(_server: &Server) -> CorsLayer {
+fn cors_layer(server: &Server) -> CorsLayer {
 	const METHODS: [Method; 7] = [
+		Method::DELETE,
 		Method::GET,
 		Method::HEAD,
+		Method::OPTIONS,
 		Method::PATCH,
 		Method::POST,
 		Method::PUT,
-		Method::DELETE,
-		Method::OPTIONS,
 	];
 
 	let headers: [HeaderName; 5] = [
-		header::ORIGIN,
-		HeaderName::from_lowercase(b"x-requested-with").unwrap(),
-		header::CONTENT_TYPE,
 		header::ACCEPT,
 		header::AUTHORIZATION,
+		header::CONTENT_TYPE,
+		header::ORIGIN,
+		HeaderName::from_lowercase(b"x-requested-with").unwrap(),
 	];
 
+	let allow_origin_list = server
+		.config
+		.access_control_allow_origin
+		.iter()
+		.map(AsRef::as_ref)
+		.map(HeaderValue::from_str)
+		.filter_map(Result::ok);
+
+	let allow_origin = if !server
+		.config
+		.access_control_allow_origin
+		.is_empty()
+	{
+		AllowOrigin::list(allow_origin_list)
+	} else {
+		AllowOrigin::any()
+	};
+
 	CorsLayer::new()
-		.allow_origin(cors::Any)
+		.max_age(Duration::from_secs(86400))
 		.allow_methods(METHODS)
 		.allow_headers(headers)
-		.max_age(Duration::from_secs(86400))
+		.allow_origin(allow_origin)
 }
 
 fn body_limit_layer(server: &Server) -> DefaultBodyLimit {

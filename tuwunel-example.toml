@@ -1754,6 +1754,15 @@
 #
 #config_reload_signal = true
 
+# Sets the `Access-Control-Allow-Origin` header included by this server in
+# all responses. A list of multiple values can be specified. The default
+# is an empty list. The actual header defaults to `*` upon an empty list.
+#
+# There is no reason to configure this without specific intent. Incorrect
+# values may degrade or disrupt clients.
+#
+#access_control_allow_origin = []
+
 # Backport state-reset security fixes to all room versions.
 #
 # This option applies the State Resolution 2.1 mitigation developed during
