@@ -37,7 +37,8 @@ pub(crate) async fn get_supported_versions_route(
 			"v1.3".to_owned(),
 			"v1.4".to_owned(),
 			"v1.5".to_owned(),
-			"v1.11".to_owned(),
+			"v1.10".to_owned(), // relations recursion
+			"v1.11".to_owned(), // authenticated media
 		],
 		unstable_features: BTreeMap::from_iter([
 			("org.matrix.e2e_cross_signing".to_owned(), true),
