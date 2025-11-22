@@ -42,7 +42,7 @@ jobs:
       publish: ${{vars.PUBLISH != 'false'}}
       build_nix: ${{vars.BUILD_NIX != 'false'}}
       build_pkgs: ${{vars.BUILD_PKGS || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/test' || contains(github.ref, 'tags/v')}}
-      check_pkgs: ${{vars.CHECK_PKGS || 'false'}}
+      check_pkgs: ${{vars.CHECK_PKGS || github.ref == 'refs/heads/test'}}
       complement: ${{vars.COMPLEMENT != 'false'}}
       complement_runner: 'het'
       docker_repo: ${{vars.DOCKER_REPO}}
