@@ -9,9 +9,9 @@ mod well_known;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tuwunel_core::{Result, arrayvec::ArrayString, utils::MutexMap};
+use tuwunel_core::{Result, arrayvec::ArrayString, smallstr::SmallString, utils::MutexMap};
 
-use self::{cache::Cache, dns::Resolver};
+use self::{cache::Cache, dns::Resolver, fed::FedDest};
 
 pub struct Service {
 	pub cache: Arc<Cache>,
@@ -20,6 +20,7 @@ pub struct Service {
 	services: Arc<crate::services::OnceServices>,
 }
 
+pub(crate) type DestString = SmallString<[u8; 40]>;
 type Resolving = MutexMap<NameBuf, ()>;
 type NameBuf = ArrayString<256>;
 

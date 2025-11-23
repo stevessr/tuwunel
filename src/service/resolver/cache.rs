@@ -11,7 +11,7 @@ use tuwunel_core::{
 };
 use tuwunel_database::{Cbor, Deserialized, Map};
 
-use super::fed::FedDest;
+use super::{DestString, FedDest};
 
 pub struct Cache {
 	destinations: Arc<Map>,
@@ -21,7 +21,7 @@ pub struct Cache {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct CachedDest {
 	pub dest: FedDest,
-	pub host: String,
+	pub host: DestString,
 	pub expire: SystemTime,
 }
 
@@ -30,7 +30,7 @@ pub struct CachedOverride {
 	pub ips: IpAddrs,
 	pub port: u16,
 	pub expire: SystemTime,
-	pub overriding: Option<String>,
+	pub overriding: Option<DestString>,
 }
 
 pub type IpAddrs = ArrayVec<IpAddr, MAX_IPS>;

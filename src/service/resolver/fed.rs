@@ -1,20 +1,24 @@
 use std::{
-	borrow::Cow,
 	fmt,
 	net::{IpAddr, SocketAddr},
 };
 
 use serde::{Deserialize, Serialize};
-use tuwunel_core::{arrayvec::ArrayString, utils::math::Expected};
+use tuwunel_core::{arrayvec::ArrayString, smallstr::SmallString, utils::math::Expected};
+
+use super::DestString;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub enum FedDest {
 	Literal(SocketAddr),
-	Named(String, PortString),
+	Named(HostString, PortString),
 }
 
-/// numeric or service-name
-pub type PortString = ArrayString<16>;
+/// FedDest::Named host domain
+pub(super) type HostString = SmallString<[u8; 32]>;
+
+/// FedDest::Named numeric or service-name
+pub(super) type PortString = ArrayString<16>;
 
 const DEFAULT_PORT: &str = ":8448";
 
@@ -35,31 +39,31 @@ pub(crate) fn add_port_to_hostname(dest: &str) -> FedDest {
 	};
 
 	FedDest::Named(
-		host.to_owned(),
+		host.into(),
 		PortString::from(port).unwrap_or_else(|_| FedDest::default_port()),
 	)
 }
 
 impl FedDest {
-	pub(crate) fn https_string(&self) -> String {
+	pub(crate) fn https_string(&self) -> DestString {
 		match self {
-			| Self::Literal(addr) => format!("https://{addr}"),
-			| Self::Named(host, port) => format!("https://{host}{port}"),
+			| Self::Literal(addr) => format!("https://{addr}").into(),
+			| Self::Named(host, port) => format!("https://{host}{port}").into(),
 		}
 	}
 
-	pub(crate) fn uri_string(&self) -> String {
+	pub(crate) fn uri_string(&self) -> DestString {
 		match self {
-			| Self::Literal(addr) => addr.to_string(),
-			| Self::Named(host, port) => format!("{host}{port}"),
+			| Self::Literal(addr) => addr.to_string().into(),
+			| Self::Named(host, port) => [host.as_str(), port.as_str()].concat().into(),
 		}
 	}
 
 	#[inline]
-	pub(crate) fn hostname(&self) -> Cow<'_, str> {
+	pub(crate) fn hostname(&self) -> HostString {
 		match &self {
 			| Self::Literal(addr) => addr.ip().to_string().into(),
-			| Self::Named(host, _) => host.into(),
+			| Self::Named(host, _) => host.clone(),
 		}
 	}
 

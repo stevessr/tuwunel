@@ -10,19 +10,20 @@ use ruma::ServerName;
 use tuwunel_core::{Err, Result, debug, debug_info, err, error, trace};
 
 use super::{
+	DestString, FedDest,
 	cache::{CachedDest, CachedOverride, MAX_IPS},
-	fed::{FedDest, PortString, add_port_to_hostname, get_ip_with_port},
+	fed::{PortString, add_port_to_hostname, get_ip_with_port},
 };
 
 #[derive(Clone, Debug)]
 pub(crate) struct ActualDest {
 	pub(crate) dest: FedDest,
-	pub(crate) host: String,
+	pub(crate) host: DestString,
 }
 
 impl ActualDest {
 	#[inline]
-	pub(crate) fn string(&self) -> String { self.dest.https_string() }
+	pub(crate) fn to_string(&self) -> DestString { self.dest.https_string() }
 }
 
 impl super::Service {
@@ -65,7 +66,7 @@ impl super::Service {
 		cache: bool,
 	) -> Result<CachedDest> {
 		self.validate_dest(dest)?;
-		let mut host = dest.as_str().to_owned();
+		let mut host: DestString = dest.as_str().into();
 		let actual_dest = match get_ip_with_port(dest.as_str()) {
 			| Some(host_port) => Self::actual_dest_1(host_port)?,
 			| None =>
@@ -77,7 +78,7 @@ impl super::Service {
 					self.services.server.check_running()?;
 					match self.request_well_known(dest.as_str()).await? {
 						| Some(delegated) =>
-							self.actual_dest_3(&mut host, cache, delegated)
+							self.actual_dest_3(&mut host, cache, &delegated)
 								.await?,
 						| _ => match self.query_srv_record(dest.as_str()).await? {
 							| Some(overrider) =>
@@ -94,16 +95,16 @@ impl super::Service {
 		let host = if let Ok(addr) = host.parse::<SocketAddr>() {
 			FedDest::Literal(addr)
 		} else if let Ok(addr) = host.parse::<IpAddr>() {
-			FedDest::Named(addr.to_string(), FedDest::default_port())
+			FedDest::Named(addr.to_string().into(), FedDest::default_port())
 		} else if let Some(pos) = host.find(':') {
 			let (host, port) = host.split_at(pos);
 			FedDest::Named(
-				host.to_owned(),
+				host.into(),
 				port.try_into()
 					.unwrap_or_else(|_| FedDest::default_port()),
 			)
 		} else {
-			FedDest::Named(host, FedDest::default_port())
+			FedDest::Named(host.as_str().into(), FedDest::default_port())
 		};
 
 		debug!("Actual destination: {actual_dest:?} hostname: {host:?}");
@@ -126,7 +127,7 @@ impl super::Service {
 			.await?;
 
 		Ok(FedDest::Named(
-			host.to_owned(),
+			host.into(),
 			port.try_into()
 				.unwrap_or_else(|_| FedDest::default_port()),
 		))
@@ -134,20 +135,20 @@ impl super::Service {
 
 	async fn actual_dest_3(
 		&self,
-		host: &mut String,
+		host: &mut DestString,
 		cache: bool,
-		delegated: String,
+		delegated: &str,
 	) -> Result<FedDest> {
 		debug!("3: A .well-known file is available");
-		*host = add_port_to_hostname(&delegated).uri_string();
-		match get_ip_with_port(&delegated) {
+		*host = add_port_to_hostname(delegated).uri_string();
+		match get_ip_with_port(delegated) {
 			| Some(host_and_port) => Self::actual_dest_3_1(host_and_port),
 			| None =>
 				if let Some(pos) = delegated.find(':') {
 					self.actual_dest_3_2(cache, delegated, pos).await
 				} else {
 					trace!("Delegated hostname has no port in this branch");
-					match self.query_srv_record(&delegated).await? {
+					match self.query_srv_record(delegated).await? {
 						| Some(overrider) =>
 							self.actual_dest_3_3(cache, delegated, overrider)
 								.await,
@@ -162,19 +163,14 @@ impl super::Service {
 		Ok(host_and_port)
 	}
 
-	async fn actual_dest_3_2(
-		&self,
-		cache: bool,
-		delegated: String,
-		pos: usize,
-	) -> Result<FedDest> {
+	async fn actual_dest_3_2(&self, cache: bool, delegated: &str, pos: usize) -> Result<FedDest> {
 		debug!("3.2: Hostname with port in .well-known file");
 		let (host, port) = delegated.split_at(pos);
 		self.conditional_query_and_cache(host, port.parse::<u16>().unwrap_or(8448), cache)
 			.await?;
 
 		Ok(FedDest::Named(
-			host.to_owned(),
+			host.into(),
 			port.try_into()
 				.unwrap_or_else(|_| FedDest::default_port()),
 		))
@@ -183,13 +179,13 @@ impl super::Service {
 	async fn actual_dest_3_3(
 		&self,
 		cache: bool,
-		delegated: String,
+		delegated: &str,
 		overrider: FedDest,
 	) -> Result<FedDest> {
 		debug!("3.3: SRV lookup successful");
 		let force_port = overrider.port();
 		self.conditional_query_and_cache_override(
-			&delegated,
+			delegated,
 			&overrider.hostname(),
 			force_port.unwrap_or(8448),
 			cache,
@@ -198,7 +194,7 @@ impl super::Service {
 
 		if let Some(port) = force_port {
 			return Ok(FedDest::Named(
-				delegated,
+				delegated.into(),
 				format!(":{port}")
 					.as_str()
 					.try_into()
@@ -206,14 +202,15 @@ impl super::Service {
 			));
 		}
 
-		Ok(add_port_to_hostname(&delegated))
+		Ok(add_port_to_hostname(delegated))
 	}
 
-	async fn actual_dest_3_4(&self, cache: bool, delegated: String) -> Result<FedDest> {
+	async fn actual_dest_3_4(&self, cache: bool, delegated: &str) -> Result<FedDest> {
 		debug!("3.4: No SRV records, just use the hostname from .well-known");
-		self.conditional_query_and_cache(&delegated, 8448, cache)
+		self.conditional_query_and_cache(delegated, 8448, cache)
 			.await?;
-		Ok(add_port_to_hostname(&delegated))
+
+		Ok(add_port_to_hostname(delegated))
 	}
 
 	async fn actual_dest_4(
@@ -234,9 +231,8 @@ impl super::Service {
 
 		if let Some(port) = force_port {
 			let port = format!(":{port}");
-
 			return Ok(FedDest::Named(
-				host.to_owned(),
+				host.into(),
 				PortString::from(port.as_str()).unwrap_or_else(|_| FedDest::default_port()),
 			));
 		}
@@ -334,7 +330,7 @@ impl super::Service {
 								.target()
 								.to_string()
 								.trim_end_matches('.')
-								.to_owned(),
+								.into(),
 							format!(":{}", result.port())
 								.as_str()
 								.try_into()
