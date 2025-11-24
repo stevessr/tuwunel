@@ -1182,6 +1182,7 @@ async fn calculate_state_changes<'a>(
 				.state_accessor
 				.state_full_shortids(horizon_shortstatehash)
 				.expect_ok()
+				.boxed()
 				.into_future()
 		})
 		.into();

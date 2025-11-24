@@ -46,13 +46,14 @@ pub async fn exists(&self, room_id: &RoomId) -> bool {
 	};
 
 	// Look for PDUs in that room.
-	self.db
+	let keys = self
+		.db
 		.pduid_pdu
 		.keys_prefix_raw(&prefix)
-		.ignore_err()
-		.next()
-		.await
-		.is_some()
+		.ignore_err();
+
+	pin_mut!(keys);
+	keys.next().await.is_some()
 }
 
 #[implement(Service)]

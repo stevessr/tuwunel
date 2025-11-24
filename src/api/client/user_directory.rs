@@ -34,7 +34,7 @@ pub(crate) async fn search_users_route(
 		.min(LIMIT_MAX);
 
 	let search_term = body.search_term.to_lowercase();
-	let mut users = services
+	let users = services
 		.users
 		.stream()
 		.ready_filter(|&user_id| user_id != sender_user)
@@ -83,6 +83,7 @@ pub(crate) async fn search_users_route(
 				})
 		});
 
+	pin_mut!(users);
 	let results = users.by_ref().take(limit).collect().await;
 	let limited = users.next().await.is_some();
 

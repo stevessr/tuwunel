@@ -1,6 +1,6 @@
 use std::{borrow::Borrow, fmt::Debug, mem::size_of_val, sync::Arc};
 
-use futures::{FutureExt, Stream, StreamExt};
+use futures::{FutureExt, Stream, StreamExt, pin_mut};
 use ruma::{EventId, OwnedRoomId, RoomId, events::StateEventType};
 use serde::Deserialize;
 pub use tuwunel_core::matrix::{ShortEventId, ShortId, ShortRoomId, ShortStateKey};
@@ -245,10 +245,14 @@ pub async fn get_shortroomid(&self, room_id: &RoomId) -> Result<ShortRoomId> {
 
 #[implement(Service)]
 pub async fn get_roomid_from_short(&self, shortroomid_: ShortRoomId) -> Result<OwnedRoomId> {
-	self.db
+	let stream = self
+		.db
 		.roomid_shortroomid
 		.stream()
-		.ready_filter_map(Result::ok)
+		.ready_filter_map(Result::ok);
+
+	pin_mut!(stream);
+	stream
 		.ready_find(|&(_, shortroomid)| shortroomid == shortroomid_)
 		.map(|found| found.map(|(room_id, _): (&RoomId, ShortRoomId)| room_id.to_owned()))
 		.await

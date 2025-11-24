@@ -1,6 +1,6 @@
 use std::{convert::AsRef, fmt::Debug, sync::Arc};
 
-use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt, future::Either};
 use rocksdb::Direction;
 use serde::{Deserialize, Serialize};
 use tokio::task;
@@ -83,11 +83,12 @@ where
 	let state = stream::State::new(self, opts);
 	if is_cached(self, from) {
 		let state = state.init_fwd(from.as_ref().into());
-		return task::consume_budget()
-			.map(move |()| stream::Items::<'_>::from(state))
-			.into_stream()
-			.flatten()
-			.boxed();
+		return Either::Left(
+			task::consume_budget()
+				.map(move |()| stream::Items::<'_>::from(state))
+				.into_stream()
+				.flatten(),
+		);
 	}
 
 	let seek = Seek {
@@ -98,13 +99,14 @@ where
 		res: None,
 	};
 
-	self.engine
-		.pool
-		.execute_iter(seek)
-		.ok_into::<stream::Items<'_>>()
-		.into_stream()
-		.try_flatten()
-		.boxed()
+	Either::Right(
+		self.engine
+			.pool
+			.execute_iter(seek)
+			.ok_into::<stream::Items<'_>>()
+			.into_stream()
+			.try_flatten(),
+	)
 }
 
 #[tracing::instrument(

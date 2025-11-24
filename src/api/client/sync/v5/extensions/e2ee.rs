@@ -170,6 +170,7 @@ async fn collect_room(
 				.ready_filter(|&user_id| user_id != sender_user)
 				.map(ToOwned::to_owned)
 				.map(|user_id| (MembershipState::Join, user_id))
+				.boxed()
 				.into_future()
 		})
 		.into();

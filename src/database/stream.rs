@@ -22,7 +22,7 @@ pub(crate) struct State<'a> {
 	init: bool,
 }
 
-pub(crate) trait Cursor<'a, T> {
+pub(crate) trait Cursor<'a, T>: Send {
 	fn state(&self) -> &State<'a>;
 
 	fn fetch(&self) -> Option<T>;
@@ -50,12 +50,12 @@ impl<'a> State<'a> {
 	#[inline]
 	pub(super) fn new(map: &'a Arc<Map>, opts: ReadOptions) -> Self {
 		Self {
+			init: true,
+			seek: false,
 			inner: map
 				.engine()
 				.db
 				.raw_iterator_cf_opt(&map.cf(), opts),
-			init: true,
-			seek: false,
 		}
 	}
 

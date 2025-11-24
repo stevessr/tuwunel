@@ -1,6 +1,9 @@
 use std::{convert::AsRef, fmt::Debug, sync::Arc};
 
-use futures::{Future, FutureExt, TryFutureExt, future::ready};
+use futures::{
+	Future, FutureExt, TryFutureExt,
+	future::{Either, ready},
+};
 use rocksdb::{DBPinnableSlice, ReadOptions};
 use tokio::task;
 use tuwunel_core::{Err, Result, err, implement, utils::result::MapExpect};
@@ -25,9 +28,9 @@ where
 
 	let cached = self.get_cached(key);
 	if matches!(cached, Err(_) | Ok(Some(_))) {
-		return task::consume_budget()
-			.map(move |()| cached.map_expect("data found in cache"))
-			.boxed();
+		return Either::Left(
+			task::consume_budget().map(move |()| cached.map_expect("data found in cache")),
+		);
 	}
 
 	debug_assert!(matches!(cached, Ok(None)), "expected status Incomplete");
@@ -37,11 +40,12 @@ where
 		res: None,
 	};
 
-	self.engine
-		.pool
-		.execute_get(cmd)
-		.and_then(|mut res| ready(res.remove(0)))
-		.boxed()
+	Either::Right(
+		self.engine
+			.pool
+			.execute_get(cmd)
+			.and_then(|mut res| ready(res.remove(0))),
+	)
 }
 
 /// Fetch a value from the cache without I/O.

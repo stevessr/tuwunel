@@ -108,6 +108,7 @@ pub fn room_state_keys_with_ids<'a>(
 		.map_ok(|shortstatehash| {
 			self.state_keys_with_ids(shortstatehash, event_type)
 				.map(Ok)
+				.boxed()
 		})
 		.map_err(move |e| err!(Database("Missing state for {room_id:?}: {e:?}")))
 		.try_flatten_stream()
@@ -127,6 +128,7 @@ pub fn room_state_keys<'a>(
 		.map_ok(|shortstatehash| {
 			self.state_keys(shortstatehash, event_type)
 				.map(Ok)
+				.boxed()
 		})
 		.map_err(move |e| err!(Database("Missing state for {room_id:?}: {e:?}")))
 		.try_flatten_stream()

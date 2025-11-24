@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use futures::StreamExt;
+use futures::{StreamExt, pin_mut};
 use ruma::{Mxc, OwnedMxcUri, UserId, http_headers::ContentDisposition};
 use tuwunel_core::{
 	Err, Result, debug, debug_info, err,
@@ -109,11 +109,14 @@ impl Data {
 		let dim: &[u32] = &[dim.width, dim.height];
 		let prefix = (mxc, dim, Interfix);
 
-		let key = self
+		let keys = self
 			.mediaid_file
 			.keys_prefix_raw(&prefix)
 			.ignore_err()
-			.map(ToOwned::to_owned)
+			.map(ToOwned::to_owned);
+
+		pin_mut!(keys);
+		let key = keys
 			.next()
 			.await
 			.ok_or_else(|| err!(Request(NotFound("Media not found"))))?;

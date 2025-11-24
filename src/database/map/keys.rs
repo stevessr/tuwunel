@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt, future::Either};
 use rocksdb::Direction;
 use serde::Deserialize;
 use tokio::task;
@@ -27,11 +27,12 @@ pub fn raw_keys(self: &Arc<Self>) -> impl Stream<Item = Result<Key<'_>>> + Send 
 	let state = stream::State::new(self, opts);
 	if is_cached(self) {
 		let state = state.init_fwd(None);
-		return task::consume_budget()
-			.map(move |()| stream::Keys::<'_>::from(state))
-			.into_stream()
-			.flatten()
-			.boxed();
+		return Either::Left(
+			task::consume_budget()
+				.map(move |()| stream::Keys::<'_>::from(state))
+				.into_stream()
+				.flatten(),
+		);
 	}
 
 	let seek = Seek {
@@ -42,11 +43,12 @@ pub fn raw_keys(self: &Arc<Self>) -> impl Stream<Item = Result<Key<'_>>> + Send 
 		res: None,
 	};
 
-	self.engine
-		.pool
-		.execute_iter(seek)
-		.ok_into::<stream::Keys<'_>>()
-		.into_stream()
-		.try_flatten()
-		.boxed()
+	Either::Right(
+		self.engine
+			.pool
+			.execute_iter(seek)
+			.ok_into::<stream::Keys<'_>>()
+			.into_stream()
+			.try_flatten(),
+	)
 }
