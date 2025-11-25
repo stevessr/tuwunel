@@ -172,13 +172,14 @@ impl Error {
 	/// Returns the Matrix error code / error kind
 	#[inline]
 	pub fn kind(&self) -> ruma::api::client::error::ErrorKind {
-		use ruma::api::client::error::ErrorKind::{FeatureDisabled, Unknown};
+		use ruma::api::client::error::ErrorKind::{FeatureDisabled, NotJson, Unknown};
 
 		match self {
+			| Self::FeatureDisabled(..) => FeatureDisabled,
+			| Self::CanonicalJson(..) | Self::Json(..) => NotJson,
+			| Self::BadRequest(kind, ..) | Self::Request(kind, ..) => kind.clone(),
 			| Self::Federation(_, error) | Self::Ruma(error) =>
 				response::ruma_error_kind(error).clone(),
-			| Self::BadRequest(kind, ..) | Self::Request(kind, ..) => kind.clone(),
-			| Self::FeatureDisabled(..) => FeatureDisabled,
 			| _ => Unknown,
 		}
 	}
@@ -189,15 +190,19 @@ impl Error {
 		use http::StatusCode;
 
 		match self {
+			| Self::Conflict(_) => StatusCode::CONFLICT, // room alias exists
 			| Self::Federation(_, error) | Self::Ruma(error) => error.status_code,
-			| Self::Request(kind, _, code) => response::status_code(kind, *code),
+			| Self::FeatureDisabled(..)
+			| Self::CanonicalJson(..)
+			| Self::Json(..)
+			| Self::JsParseInt(..)
+			| Self::JsTryFromInt(..) => response::bad_request_code(&self.kind()),
 			| Self::BadRequest(kind, ..) => response::bad_request_code(kind),
-			| Self::FeatureDisabled(..) => response::bad_request_code(&self.kind()),
+			| Self::Request(kind, _, code) => response::status_code(kind, *code),
+			| Self::Io(error) => response::io_error_code(error.kind()),
 			| Self::Reqwest(error) => error
 				.status()
 				.unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-			| Self::Conflict(_) => StatusCode::CONFLICT,
-			| Self::Io(error) => response::io_error_code(error.kind()),
 			| _ => StatusCode::INTERNAL_SERVER_ERROR,
 		}
 	}
