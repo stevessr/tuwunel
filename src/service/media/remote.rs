@@ -320,8 +320,8 @@ where
 	Request: OutgoingRequest + Send + Debug,
 {
 	self.services
-		.sending
-		.send_federation_request(server.unwrap_or(mxc.server_name), request)
+		.federation
+		.execute(server.unwrap_or(mxc.server_name), request)
 		.await
 		.map_err(|error| handle_federation_error(mxc, user, server, error))
 }
@@ -374,8 +374,8 @@ pub async fn fetch_remote_thumbnail_legacy(
 	self.check_fetch_authorized(&mxc)?;
 	let response = self
 		.services
-		.sending
-		.send_federation_request(mxc.server_name, media::get_content_thumbnail::v3::Request {
+		.federation
+		.execute(mxc.server_name, media::get_content_thumbnail::v3::Request {
 			allow_remote: body.allow_remote,
 			height: body.height,
 			width: body.width,
@@ -414,8 +414,8 @@ pub async fn fetch_remote_content_legacy(
 	self.check_fetch_authorized(mxc)?;
 	let response = self
 		.services
-		.sending
-		.send_federation_request(mxc.server_name, media::get_content::v3::Request {
+		.federation
+		.execute(mxc.server_name, media::get_content::v3::Request {
 			allow_remote: true,
 			server_name: mxc.server_name.into(),
 			media_id: mxc.media_id.into(),

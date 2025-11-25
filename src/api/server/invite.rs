@@ -198,8 +198,8 @@ pub(crate) async fn create_invite_route(
 		for appservice in services.appservice.read().await.values() {
 			if appservice.is_user_match(&invited_user) {
 				services
-					.sending
-					.send_appservice_request(
+					.appservice
+					.send_request(
 						appservice.registration.clone(),
 						ruma::api::appservice::event::push_events::v1::Request {
 							events: vec![pdu.to_format()],

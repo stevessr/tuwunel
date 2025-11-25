@@ -37,13 +37,10 @@ pub(crate) async fn appservice_ping(
 	let timer = tokio::time::Instant::now();
 
 	let _response = services
-		.sending
-		.send_appservice_request(
-			appservice_info.registration.clone(),
-			ping::send_ping::v1::Request {
-				transaction_id: body.transaction_id.clone(),
-			},
-		)
+		.appservice
+		.send_request(appservice_info.registration.clone(), ping::send_ping::v1::Request {
+			transaction_id: body.transaction_id.clone(),
+		})
 		.await?
 		.expect("We already validated if an appservice URL exists above");
 

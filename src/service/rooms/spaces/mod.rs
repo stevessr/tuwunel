@@ -170,8 +170,8 @@ async fn get_summary_and_children_federation(
 		.iter()
 		.map(|server| {
 			self.services
-				.sending
-				.send_federation_request(server, request.clone())
+				.federation
+				.execute(server, request.clone())
 		})
 		.collect();
 

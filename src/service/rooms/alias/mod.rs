@@ -151,8 +151,8 @@ impl Service {
 
 		let response = self
 			.services
-			.sending
-			.send_federation_request(server, request)
+			.federation
+			.execute(server, request)
 			.await?;
 
 		Ok((response.room_id, response.servers))
@@ -257,8 +257,8 @@ impl Service {
 			if appservice.aliases.is_match(room_alias.as_str())
 				&& matches!(
 					self.services
-						.sending
-						.send_appservice_request(
+						.appservice
+						.send_request(
 							appservice.registration.clone(),
 							query_room_alias::v1::Request { room_alias: room_alias.to_owned() },
 						)

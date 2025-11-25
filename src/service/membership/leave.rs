@@ -243,14 +243,11 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 	{
 		let make_leave_response = self
 			.services
-			.sending
-			.send_federation_request(
-				&remote_server,
-				federation::membership::prepare_leave_event::v1::Request {
-					room_id: room_id.to_owned(),
-					user_id: user_id.to_owned(),
-				},
-			)
+			.federation
+			.execute(&remote_server, federation::membership::prepare_leave_event::v1::Request {
+				room_id: room_id.to_owned(),
+				user_id: user_id.to_owned(),
+			})
 			.await;
 
 		make_leave_response_and_server = make_leave_response.map(|r| (r, remote_server));
@@ -317,19 +314,16 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 	let leave_event = leave_event_stub;
 
 	self.services
-		.sending
-		.send_federation_request(
-			&remote_server,
-			federation::membership::create_leave_event::v2::Request {
-				room_id: room_id.to_owned(),
-				event_id,
-				pdu: self
-					.services
-					.federation
-					.format_pdu_into(leave_event.clone(), Some(&room_version_id))
-					.await,
-			},
-		)
+		.federation
+		.execute(&remote_server, federation::membership::create_leave_event::v2::Request {
+			room_id: room_id.to_owned(),
+			event_id,
+			pdu: self
+				.services
+				.federation
+				.format_pdu_into(leave_event.clone(), Some(&room_version_id))
+				.await,
+		})
 		.await?;
 
 	Ok(())

@@ -125,8 +125,8 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 		debug_info!("Asking {backfill_server} for backfill");
 		if let Ok(response) = self
 			.services
-			.sending
-			.send_federation_request(backfill_server, request)
+			.federation
+			.execute(backfill_server, request)
 			.inspect_err(|e| {
 				warn!("{backfill_server} failed backfilling for room {room_id}: {e}");
 			})
