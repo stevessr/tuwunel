@@ -2,7 +2,7 @@ use std::{ops::Deref, sync::Arc};
 
 use tuwunel_service::Services;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct State {
 	services: *const Services,
 }
