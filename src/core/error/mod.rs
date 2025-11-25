@@ -4,16 +4,21 @@ mod panic;
 mod response;
 mod serde;
 
-use std::{any::Any, borrow::Cow, convert::Infallible, sync::PoisonError};
+use std::{
+	any::Any,
+	borrow::Cow,
+	convert::Infallible,
+	sync::{OnceLock, PoisonError},
+};
 
 pub use self::{err::visit, log::*};
 
 #[derive(thiserror::Error)]
 pub enum Error {
 	#[error("PANIC!")]
-	PanicAny(Box<dyn Any + Send>),
+	PanicAny(OnceLock<Box<dyn Any + Send>>),
 	#[error("PANIC! {0}")]
-	Panic(&'static str, Box<dyn Any + Send + 'static>),
+	Panic(&'static str, OnceLock<Box<dyn Any + Send + 'static>>),
 
 	// std
 	#[error(transparent)]
@@ -27,7 +32,7 @@ pub enum Error {
 	#[error(transparent)]
 	ParseInt(#[from] std::num::ParseIntError),
 	#[error(transparent)]
-	Std(#[from] Box<dyn std::error::Error + Send>),
+	Std(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 	#[error(transparent)]
 	SystemTime(#[from] std::time::SystemTimeError),
 	#[error(transparent)]
