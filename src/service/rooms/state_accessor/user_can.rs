@@ -5,10 +5,15 @@ use ruma::{
 		room::{
 			history_visibility::{HistoryVisibility, RoomHistoryVisibilityEventContent},
 			member::{MembershipState, RoomMemberEventContent},
+			tombstone::RoomTombstoneEventContent,
 		},
 	},
 };
-use tuwunel_core::{Err, Result, implement, matrix::Event, pdu::PduBuilder};
+use tuwunel_core::{
+	Err, Result, implement,
+	matrix::{Event, StateKey},
+	pdu::PduBuilder,
+};
 
 use crate::rooms::state::RoomMutexGuard;
 
@@ -176,6 +181,37 @@ pub async fn user_can_invite(
 				&RoomMemberEventContent::new(MembershipState::Invite),
 			),
 			sender,
+			room_id,
+			state_lock,
+		)
+		.await
+		.is_ok()
+}
+
+#[implement(super::Service)]
+pub async fn user_can_tombstone(
+	&self,
+	room_id: &RoomId,
+	user_id: &UserId,
+	state_lock: &RoomMutexGuard,
+) -> bool {
+	if !self
+		.services
+		.state_cache
+		.is_joined(user_id, room_id)
+		.await
+	{
+		return false;
+	}
+
+	self.services
+		.timeline
+		.create_hash_and_sign_event(
+			PduBuilder::state(StateKey::new(), &RoomTombstoneEventContent {
+				replacement_room: room_id.into(), // placeholder,
+				body: "Not a valid m.room.tombstone.".into(),
+			}),
+			user_id,
 			room_id,
 			state_lock,
 		)
