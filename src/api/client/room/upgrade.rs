@@ -3,7 +3,7 @@ use std::cmp::max;
 use axum::extract::State;
 use futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use ruma::{
-	CanonicalJsonObject, OwnedEventId, OwnedRoomId, RoomId, RoomVersionId, UserId,
+	CanonicalJsonObject, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, RoomVersionId, UserId,
 	api::client::room::upgrade_room::v3,
 	events::{
 		StateEventType, TimelineEventType,
@@ -15,11 +15,14 @@ use ruma::{
 		},
 	},
 	int,
-	room_version_rules::RoomIdFormatVersion,
+	room_version_rules::{RoomIdFormatVersion, RoomVersionRules},
 };
-use serde_json::{json, value::to_raw_value};
+use serde_json::{
+	Value as JsonValue, json,
+	value::{to_raw_value, to_value},
+};
 use tuwunel_core::{
-	Err, Result, err, error, implement, info,
+	Err, Result, debug_info, err, error, implement, info, is_equal_to, is_less_than,
 	matrix::{Event, StateKey, pdu::PduBuilder, room_version},
 	utils::{
 		future::TryExtExt,
@@ -43,14 +46,16 @@ const RECOMMENDED_TRANSFERABLE_STATE_EVENT_TYPES: &[StateEventType; 9] = &[
 	StateEventType::RoomPowerLevels,
 ];
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Debug)]
 struct RoomUpgradeContext<'a> {
 	services: &'a Services,
 	sender_user: &'a UserId,
-	new_room_id: &'a RoomId,
-	new_state_lock: &'a RoomMutexGuard,
 	old_room_id: &'a RoomId,
 	old_state_lock: &'a RoomMutexGuard,
+	new_room_id: &'a RoomId,
+	new_state_lock: &'a RoomMutexGuard,
+	new_version_rules: &'a RoomVersionRules,
+	additional_creators: &'a [OwnedUserId],
 }
 
 /// # `POST /_matrix/client/r0/rooms/{roomId}/upgrade`
@@ -81,12 +86,6 @@ pub(crate) async fn upgrade_room_route(
 		)));
 	}
 
-	if matches!(new_version, RoomVersionId::V12) {
-		return Err!(Request(UnsupportedRoomVersion(
-			"Upgrading to version 12 is still under development.",
-		)));
-	}
-
 	let old_room_id = &body.room_id;
 	let old_state_lock = services.state.mutex.lock(old_room_id).await;
 
@@ -112,21 +111,50 @@ pub(crate) async fn upgrade_room_route(
 			.map(ToOwned::to_owned),
 	};
 
+	debug_info!(
+		%sender_user,
+		%old_room_id,
+		last_event = ?predecessor.event_id,
+		?new_version,
+		"Attempting upgrade of room..."
+	);
+
 	let id_format = version_rules.room_id_format;
 	let (replacement_room, state_lock) = match id_format {
-		| RoomIdFormatVersion::V1 => upgrade_room_create_legacy(&services, &body, predecessor),
-		| _ => unimplemented!("Unexpected format {id_format:?} for room {new_version}"),
+		| RoomIdFormatVersion::V2 =>
+			upgrade_room_create(
+				&services,
+				sender_user,
+				old_room_id,
+				new_version,
+				&version_rules,
+				predecessor,
+				body.additional_creators.clone(),
+			)
+			.await,
+
+		| RoomIdFormatVersion::V1 =>
+			upgrade_room_create_legacy(
+				&services,
+				sender_user,
+				old_room_id,
+				new_version,
+				&version_rules,
+				predecessor,
+			)
+			.await,
 	}
-	.inspect_err(|e| error!(?body, "Upgrade creation event failed: {e}"))
-	.await?;
+	.inspect_err(|e| error!(?body, "Upgrade m.room.create event failed: {e}"))?;
 
 	let context = RoomUpgradeContext {
 		services: &services,
 		sender_user,
-		new_room_id: &replacement_room,
-		new_state_lock: &state_lock,
 		old_room_id: &body.room_id,
 		old_state_lock: &old_state_lock,
+		new_room_id: &replacement_room,
+		new_state_lock: &state_lock,
+		new_version_rules: &version_rules,
+		additional_creators: &body.additional_creators,
 	};
 
 	if let Err(e) = context.transfer_room().await {
@@ -146,6 +174,7 @@ pub(crate) async fn upgrade_room_route(
 	info!(
 		old_room_id = %context.old_room_id,
 		new_room_id = %context.new_room_id,
+		upgraded_by = %sender_user,
 		"Room upgraded",
 	);
 
@@ -153,14 +182,80 @@ pub(crate) async fn upgrade_room_route(
 }
 
 #[tracing::instrument(level = "info")]
+async fn upgrade_room_create(
+	services: &Services,
+	sender_user: &UserId,
+	old_room_id: &RoomId,
+	new_version: &RoomVersionId,
+	version_rules: &RoomVersionRules,
+	predecessor: PreviousRoom,
+	mut additional_creators: Vec<OwnedUserId>,
+) -> Result<(OwnedRoomId, RoomMutexGuard)> {
+	// Get the old room creation event
+	let mut content: CanonicalJsonObject = services
+		.state_accessor
+		.room_state_get_content(old_room_id, &StateEventType::RoomCreate, "")
+		.await
+		.map_err(|_| err!(Database("Found room without m.room.create event.")))?;
+
+	content.remove("creator");
+	content.insert("predecessor".into(), json!(predecessor).try_into()?);
+	content.insert("room_version".into(), json!(new_version).try_into()?);
+
+	if version_rules
+		.authorization
+		.additional_room_creators
+	{
+		additional_creators.sort();
+		additional_creators.dedup();
+		content.remove("additional_creators");
+		if !additional_creators.is_empty() {
+			content.insert("additional_creators".into(), json!(additional_creators).try_into()?);
+		}
+	}
+
+	// Validate creation event content
+	let raw_content = to_raw_value(&content)?;
+	if let Err(e) = serde_json::from_str::<CanonicalJsonObject>(raw_content.get()) {
+		return Err!(Request(BadJson("Error forming creation event: {e}")));
+	}
+
+	let room_id = ruma::room_id!("!thiswillbereplaced").to_owned();
+	let state_lock = services.state.mutex.lock(&room_id).await;
+	let create_event_id = services
+		.timeline
+		.build_and_append_pdu(
+			PduBuilder {
+				event_type: TimelineEventType::RoomCreate,
+				content: to_raw_value(&content)?,
+				state_key: Some(StateKey::new()),
+				..Default::default()
+			},
+			sender_user,
+			&room_id,
+			&state_lock,
+		)
+		.boxed()
+		.await?;
+
+	drop(state_lock);
+
+	// The real room_id is now the event_id.
+	let room_id = OwnedRoomId::from_parts('!', create_event_id.localpart(), None)?;
+	let state_lock = services.state.mutex.lock(&room_id).await;
+
+	Ok((room_id, state_lock))
+}
+
+#[tracing::instrument(level = "info")]
 async fn upgrade_room_create_legacy(
 	services: &Services,
-	body: &Ruma<v3::Request>,
+	sender_user: &UserId,
+	old_room_id: &RoomId,
+	new_version: &RoomVersionId,
+	version_rules: &RoomVersionRules,
 	predecessor: PreviousRoom,
 ) -> Result<(OwnedRoomId, RoomMutexGuard)> {
-	let sender_user = body.sender_user();
-	let old_room_id = &body.room_id;
-
 	// Create a replacement room
 	let new_room_id = RoomId::new_v1(services.globals.server_name());
 	let state_lock = services.state.mutex.lock(&new_room_id).await;
@@ -170,7 +265,7 @@ async fn upgrade_room_create_legacy(
 		.await;
 
 	// Get the old room creation event
-	let mut create_event_content: CanonicalJsonObject = services
+	let mut content: CanonicalJsonObject = services
 		.state_accessor
 		.room_state_get_content(old_room_id, &StateEventType::RoomCreate, "")
 		.await
@@ -180,18 +275,18 @@ async fn upgrade_room_create_legacy(
 	// room_version. "creator" key no longer exists in V11+ rooms.
 	{
 		use RoomVersionId::*;
-		match body.new_version {
+		match new_version {
 			| V1 | V2 | V3 | V4 | V5 | V6 | V7 | V8 | V9 | V10 =>
-				create_event_content.insert("creator".into(), json!(&sender_user).try_into()?),
-			| _ => create_event_content.remove("creator"),
+				content.insert("creator".into(), json!(&sender_user).try_into()?),
+			| _ => content.remove("creator"),
 		}
 	};
 
-	create_event_content.insert("predecessor".into(), json!(predecessor).try_into()?);
-	create_event_content.insert("room_version".into(), json!(&body.new_version).try_into()?);
+	content.insert("predecessor".into(), json!(predecessor).try_into()?);
+	content.insert("room_version".into(), json!(new_version).try_into()?);
 
 	// Validate creation event content
-	let raw_content = to_raw_value(&create_event_content)?;
+	let raw_content = to_raw_value(&content)?;
 	if let Err(e) = serde_json::from_str::<CanonicalJsonObject>(raw_content.get()) {
 		return Err!(Request(BadJson("Error forming creation event: {e}")));
 	}
@@ -201,7 +296,7 @@ async fn upgrade_room_create_legacy(
 		.build_and_append_pdu(
 			PduBuilder {
 				event_type: TimelineEventType::RoomCreate,
-				content: to_raw_value(&create_event_content)?,
+				content: to_raw_value(&content)?,
 				state_key: Some(StateKey::new()),
 				..Default::default()
 			},
@@ -279,17 +374,10 @@ async fn move_state_events(&self) -> Result {
 		})
 		.map(Ok)
 		.try_for_each(async |event| {
-			let builder = PduBuilder {
-				event_type: event.kind().clone(),
-				content: to_raw_value(event.content())?,
-				state_key: Some(StateKey::new()),
-				..Default::default()
-			};
-
 			self.services
 				.timeline
 				.build_and_append_pdu(
-					builder,
+					self.rebuild_state_event(&event)?,
 					self.sender_user,
 					self.new_room_id,
 					self.new_state_lock,
@@ -301,6 +389,53 @@ async fn move_state_events(&self) -> Result {
 				.await
 		})
 		.await
+}
+
+#[implement(RoomUpgradeContext, params = "<'_>")]
+#[tracing::instrument(level = "debug")]
+fn rebuild_state_event<Pdu: Event>(&self, event: &Pdu) -> Result<PduBuilder> {
+	let content = match event.kind() {
+		| TimelineEventType::RoomPowerLevels
+			if self
+				.new_version_rules
+				.authorization
+				.explicitly_privilege_room_creators =>
+		{
+			let mut content = event.get_content_as_value();
+
+			if let Some(users) = content
+				.get_mut("users")
+				.and_then(JsonValue::as_object_mut)
+			{
+				users.retain(|user_id, _pl| {
+					!self
+						.additional_creators
+						.iter()
+						.map(AsRef::as_ref)
+						.map(UserId::as_str)
+						.any(is_equal_to!(user_id.as_str()))
+						&& self.sender_user.as_str() != user_id.as_str()
+				});
+			}
+
+			if content["events"]["m.room.tombstone"]
+				.as_i64()
+				.is_none_or(is_less_than!(150))
+			{
+				content["events"]["m.room.tombstone"] = to_value(150)?;
+			}
+
+			to_raw_value(&content)?
+		},
+		| _ => to_raw_value(event.content())?,
+	};
+
+	Ok(PduBuilder {
+		content,
+		event_type: event.kind().clone(),
+		state_key: event.state_key().map(Into::into),
+		..Default::default()
+	})
 }
 
 // Moves any local aliases to the new room
@@ -339,7 +474,7 @@ async fn tombstone_old_room(&self) -> Result<OwnedEventId> {
 		.timeline
 		.build_and_append_pdu(
 			PduBuilder::state(StateKey::new(), &RoomTombstoneEventContent {
-				body: "This room has been upgraded".to_owned(),
+				body: "This room has been upgraded.".to_owned(),
 				replacement_room: self.new_room_id.to_owned(),
 			}),
 			self.sender_user,
