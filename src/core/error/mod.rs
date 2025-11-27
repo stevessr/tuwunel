@@ -8,17 +8,18 @@ use std::{
 	any::Any,
 	borrow::Cow,
 	convert::Infallible,
-	sync::{OnceLock, PoisonError},
+	sync::{Mutex, PoisonError},
 };
 
 pub use self::{err::visit, log::*};
+use crate::utils::{assert_ref_unwind_safe, assert_send, assert_sync, assert_unwind_safe};
 
 #[derive(thiserror::Error)]
 pub enum Error {
 	#[error("PANIC!")]
-	PanicAny(OnceLock<Box<dyn Any + Send>>),
+	PanicAny(Mutex<Box<dyn Any + Send>>),
 	#[error("PANIC! {0}")]
-	Panic(&'static str, OnceLock<Box<dyn Any + Send + 'static>>),
+	Panic(&'static str, Mutex<Box<dyn Any + Send + 'static>>),
 
 	// std
 	#[error(transparent)]
@@ -140,6 +141,11 @@ pub enum Error {
 	#[error("{0}")]
 	Err(Cow<'static, str>),
 }
+
+static _IS_SEND: () = assert_send::<Error>();
+static _IS_SYNC: () = assert_sync::<Error>();
+static _IS_UNWIND_SAFE: () = assert_unwind_safe::<Error>();
+static _IS_REF_UNWIND_SAFE: () = assert_ref_unwind_safe::<Error>();
 
 impl Error {
 	#[inline]

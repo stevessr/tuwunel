@@ -23,8 +23,8 @@ impl Error {
 	pub fn into_panic(self) -> Box<dyn Any + Send> {
 		match self {
 			| Self::JoinError(e) => e.into_panic(),
-			| Self::Panic(_, mut e) | Self::PanicAny(mut e) =>
-				e.take().expect("Error contained panic"),
+			| Self::Panic(_, e) | Self::PanicAny(e) =>
+				e.into_inner().expect("Error contained panic"),
 			| _ => Box::new(self),
 		}
 	}
