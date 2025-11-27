@@ -3,10 +3,10 @@ mod items_rev;
 mod keys;
 mod keys_rev;
 
-use std::sync::Arc;
+use std::{mem::replace, sync::Arc};
 
 use rocksdb::{DBRawIteratorWithThreadMode, ReadOptions};
-use tuwunel_core::{Result, utils::exchange};
+use tuwunel_core::Result;
 
 pub(crate) use self::{items::Items, items_rev::ItemsRev, keys::Keys, keys_rev::KeysRev};
 use crate::{
@@ -94,7 +94,7 @@ impl<'a> State<'a> {
 	#[inline]
 	#[cfg_attr(unabridged, tracing::instrument(level = "trace", skip_all))]
 	pub(super) fn seek_fwd(&mut self) {
-		if !exchange(&mut self.init, false) {
+		if !replace(&mut self.init, false) {
 			self.inner.next();
 		} else if !self.seek {
 			self.inner.seek_to_first();
@@ -104,7 +104,7 @@ impl<'a> State<'a> {
 	#[inline]
 	#[cfg_attr(unabridged, tracing::instrument(level = "trace", skip_all))]
 	pub(super) fn seek_rev(&mut self) {
-		if !exchange(&mut self.init, false) {
+		if !replace(&mut self.init, false) {
 			self.inner.prev();
 		} else if !self.seek {
 			self.inner.seek_to_last();
