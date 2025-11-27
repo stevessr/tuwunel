@@ -212,7 +212,7 @@ pub fn get_shared_rooms<'a>(
 ) -> impl Stream<Item = &RoomId> + Send + 'a {
 	use tuwunel_core::utils::set;
 
-	let a = self.rooms_joined(user_a).boxed();
+	let a = self.rooms_joined(user_a);
 	let b = self.rooms_joined(user_b).boxed();
 
 	set::intersection_sorted_stream2(a, b)
