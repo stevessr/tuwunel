@@ -912,6 +912,26 @@ pub struct Config {
 	#[serde(default)]
 	pub log_to_stderr: bool,
 
+	/// Setting to false disables the logging/tracing system at a lower level.
+	/// In contrast to configuring an empty `log` string where the system is
+	/// still operating but muted, when this option is false the system was not
+	/// initialized and is not operating. Changing this option has no effect
+	/// after startup. This option is intended for developers and expert use
+	/// only: configuring an empty log string is preferred over using this.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub log_enable: bool,
+
+	/// Setting to false disables the logging/tracing system at a lower level
+	/// similar to `log_enable`. In this case the system is configured normally,
+	/// but not registered as the global handler in the final steps. This option
+	/// is for developers and expert use only.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub log_global_default: bool,
+
 	/// OpenID token expiration/TTL in seconds.
 	///
 	/// These are the OpenID tokens that are primarily used for Matrix account
