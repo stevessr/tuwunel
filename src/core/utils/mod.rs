@@ -42,6 +42,14 @@ pub use self::{
 	},
 };
 
+pub const fn assert_send<T: Send>() {}
+pub const fn assert_sync<T: Sync>() {}
+pub const fn assert_dst<T: ?Sized>() {}
+pub const fn assert_sized<T: Sized>() {}
+pub const fn assert_unpin<T: Unpin>() {}
+pub const fn assert_unwind_safe<T: std::panic::UnwindSafe>() {}
+pub const fn assert_ref_unwind_safe<T: std::panic::RefUnwindSafe>() {}
+
 #[macro_export]
 macro_rules! extract_variant {
 	( $e:expr_2021, $( $variant:path )|* ) => {
