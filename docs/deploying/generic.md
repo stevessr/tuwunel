@@ -1,9 +1,9 @@
 # Generic deployment documentation
 
-> ### Getting help
+> [!TIP]
 >
-> If you run into any problems while setting up Tuwunel [open an issue on
-> GitHub](https://github.com/matrix-construct/tuwunel/issues/new).
+> Getting help: If you run into any problems while setting up Tuwunel
+> [open an issue on GitHub](https://github.com/matrix-construct/tuwunel/issues/new).
 
 ## Installing Tuwunel
 
