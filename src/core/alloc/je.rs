@@ -117,6 +117,12 @@ pub fn memory_stats(opts: &str) -> Option<String> {
 }
 
 unsafe extern "C" fn malloc_stats_cb(opaque: *mut c_void, msg: *const c_char) {
+	catch_unwind(move || handle_malloc_stats(opaque, msg))
+		.map_err(|_| abort())
+		.ok();
+}
+
+fn handle_malloc_stats(opaque: *mut c_void, msg: *const c_char) {
 	// SAFETY: we have to trust the opaque points to our String
 	let res: &mut String = unsafe {
 		opaque
