@@ -29,7 +29,7 @@ pub static malloc_conf: &[u8] = const_str::concat_bytes!(
 	",metadata_thp:always",
 	",background_thread:true",
 	",max_background_threads:-1",
-	MALLOC_CONF_PROF,
+	//MALLOC_CONF_PROF,
 	0
 );
 
@@ -38,12 +38,12 @@ pub static malloc_conf: &[u8] = const_str::concat_bytes!(
 	feature = "jemalloc_prof",
 	target_arch = "x86_64",
 ))]
-const MALLOC_CONF_PROF: &str = ",prof_active:false";
+const _MALLOC_CONF_PROF: &str = ",prof_active:false";
 #[cfg(all(
 	feature = "jemalloc_conf",
 	any(not(feature = "jemalloc_prof"), not(target_arch = "x86_64")),
 ))]
-const MALLOC_CONF_PROF: &str = "";
+const _MALLOC_CONF_PROF: &str = "";
 
 #[global_allocator]
 static JEMALLOC: jemalloc::Jemalloc = jemalloc::Jemalloc;
@@ -62,7 +62,8 @@ fn _static_initialization() {
 }
 
 #[must_use]
-#[cfg(feature = "jemalloc_stats")]
+#[cfg(disable)]
+//#[cfg(feature = "jemalloc_stats")]
 pub fn memory_usage() -> Option<String> {
 	use mallctl::stats;
 
@@ -91,7 +92,7 @@ pub fn memory_usage() -> Option<String> {
 }
 
 #[must_use]
-#[cfg(not(feature = "jemalloc_stats"))]
+//#[cfg(not(feature = "jemalloc_stats"))]
 pub fn memory_usage() -> Option<String> { None }
 
 pub fn memory_stats(opts: &str) -> Option<String> {
