@@ -231,6 +231,10 @@ version = "0.1"
 [workspace.dependencies.itertools]
 version = "0.14"
 
+[workspace.dependencies.jevmalloc]
+git = "https://github.com/matrix-construct/jevmalloc"
+rev = "29fde02533ee2c6a5e9b87095324e6f7a5d43738"
+
 [workspace.dependencies.jsonwebtoken]
 version = "9.3"
 default-features = false
@@ -368,7 +372,7 @@ default-features = false
 
 [workspace.dependencies.rust-rocksdb]
 git = "https://github.com/matrix-construct/rust-rocksdb"
-rev = "2c0ad2ac6d933f61afb4c79ee2f965ffe2293774"
+rev = "31e6f8dd4a531b379c132e82773efc9315b0489a"
 default-features = false
 features = [
 	"bzip2",
@@ -476,30 +480,6 @@ default-features = false
 [workspace.dependencies.thiserror]
 version = "2.0"
 default-features = false
-
-[workspace.dependencies.tikv-jemallocator]
-git = "https://github.com/matrix-construct/jemallocator"
-rev = "03bed96afbbc898bef4d4f7d335c0519e3d1afad"
-default-features = false
-features = [
-	"background_threads_runtime_support",
-	"unprefixed_malloc_on_supported_platforms",
-]
-
-[workspace.dependencies.tikv-jemalloc-ctl]
-git = "https://github.com/matrix-construct/jemallocator"
-rev = "03bed96afbbc898bef4d4f7d335c0519e3d1afad"
-default-features = false
-features = ["use_std"]
-
-[workspace.dependencies.tikv-jemalloc-sys]
-git = "https://github.com/matrix-construct/jemallocator"
-rev = "03bed96afbbc898bef4d4f7d335c0519e3d1afad"
-default-features = false
-features = [
-	"background_threads_runtime_support",
-	"unprefixed_malloc_on_supported_platforms",
-]
 
 [workspace.dependencies.tokio]
 version = "1.48"

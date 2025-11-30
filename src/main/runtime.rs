@@ -174,15 +174,8 @@ fn set_worker_affinity() {
 }
 
 #[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
-fn set_worker_mallctl(id: usize) {
-	use tuwunel_core::alloc::je::{
-		is_affine_arena,
-		this_thread::{set_arena, set_muzzy_decay},
-	};
-
-	if is_affine_arena() {
-		set_arena(id).log_debug_err().ok();
-	}
+fn set_worker_mallctl(_id: usize) {
+	use tuwunel_core::alloc::je::this_thread::set_muzzy_decay;
 
 	let muzzy_option = GC_MUZZY
 		.get()
