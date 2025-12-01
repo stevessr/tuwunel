@@ -50,7 +50,7 @@ use tuwunel_core::{
 	trace,
 	utils::{
 		self, BoolExt, FutureBoolExt, IterStream, ReadyExt, TryFutureExtExt,
-		future::{OptionStream, ReadyEqExt},
+		future::{OptionStream, ReadyBoolExt},
 		math::ruma_from_u64,
 		result::MapExpect,
 		stream::{BroadbandExt, Tools, TryExpect, WidebandExt},
@@ -539,7 +539,7 @@ async fn handle_left_room(
 		return Ok(None);
 	}
 
-	let is_not_found = services.metadata.exists(room_id).eq(&false);
+	let is_not_found = services.metadata.exists(room_id).is_false();
 
 	let is_disabled = services.metadata.is_disabled(room_id);
 

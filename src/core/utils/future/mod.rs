@@ -2,6 +2,7 @@ mod bool_ext;
 mod ext_ext;
 mod option_ext;
 mod option_stream;
+mod ready_bool_ext;
 mod ready_eq_ext;
 mod try_ext_ext;
 
@@ -10,6 +11,7 @@ pub use self::{
 	ext_ext::ExtExt,
 	option_ext::OptionExt,
 	option_stream::OptionStream,
+	ready_bool_ext::ReadyBoolExt,
 	ready_eq_ext::ReadyEqExt,
 	try_ext_ext::TryExtExt,
 };

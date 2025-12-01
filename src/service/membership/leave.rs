@@ -13,7 +13,7 @@ use tuwunel_core::{
 	Err, Result, debug_info, debug_warn, err, implement,
 	matrix::PduCount,
 	pdu::PduBuilder,
-	utils::{self, FutureBoolExt, future::ReadyEqExt},
+	utils::{self, FutureBoolExt, future::ReadyBoolExt},
 	warn,
 };
 
@@ -74,13 +74,13 @@ pub async fn leave(
 		.services
 		.state_cache
 		.server_in_room(self.services.globals.server_name(), room_id)
-		.eq(&false);
+		.is_false();
 
 	let not_knocked = self
 		.services
 		.state_cache
 		.is_knocked(user_id, room_id)
-		.eq(&false);
+		.is_false();
 
 	// Ask a remote server if we don't have this room and are not knocking on it
 	if remote_leave_now || dont_have_room.and(not_knocked).await {
