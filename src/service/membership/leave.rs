@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use futures::{FutureExt, StreamExt, TryFutureExt, pin_mut};
+use futures::{FutureExt, StreamExt, TryFutureExt, future::ready, pin_mut};
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, OwnedServerName, RoomId, UserId,
 	api::federation,
@@ -70,11 +70,22 @@ pub async fn leave(
 		return Ok(());
 	}
 
+	let member_event = self
+		.services
+		.state_accessor
+		.room_state_get_content::<RoomMemberEventContent>(
+			room_id,
+			&StateEventType::RoomMember,
+			user_id.as_str(),
+		)
+		.await;
+
 	let dont_have_room = self
 		.services
 		.state_cache
 		.server_in_room(self.services.globals.server_name(), room_id)
-		.is_false();
+		.is_false()
+		.and(ready(member_event.as_ref().is_err()));
 
 	let not_knocked = self
 		.services
@@ -122,16 +133,7 @@ pub async fn leave(
 			)
 			.await?;
 	} else {
-		let Ok(event) = self
-			.services
-			.state_accessor
-			.room_state_get_content::<RoomMemberEventContent>(
-				room_id,
-				&StateEventType::RoomMember,
-				user_id.as_str(),
-			)
-			.await
-		else {
+		let Ok(event) = member_event else {
 			debug_warn!(
 				"Trying to leave a room you are not a member of, marking room as left locally."
 			);
