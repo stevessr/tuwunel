@@ -806,10 +806,15 @@ async fn make_join_request(
 				return make_join_response_and_server;
 			}
 
-			if make_join_counter > 40 {
+			let max_attempts = self
+				.services
+				.config
+				.max_make_join_attempts_per_join_attempt;
+			if make_join_counter >= max_attempts {
+				warn!(?remote_server, "last make_join failure reason: {e}");
 				warn!(
-					"40 servers failed to provide valid make_join response, assuming no server \
-					 can assist in joining."
+					"{max_attempts} servers failed to provide valid make_join response, \
+					 assuming no server can assist in joining."
 				);
 				make_join_response_and_server =
 					Err!(BadServerResponse("No server available to assist in joining."));

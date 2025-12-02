@@ -1757,6 +1757,26 @@ pub struct Config {
 	)]
 	pub deprioritize_joins_through_servers: RegexSet,
 
+	/// Maximum make_join requests to attempt within each join attempt. Each
+	/// attempt tries a different server, as each server is only tried once;
+	/// though retries can occur when the join request as a whole is retried.
+	///
+	/// default: 48
+	#[serde(default = "default_max_make_join_attempts_per_join_attempt")]
+	pub max_make_join_attempts_per_join_attempt: usize,
+
+	/// Maximum join attempts to conduct per client join request. Each join
+	/// attempt consists of one or more make_join requests limited above, and a
+	/// single send_join request. This value allows for additional servers to
+	/// act as the join-server prior to reporting the last error back to the
+	/// client, which can be frustrating for users. Therefor the default value
+	/// is greater than one, but less than excessively exceeding the client's
+	/// request timeout, though that may not be avoidable in some cases.
+	///
+	/// default: 3
+	#[serde(default = "default_max_join_attempts_per_join_request")]
+	pub max_join_attempts_per_join_request: usize,
+
 	/// Retry failed and incomplete messages to remote servers immediately upon
 	/// startup. This is called bursting. If this is disabled, said messages may
 	/// not be delivered until more messages are queued for that server. Do not
@@ -2997,3 +3017,7 @@ fn default_deprioritize_joins_through_servers() -> RegexSet {
 }
 
 fn default_one_time_key_limit() -> usize { 256 }
+
+fn default_max_make_join_attempts_per_join_attempt() -> usize { 48 }
+
+fn default_max_join_attempts_per_join_request() -> usize { 3 }

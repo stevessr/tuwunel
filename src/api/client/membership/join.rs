@@ -5,7 +5,7 @@ use ruma::{
 	RoomId, RoomOrAliasId,
 	api::client::membership::{join_room_by_id, join_room_by_id_or_alias},
 };
-use tuwunel_core::Result;
+use tuwunel_core::{Result, warn};
 
 use super::banned_room_check;
 use crate::{Ruma, client::membership::get_join_params};
@@ -36,7 +36,8 @@ pub(crate) async fn join_room_by_id_route(
 
 	let state_lock = services.state.mutex.lock(&room_id).await;
 
-	services
+	let mut errors = 0_usize;
+	while let Err(e) = services
 		.membership
 		.join(
 			sender_user,
@@ -47,7 +48,17 @@ pub(crate) async fn join_room_by_id_route(
 			&state_lock,
 		)
 		.boxed()
-		.await?;
+		.await
+	{
+		errors = errors.saturating_add(1);
+		if errors >= services.config.max_join_attempts_per_join_request {
+			warn!(
+				"Several servers failed. Giving up for this request. Try again for different \
+				 server selection."
+			);
+			return Err(e);
+		}
+	}
 
 	drop(state_lock);
 
@@ -80,7 +91,8 @@ pub(crate) async fn join_room_by_id_or_alias_route(
 
 	let state_lock = services.state.mutex.lock(&room_id).await;
 
-	services
+	let mut errors = 0_usize;
+	while let Err(e) = services
 		.membership
 		.join(
 			sender_user,
@@ -91,7 +103,17 @@ pub(crate) async fn join_room_by_id_or_alias_route(
 			&state_lock,
 		)
 		.boxed()
-		.await?;
+		.await
+	{
+		errors = errors.saturating_add(1);
+		if errors >= services.config.max_join_attempts_per_join_request {
+			warn!(
+				"Several servers failed. Giving up for this request. Try again for different \
+				 server selection."
+			);
+			return Err(e);
+		}
+	}
 
 	drop(state_lock);
 

@@ -1516,6 +1516,22 @@
 #
 #deprioritize_joins_through_servers = ["matrix\.org"]
 
+# Maximum make_join requests to attempt within each join attempt. Each
+# attempt tries a different server, as each server is only tried once;
+# though retries can occur when the join request as a whole is retried.
+#
+#max_make_join_attempts_per_join_attempt = 48
+
+# Maximum join attempts to conduct per client join request. Each join
+# attempt consists of one or more make_join requests limited above, and a
+# single send_join request. This value allows for additional servers to
+# act as the join-server prior to reporting the last error back to the
+# client, which can be frustrating for users. Therefor the default value
+# is greater than one, but less than excessively exceeding the client's
+# request timeout, though that may not be avoidable in some cases.
+#
+#max_join_attempts_per_join_request = 3
+
 # Retry failed and incomplete messages to remote servers immediately upon
 # startup. This is called bursting. If this is disabled, said messages may
 # not be delivered until more messages are queued for that server. Do not
