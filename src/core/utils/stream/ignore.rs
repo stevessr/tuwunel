@@ -1,34 +1,35 @@
 use futures::{Stream, StreamExt, TryStream, future::ready};
 
-use crate::{Error, Result};
+use crate::{Error, Result, utils::stream::TryExpect};
 
-pub trait TryIgnore<'a, Item> {
-	fn ignore_err(self) -> impl Stream<Item = Item> + Send + 'a;
+pub trait TryIgnore<Item>
+where
+	Item: Send,
+	Self: Send + Sized,
+{
+	fn ignore_err(self) -> impl Stream<Item = Item> + Send;
 
-	fn ignore_ok(self) -> impl Stream<Item = Error> + Send + 'a;
+	fn ignore_ok(self) -> impl Stream<Item = Error> + Send;
 }
 
-impl<'a, T, Item> TryIgnore<'a, Item> for T
+impl<Item, S> TryIgnore<Item> for S
 where
-	T: Stream<Item = Result<Item>> + TryStream + Send + 'a,
-	Item: Send + 'a,
+	S: Stream<Item = Result<Item>> + Send + TryStream + TryExpect<Item>,
+	Item: Send,
+	Self: Send + Sized,
 {
 	#[cfg(debug_assertions)]
 	#[inline]
-	fn ignore_err(self: T) -> impl Stream<Item = Item> + Send + 'a {
-		use super::TryExpect;
-
-		self.expect_ok()
-	}
+	fn ignore_err(self: S) -> impl Stream<Item = Item> + Send { self.expect_ok() }
 
 	#[cfg(not(debug_assertions))]
 	#[inline]
-	fn ignore_err(self: T) -> impl Stream<Item = Item> + Send + 'a {
+	fn ignore_err(self: S) -> impl Stream<Item = Item> + Send {
 		self.filter_map(|res| ready(res.ok()))
 	}
 
 	#[inline]
-	fn ignore_ok(self: T) -> impl Stream<Item = Error> + Send + 'a {
+	fn ignore_ok(self: S) -> impl Stream<Item = Error> + Send {
 		self.filter_map(|res| ready(res.err()))
 	}
 }

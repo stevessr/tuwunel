@@ -151,7 +151,7 @@ async fn get_join_params(
 	via: &[OwnedServerName],
 ) -> Result<(OwnedRoomId, Vec<OwnedServerName>)> {
 	// servers tried first, additional_servers shuffled then tried after
-	let (room_id, mut servers, mut additional_servers) =
+	let (room_id, mut primary_servers, mut additional_servers) =
 		match OwnedRoomId::try_from(room_id_or_alias.to_owned()) {
 			// if room id, shuffle via + room_id server_name ...
 			| Ok(room_id) => {
@@ -194,11 +194,23 @@ async fn get_join_params(
 			.map(|user| user.server_name().to_owned()),
 	);
 
+	primary_servers.sort_unstable();
+	primary_servers.dedup();
+	shuffle(&mut primary_servers);
+
 	// shuffle additionals, append to base servers
-	servers.append(&mut additional_servers);
-	servers.sort_unstable();
-	servers.dedup();
-	shuffle(&mut servers);
+	additional_servers.sort_unstable();
+	additional_servers.dedup();
+	shuffle(&mut additional_servers);
+
+	let mut servers: Vec<_> = room_id_or_alias
+		.server_name()
+		.filter(|_| room_id_or_alias.is_room_alias_id())
+		.map(ToOwned::to_owned)
+		.into_iter()
+		.chain(primary_servers.into_iter())
+		.chain(additional_servers.into_iter())
+		.collect();
 
 	// sort deprioritized servers last
 	servers.sort_by(|a, b| {
@@ -207,6 +219,7 @@ async fn get_join_params(
 			.config
 			.deprioritize_joins_through_servers
 			.is_match(a.host());
+
 		let b_matches = services
 			.server
 			.config

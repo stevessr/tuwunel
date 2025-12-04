@@ -65,8 +65,8 @@ where
 
 		let response = self
 			.services
-			.sending
-			.send_synapse_request(notary, request)
+			.federation
+			.execute_synapse(notary, request)
 			.await?
 			.server_keys
 			.into_iter()
@@ -94,8 +94,8 @@ pub async fn notary_request(
 
 	let response = self
 		.services
-		.sending
-		.send_federation_request(notary, request)
+		.federation
+		.execute(notary, request)
 		.await?
 		.server_keys
 		.into_iter()
@@ -111,8 +111,8 @@ pub async fn server_request(&self, target: &ServerName) -> Result<ServerSigningK
 
 	let server_signing_key = self
 		.services
-		.sending
-		.send_federation_request(target, Request::new())
+		.federation
+		.execute(target, Request::new())
 		.await
 		.map(|response| response.server_key)
 		.and_then(|key| key.deserialize().map_err(Into::into))?;

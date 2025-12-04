@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use futures::{FutureExt, StreamExt, pin_mut};
+use futures::{FutureExt, StreamExt};
 use ruma::RoomId;
 use tuwunel_core::{
 	Result, debug,
@@ -35,6 +35,7 @@ impl Service {
 			.services
 			.state_cache
 			.local_users_in_room(room_id)
+			.boxed()
 			.into_future()
 			.map(|(next, ..)| next.as_ref().is_some());
 
@@ -42,10 +43,10 @@ impl Service {
 			.services
 			.state_cache
 			.local_users_invited_to_room(room_id)
+			.boxed()
 			.into_future()
 			.map(|(next, ..)| next.as_ref().is_some());
 
-		pin_mut!(has_local_users, has_local_invites);
 		if has_local_users.or(has_local_invites).await {
 			trace!(?room_id, "Not deleting with local joined or invited");
 			return;

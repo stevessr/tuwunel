@@ -3,7 +3,7 @@ mod room_tags;
 
 use std::sync::Arc;
 
-use futures::{Stream, StreamExt, TryFutureExt};
+use futures::{Stream, StreamExt, TryFutureExt, pin_mut};
 use ruma::{
 	RoomId, UserId,
 	events::{
@@ -175,15 +175,18 @@ pub async fn last_count<'a>(
 
 	let upper = upper.unwrap_or(u64::MAX);
 	let key = (room_id, user_id, upper, Interfix);
-	self.db
+	let keys = self
+		.db
 		.roomuserdataid_accountdata
 		.rev_keys_from(&key)
 		.ignore_err()
 		.ready_take_while(move |(room_id_, user_id_, ..): &Key<'_>| {
 			room_id == *room_id_ && user_id == *user_id_
 		})
-		.map(at!(2))
-		.next()
+		.map(at!(2));
+
+	pin_mut!(keys);
+	keys.next()
 		.await
 		.ok_or_else(|| err!(Request(NotFound("No account data found."))))
 }

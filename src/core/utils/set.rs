@@ -57,9 +57,10 @@ where
 /// Intersection of sets
 ///
 /// Outputs the set of elements common to both streams. Streams must be sorted.
-pub fn intersection_sorted_stream2<Item, S>(a: S, b: S) -> impl Stream<Item = Item> + Send
+pub fn intersection_sorted_stream2<Item, A, B>(a: A, b: B) -> impl Stream<Item = Item> + Send
 where
-	S: Stream<Item = Item> + Send + Unpin,
+	A: Stream<Item = Item> + Send,
+	B: Stream<Item = Item> + Send + Unpin,
 	Item: Eq + PartialOrd + Send + Sync,
 {
 	use tokio::sync::Mutex;
@@ -86,9 +87,10 @@ where
 ///
 /// Outputs the set of elements found in `a` which are not found in `b`. Streams
 /// must be sorted.
-pub fn difference_sorted_stream2<Item, S>(a: S, b: S) -> impl Stream<Item = Item> + Send
+pub fn difference_sorted_stream2<Item, A, B>(a: A, b: B) -> impl Stream<Item = Item> + Send
 where
-	S: Stream<Item = Item> + Send + Unpin,
+	A: Stream<Item = Item> + Send,
+	B: Stream<Item = Item> + Send + Unpin,
 	Item: Eq + PartialOrd + Send + Sync,
 {
 	use tokio::sync::Mutex;

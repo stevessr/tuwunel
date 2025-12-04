@@ -503,10 +503,7 @@ where
 			let request =
 				federation::keys::get_keys::v1::Request { device_keys: device_keys_input_fed };
 
-			let response = services
-				.sending
-				.send_federation_request(server, request)
-				.await;
+			let response = services.federation.execute(server, request).await;
 
 			(server, response)
 		})
@@ -631,8 +628,8 @@ pub(crate) async fn claim_keys_helper(
 			(
 				server,
 				services
-					.sending
-					.send_federation_request(server, federation::keys::claim_keys::v1::Request {
+					.federation
+					.execute(server, federation::keys::claim_keys::v1::Request {
 						one_time_keys: one_time_keys_input_fed,
 					})
 					.await,

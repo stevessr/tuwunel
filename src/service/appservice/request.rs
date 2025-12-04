@@ -1,19 +1,19 @@
 use std::{fmt::Debug, mem};
 
 use bytes::BytesMut;
-use reqwest::Client;
 use ruma::api::{
 	IncomingResponse, MatrixVersion, OutgoingRequest, SendAccessToken, SupportedVersions,
 	appservice::Registration,
 };
-use tuwunel_core::{Err, Result, debug_error, err, trace, utils, warn};
+use tuwunel_core::{Err, Result, debug_error, err, implement, trace, utils, warn};
 
 /// Sends a request to an appservice
 ///
 /// Only returns Ok(None) if there is no url specified in the appservice
 /// registration file
-pub(crate) async fn send_request<T>(
-	client: &Client,
+#[implement(super::Service)]
+pub async fn send_request<T>(
+	&self,
 	registration: Registration,
 	request: T,
 ) -> Result<Option<T::IncomingResponse>>
@@ -25,6 +25,7 @@ where
 		versions: VERSIONS.into(),
 		features: Default::default(),
 	};
+	let client = &self.services.client.appservice;
 
 	let Some(dest) = registration.url else {
 		return Ok(None);

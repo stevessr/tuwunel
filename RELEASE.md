@@ -1,47 +1,39 @@
-# Tuwunel 1.4.6
+# Tuwunel 1.4.7
 
-November 6, 2025
+December 3, 2025
+
+Tuwunel is now deployed at scale serving the citizens of Switzerland in production. Some optimizations were requested to reduce operating costs from projected growth over product lifespan: this release delivers with markedly reduced CPU usage and improves responsiveness. However, complications during routine dependency upgrades consumed valuable time planned for features and issues which could not be completed for this release.
 
 ### New Features
 
-- Element Call discovery support was implemented by @tototomate123 in (#209). Adding a `[[global.well_known.rtc_transports]]` section in your [config file](https://github.com/matrix-construct/tuwunel/blob/e1f89b69ea117f166be423f035a5a34f4c0e7366/tuwunel-example.toml#L1835-L1851) enables discovery. More information on setting up Element Call can be found at [Spaetzblog](https://sspaeth.de/2024/11/sfu/), skipping step one, and performing step three in your Tuwunel config.
-
-- Dehydrated Device support (MSC3814) is now available (#200). This feature allows users to receive encrypted messages without being logged in. Supporting clients will setup the dehydrated device automatically and it will "just work" behind the scenes; in fact, these clients will also hide it from the sessions list to avoid confusion. Support is not widespread yet but it has been tested with matrix-js-sdk clients such as Element-web. This feature was commissioned and made public by an enterprise sponsor.
-
-- Notification panel (the 🔔 button) has been implemented in (#201). Even though Element-web now requires enabling it in the Labs menu, the underlying support (`GET /_matrix/client/v3/notifications`) enhances the push-notification handling of other clients.
-
-- Live room previews are now available. This support (`GET /_matrix/client/v3/events`) allows users, including guests, to sync updates for a public room without joining (4afd6f347b1).
-
-- Thanks to a suggestion by @cyberdoors in (#29), the configuration option `encryption_enabled_by_default_for_room_type` is now available. This feature can enable encryption for a room even when the client does not. The values `all` or `invite` are accepted, the latter roughly meaning DM's only. Neither are enabled by default.
+- Upgrade Support for Room Version 12 is now available. Though this room version has been supported for the entire 1.4 series, all Tuwunel servers have been protected by Hydra Backports on all room versions. As such, other work was able to be prioritized for the preceding releases.
 
 ### Enhancements
 
-- Thank you @tototomate123 for improving the reverse-proxy docs, adding dedicated pages for both [Caddy](https://github.com/matrix-construct/tuwunel/blob/e0a997c22784b453735b24907e607412b153ba56/docs/deploying/reverse-proxy-caddy.md) and [Nginx](https://github.com/matrix-construct/tuwunel/blob/e0a997c22784b453735b24907e607412b153ba56/docs/deploying/reverse-proxy-nginx.md) in (#209). Thanks to @tycode for pointing out the docs were missing for alternative proxies in (#197).
+- Recursive relations have been enabled. This is an optimization which allows the server to gather more data using fewer client requests, for example, of a thread with many reactions and replies. The implementation is now optimal and utilizes the full capabilities of Tuwunel's asynchronous database.
 
-- Thanks to an observation by @iwalkalone69 in (#40), the last-seen time for a device in the session list is now updated acceptably. This function piggybacks on the presence system to prevent writing too frequently; testing has never shown it more than a minute or few out of date.
+- Several miscellaneous but significant optimizations took place at the direction of memory profiling. This reduced load on the allocator for database queries and JSON serialization of complex objects. Heroes calculations and the joined room hot-path on sync v3 were further optimized to reduce the database query load itself.
 
-- Thanks to an inquiry by @EntityinArray in (#189) guest-accounts can now be enabled while registration tokens are also enabled to prevent fully open account registration. Note that registration tokens don't apply to guest-accounts and those are still fully open.
+- Jemalloc has been repackaged with platform-specific optimizations enhancing the build. The upgrade to the dev branch of libjemalloc itself was considered as too much variability for the same release, it is planned for an upcoming release.
 
-- Courtesy of @dasha-uwu the list of servers attempted when joining a room is now properly shuffled to increase the odds of finding a viable server, especially if an additional join attempt is made.
+- Thanks to element-hq/synapse#18970 by @dasha-uwu, we have very slightly turned down the amount of randomness when selecting join-servers, More retries also occur within a single request if necessary. Thanks to @gogo199432 and @lifeofguenter for reporting problems in (#128) and (#205) respectively. More opportunities are still available to make large room joins robust.
 
 ### Bug Fixes
 
-- Special thanks to @BVollmerhaus for finding the TURN secret file configured by `turn_secret_file` was broken in (#211), forcing users to configure `turn_secret` directly. Thank you for fixing this in (#212).
+- Special thanks to @yefimg for fixing LDAP logout in (#231) from a report kindly made by @orhtej2 in (#97); thank you for your patience waiting for domain expertise to assist here.
 
-- Thank you @scvalex for updating the nix build for Tuwunel's integration tests and re-enabling all checks. (#215)
+- Thanks to @Radiant-Xyz the example configurations have been updated to remove `allow_check_for_updates`. This fixes any warnings for the item no longer existing. (#221)
 
-- Thanks to a report by @Anagastes in (#146) **Nheko and NeoChat users can now enjoy properly verified devices.** Special thanks for the assistance of @deepbluev7 with diagnosing the cross-signing signature issue.
+- Thanks again to @Radiant-Xyz reporting in (#219) the `/whoami` endpoint is now returns spec-compliant errors for Mautrix bridges (fe12daead9). Thanks also to @bobobo1618 for confirming the fix is working.
 
-- Database columns intended for deletion, notably `roomsynctoken_shortstatehash`, never had the deletion command actually invoked on them 😭 explaining the lack of enthusiasm after the 1.4.3 release introduced stateless sync. **Users will now see the free disk space they were promised.** This was uncovered during an unrelated issue investigation courtesy of @frebib.
+- Relations responses were sometimes incorrect in the forwards direction. This was fixed by (5147b541) bringing those responses into full compliance. Note the prior release had also fixed compliance issues but in the backwards direction.
 
-- Thanks to investigation by @dasha-uwu the pagination tokens in the `/relations` endpoint were buggy and now operate correctly.
+- Server selection for backfill struggled sometimes for version 12 rooms. These rooms might fail to load history after join. Additional servers are now found using `creators` and `additional_creators` instead.
 
-- Thanks to @Polve for identifying the `DynamicUser=yes` directive in the systemd files was invalid and advising a replacement in (#207).
+- Room leave compliance has been fixed for an edge-case where a room becomes empty except for a locally invited user which does not have its leave event sent down `/sync`.
 
-- Thanks to @daudix for reporting an edge-case where the server will refuse to start rather than robustly reporting errors during startup checks and recreate a missing media directory (#213).
+- Thanks to @grinapo for a report which lead to the discovery of events acquired over backfill not being checked for whether they already exist.
 
-- Push rule evaluation was never implemented for invites arriving over federation. Notifications are now properly sent in this case.
+### Upcoming
 
-- Sliding-sync handlers were susceptible to errors under rare circumstances escaping to cause an HTTP 500, which wreaks havoc on the rust-sdk. This has now been prevented.
-
-- Federating with Conduit over several non-essential endpoints was broken. It is unclear whether this affected an actual Conduit release version, but thanks to @kladki a fix is scheduled and we have included a workaround now on this end.
+- As stated in the summary, several planned items could not be cut into this release. These include SSO/OIDC support (#7), Element Call setup assistance and documentation (#217)(#215), User-level Admin Room and Media deletion (#192), and any other assigned issue. These items are on the short-list for the next cycle and mean a lot to us; to all participants: your issues are not being ignored and we hear you.

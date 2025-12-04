@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use futures::{FutureExt, StreamExt, TryFutureExt, pin_mut};
+use futures::{FutureExt, StreamExt, TryFutureExt, future::ready, pin_mut};
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, OwnedServerName, RoomId, UserId,
 	api::federation,
@@ -13,7 +13,7 @@ use tuwunel_core::{
 	Err, Result, debug_info, debug_warn, err, implement,
 	matrix::PduCount,
 	pdu::PduBuilder,
-	utils::{self, FutureBoolExt, future::ReadyEqExt},
+	utils::{self, FutureBoolExt, future::ReadyBoolExt},
 	warn,
 };
 
@@ -70,17 +70,28 @@ pub async fn leave(
 		return Ok(());
 	}
 
+	let member_event = self
+		.services
+		.state_accessor
+		.room_state_get_content::<RoomMemberEventContent>(
+			room_id,
+			&StateEventType::RoomMember,
+			user_id.as_str(),
+		)
+		.await;
+
 	let dont_have_room = self
 		.services
 		.state_cache
 		.server_in_room(self.services.globals.server_name(), room_id)
-		.eq(&false);
+		.is_false()
+		.and(ready(member_event.as_ref().is_err()));
 
 	let not_knocked = self
 		.services
 		.state_cache
 		.is_knocked(user_id, room_id)
-		.eq(&false);
+		.is_false();
 
 	// Ask a remote server if we don't have this room and are not knocking on it
 	if remote_leave_now || dont_have_room.and(not_knocked).await {
@@ -122,16 +133,7 @@ pub async fn leave(
 			)
 			.await?;
 	} else {
-		let Ok(event) = self
-			.services
-			.state_accessor
-			.room_state_get_content::<RoomMemberEventContent>(
-				room_id,
-				&StateEventType::RoomMember,
-				user_id.as_str(),
-			)
-			.await
-		else {
+		let Ok(event) = member_event else {
 			debug_warn!(
 				"Trying to leave a room you are not a member of, marking room as left locally."
 			);
@@ -243,14 +245,11 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 	{
 		let make_leave_response = self
 			.services
-			.sending
-			.send_federation_request(
-				&remote_server,
-				federation::membership::prepare_leave_event::v1::Request {
-					room_id: room_id.to_owned(),
-					user_id: user_id.to_owned(),
-				},
-			)
+			.federation
+			.execute(&remote_server, federation::membership::prepare_leave_event::v1::Request {
+				room_id: room_id.to_owned(),
+				user_id: user_id.to_owned(),
+			})
 			.await;
 
 		make_leave_response_and_server = make_leave_response.map(|r| (r, remote_server));
@@ -317,19 +316,16 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 	let leave_event = leave_event_stub;
 
 	self.services
-		.sending
-		.send_federation_request(
-			&remote_server,
-			federation::membership::create_leave_event::v2::Request {
-				room_id: room_id.to_owned(),
-				event_id,
-				pdu: self
-					.services
-					.federation
-					.format_pdu_into(leave_event.clone(), Some(&room_version_id))
-					.await,
-			},
-		)
+		.federation
+		.execute(&remote_server, federation::membership::create_leave_event::v2::Request {
+			room_id: room_id.to_owned(),
+			event_id,
+			pdu: self
+				.services
+				.federation
+				.format_pdu_into(leave_event.clone(), Some(&room_version_id))
+				.await,
+		})
 		.await?;
 
 	Ok(())

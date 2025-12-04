@@ -9,7 +9,7 @@ use std::{
 use ruma::OwnedServerName;
 use tokio::{runtime, sync::broadcast};
 
-use crate::{Err, Result, config, config::Config, log::Log, metrics::Metrics};
+use crate::{Err, Result, config, config::Config, log::Logging, metrics::Metrics};
 
 /// Server runtime state; public portion
 pub struct Server {
@@ -41,7 +41,7 @@ pub struct Server {
 	pub signal: broadcast::Sender<&'static str>,
 
 	/// Logging subsystem state
-	pub log: Log,
+	pub log: Logging,
 
 	/// Metrics subsystem state
 	pub metrics: Metrics,
@@ -49,7 +49,7 @@ pub struct Server {
 
 impl Server {
 	#[must_use]
-	pub fn new(config: Config, runtime: Option<runtime::Handle>, log: Log) -> Self {
+	pub fn new(config: Config, runtime: Option<runtime::Handle>, log: Logging) -> Self {
 		Self {
 			name: config.server_name.clone(),
 			config: config::Manager::new(config),

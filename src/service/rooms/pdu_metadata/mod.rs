@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use futures::{Stream, StreamExt, TryFutureExt};
+use futures::{Stream, StreamExt, TryFutureExt, future::Either};
 use ruma::{EventId, RoomId, UserId, api::Direction};
 use tuwunel_core::{
 	PduId, Result,
@@ -86,16 +86,8 @@ pub fn get_relations<'a>(
 	};
 
 	match dir {
-		| Direction::Backward => self
-			.db
-			.tofrom_relation
-			.rev_raw_keys_from(start)
-			.boxed(),
-		| Direction::Forward => self
-			.db
-			.tofrom_relation
-			.raw_keys_from(start)
-			.boxed(),
+		| Direction::Backward => Either::Left(self.db.tofrom_relation.rev_raw_keys_from(start)),
+		| Direction::Forward => Either::Right(self.db.tofrom_relation.raw_keys_from(start)),
 	}
 	.ignore_err()
 	.ready_take_while(move |key| key.starts_with(&target))

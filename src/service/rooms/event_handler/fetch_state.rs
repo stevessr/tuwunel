@@ -28,8 +28,8 @@ pub(super) async fn fetch_state(
 ) -> Result<Option<HashMap<u64, OwnedEventId>>> {
 	let res = self
 		.services
-		.sending
-		.send_federation_request(origin, get_room_state_ids::v1::Request {
+		.federation
+		.execute(origin, get_room_state_ids::v1::Request {
 			room_id: room_id.to_owned(),
 			event_id: event_id.to_owned(),
 		})

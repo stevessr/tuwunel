@@ -751,6 +751,22 @@
 #
 #log_to_stderr = false
 
+# Setting to false disables the logging/tracing system at a lower level.
+# In contrast to configuring an empty `log` string where the system is
+# still operating but muted, when this option is false the system was not
+# initialized and is not operating. Changing this option has no effect
+# after startup. This option is intended for developers and expert use
+# only: configuring an empty log string is preferred over using this.
+#
+#log_enable = true
+
+# Setting to false disables the logging/tracing system at a lower level
+# similar to `log_enable`. In this case the system is configured normally,
+# but not registered as the global handler in the final steps. This option
+# is for developers and expert use only.
+#
+#log_global_default = true
+
 # OpenID token expiration/TTL in seconds.
 #
 # These are the OpenID tokens that are primarily used for Matrix account
@@ -1499,6 +1515,22 @@
 # from a certain homeserver.
 #
 #deprioritize_joins_through_servers = ["matrix\.org"]
+
+# Maximum make_join requests to attempt within each join attempt. Each
+# attempt tries a different server, as each server is only tried once;
+# though retries can occur when the join request as a whole is retried.
+#
+#max_make_join_attempts_per_join_attempt = 48
+
+# Maximum join attempts to conduct per client join request. Each join
+# attempt consists of one or more make_join requests limited above, and a
+# single send_join request. This value allows for additional servers to
+# act as the join-server prior to reporting the last error back to the
+# client, which can be frustrating for users. Therefor the default value
+# is greater than one, but less than excessively exceeding the client's
+# request timeout, though that may not be avoidable in some cases.
+#
+#max_join_attempts_per_join_request = 3
 
 # Retry failed and incomplete messages to remote servers immediately upon
 # startup. This is called bursting. If this is disabled, said messages may

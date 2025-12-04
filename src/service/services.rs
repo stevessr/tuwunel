@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt, sync::Arc};
 
 use futures::{StreamExt, TryStreamExt};
 use tokio::sync::Mutex;
@@ -175,6 +175,12 @@ pub(crate) fn services(&self) -> impl Iterator<Item = Arc<dyn Service>> + Send {
 		cast!(self.deactivate),
 	]
 	.into_iter()
+}
+
+impl fmt::Debug for Services {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Services").finish()
+	}
 }
 
 #[implement(Services)]

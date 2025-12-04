@@ -232,8 +232,8 @@ async fn remote_room_summary_hierarchy_response(
 		.iter()
 		.map(|server| {
 			services
-				.sending
-				.send_federation_request(server, request.clone())
+				.federation
+				.execute(server, request.clone())
 		})
 		.collect();
 

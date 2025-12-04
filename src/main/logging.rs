@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
+use tracing::subscriber::NoSubscriber;
 use tracing_subscriber::{EnvFilter, Layer, Registry, fmt, layer::SubscriberExt, reload};
 use tuwunel_core::{
 	Result,
 	config::Config,
 	debug_warn, err,
-	log::{ConsoleFormat, ConsoleWriter, LogLevelReloadHandles, capture, fmt_span},
+	log::{ConsoleFormat, ConsoleWriter, LogLevelReloadHandles, Logging, capture, fmt_span},
 	result::UnwrapOrErr,
 };
 
@@ -14,13 +15,20 @@ pub(crate) type TracingFlameGuard =
 	Option<tracing_flame::FlushGuard<std::io::BufWriter<std::fs::File>>>;
 
 #[cfg(not(feature = "perf_measurements"))]
-pub(crate) type TracingFlameGuard = ();
+pub(crate) type TracingFlameGuard = Option<()>;
 
 #[allow(clippy::redundant_clone)]
-pub(crate) fn init(
-	config: &Config,
-) -> Result<(LogLevelReloadHandles, TracingFlameGuard, Arc<capture::State>)> {
+pub(crate) fn init(config: &Config) -> Result<(TracingFlameGuard, Logging)> {
 	let reload_handles = LogLevelReloadHandles::default();
+	let cap_state = Arc::new(capture::State::new());
+
+	if !config.log_enable {
+		return Ok((None, Logging {
+			reload: reload_handles,
+			capture: cap_state,
+			subscriber: Arc::new(NoSubscriber::new()),
+		}));
+	}
 
 	let console_span_events = fmt_span::from_str(&config.log_span_events).unwrap_or_err();
 
@@ -37,14 +45,11 @@ pub(crate) fn init(
 		.event_format(ConsoleFormat::new(config))
 		.with_writer(ConsoleWriter::new(config));
 
-	let (console_reload_filter, console_reload_handle) =
-		reload::Layer::new(console_filter.clone());
+	let (console_reload_filter, console_reload_handle) = reload::Layer::new(console_filter);
 
 	reload_handles.add("console", Box::new(console_reload_handle));
 
-	let cap_state = Arc::new(capture::State::new());
 	let cap_layer = capture::Layer::new(&cap_state);
-
 	let subscriber = Registry::default()
 		.with(console_layer.with_filter(console_reload_filter))
 		.with(cap_layer);
@@ -117,33 +122,43 @@ pub(crate) fn init(
 		not(feature = "perf_measurements"),
 		allow(clippy::let_unit_value)
 	)]
-	let flame_guard = ();
+	let flame_guard = None;
 
-	let ret = (reload_handles, flame_guard, cap_state);
+	let subscriber = Arc::new(subscriber);
 
 	// Enable the tokio console. This is slightly kludgy because we're judggling
 	// compile-time and runtime conditions to elide it, each of those changing the
 	// subscriber's type.
 	let (console_enabled, console_disabled_reason) = tokio_console_enabled(config);
 	#[cfg(all(feature = "tokio_console", tokio_unstable, tuwunel_disable))]
-	if console_enabled {
+	if console_enabled && config.log_global_default {
 		let console_layer = console_subscriber::ConsoleLayer::builder()
 			.with_default_env()
 			.spawn();
 
-		set_global_default(subscriber.with(console_layer));
-		return Ok(ret);
+		set_global_default(subscriber.clone().with(console_layer));
+		return Ok((flame_guard, Log {
+			reload: reload_handles,
+			capture: cap_state,
+			subscriber,
+		}));
 	}
 
-	set_global_default(subscriber);
+	if config.log_global_default {
+		set_global_default(subscriber.clone());
+	}
 
 	// If there's a reason the tokio console was disabled when it might be desired
 	// we output that here after initializing logging
-	if !console_enabled && !console_disabled_reason.is_empty() {
+	if !console_enabled && !console_disabled_reason.is_empty() && config.log_global_default {
 		debug_warn!("{console_disabled_reason}");
 	}
 
-	Ok(ret)
+	Ok((flame_guard, Logging {
+		reload: reload_handles,
+		capture: cap_state,
+		subscriber,
+	}))
 }
 
 fn tokio_console_enabled(config: &Config) -> (bool, &'static str) {

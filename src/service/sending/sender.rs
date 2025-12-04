@@ -51,7 +51,6 @@ use tuwunel_core::{
 };
 
 use super::{Destination, EduBuf, EduVec, Msg, SendingEvent, Service, data::QueueItem};
-use crate::appservice;
 
 #[derive(Debug)]
 enum TransactionStatus {
@@ -759,18 +758,16 @@ impl Service {
 
 		//debug_assert!(pdu_jsons.len() + edu_jsons.len() > 0, "sending empty
 		// transaction");
-		let client = &self.services.client.appservice;
-		match appservice::send_request(
-			client,
-			appservice,
-			ruma::api::appservice::event::push_events::v1::Request {
+		match self
+			.services
+			.appservice
+			.send_request(appservice, ruma::api::appservice::event::push_events::v1::Request {
 				txn_id: txn_id.into(),
 				events: pdu_jsons,
 				ephemeral: edu_jsons,
 				to_device: Vec::new(), // TODO
-			},
-		)
-		.await
+			})
+			.await
 		{
 			| Ok(_) => Ok(Destination::Appservice(id)),
 			| Err(e) => Err((Destination::Appservice(id), e)),

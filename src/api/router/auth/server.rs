@@ -1,5 +1,6 @@
 use axum::RequestPartsExt;
 use axum_extra::{TypedHeader, headers::Authorization, typed_header::TypedHeaderRejectionReason};
+use http::uri::PathAndQuery;
 use ruma::{
 	CanonicalJsonName, CanonicalJsonObject, CanonicalJsonValue,
 	api::federation::authentication::XMatrix,
@@ -30,8 +31,8 @@ pub(super) async fn auth_server(
 		.parts
 		.uri
 		.path_and_query()
-		.expect("all requests have a path")
-		.to_string();
+		.map(PathAndQuery::as_str)
+		.unwrap_or("/");
 
 	let signature: [Member; 1] =
 		[(x_matrix.key.as_str().into(), Value::String(x_matrix.sig.to_string()))];
@@ -45,7 +46,7 @@ pub(super) async fn auth_server(
 			("method".into(), Value::String(request.parts.method.as_str().into())),
 			("origin".into(), Value::String(origin.as_str().into())),
 			("signatures".into(), Value::Object(signatures.into())),
-			("uri".into(), Value::String(signature_uri)),
+			("uri".into(), Value::String(signature_uri.into())),
 		];
 
 		authorization.into()
@@ -55,7 +56,7 @@ pub(super) async fn auth_server(
 			("method".into(), Value::String(request.parts.method.as_str().into())),
 			("origin".into(), Value::String(origin.as_str().into())),
 			("signatures".into(), Value::Object(signatures.into())),
-			("uri".into(), Value::String(signature_uri)),
+			("uri".into(), Value::String(signature_uri.into())),
 		];
 
 		authorization.into()

@@ -251,8 +251,8 @@ pub async fn join_remote(
 
 	let send_join_response = match self
 		.services
-		.sending
-		.send_synapse_request(&remote_server, send_join_request)
+		.federation
+		.execute(&remote_server, send_join_request)
 		.await
 	{
 		| Ok(response) => response,
@@ -704,20 +704,17 @@ pub async fn join_local(
 
 	let send_join_response = self
 		.services
-		.sending
-		.send_synapse_request(
-			&remote_server,
-			federation::membership::create_join_event::v2::Request {
-				room_id: room_id.to_owned(),
-				event_id: event_id.clone(),
-				omit_members: false,
-				pdu: self
-					.services
-					.federation
-					.format_pdu_into(join_event.clone(), Some(&room_version_id))
-					.await,
-			},
-		)
+		.federation
+		.execute(&remote_server, federation::membership::create_join_event::v2::Request {
+			room_id: room_id.to_owned(),
+			event_id: event_id.clone(),
+			omit_members: false,
+			pdu: self
+				.services
+				.federation
+				.format_pdu_into(join_event.clone(), Some(&room_version_id))
+				.await,
+		})
 		.await?;
 
 	if let Some(signed_raw) = send_join_response.room_state.event {
@@ -774,19 +771,16 @@ async fn make_join_request(
 		info!("Asking {remote_server} for make_join ({make_join_counter})");
 		let make_join_response = self
 			.services
-			.sending
-			.send_federation_request(
-				remote_server,
-				federation::membership::prepare_join_event::v1::Request {
-					room_id: room_id.to_owned(),
-					user_id: sender_user.to_owned(),
-					ver: self
-						.services
-						.server
-						.supported_room_versions()
-						.collect(),
-				},
-			)
+			.federation
+			.execute(remote_server, federation::membership::prepare_join_event::v1::Request {
+				room_id: room_id.to_owned(),
+				user_id: sender_user.to_owned(),
+				ver: self
+					.services
+					.server
+					.supported_room_versions()
+					.collect(),
+			})
 			.await;
 
 		trace!("make_join response: {make_join_response:?}");
@@ -812,10 +806,15 @@ async fn make_join_request(
 				return make_join_response_and_server;
 			}
 
-			if make_join_counter > 40 {
+			let max_attempts = self
+				.services
+				.config
+				.max_make_join_attempts_per_join_attempt;
+			if make_join_counter >= max_attempts {
+				warn!(?remote_server, "last make_join failure reason: {e}");
 				warn!(
-					"40 servers failed to provide valid make_join response, assuming no server \
-					 can assist in joining."
+					"{max_attempts} servers failed to provide valid make_join response, \
+					 assuming no server can assist in joining."
 				);
 				make_join_response_and_server =
 					Err!(BadServerResponse("No server available to assist in joining."));
