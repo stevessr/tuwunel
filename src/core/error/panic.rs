@@ -15,13 +15,16 @@ impl Error {
 
 	#[must_use]
 	#[inline]
-	pub fn from_panic(e: Box<dyn Any + Send>) -> Self { Self::Panic(debug::panic_str(&e), e) }
+	pub fn from_panic(e: Box<dyn Any + Send + 'static>) -> Self {
+		Self::Panic(debug::panic_str(&e), e.into())
+	}
 
 	#[inline]
-	pub fn into_panic(self) -> Box<dyn Any + Send + 'static> {
+	pub fn into_panic(self) -> Box<dyn Any + Send> {
 		match self {
-			| Self::Panic(_, e) | Self::PanicAny(e) => e,
 			| Self::JoinError(e) => e.into_panic(),
+			| Self::Panic(_, e) | Self::PanicAny(e) =>
+				e.into_inner().expect("Error contained panic"),
 			| _ => Box::new(self),
 		}
 	}
@@ -29,16 +32,18 @@ impl Error {
 	/// Get the panic message string.
 	#[inline]
 	pub fn panic_str(self) -> Option<&'static str> {
-		self.is_panic()
-			.then_some(debug::panic_str(&self.into_panic()))
+		self.is_panic().then(|| {
+			let panic = self.into_panic();
+			debug::panic_str(&panic)
+		})
 	}
 
 	/// Check if the Error is trafficking a panic object.
 	#[inline]
 	pub fn is_panic(&self) -> bool {
 		match &self {
-			| Self::Panic(..) | Self::PanicAny(..) => true,
 			| Self::JoinError(e) => e.is_panic(),
+			| Self::Panic(..) | Self::PanicAny(..) => true,
 			| _ => false,
 		}
 	}

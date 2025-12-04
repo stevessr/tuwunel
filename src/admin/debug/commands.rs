@@ -236,8 +236,8 @@ pub(super) async fn get_remote_pdu(
 
 	match self
 		.services
-		.sending
-		.send_federation_request(&server, ruma::api::federation::event::get_event::v1::Request {
+		.federation
+		.execute(&server, ruma::api::federation::event::get_event::v1::Request {
 			event_id: event_id.clone(),
 		})
 		.await
@@ -327,11 +327,8 @@ pub(super) async fn ping(&self, server: OwnedServerName) -> Result {
 
 	match self
 		.services
-		.sending
-		.send_federation_request(
-			&server,
-			ruma::api::federation::discovery::get_server_version::v1::Request {},
-		)
+		.federation
+		.execute(&server, ruma::api::federation::discovery::get_server_version::v1::Request {})
 		.await
 	{
 		| Err(e) => {
@@ -571,8 +568,8 @@ pub(super) async fn force_set_room_state_from_server(
 
 	let remote_state_response = self
 		.services
-		.sending
-		.send_federation_request(&server_name, get_room_state::v1::Request {
+		.federation
+		.execute(&server_name, get_room_state::v1::Request {
 			room_id: room_id.clone(),
 			event_id: first_pdu.event_id().to_owned(),
 		})

@@ -2,25 +2,30 @@ use futures::{Stream, StreamExt, TryStream};
 
 use crate::Result;
 
-pub trait TryExpect<'a, Item> {
-	fn expect_ok(self) -> impl Stream<Item = Item> + Send + 'a;
+pub trait TryExpect<Item>
+where
+	Item: Send,
+	Self: Send + Sized,
+{
+	fn expect_ok(self) -> impl Stream<Item = Item> + Send;
 
-	fn map_expect(self, msg: &'a str) -> impl Stream<Item = Item> + Send + 'a;
+	fn map_expect(self, msg: &str) -> impl Stream<Item = Item> + Send;
 }
 
-impl<'a, T, Item> TryExpect<'a, Item> for T
+impl<Item, S> TryExpect<Item> for S
 where
-	T: Stream<Item = Result<Item>> + Send + TryStream + 'a,
-	Item: 'a,
+	S: Stream<Item = Result<Item>> + Send + TryStream,
+	Item: Send,
+	Self: Send + Sized,
 {
 	#[inline]
-	fn expect_ok(self: T) -> impl Stream<Item = Item> + Send + 'a {
+	fn expect_ok(self: S) -> impl Stream<Item = Item> + Send {
 		self.map_expect("stream expectation failure")
 	}
 
 	//TODO: move to impl MapExpect
 	#[inline]
-	fn map_expect(self, msg: &'a str) -> impl Stream<Item = Item> + Send + 'a {
+	fn map_expect(self, msg: &str) -> impl Stream<Item = Item> + Send {
 		self.map(|res| res.expect(msg))
 	}
 }

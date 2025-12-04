@@ -95,7 +95,7 @@ pub fn trap() {
 }
 
 #[must_use]
-pub fn panic_str(p: &Box<dyn Any + Send>) -> &'static str {
+pub fn panic_str(p: &Box<dyn Any + Send + 'static>) -> &'static str {
 	(**p)
 		.downcast_ref::<&str>()
 		.copied()

@@ -16,7 +16,6 @@ use tokio::sync::{RwLock, RwLockReadGuard};
 use tuwunel_core::{Err, Result, debug, err, utils::stream::IterStream};
 use tuwunel_database::Map;
 
-pub(crate) use self::request::send_request;
 pub use self::{namespace_regex::NamespaceRegex, registration_info::RegistrationInfo};
 
 pub struct Service {

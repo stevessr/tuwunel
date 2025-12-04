@@ -8,23 +8,31 @@ pub mod fmt_span;
 mod reload;
 mod suppress;
 
-pub use capture::Capture;
-pub use console::{ConsoleFormat, ConsoleWriter, is_systemd_mode};
-pub use reload::{LogLevelReloadHandles, ReloadHandle};
-pub use suppress::Suppress;
-pub use tracing::Level;
+use std::sync::Arc;
+
+pub use tracing::{Level, subscriber::Subscriber};
 pub use tracing_core::{Event, Metadata};
 pub use tracing_subscriber::EnvFilter;
+
+pub use self::{
+	capture::Capture,
+	console::{ConsoleFormat, ConsoleWriter, is_systemd_mode},
+	reload::{LogLevelReloadHandles, ReloadHandle},
+	suppress::Suppress,
+};
 
 /// Logging subsystem. This is a singleton member of super::Server which holds
 /// all logging and tracing related state rather than shoving it all in
 /// super::Server directly.
-pub struct Log {
+pub struct Logging {
+	/// Subscriber assigned to globals and defaults; may also be NoSubscriber.
+	pub subscriber: Arc<dyn Subscriber + Send + Sync>,
+
 	/// General log level reload handles.
 	pub reload: LogLevelReloadHandles,
 
 	/// Tracing capture state for ephemeral/oneshot uses.
-	pub capture: std::sync::Arc<capture::State>,
+	pub capture: Arc<capture::State>,
 }
 
 // Wraps for logging macros. Use these macros rather than extern tracing:: or

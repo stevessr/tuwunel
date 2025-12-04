@@ -260,8 +260,8 @@ async fn knock_room_helper_local(
 	};
 
 	let send_knock_response = services
-		.sending
-		.send_federation_request(&remote_server, send_knock_request)
+		.federation
+		.execute(&remote_server, send_knock_request)
 		.await?;
 
 	info!("send_knock finished");
@@ -396,8 +396,8 @@ async fn knock_room_helper_remote(
 	};
 
 	let send_knock_response = services
-		.sending
-		.send_federation_request(&remote_server, send_knock_request)
+		.federation
+		.execute(&remote_server, send_knock_request)
 		.await?;
 
 	info!("send_knock finished");
@@ -556,18 +556,15 @@ async fn make_knock_request(
 		info!("Asking {remote_server} for make_knock ({make_knock_counter})");
 
 		let make_knock_response = services
-			.sending
-			.send_federation_request(
-				remote_server,
-				federation::membership::prepare_knock_event::v1::Request {
-					room_id: room_id.to_owned(),
-					user_id: sender_user.to_owned(),
-					ver: services
-						.server
-						.supported_room_versions()
-						.collect(),
-				},
-			)
+			.federation
+			.execute(remote_server, federation::membership::prepare_knock_event::v1::Request {
+				room_id: room_id.to_owned(),
+				user_id: sender_user.to_owned(),
+				ver: services
+					.server
+					.supported_room_versions()
+					.collect(),
+			})
 			.await;
 
 		trace!("make_knock response: {make_knock_response:?}");

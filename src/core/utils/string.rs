@@ -4,8 +4,10 @@ mod tests;
 mod unquote;
 mod unquoted;
 
+use std::mem::replace;
+
 pub use self::{between::Between, split::SplitInfallible, unquote::Unquote, unquoted::Unquoted};
-use crate::{Result, smallstr::SmallString, utils::exchange};
+use crate::{Result, smallstr::SmallString};
 
 pub const EMPTY: &str = "";
 
@@ -76,7 +78,7 @@ where
 		.map(char::from)
 		.try_for_each(|ch| {
 			let m = ch.is_ascii_uppercase();
-			let s = exchange(&mut state, !m);
+			let s = replace(&mut state, !m);
 			if m && s {
 				output.write_char('_')?;
 			}

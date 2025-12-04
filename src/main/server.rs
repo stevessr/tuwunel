@@ -5,7 +5,6 @@ use tuwunel_core::{
 	Error, Result,
 	config::Config,
 	implement, info,
-	log::Log,
 	utils::{stream, sys},
 };
 
@@ -45,7 +44,7 @@ pub fn new(args: Option<&Args>, runtime: Option<&runtime::Handle>) -> Result<Arc
 		.and_then(|raw| args::update(raw, args))
 		.and_then(|raw| Config::new(&raw))?;
 
-	let (tracing_reload_handle, tracing_flame_guard, capture) = crate::logging::init(&config)?;
+	let (tracing_flame_guard, logger) = crate::logging::init(&config)?;
 
 	config.check()?;
 
@@ -66,8 +65,6 @@ pub fn new(args: Option<&Args>, runtime: Option<&runtime::Handle>) -> Result<Arc
 		"{}",
 		tuwunel_core::version(),
 	);
-
-	let logger = Log { reload: tracing_reload_handle, capture };
 
 	Ok(Arc::new(Self {
 		server: Arc::new(tuwunel_core::Server::new(config, runtime.cloned(), logger)),

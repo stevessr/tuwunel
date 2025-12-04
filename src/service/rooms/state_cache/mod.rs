@@ -213,7 +213,8 @@ pub fn get_shared_rooms<'a>(
 	use tuwunel_core::utils::set;
 
 	let a = self.rooms_joined(user_a);
-	let b = self.rooms_joined(user_b);
+	let b = self.rooms_joined(user_b).boxed();
+
 	set::intersection_sorted_stream2(a, b)
 }
 
@@ -415,6 +416,7 @@ pub fn user_memberships<'a>(
 		.then(|| {
 			self.rooms_joined(user_id)
 				.map(|room_id| (Join, room_id))
+				.boxed()
 				.into_future()
 		})
 		.into();
@@ -424,6 +426,7 @@ pub fn user_memberships<'a>(
 		.then(|| {
 			self.rooms_invited(user_id)
 				.map(|room_id| (Invite, room_id))
+				.boxed()
 				.into_future()
 		})
 		.into();
@@ -433,6 +436,7 @@ pub fn user_memberships<'a>(
 		.then(|| {
 			self.rooms_knocked(user_id)
 				.map(|room_id| (Knock, room_id))
+				.boxed()
 				.into_future()
 		})
 		.into();
@@ -442,6 +446,7 @@ pub fn user_memberships<'a>(
 		.then(|| {
 			self.rooms_left(user_id)
 				.map(|room_id| (Leave, room_id))
+				.boxed()
 				.into_future()
 		})
 		.into();

@@ -1,5 +1,9 @@
 use axum::extract::State;
-use futures::{FutureExt, StreamExt, TryFutureExt, future::OptionFuture, pin_mut};
+use futures::{
+	FutureExt, StreamExt, TryFutureExt,
+	future::{Either, OptionFuture},
+	pin_mut,
+};
 use ruma::{
 	RoomId, UserId,
 	api::{
@@ -105,17 +109,18 @@ pub(crate) async fn get_message_events_route(
 	}
 
 	let it = match body.dir {
-		| Direction::Forward => services
-			.timeline
-			.pdus(Some(sender_user), room_id, Some(from))
-			.ignore_err()
-			.boxed(),
-
-		| Direction::Backward => services
-			.timeline
-			.pdus_rev(Some(sender_user), room_id, Some(from))
-			.ignore_err()
-			.boxed(),
+		| Direction::Forward => Either::Left(
+			services
+				.timeline
+				.pdus(Some(sender_user), room_id, Some(from))
+				.ignore_err(),
+		),
+		| Direction::Backward => Either::Right(
+			services
+				.timeline
+				.pdus_rev(Some(sender_user), room_id, Some(from))
+				.ignore_err(),
+		),
 	};
 
 	let events: Vec<_> = it

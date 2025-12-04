@@ -1,20 +1,26 @@
 //! jemalloc allocator
 
 use std::{
+	alloc::Layout,
 	cell::OnceCell,
 	ffi::{CStr, c_char, c_void},
 	fmt::Debug,
-	sync::RwLock,
+	panic::catch_unwind,
+	process::abort,
+	sync::{
+		Mutex,
+		atomic::{AtomicBool, AtomicU64, Ordering},
+	},
 };
 
-use arrayvec::ArrayVec;
-use tikv_jemalloc_ctl as mallctl;
-use tikv_jemalloc_sys as ffi;
-use tikv_jemallocator as jemalloc;
+use jevmalloc as jemalloc;
+use jevmalloc::{ctl as mallctl, ffi};
 
 use crate::{
-	Result, err, is_equal_to, is_nonzero,
-	utils::{math, math::Tried},
+	Result,
+	arrayvec::ArrayVec,
+	err, is_equal_to, is_nonzero,
+	utils::{BoolExt, math, math::Tried},
 };
 
 #[cfg(feature = "jemalloc_conf")]
@@ -29,7 +35,7 @@ pub static malloc_conf: &[u8] = const_str::concat_bytes!(
 	",metadata_thp:always",
 	",background_thread:true",
 	",max_background_threads:-1",
-	MALLOC_CONF_PROF,
+	//MALLOC_CONF_PROF,
 	0
 );
 
@@ -38,16 +44,12 @@ pub static malloc_conf: &[u8] = const_str::concat_bytes!(
 	feature = "jemalloc_prof",
 	target_arch = "x86_64",
 ))]
-const MALLOC_CONF_PROF: &str = ",prof_active:false";
+const _MALLOC_CONF_PROF: &str = ",prof_active:false";
 #[cfg(all(
 	feature = "jemalloc_conf",
 	any(not(feature = "jemalloc_prof"), not(target_arch = "x86_64")),
 ))]
-const MALLOC_CONF_PROF: &str = "";
-
-#[global_allocator]
-static JEMALLOC: jemalloc::Jemalloc = jemalloc::Jemalloc;
-static CONTROL: RwLock<()> = RwLock::new(());
+const _MALLOC_CONF_PROF: &str = "";
 
 type Name = ArrayVec<u8, NAME_MAX>;
 type Key = ArrayVec<usize, KEY_SEGS>;
@@ -55,14 +57,27 @@ type Key = ArrayVec<usize, KEY_SEGS>;
 const NAME_MAX: usize = 128;
 const KEY_SEGS: usize = 8;
 
+#[global_allocator]
+static JEMALLOC: jemalloc::Jemalloc = jemalloc::Jemalloc;
+static CONTROL: Mutex<()> = Mutex::new(());
+
+static GLOBAL_ALLOCS: AtomicU64 = AtomicU64::new(0);
+static COUNT_GLOBAL_ALLOCS: AtomicBool = AtomicBool::new(false);
+static TRACE_GLOBAL_ALLOCS: AtomicBool = AtomicBool::new(false);
+
 #[crate::ctor]
 fn _static_initialization() {
-	acq_epoch().expect("pre-initialization of jemalloc failed");
-	acq_epoch().expect("pre-initialization of jemalloc failed");
+	// SAFETY: Mutable static globals in jemalloc crate; must be initialized
+	// properly and uniquely.
+	unsafe {
+		jemalloc::hook::ALLOC = Some(global_alloc_hook);
+		jemalloc::hook::ALLOC_ZEROED = Some(global_alloc_zeroed_hook);
+	};
 }
 
 #[must_use]
-#[cfg(feature = "jemalloc_stats")]
+#[cfg(disable)]
+//#[cfg(feature = "jemalloc_stats")]
 pub fn memory_usage() -> Option<String> {
 	use mallctl::stats;
 
@@ -91,7 +106,7 @@ pub fn memory_usage() -> Option<String> {
 }
 
 #[must_use]
-#[cfg(not(feature = "jemalloc_stats"))]
+//#[cfg(not(feature = "jemalloc_stats"))]
 pub fn memory_usage() -> Option<String> { None }
 
 pub fn memory_stats(opts: &str) -> Option<String> {
@@ -117,6 +132,12 @@ pub fn memory_stats(opts: &str) -> Option<String> {
 }
 
 unsafe extern "C" fn malloc_stats_cb(opaque: *mut c_void, msg: *const c_char) {
+	catch_unwind(move || handle_malloc_stats(opaque, msg))
+		.map_err(|_| abort())
+		.ok();
+}
+
+fn handle_malloc_stats(opaque: *mut c_void, msg: *const c_char) {
 	// SAFETY: we have to trust the opaque points to our String
 	let res: &mut String = unsafe {
 		opaque
@@ -131,6 +152,43 @@ unsafe extern "C" fn malloc_stats_cb(opaque: *mut c_void, msg: *const c_char) {
 	let msg = String::from_utf8_lossy(msg.to_bytes());
 	res.push_str(msg.as_ref());
 }
+
+fn global_alloc_hook(layout: Layout) {
+	catch_unwind(move || handle_global_alloc(layout))
+		.map_err(|_| abort())
+		.ok();
+}
+
+fn global_alloc_zeroed_hook(layout: Layout) {
+	catch_unwind(move || handle_global_alloc(layout))
+		.map_err(|_| abort())
+		.ok();
+}
+
+fn handle_global_alloc(layout: Layout) {
+	use std::io::Write;
+
+	use libc::{STDOUT_FILENO, write};
+
+	let do_count = COUNT_GLOBAL_ALLOCS.load(Ordering::Relaxed);
+	let count = GLOBAL_ALLOCS.fetch_add(do_count.into(), Ordering::Relaxed);
+
+	if TRACE_GLOBAL_ALLOCS.load(Ordering::Relaxed) {
+		let mut buf = ArrayVec::<u8, 128>::new();
+		writeln!(&mut buf, "{count} align={} size={}", layout.align(), layout.size())
+			.expect("writeln! to buffer failed");
+
+		// SAFETY: Valid ptr and len from buf for writing to stdout.
+		unsafe { write(STDOUT_FILENO, buf.as_ptr().cast::<c_void>(), buf.len()) }
+			.ge(&0)
+			.into_result()
+			.expect("write(2) error");
+	}
+}
+
+#[inline]
+#[must_use]
+pub fn global_alloc_count() -> u64 { GLOBAL_ALLOCS.load(Ordering::Relaxed) }
 
 macro_rules! mallctl {
 	($name:expr_2021) => {{
@@ -339,7 +397,7 @@ fn set<T>(key: &Key, val: T) -> Result<T>
 where
 	T: Copy + Debug,
 {
-	let _lock = CONTROL.write()?;
+	let _lock = CONTROL.lock()?;
 	let res = xchg(key, val)?;
 	inc_epoch()?;
 
@@ -356,7 +414,6 @@ fn get<T>(key: &Key) -> Result<T>
 where
 	T: Copy + Debug,
 {
-	acq_epoch()?;
 	acq_epoch()?;
 
 	// SAFETY: T must be perfectly valid to receive value.
@@ -401,6 +458,4 @@ fn name(name: &str) -> Result<Name> {
 	Ok(buf)
 }
 
-fn map_err(error: tikv_jemalloc_ctl::Error) -> crate::Error {
-	err!("mallctl: {}", error.to_string())
-}
+fn map_err(error: jemalloc::ctl::Error) -> crate::Error { err!("mallctl: {}", error.to_string()) }

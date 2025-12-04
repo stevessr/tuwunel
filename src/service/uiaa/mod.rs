@@ -93,6 +93,7 @@ pub fn create(
 }
 
 #[implement(Service)]
+#[allow(clippy::useless_let_if_seq)]
 pub async fn try_auth(
 	&self,
 	user_id: &UserId,
@@ -137,16 +138,37 @@ pub async fn try_auth(
 
 			// Check if password is correct
 			let user_id = user_id_from_username;
-			if let Ok(hash) = self.services.users.password_hash(&user_id).await {
-				let hash_matches = hash::verify_password(password, &hash).is_ok();
-				if !hash_matches {
-					uiaainfo.auth_error = Some(StandardErrorBody {
-						kind: ErrorKind::forbidden(),
-						message: "Invalid username or password.".to_owned(),
-					});
+			let mut password_verified = false;
 
-					return Ok((false, uiaainfo));
+			// First try local password hash verification
+			if let Ok(hash) = self.services.users.password_hash(&user_id).await {
+				password_verified = hash::verify_password(password, &hash).is_ok();
+			}
+
+			// If local password verification failed, try LDAP authentication
+			#[cfg(feature = "ldap")]
+			if !password_verified && self.services.server.config.ldap.enable {
+				// Search for user in LDAP to get their DN
+				if let Ok(dns) = self.services.users.search_ldap(&user_id).await {
+					if let Some((user_dn, _is_admin)) = dns.first() {
+						// Try to authenticate with LDAP
+						password_verified = self
+							.services
+							.users
+							.auth_ldap(user_dn, password)
+							.await
+							.is_ok();
+					}
 				}
+			}
+
+			if !password_verified {
+				uiaainfo.auth_error = Some(StandardErrorBody {
+					kind: ErrorKind::forbidden(),
+					message: "Invalid username or password.".to_owned(),
+				});
+
+				return Ok((false, uiaainfo));
 			}
 
 			// Password was correct! Let's add it to `completed`

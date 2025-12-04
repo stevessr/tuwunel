@@ -1,8 +1,9 @@
 use std::{convert::AsRef, fmt::Debug, sync::Arc};
 
-use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt, future::Either};
 use rocksdb::Direction;
 use serde::{Deserialize, Serialize};
+use tokio::task;
 use tuwunel_core::{Result, implement};
 
 use super::stream_from::is_cached;
@@ -64,7 +65,13 @@ where
 	let opts = super::iter_options_default(&self.engine);
 	let state = stream::State::new(self, opts);
 	if is_cached(self, from) {
-		return stream::Keys::<'_>::from(state.init_fwd(from.as_ref().into())).boxed();
+		let state = state.init_fwd(from.as_ref().into());
+		return Either::Left(
+			task::consume_budget()
+				.map(move |()| stream::Keys::<'_>::from(state))
+				.into_stream()
+				.flatten(),
+		);
 	}
 
 	let seek = Seek {
@@ -75,11 +82,12 @@ where
 		res: None,
 	};
 
-	self.engine
-		.pool
-		.execute_iter(seek)
-		.ok_into::<stream::Keys<'_>>()
-		.into_stream()
-		.try_flatten()
-		.boxed()
+	Either::Right(
+		self.engine
+			.pool
+			.execute_iter(seek)
+			.ok_into::<stream::Keys<'_>>()
+			.into_stream()
+			.try_flatten(),
+	)
 }

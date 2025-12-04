@@ -243,8 +243,8 @@ pub(crate) async fn get_timezone_key_route(
 	if !services.globals.user_is_local(&body.user_id) {
 		// Create and update our local copy of the user
 		if let Ok(response) = services
-			.sending
-			.send_federation_request(
+			.federation
+			.execute(
 				body.user_id.server_name(),
 				federation::query::get_profile_information::v1::Request {
 					user_id: body.user_id.clone(),
@@ -304,8 +304,8 @@ pub(crate) async fn get_profile_field_route(
 	if !services.globals.user_is_local(&body.user_id) {
 		// Create and update our local copy of the user
 		if let Ok(response) = services
-			.sending
-			.send_federation_request(
+			.federation
+			.execute(
 				body.user_id.server_name(),
 				federation::query::get_profile_information::v1::Request {
 					user_id: body.user_id.clone(),

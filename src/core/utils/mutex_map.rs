@@ -9,10 +9,12 @@ use tokio::sync::OwnedMutexGuard as Omg;
 use crate::{Result, err};
 
 /// Map of Mutexes
+#[derive(Debug)]
 pub struct MutexMap<Key, Val> {
 	map: Map<Key, Val>,
 }
 
+#[derive(Debug)]
 pub struct Guard<Key, Val> {
 	map: Map<Key, Val>,
 	val: Omg<Val>,

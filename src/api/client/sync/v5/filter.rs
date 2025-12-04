@@ -7,7 +7,7 @@ use tuwunel_core::{
 	is_equal_to, is_true,
 	utils::{
 		BoolExt, FutureBoolExt, IterStream, ReadyExt,
-		future::{self, OptionExt, ReadyEqExt},
+		future::{self, OptionExt, ReadyBoolExt},
 	},
 };
 
@@ -132,7 +132,7 @@ pub(super) async fn filter_room_meta(
 	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
 	room_id: &RoomId,
 ) -> bool {
-	let not_exists = services.metadata.exists(room_id).eq(&false);
+	let not_exists = services.metadata.exists(room_id).is_false();
 
 	let is_disabled = services.metadata.is_disabled(room_id);
 
@@ -141,13 +141,13 @@ pub(super) async fn filter_room_meta(
 	let not_visible = services
 		.state_accessor
 		.user_can_see_state_events(sender_user, room_id)
-		.eq(&false);
+		.is_false();
 
 	pin_mut!(not_visible, not_exists, is_disabled, is_banned);
 	not_visible
 		.or(not_exists)
 		.or(is_disabled)
 		.or(is_banned)
+		.is_false()
 		.await
-		.eq(&false)
 }

@@ -912,6 +912,26 @@ pub struct Config {
 	#[serde(default)]
 	pub log_to_stderr: bool,
 
+	/// Setting to false disables the logging/tracing system at a lower level.
+	/// In contrast to configuring an empty `log` string where the system is
+	/// still operating but muted, when this option is false the system was not
+	/// initialized and is not operating. Changing this option has no effect
+	/// after startup. This option is intended for developers and expert use
+	/// only: configuring an empty log string is preferred over using this.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub log_enable: bool,
+
+	/// Setting to false disables the logging/tracing system at a lower level
+	/// similar to `log_enable`. In this case the system is configured normally,
+	/// but not registered as the global handler in the final steps. This option
+	/// is for developers and expert use only.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub log_global_default: bool,
+
 	/// OpenID token expiration/TTL in seconds.
 	///
 	/// These are the OpenID tokens that are primarily used for Matrix account
@@ -1736,6 +1756,26 @@ pub struct Config {
 		with = "serde_regex"
 	)]
 	pub deprioritize_joins_through_servers: RegexSet,
+
+	/// Maximum make_join requests to attempt within each join attempt. Each
+	/// attempt tries a different server, as each server is only tried once;
+	/// though retries can occur when the join request as a whole is retried.
+	///
+	/// default: 48
+	#[serde(default = "default_max_make_join_attempts_per_join_attempt")]
+	pub max_make_join_attempts_per_join_attempt: usize,
+
+	/// Maximum join attempts to conduct per client join request. Each join
+	/// attempt consists of one or more make_join requests limited above, and a
+	/// single send_join request. This value allows for additional servers to
+	/// act as the join-server prior to reporting the last error back to the
+	/// client, which can be frustrating for users. Therefor the default value
+	/// is greater than one, but less than excessively exceeding the client's
+	/// request timeout, though that may not be avoidable in some cases.
+	///
+	/// default: 3
+	#[serde(default = "default_max_join_attempts_per_join_request")]
+	pub max_join_attempts_per_join_request: usize,
 
 	/// Retry failed and incomplete messages to remote servers immediately upon
 	/// startup. This is called bursting. If this is disabled, said messages may
@@ -2977,3 +3017,7 @@ fn default_deprioritize_joins_through_servers() -> RegexSet {
 }
 
 fn default_one_time_key_limit() -> usize { 256 }
+
+fn default_max_make_join_attempts_per_join_attempt() -> usize { 48 }
+
+fn default_max_join_attempts_per_join_request() -> usize { 3 }

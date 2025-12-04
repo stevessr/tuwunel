@@ -50,12 +50,12 @@ where
 		.widen_then(automatic_width(), |chunk| {
 			self.engine.pool.execute_get(Get {
 				map: self.clone(),
+				res: None,
 				key: chunk
 					.iter()
 					.map(AsRef::as_ref)
 					.map(Into::into)
 					.collect(),
-				res: None,
 			})
 		})
 		.map_ok(|results| results.into_iter().stream())

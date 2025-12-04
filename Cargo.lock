@@ -2181,6 +2181,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
+name = "jevmalloc"
+version = "0.0.0+5.3.0-1-g54eaed1d8b56b1aa528be3bdd1877e59c56fa90c"
+source = "git+https://github.com/matrix-construct/jevmalloc?rev=29fde02533ee2c6a5e9b87095324e6f7a5d43738#29fde02533ee2c6a5e9b87095324e6f7a5d43738"
+dependencies = [
+ "jevmalloc-sys",
+ "libc",
+ "paste",
+]
+
+[[package]]
+name = "jevmalloc-sys"
+version = "0.0.0+5.3.0-1-g54eaed1d8b56b1aa528be3bdd1877e59c56fa90c"
+source = "git+https://github.com/matrix-construct/jevmalloc?rev=29fde02533ee2c6a5e9b87095324e6f7a5d43738#29fde02533ee2c6a5e9b87095324e6f7a5d43738"
+dependencies = [
+ "cc",
+ "libc",
+ "rustflags",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3659,7 +3679,7 @@ dependencies = [
 [[package]]
 name = "ruma"
 version = "0.13.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "assign",
  "js_int",
@@ -3678,7 +3698,7 @@ dependencies = [
 [[package]]
 name = "ruma-appservice-api"
 version = "0.13.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "js_int",
  "ruma-common",
@@ -3690,7 +3710,7 @@ dependencies = [
 [[package]]
 name = "ruma-client-api"
 version = "0.21.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "as_variant",
  "assign",
@@ -3715,7 +3735,7 @@ dependencies = [
 [[package]]
 name = "ruma-common"
 version = "0.16.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "as_variant",
  "base64",
@@ -3749,7 +3769,7 @@ dependencies = [
 [[package]]
 name = "ruma-events"
 version = "0.31.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "as_variant",
  "indexmap",
@@ -3776,7 +3796,7 @@ dependencies = [
 [[package]]
 name = "ruma-federation-api"
 version = "0.12.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "bytes",
  "headers",
@@ -3799,7 +3819,7 @@ dependencies = [
 [[package]]
 name = "ruma-identifiers-validation"
 version = "0.11.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "js_int",
  "thiserror 2.0.17",
@@ -3808,7 +3828,7 @@ dependencies = [
 [[package]]
 name = "ruma-macros"
 version = "0.16.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "cfg-if",
  "proc-macro-crate",
@@ -3823,7 +3843,7 @@ dependencies = [
 [[package]]
 name = "ruma-push-gateway-api"
 version = "0.12.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "js_int",
  "ruma-common",
@@ -3835,7 +3855,7 @@ dependencies = [
 [[package]]
 name = "ruma-signatures"
 version = "0.18.0"
-source = "git+https://github.com/matrix-construct/ruma?rev=db4bf59eaa1757735f38489f8924348ae05a6a17#db4bf59eaa1757735f38489f8924348ae05a6a17"
+source = "git+https://github.com/matrix-construct/ruma?rev=f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2#f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
 dependencies = [
  "base64",
  "ed25519-dalek",
@@ -3851,24 +3871,24 @@ dependencies = [
 [[package]]
 name = "rust-librocksdb-sys"
 version = "0.40.0+10.7.5"
-source = "git+https://github.com/matrix-construct/rust-rocksdb?rev=f111d191918372e3178a3662f5e4b210c0ce2505#f111d191918372e3178a3662f5e4b210c0ce2505"
+source = "git+https://github.com/matrix-construct/rust-rocksdb?rev=31e6f8dd4a531b379c132e82773efc9315b0489a#31e6f8dd4a531b379c132e82773efc9315b0489a"
 dependencies = [
  "bindgen",
  "bzip2-sys",
  "cc",
  "glob",
+ "jevmalloc-sys",
  "libc",
  "libz-sys",
  "lz4-sys",
  "pkg-config",
- "tikv-jemalloc-sys",
  "zstd-sys",
 ]
 
 [[package]]
 name = "rust-rocksdb"
 version = "0.44.2"
-source = "git+https://github.com/matrix-construct/rust-rocksdb?rev=f111d191918372e3178a3662f5e4b210c0ce2505#f111d191918372e3178a3662f5e4b210c0ce2505"
+source = "git+https://github.com/matrix-construct/rust-rocksdb?rev=31e6f8dd4a531b379c132e82773efc9315b0489a#31e6f8dd4a531b379c132e82773efc9315b0489a"
 dependencies = [
  "libc",
  "parking_lot",
@@ -3896,6 +3916,12 @@ checksum = "cfcb3a22ef46e85b45de6ee7e79d063319ebb6594faafcf1c225ea92ab6e9b92"
 dependencies = [
  "semver",
 ]
+
+[[package]]
+name = "rustflags"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a39e0e9135d7a7208ee80aa4e3e4b88f0f5ad7be92153ed70686c38a03db2e63"
 
 [[package]]
 name = "rusticata-macros"
@@ -4680,34 +4706,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "tikv-jemalloc-ctl"
-version = "0.6.0"
-source = "git+https://github.com/matrix-construct/jemallocator?rev=03bed96afbbc898bef4d4f7d335c0519e3d1afad#03bed96afbbc898bef4d4f7d335c0519e3d1afad"
-dependencies = [
- "libc",
- "paste",
- "tikv-jemalloc-sys",
-]
-
-[[package]]
-name = "tikv-jemalloc-sys"
-version = "0.6.0+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
-source = "git+https://github.com/matrix-construct/jemallocator?rev=03bed96afbbc898bef4d4f7d335c0519e3d1afad#03bed96afbbc898bef4d4f7d335c0519e3d1afad"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
-name = "tikv-jemallocator"
-version = "0.6.0"
-source = "git+https://github.com/matrix-construct/jemallocator?rev=03bed96afbbc898bef4d4f7d335c0519e3d1afad#03bed96afbbc898bef4d4f7d335c0519e3d1afad"
-dependencies = [
- "libc",
- "tikv-jemalloc-sys",
-]
-
-[[package]]
 name = "time"
 version = "0.3.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5089,7 +5087,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tuwunel"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "clap",
  "const-str",
@@ -5121,7 +5119,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_admin"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "base64",
  "clap",
@@ -5144,7 +5142,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_api"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "async-trait",
  "axum",
@@ -5177,7 +5175,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_core"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "argon2",
  "arrayvec",
@@ -5202,6 +5200,7 @@ dependencies = [
  "insta",
  "ipaddress",
  "itertools 0.14.0",
+ "jevmalloc",
  "jsonwebtoken",
  "libc",
  "libloading",
@@ -5223,9 +5222,6 @@ dependencies = [
  "smallstr",
  "smallvec",
  "thiserror 2.0.17",
- "tikv-jemalloc-ctl",
- "tikv-jemalloc-sys",
- "tikv-jemallocator",
  "tokio",
  "tokio-metrics",
  "toml 0.9.8",
@@ -5238,7 +5234,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_database"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "async-channel",
  "const-str",
@@ -5259,7 +5255,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_macros"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
@@ -5269,7 +5265,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_router"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "axum",
  "axum-client-ip",
@@ -5303,7 +5299,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_service"
-version = "1.4.6"
+version = "1.4.7"
 dependencies = [
  "async-trait",
  "base64",

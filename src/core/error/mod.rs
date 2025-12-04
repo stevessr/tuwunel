@@ -4,16 +4,22 @@ mod panic;
 mod response;
 mod serde;
 
-use std::{any::Any, borrow::Cow, convert::Infallible, sync::PoisonError};
+use std::{
+	any::Any,
+	borrow::Cow,
+	convert::Infallible,
+	sync::{Mutex, PoisonError},
+};
 
 pub use self::{err::visit, log::*};
+use crate::utils::{assert_ref_unwind_safe, assert_send, assert_sync, assert_unwind_safe};
 
 #[derive(thiserror::Error)]
 pub enum Error {
 	#[error("PANIC!")]
-	PanicAny(Box<dyn Any + Send>),
+	PanicAny(Mutex<Box<dyn Any + Send>>),
 	#[error("PANIC! {0}")]
-	Panic(&'static str, Box<dyn Any + Send + 'static>),
+	Panic(&'static str, Mutex<Box<dyn Any + Send + 'static>>),
 
 	// std
 	#[error(transparent)]
@@ -27,7 +33,7 @@ pub enum Error {
 	#[error(transparent)]
 	ParseInt(#[from] std::num::ParseIntError),
 	#[error(transparent)]
-	Std(#[from] Box<dyn std::error::Error + Send>),
+	Std(#[from] Box<dyn std::error::Error + Send + Sync + 'static>),
 	#[error(transparent)]
 	SystemTime(#[from] std::time::SystemTimeError),
 	#[error(transparent)]
@@ -136,6 +142,11 @@ pub enum Error {
 	Err(Cow<'static, str>),
 }
 
+static _IS_SEND: () = assert_send::<Error>();
+static _IS_SYNC: () = assert_sync::<Error>();
+static _IS_UNWIND_SAFE: () = assert_unwind_safe::<Error>();
+static _IS_REF_UNWIND_SAFE: () = assert_ref_unwind_safe::<Error>();
+
 impl Error {
 	#[inline]
 	#[must_use]
@@ -167,13 +178,14 @@ impl Error {
 	/// Returns the Matrix error code / error kind
 	#[inline]
 	pub fn kind(&self) -> ruma::api::client::error::ErrorKind {
-		use ruma::api::client::error::ErrorKind::{FeatureDisabled, Unknown};
+		use ruma::api::client::error::ErrorKind::{FeatureDisabled, NotJson, Unknown};
 
 		match self {
+			| Self::FeatureDisabled(..) => FeatureDisabled,
+			| Self::CanonicalJson(..) | Self::Json(..) => NotJson,
+			| Self::BadRequest(kind, ..) | Self::Request(kind, ..) => kind.clone(),
 			| Self::Federation(_, error) | Self::Ruma(error) =>
 				response::ruma_error_kind(error).clone(),
-			| Self::BadRequest(kind, ..) | Self::Request(kind, ..) => kind.clone(),
-			| Self::FeatureDisabled(..) => FeatureDisabled,
 			| _ => Unknown,
 		}
 	}
@@ -184,15 +196,19 @@ impl Error {
 		use http::StatusCode;
 
 		match self {
+			| Self::Conflict(_) => StatusCode::CONFLICT, // room alias exists
 			| Self::Federation(_, error) | Self::Ruma(error) => error.status_code,
-			| Self::Request(kind, _, code) => response::status_code(kind, *code),
+			| Self::FeatureDisabled(..)
+			| Self::CanonicalJson(..)
+			| Self::Json(..)
+			| Self::JsParseInt(..)
+			| Self::JsTryFromInt(..) => response::bad_request_code(&self.kind()),
 			| Self::BadRequest(kind, ..) => response::bad_request_code(kind),
-			| Self::FeatureDisabled(..) => response::bad_request_code(&self.kind()),
+			| Self::Request(kind, _, code) => response::status_code(kind, *code),
+			| Self::Io(error) => response::io_error_code(error.kind()),
 			| Self::Reqwest(error) => error
 				.status()
 				.unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
-			| Self::Conflict(_) => StatusCode::CONFLICT,
-			| Self::Io(error) => response::io_error_code(error.kind()),
 			| _ => StatusCode::INTERNAL_SERVER_ERROR,
 		}
 	}

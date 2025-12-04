@@ -8,6 +8,7 @@ use axum_client_ip::SecureClientIpSource;
 use http::{
 	HeaderValue, Method, StatusCode,
 	header::{self, HeaderName},
+	uri::PathAndQuery,
 };
 use tower::ServiceBuilder;
 use tower_http::{
@@ -239,8 +240,8 @@ fn request_path_str<T>(request: &http::Request<T>) -> &str {
 	request
 		.uri()
 		.path_and_query()
-		.expect("all requests have a path")
-		.as_str()
+		.map(PathAndQuery::as_str)
+		.unwrap_or("/")
 }
 
 fn truncated_matched_path(path: &MatchedPath) -> &str {

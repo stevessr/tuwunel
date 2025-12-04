@@ -220,8 +220,8 @@ pub(crate) async fn get_public_rooms_filtered_helper(
 		server.filter(|server_name| !services.globals.server_is_ours(server_name))
 	{
 		let response = services
-			.sending
-			.send_federation_request(
+			.federation
+			.execute(
 				other_server,
 				federation::directory::get_public_rooms_filtered::v1::Request {
 					limit,

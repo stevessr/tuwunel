@@ -5,10 +5,15 @@ use ruma::{
 		room::{
 			history_visibility::{HistoryVisibility, RoomHistoryVisibilityEventContent},
 			member::{MembershipState, RoomMemberEventContent},
+			tombstone::RoomTombstoneEventContent,
 		},
 	},
 };
-use tuwunel_core::{Err, Result, implement, matrix::Event, pdu::PduBuilder};
+use tuwunel_core::{
+	Err, Result, implement,
+	matrix::{Event, StateKey},
+	pdu::PduBuilder,
+};
 
 use crate::rooms::state::RoomMutexGuard;
 
@@ -92,12 +97,6 @@ pub async fn user_can_see_event(
 		return true;
 	};
 
-	let currently_member = self
-		.services
-		.state_cache
-		.is_joined(user_id, room_id)
-		.await;
-
 	let history_visibility = self
 		.state_get_content(shortstatehash, &StateEventType::RoomHistoryVisibility, "")
 		.await
@@ -106,18 +105,23 @@ pub async fn user_can_see_event(
 		});
 
 	match history_visibility {
-		| HistoryVisibility::Invited => {
-			// Allow if any member on requesting server was AT LEAST invited, else deny
-			self.user_was_invited(shortstatehash, user_id)
-				.await
-		},
-		| HistoryVisibility::Joined => {
-			// Allow if any member on requested server was joined, else deny
-			self.user_was_joined(shortstatehash, user_id)
-				.await
-		},
 		| HistoryVisibility::WorldReadable => true,
-		| HistoryVisibility::Shared | _ => currently_member,
+
+		// Allow if any member on requesting server was AT LEAST invited, else deny
+		| HistoryVisibility::Invited =>
+			self.user_was_invited(shortstatehash, user_id)
+				.await,
+
+		// Allow if any member on requested server was joined, else deny
+		| HistoryVisibility::Joined =>
+			self.user_was_joined(shortstatehash, user_id)
+				.await,
+
+		| HistoryVisibility::Shared | _ =>
+			self.services
+				.state_cache
+				.is_joined(user_id, room_id)
+				.await,
 	}
 }
 
@@ -144,16 +148,19 @@ pub async fn user_can_see_state_events(&self, user_id: &UserId, room_id: &RoomId
 
 	match history_visibility {
 		| HistoryVisibility::WorldReadable => true,
-		| HistoryVisibility::Shared =>
-			self.services
-				.state_cache
-				.once_joined(user_id, room_id)
-				.await,
+
 		| HistoryVisibility::Invited =>
 			self.services
 				.state_cache
 				.is_invited(user_id, room_id)
 				.await,
+
+		| HistoryVisibility::Shared =>
+			self.services
+				.state_cache
+				.once_joined(user_id, room_id)
+				.await,
+
 		| _ => false,
 	}
 }
@@ -174,6 +181,37 @@ pub async fn user_can_invite(
 				&RoomMemberEventContent::new(MembershipState::Invite),
 			),
 			sender,
+			room_id,
+			state_lock,
+		)
+		.await
+		.is_ok()
+}
+
+#[implement(super::Service)]
+pub async fn user_can_tombstone(
+	&self,
+	room_id: &RoomId,
+	user_id: &UserId,
+	state_lock: &RoomMutexGuard,
+) -> bool {
+	if !self
+		.services
+		.state_cache
+		.is_joined(user_id, room_id)
+		.await
+	{
+		return false;
+	}
+
+	self.services
+		.timeline
+		.create_hash_and_sign_event(
+			PduBuilder::state(StateKey::new(), &RoomTombstoneEventContent {
+				replacement_room: room_id.into(), // placeholder,
+				body: "Not a valid m.room.tombstone.".into(),
+			}),
+			user_id,
 			room_id,
 			state_lock,
 		)

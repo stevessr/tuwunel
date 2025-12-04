@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, mem};
 
-use futures::{Stream, StreamExt, TryFutureExt};
+use futures::{Stream, StreamExt, TryFutureExt, pin_mut};
 use ruma::{
 	DeviceId, KeyId, OneTimeKeyAlgorithm, OneTimeKeyId, OneTimeKeyName, OwnedKeyId, RoomId, UInt,
 	UserId,
@@ -113,7 +113,7 @@ pub async fn take_one_time_key(
 	prefix.extend_from_slice(key_algorithm.as_ref().as_bytes());
 	prefix.push(b':');
 
-	let one_time_key = self
+	let one_time_keys = self
 		.db
 		.onetimekeyid_onetimekeys
 		.raw_stream_prefix(&prefix)
@@ -136,11 +136,13 @@ pub async fn take_one_time_key(
 				.unwrap();
 
 			(key, val)
-		})
-		.next()
-		.await;
+		});
 
-	one_time_key.ok_or_else(|| err!(Request(NotFound("No one-time-key found"))))
+	pin_mut!(one_time_keys);
+	one_time_keys
+		.next()
+		.await
+		.ok_or_else(|| err!(Request(NotFound("No one-time-key found"))))
 }
 
 #[implement(super::Service)]

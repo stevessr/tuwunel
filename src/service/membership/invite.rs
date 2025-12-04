@@ -83,8 +83,8 @@ async fn remote_invite(
 
 	let response = self
 		.services
-		.sending
-		.send_federation_request(user_id.server_name(), create_invite::v2::Request {
+		.federation
+		.execute(user_id.server_name(), create_invite::v2::Request {
 			room_id: room_id.to_owned(),
 			event_id: (*pdu.event_id).to_owned(),
 			room_version: room_version_id.clone(),
