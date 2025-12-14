@@ -23,7 +23,7 @@ pub(crate) async fn events_route(
 	State(services): State<crate::State>,
 	body: Ruma<Request>,
 ) -> Result<Response> {
-	let (sender_user, sender_device) = body.sender();
+	let sender_user = body.sender_user();
 
 	let from = body
 		.body
@@ -62,9 +62,11 @@ pub(crate) async fn events_route(
 		.expect("configuration must limit maximum timeout");
 
 	loop {
-		let watchers = services
-			.sync
-			.watch(sender_user, sender_device, once(room_id).stream());
+		let watchers = services.sync.watch(
+			sender_user,
+			body.sender_device.as_deref(),
+			once(room_id).stream(),
+		);
 
 		let next_batch = services.globals.wait_pending().await?;
 

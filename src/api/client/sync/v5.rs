@@ -37,7 +37,7 @@ use crate::Ruma;
 struct SyncInfo<'a> {
 	services: &'a Services,
 	sender_user: &'a UserId,
-	sender_device: &'a DeviceId,
+	sender_device: Option<&'a DeviceId>,
 }
 
 #[derive(Clone, Debug)]
@@ -69,7 +69,7 @@ type ListIds = SmallVec<[ListId; 1]>;
 	skip_all,
 	fields(
 		user_id = %body.sender_user().localpart(),
-		device_id = %body.sender_device(),
+		device_id = %body.sender_device.as_deref().map_or("<no device>", |x| x.as_str()),
 		conn_id = ?body.body.conn_id.clone().unwrap_or_default(),
 		since = ?body.body.pos.clone().unwrap_or_default(),
 	)
@@ -78,7 +78,8 @@ pub(crate) async fn sync_events_v5_route(
 	State(ref services): State<crate::State>,
 	body: Ruma<Request>,
 ) -> Result<Response> {
-	let (sender_user, sender_device) = body.sender();
+	let sender_user = body.sender_user();
+	let sender_device = body.sender_device.as_deref();
 	let request = &body.body;
 	let since = request
 		.pos
@@ -108,7 +109,7 @@ pub(crate) async fn sync_events_v5_route(
 	let conn = conn_val.lock();
 	let ping_presence = services
 		.presence
-		.maybe_ping_presence(sender_user, Some(sender_device), &request.set_presence)
+		.maybe_ping_presence(sender_user, sender_device, &request.set_presence)
 		.inspect_err(inspect_log)
 		.ok();
 

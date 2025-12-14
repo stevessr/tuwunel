@@ -35,7 +35,8 @@ pub(crate) async fn upload_keys_route(
 	State(services): State<crate::State>,
 	body: Ruma<upload_keys::v3::Request>,
 ) -> Result<upload_keys::v3::Response> {
-	let (sender_user, sender_device) = body.sender();
+	let sender_user = body.sender_user();
+	let sender_device = body.sender_device()?;
 
 	let one_time_keys = body
 		.one_time_keys
