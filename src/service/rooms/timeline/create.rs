@@ -187,17 +187,7 @@ pub async fn create_hash_and_sign_event(
 	pdu.event_id = self
 		.services
 		.server_keys
-		.gen_id_hash_and_sign_event(&mut pdu_json, &room_version)
-		.map_err(|e| {
-			use Error::Signatures;
-			use ruma::signatures::Error::PduSize;
-			match e {
-				| Signatures(PduSize) => {
-					err!(Request(TooLarge("PDU exceeds 65535 bytes")))
-				},
-				| _ => err!(Request(Unknown(warn!("Signing event failed: {e}")))),
-			}
-		})?;
+		.gen_id_hash_and_sign_event(&mut pdu_json, &room_version)?;
 
 	// Room id is event id for V12+
 	if matches!(version_rules.room_id_format, RoomIdFormatVersion::V2)
@@ -206,6 +196,8 @@ pub async fn create_hash_and_sign_event(
 		pdu.room_id = OwnedRoomId::from_parts('!', pdu.event_id.localpart(), None)?;
 		pdu_json.insert("room_id".into(), CanonicalJsonValue::String(pdu.room_id.clone().into()));
 	}
+
+	state_res::check_pdu_format(&pdu_json, &version_rules.event_format)?;
 
 	// Generate short event id
 	let _shorteventid = self

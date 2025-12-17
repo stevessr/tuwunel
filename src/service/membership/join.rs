@@ -225,6 +225,8 @@ pub async fn join_remote(
 		.server_keys
 		.gen_id_hash_and_sign_event(&mut join_event_stub, &room_version_id)?;
 
+	state_res::check_pdu_format(&join_event_stub, &room_version_rules.event_format)?;
+
 	// It has enough fields to be called a proper event now
 	let mut join_event = join_event_stub;
 
@@ -634,6 +636,8 @@ pub async fn join_local(
 		));
 	}
 
+	let room_version_rules = room_version::rules(&room_version_id)?;
+
 	let mut join_event_stub: CanonicalJsonObject =
 		serde_json::from_str(make_join_response.event.get()).map_err(|e| {
 			err!(BadServerResponse("Invalid make_join event json received from server: {e:?}"))
@@ -698,6 +702,8 @@ pub async fn join_local(
 		.services
 		.server_keys
 		.gen_id_hash_and_sign_event(&mut join_event_stub, &room_version_id)?;
+
+	state_res::check_pdu_format(&join_event_stub, &room_version_rules.event_format)?;
 
 	// It has enough fields to be called a proper event now
 	let join_event = join_event_stub;

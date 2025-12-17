@@ -11,8 +11,9 @@ use ruma::{
 };
 use tuwunel_core::{
 	Err, Result, debug_info, debug_warn, err, implement,
-	matrix::PduCount,
+	matrix::{PduCount, room_version},
 	pdu::PduBuilder,
+	state_res,
 	utils::{self, FutureBoolExt, future::ReadyBoolExt},
 	warn,
 };
@@ -278,6 +279,8 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 		)));
 	}
 
+	let room_version_rules = room_version::rules(&room_version_id)?;
+
 	let mut leave_event_stub = serde_json::from_str::<CanonicalJsonObject>(
 		make_leave_response.event.get(),
 	)
@@ -311,6 +314,8 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 		.services
 		.server_keys
 		.gen_id_hash_and_sign_event(&mut leave_event_stub, &room_version_id)?;
+
+	state_res::check_pdu_format(&leave_event_stub, &room_version_rules.event_format)?;
 
 	// It has enough fields to be called a proper event now
 	let leave_event = leave_event_stub;

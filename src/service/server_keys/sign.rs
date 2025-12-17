@@ -1,6 +1,6 @@
 use ruma::{CanonicalJsonObject, CanonicalJsonValue, OwnedEventId, RoomVersionId};
 use tuwunel_core::{
-	Result, implement,
+	Result, err, implement,
 	matrix::{event::gen_event_id, room_version},
 };
 
@@ -73,7 +73,15 @@ pub fn hash_and_sign_event(
 		object,
 		&room_version_rules.redaction,
 	)
-	.map_err(Into::into)
+	.map_err(|e| {
+		use ruma::signatures::Error::PduSize;
+		match e {
+			| PduSize => {
+				err!(Request(TooLarge("PDU exceeds 65535 bytes")))
+			},
+			| _ => err!(Request(Unknown(warn!("Signing event failed: {e}")))),
+		}
+	})
 }
 
 #[implement(super::Service)]
