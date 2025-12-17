@@ -15,7 +15,7 @@
 
 <!-- ANCHOR: body -->
 
-![Documentation](https://img.shields.io/badge/documentation%2D_?color=%238A2BE2&style=for-the-badge&logo=mdBook&logoColor=white&link=https%3A%2F%2Fmatrix-construct.github.io%2Ftuwunel%2F)
+[![Documentation](https://img.shields.io/badge/documentation%2D_?color=%238A2BE2&style=for-the-badge&logo=mdBook&logoColor=white)](https://matrix-construct.github.io/tuwunel/)
 ![Support Chat](https://img.shields.io/matrix/tuwunel%3Amatrix.org.svg?color=%238A2BE2&style=for-the-badge&label=Support%20Chat)
 
 Tuwunel is a featureful [Matrix](https://matrix.org/) homeserver you can use instead of Synapse
@@ -28,7 +28,7 @@ low-cost, enterprise-ready, community-driven alternative, fully implementing the
 This project is the official successor to [conduwuit](https://github.com/x86pup/conduwuit) after it
 reached stability. Tuwunel is now used by many companies with a vested interest in its continued
 development by full-time staff. It is primarily sponsored by the government of
-Switzerland 🇨🇭 where it is currently deployed for its citizens.
+Switzerland 🇨🇭 where it is currently deployed for citizens.
 
 ### Getting Started
 
