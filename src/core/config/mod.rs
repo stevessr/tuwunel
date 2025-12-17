@@ -2111,11 +2111,6 @@ pub struct Config {
 	///
 	/// This option exists for developer and debug use, and as a failsafe in
 	/// lieu of hardcoding it.
-	///
-	/// This currently defaults to false as a matter of development until
-	/// real-world testing can shake out any implementation issues rather than
-	/// jeopardize existing rooms, but otherwise will default to true at the
-	/// next point release or patch.
 	#[serde(default = "true_fn")]
 	pub hydra_backports: bool,
 
