@@ -233,7 +233,7 @@ version = "0.14"
 
 [workspace.dependencies.jevmalloc]
 git = "https://github.com/matrix-construct/jevmalloc"
-rev = "29fde02533ee2c6a5e9b87095324e6f7a5d43738"
+rev = "93795449913f65ab533b7fa482333eef63fc3ae0"
 
 [workspace.dependencies.jsonwebtoken]
 version = "9.3"
@@ -372,7 +372,7 @@ default-features = false
 
 [workspace.dependencies.rust-rocksdb]
 git = "https://github.com/matrix-construct/rust-rocksdb"
-rev = "31e6f8dd4a531b379c132e82773efc9315b0489a"
+rev = "c11395350bc1f2090a0152f2d15c8c5847821eba"
 default-features = false
 features = [
 	"bzip2",
