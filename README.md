@@ -16,7 +16,7 @@
 <!-- ANCHOR: body -->
 
 [![Documentation](https://img.shields.io/badge/documentation%2D_?color=%238A2BE2&style=for-the-badge&logo=mdBook&logoColor=white)](https://matrix-construct.github.io/tuwunel/)
-![Support Chat](https://img.shields.io/matrix/tuwunel%3Amatrix.org.svg?color=%238A2BE2&style=for-the-badge&label=Support%20Chat)
+[![Support Chat](https://img.shields.io/matrix/tuwunel%3Amatrix.org.svg?color=%238A2BE2&style=for-the-badge&label=Support%20Chat)](https://matrix.to/#/#tuwunel:grin.hu)
 
 Tuwunel is a featureful [Matrix](https://matrix.org/) homeserver you can use instead of Synapse
 with your favorite [client](https://matrix.org/ecosystem/clients/),
