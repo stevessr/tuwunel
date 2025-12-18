@@ -263,7 +263,6 @@ async fn build_empty_response(
 #[tracing::instrument(
 	name = "build",
 	level = INFO_SPAN_LEVEL,
-	ret(level = "trace"),
 	skip_all,
 	fields(
 		%since,
