@@ -1,4 +1,5 @@
 mod between;
+pub mod de;
 mod split;
 mod tests;
 mod unquote;
