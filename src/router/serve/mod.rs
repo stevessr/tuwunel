@@ -33,6 +33,8 @@ pub(super) async fn serve(
 		unix::serve(server, app, shutdown).await
 	} else if config.tls.certs.is_some() {
 		#[cfg(feature = "direct_tls")]
+		services.globals.init_rustls_provider()?;
+		#[cfg(feature = "direct_tls")]
 		return tls::serve(server, app, handle, addrs).await;
 
 		#[cfg(not(feature = "direct_tls"))]

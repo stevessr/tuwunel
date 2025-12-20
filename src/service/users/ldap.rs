@@ -21,6 +21,10 @@ pub async fn search_ldap(&self, user_id: &UserId) -> Result<Vec<(String, bool)>>
 		.as_ref()
 		.ok_or_else(|| err!(Ldap(error!("LDAP URI is not configured."))))?;
 
+	if uri.scheme().starts_with("ldaps") {
+		self.services.globals.init_rustls_provider()?;
+	}
+
 	debug!(?uri, "LDAP creating connection...");
 	let (conn, mut ldap) = LdapConnAsync::new(uri.as_str())
 		.await
@@ -121,6 +125,10 @@ pub async fn auth_ldap(&self, user_dn: &str, password: &str) -> Result {
 		.uri
 		.as_ref()
 		.ok_or_else(|| err!(Ldap(error!("LDAP URI is not configured."))))?;
+
+	if uri.scheme().starts_with("ldaps") {
+		self.services.globals.init_rustls_provider()?;
+	}
 
 	debug!(?uri, "LDAP creating connection...");
 	let (conn, mut ldap) = LdapConnAsync::new(uri.as_str())

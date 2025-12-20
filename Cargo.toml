@@ -242,7 +242,7 @@ features = ["use_pem"]
 
 [workspace.dependencies.ldap3]
 git = "https://github.com/matrix-construct/ldap3"
-rev = "7d423314b9dbc66347284e38fc2b78c3d8f3d494"
+rev = "fdfbba2bf916b53e5f73cdb1a495ebb649978079"
 default-features = false
 features = ["sync", "tls-rustls"]
 
@@ -364,7 +364,7 @@ features = [
 [workspace.dependencies.rustls]
 version = "0.23"
 default-features = false
-features = ["aws_lc_rs"]
+features = ["aws_lc_rs", "logging", "tls12", "prefer-post-quantum"]
 
 [workspace.dependencies.rustyline-async]
 version = "0.4.6"

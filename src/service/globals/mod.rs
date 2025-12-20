@@ -4,7 +4,7 @@ use std::{collections::HashSet, ops::Range, sync::Arc};
 
 use data::Data;
 use ruma::{OwnedUserId, RoomAliasId, ServerName, UserId};
-use tuwunel_core::{Result, Server, error};
+use tuwunel_core::{Result, Server, err, error};
 
 use crate::service;
 
@@ -129,5 +129,17 @@ impl Service {
 		}
 
 		tokens
+	}
+
+	pub fn init_rustls_provider(&self) -> Result {
+		if rustls::crypto::CryptoProvider::get_default().is_none() {
+			rustls::crypto::aws_lc_rs::default_provider()
+				.install_default()
+				.map_err(|_provider| {
+					err!(error!("Error initialising aws_lc_rs rustls crypto backend"))
+				})
+		} else {
+			Ok(())
+		}
 	}
 }
