@@ -418,6 +418,10 @@ version = "1.0"
 default-features = false
 features = ["rc"]
 
+[workspace.dependencies.serde_core]
+version = "1.0"
+default-features = false
+
 [workspace.dependencies.serde_html_form]
 version = "0.2"
 
