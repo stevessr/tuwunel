@@ -1,7 +1,7 @@
 use futures::FutureExt;
 use ruma::{OwnedUserId, UserId};
 use tuwunel_core::{Err, Result, debug};
-use tuwunel_service::Services;
+use tuwunel_service::{Services, users::Register};
 
 use super::password_login;
 
@@ -51,7 +51,12 @@ pub(super) async fn ldap_login(
 	if !services.users.exists(lowercased_user_id).await {
 		services
 			.users
-			.full_register(lowercased_user_id, Some("*"), Some("ldap"), None, false, false)
+			.full_register(Register {
+				user_id: Some(lowercased_user_id),
+				password: Some("*"),
+				origin: Some("ldap"),
+				..Default::default()
+			})
 			.await?;
 	}
 

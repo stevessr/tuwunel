@@ -22,7 +22,7 @@ use tuwunel_core::{
 };
 use tuwunel_database::{Deserialized, Json, Map};
 
-pub use self::keys::parse_master_key;
+pub use self::{keys::parse_master_key, register::Register};
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,

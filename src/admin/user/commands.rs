@@ -17,7 +17,7 @@ use tuwunel_core::{
 	matrix::{Event, pdu::PduBuilder},
 	utils::{self, ReadyExt},
 };
-use tuwunel_service::Services;
+use tuwunel_service::{Services, users::Register};
 
 use crate::{
 	admin_command, get_room_info,
@@ -63,7 +63,12 @@ pub(super) async fn create_user(&self, username: String, password: Option<String
 
 	self.services
 		.users
-		.full_register(&user_id, Some(&password), None, None, false, true)
+		.full_register(Register {
+			user_id: Some(&user_id),
+			password: Some(&password),
+			grant_first_user_admin: true,
+			..Default::default()
+		})
 		.await?;
 
 	self.write_str(&format!("Created user with user_id: {user_id} and password: `{password}`"))
