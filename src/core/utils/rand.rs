@@ -31,6 +31,34 @@ pub fn string_array<const LENGTH: usize>() -> ArrayString<LENGTH> {
 	ret
 }
 
+#[must_use]
+pub fn truncate_string(mut str: String, range: Range<u64>) -> String {
+	let len = thread_rng()
+		.gen_range(range)
+		.try_into()
+		.unwrap_or(usize::MAX);
+
+	if let Some((i, _)) = str.char_indices().nth(len) {
+		str.truncate(i);
+	}
+
+	str
+}
+
+#[inline]
+#[must_use]
+pub fn truncate_str(str: &str, range: Range<u64>) -> &str {
+	let len = thread_rng()
+		.gen_range(range)
+		.try_into()
+		.unwrap_or(usize::MAX);
+
+	str.char_indices()
+		.nth(len)
+		.map(|(i, _)| str.split_at(i).0)
+		.unwrap_or(str)
+}
+
 #[inline]
 #[must_use]
 pub fn time_from_now_secs(range: Range<u64>) -> SystemTime {

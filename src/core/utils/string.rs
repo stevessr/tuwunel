@@ -5,7 +5,7 @@ mod tests;
 mod unquote;
 mod unquoted;
 
-use std::mem::replace;
+use std::{mem::replace, ops::Range};
 
 pub use self::{between::Between, split::SplitInfallible, unquote::Unquote, unquoted::Unquoted};
 use crate::{Result, smallstr::SmallString};
@@ -110,6 +110,26 @@ pub fn common_prefix<T: AsRef<str>>(choice: &[T]) -> &str {
 					.count()]
 			})
 	})
+}
+
+#[inline]
+#[must_use]
+#[allow(clippy::arithmetic_side_effects)]
+pub fn truncate_deterministic(str: &str, range: Option<Range<usize>>) -> &str {
+	let range = range.unwrap_or(0..str.len());
+	let len = str
+		.as_bytes()
+		.iter()
+		.copied()
+		.map(Into::into)
+		.fold(0_usize, usize::wrapping_add)
+		.wrapping_rem(str.len().max(1))
+		.clamp(range.start, range.end);
+
+	str.char_indices()
+		.nth(len)
+		.map(|(i, _)| str.split_at(i).0)
+		.unwrap_or(str)
 }
 
 pub fn to_small_string<const CAP: usize, T>(t: T) -> SmallString<[u8; CAP]>
