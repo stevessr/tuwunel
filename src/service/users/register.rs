@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use futures::FutureExt;
 use ruma::{UserId, events::GlobalAccountDataEventType, push};
 use tuwunel_core::{Err, Result, error, implement, info, is_equal_to, warn};
@@ -15,6 +13,8 @@ pub struct Register<'a> {
 	pub appservice_info: Option<&'a RegistrationInfo>,
 	pub is_guest: bool,
 	pub grant_first_user_admin: bool,
+	pub displayname: Option<&'a str>,
+	pub omit_displayname_suffix: bool,
 }
 
 /// Fully register a local user
@@ -32,6 +32,8 @@ pub async fn full_register(
 		appservice_info,
 		is_guest,
 		grant_first_user_admin,
+		displayname,
+		omit_displayname_suffix,
 	}: Register<'_>,
 ) -> Result {
 	let ref user_id = user_id
@@ -59,31 +61,33 @@ pub async fn full_register(
 		.create(user_id, password, origin)
 		.await?;
 
-	// Default to pretty displayname
-	let mut displayname = user_id.localpart().to_owned();
-
-	// If `new_user_displayname_suffix` is set, registration will push whatever
-	// content is set to the user's display name with a space before it
-	if !self
+	let displayname_suffix = self
 		.services
 		.config
 		.new_user_displayname_suffix
-		.is_empty()
-		&& appservice_info.is_none()
-	{
-		write!(
-			displayname,
-			" {}",
-			self.services
-				.server
-				.config
-				.new_user_displayname_suffix
-		)?;
-	}
+		.as_str();
 
-	self.services
-		.users
-		.set_displayname(user_id, Some(displayname.clone()));
+	let add_displayname_suffix = !displayname_suffix.is_empty() && !omit_displayname_suffix;
+
+	if let Some(displayname) =
+		displayname.or_else(|| add_displayname_suffix.then(|| user_id.localpart()))
+	{
+		// If `new_user_displayname_suffix` is set, registration will push whatever
+		// content is set to the user's display name with a space before it
+		let displayname = format!(
+			"{displayname}{}{}",
+			add_displayname_suffix
+				.then_some(" ")
+				.unwrap_or(""),
+			add_displayname_suffix
+				.then_some(displayname_suffix)
+				.unwrap_or("")
+		);
+
+		self.services
+			.users
+			.set_displayname(user_id, Some(displayname));
+	}
 
 	// Initial account data
 	self.services
