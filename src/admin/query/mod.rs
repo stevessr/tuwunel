@@ -1,6 +1,7 @@
 mod account_data;
 mod appservice;
 mod globals;
+mod oauth;
 mod presence;
 mod pusher;
 mod raw;
@@ -18,10 +19,10 @@ use tuwunel_core::Result;
 
 use self::{
 	account_data::AccountDataCommand, appservice::AppserviceCommand, globals::GlobalsCommand,
-	presence::PresenceCommand, pusher::PusherCommand, raw::RawCommand, resolver::ResolverCommand,
-	room_alias::RoomAliasCommand, room_state_cache::RoomStateCacheCommand,
-	room_timeline::RoomTimelineCommand, sending::SendingCommand, short::ShortCommand,
-	sync::SyncCommand, users::UsersCommand,
+	oauth::OauthCommand, presence::PresenceCommand, pusher::PusherCommand, raw::RawCommand,
+	resolver::ResolverCommand, room_alias::RoomAliasCommand,
+	room_state_cache::RoomStateCacheCommand, room_timeline::RoomTimelineCommand,
+	sending::SendingCommand, short::ShortCommand, sync::SyncCommand, users::UsersCommand,
 };
 use crate::admin_command_dispatch;
 
@@ -80,6 +81,10 @@ pub(super) enum QueryCommand {
 	/// - sync service
 	#[command(subcommand)]
 	Sync(SyncCommand),
+
+	/// - oauth service
+	#[command(subcommand)]
+	Oauth(OauthCommand),
 
 	/// - raw service
 	#[command(subcommand)]

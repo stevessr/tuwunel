@@ -76,6 +76,7 @@ version = "0.7"
 version = "0.10"
 default-features = false
 features = [
+	"cookie",
 	"typed-header",
 	"tracing",
 ]
@@ -312,10 +313,12 @@ version = "1.12"
 version = "0.12"
 default-features = false
 features = [
-	"rustls-tls-native-roots",
-	"socks",
+	"charset",
 	"hickory-dns",
 	"http2",
+	"json",
+	"rustls-tls-native-roots",
+	"socks",
 ]
 
 [workspace.dependencies.ring]

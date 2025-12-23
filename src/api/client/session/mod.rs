@@ -4,6 +4,7 @@ mod ldap;
 mod logout;
 mod password;
 mod refresh;
+mod sso;
 mod token;
 
 use axum::extract::State;
@@ -12,8 +13,8 @@ use ruma::api::client::session::{
 	get_login_types::{
 		self,
 		v3::{
-			ApplicationServiceLoginType, JwtLoginType, LoginType, PasswordLoginType,
-			TokenLoginType,
+			ApplicationServiceLoginType, IdentityProvider, JwtLoginType, LoginType,
+			PasswordLoginType, SsoLoginType, TokenLoginType,
 		},
 	},
 	login::{
@@ -28,6 +29,7 @@ use self::{ldap::ldap_login, password::password_login};
 pub(crate) use self::{
 	logout::{logout_all_route, logout_route},
 	refresh::refresh_token_route,
+	sso::{sso_callback_route, sso_login_route, sso_login_with_provider_route},
 	token::login_token_route,
 };
 use super::TOKEN_LENGTH;
@@ -49,6 +51,20 @@ pub(crate) async fn get_login_types_route(
 		LoginType::Jwt(JwtLoginType::default()),
 		LoginType::Token(TokenLoginType {
 			get_login_token: services.config.login_via_existing_session,
+		}),
+		LoginType::Sso(SsoLoginType {
+			identity_providers: services
+				.config
+				.identity_provider
+				.iter()
+				.cloned()
+				.map(|config| IdentityProvider {
+					id: config.id().to_owned(),
+					brand: Some(config.brand.clone().into()),
+					icon: config.icon,
+					name: config.name.unwrap_or(config.brand),
+				})
+				.collect(),
 		}),
 	]))
 }
@@ -88,6 +104,10 @@ pub(crate) async fn login_route(
 			))));
 		},
 	};
+
+	if !services.users.is_active_local(&user_id).await {
+		return Err!(Request(UserDeactivated("This user has been deactivated.")));
+	}
 
 	// Generate a new token for the device
 	let (access_token, expires_in) = services

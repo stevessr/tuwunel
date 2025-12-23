@@ -383,6 +383,7 @@ dependencies = [
  "axum",
  "axum-core",
  "bytes",
+ "cookie",
  "futures-util",
  "headers",
  "http",
@@ -834,6 +835,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
+]
+
+[[package]]
+name = "cookie"
+version = "0.18.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ddef33a339a91ea89fb53151bd0a4689cfce27055c291dfa69945475d22c747"
+dependencies = [
+ "percent-encoding",
+ "time",
+ "version_check",
 ]
 
 [[package]]
@@ -1290,6 +1302,15 @@ name = "encode_unicode"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34aa73646ffb006b8f5147f3dc182bd4bcb190227ce861fc4a4844bf8e3cb2c0"
+
+[[package]]
+name = "encoding_rs"
+version = "0.8.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
+dependencies = [
+ "cfg-if",
+]
 
 [[package]]
 name = "enum-as-inner"
@@ -3582,6 +3603,7 @@ checksum = "3b4c14b2d9afca6a60277086b0cc6a6ae0b568f6f7916c943a8cdc79f8be240f"
 dependencies = [
  "base64",
  "bytes",
+ "encoding_rs",
  "futures-channel",
  "futures-core",
  "futures-util",
@@ -3595,6 +3617,7 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
+ "mime",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -5141,6 +5164,7 @@ dependencies = [
  "tracing",
  "tuwunel_core",
  "tuwunel_service",
+ "url",
 ]
 
 [[package]]
@@ -5185,6 +5209,8 @@ dependencies = [
  "ruma",
  "sanitize-filename",
  "serde",
+ "serde_core",
+ "serde_html_form",
  "serde_json",
  "serde_regex",
  "serde_yaml",
@@ -5295,6 +5321,7 @@ dependencies = [
  "rustls",
  "rustyline-async",
  "serde",
+ "serde_html_form",
  "serde_json",
  "serde_yaml",
  "sha2",

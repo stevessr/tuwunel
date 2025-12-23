@@ -5,7 +5,7 @@ use ruma::{
 		client::uiaa::{AuthData, AuthFlow, AuthType, Jwt, UiaaInfo},
 	},
 };
-use tuwunel_core::{Err, Error, Result, err, utils};
+use tuwunel_core::{Err, Error, Result, err, is_equal_to, utils};
 use tuwunel_service::{Services, uiaa::SESSION_ID_LENGTH};
 
 use crate::{Ruma, client::jwt};
@@ -67,8 +67,18 @@ where
 			| Some(ref json) => {
 				let sender_user = body
 					.sender_user
-					.as_ref()
+					.as_deref()
 					.ok_or_else(|| err!(Request(MissingToken("Missing access token."))))?;
+
+				// Skip UIAA for SSO/OIDC users.
+				if services
+					.users
+					.origin(sender_user)
+					.await
+					.is_ok_and(is_equal_to!("sso"))
+				{
+					return Ok(sender_user.to_owned());
+				}
 
 				uiaainfo.session = Some(utils::random_string(SESSION_ID_LENGTH));
 				services

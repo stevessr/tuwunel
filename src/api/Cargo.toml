@@ -101,6 +101,7 @@ tokio.workspace = true
 tracing.workspace = true
 tuwunel-core.workspace = true
 tuwunel-service.workspace = true
+url.workspace = true
 
 [lints]
 workspace = true
