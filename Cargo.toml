@@ -524,7 +524,7 @@ features = [
 ]
 
 [workspace.dependencies.tracing]
-version = "0.1"
+version = "=0.1.43"
 default-features = false
 
 [workspace.dependencies.tracing-core]
