@@ -2,6 +2,7 @@ mod appservice;
 pub(crate) mod jwt;
 mod ldap;
 mod logout;
+pub(crate) mod oauth;
 mod password;
 mod refresh;
 mod token;
@@ -13,7 +14,7 @@ use ruma::api::client::session::{
 		self,
 		v3::{
 			ApplicationServiceLoginType, JwtLoginType, LoginType, PasswordLoginType,
-			TokenLoginType,
+			SsoLoginType, TokenLoginType,
 		},
 	},
 	login::{
@@ -43,14 +44,21 @@ pub(crate) async fn get_login_types_route(
 	InsecureClientIp(client): InsecureClientIp,
 	_body: Ruma<get_login_types::v3::Request>,
 ) -> Result<get_login_types::v3::Response> {
-	Ok(get_login_types::v3::Response::new(vec![
+	let mut flows = vec![
 		LoginType::Password(PasswordLoginType::default()),
 		LoginType::ApplicationService(ApplicationServiceLoginType::default()),
 		LoginType::Jwt(JwtLoginType::default()),
 		LoginType::Token(TokenLoginType {
 			get_login_token: services.config.login_via_existing_session,
 		}),
-	]))
+	];
+
+	// Add SSO/OAuth login type if enabled
+	if services.config.oauth.enable {
+		flows.push(LoginType::Sso(SsoLoginType::default()));
+	}
+
+	Ok(get_login_types::v3::Response::new(flows))
 }
 
 /// # `POST /_matrix/client/v3/login`

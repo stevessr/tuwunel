@@ -102,3 +102,5 @@ tests/complement/logs.jsonl
 # Editor crashfiles
 *.save
 *.swp
+tuwunel-data
+node_modules

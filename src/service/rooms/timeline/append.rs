@@ -169,7 +169,8 @@ where
 
 	self.services
 		.pusher
-		.reset_notification_counts(pdu.sender(), pdu.room_id());
+		.reset_notification_counts(pdu.sender(), pdu.room_id())
+		.await;
 
 	let count = PduCount::Normal(*next_count1);
 	let pdu_id: RawPduId = PduId { shortroomid, count }.into();

@@ -23,7 +23,7 @@ pub(crate) struct ActualDest {
 
 impl ActualDest {
 	#[inline]
-	pub(crate) fn to_string(&self) -> DestString { self.dest.https_string() }
+	pub(crate) fn string(&self) -> String { self.dest.https_string() }
 }
 
 impl super::Service {
@@ -78,7 +78,7 @@ impl super::Service {
 					self.services.server.check_running()?;
 					match self.request_well_known(dest.as_str()).await? {
 						| Some(delegated) =>
-							self.actual_dest_3(&mut host, cache, &delegated)
+							self.actual_dest_3(&mut host, cache, delegated)
 								.await?,
 						| _ => match self.query_srv_record(dest.as_str()).await? {
 							| Some(overrider) =>
@@ -148,7 +148,7 @@ impl super::Service {
 					self.actual_dest_3_2(cache, delegated, pos).await
 				} else {
 					trace!("Delegated hostname has no port in this branch");
-					match self.query_srv_record(delegated).await? {
+					match self.query_srv_record(&delegated).await? {
 						| Some(overrider) =>
 							self.actual_dest_3_3(cache, delegated, overrider)
 								.await,

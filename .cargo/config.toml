@@ -1,2 +1,30 @@
 [env]
 RUMA_UNSTABLE_EXHAUSTIVE_TYPES = "true"
+# Pass mold to clang via rustc link-arg so the clang driver uses mold as the
+# linker backend.
+RUSTFLAGS = "-C link-arg=-fuse-ld=mold"
+
+[build]
+# Default number of parallel jobs for cargo. Tune to number of logical CPUs
+# or set via environment variable CARGO_BUILD_JOBS. 16 is a reasonable default
+# for developer machines with multiple cores.
+jobs = 4
+
+# Use mold as the linker for x86_64 Linux builds when available. Mold is a
+# high-performance, parallel linker that can greatly speed up linking for
+# large Rust projects. Ensure `mold` is installed on the system (e.g. via
+# your distro package manager or by building from https://github.com/rui314/mold).
+#
+# If you prefer to use the compiler driver (clang/gcc) with mold, you can
+# alternatively set the compiler driver as the linker and pass -fuse-ld=mold
+# via rustflags. This configuration attempts to use mold directly.
+
+[target.x86_64-unknown-linux-gnu]
+# Use clang as the linker driver and ask it to use mold. Directly invoking
+# `mold` as the linker can fail because rustc may pass `-m64` (or other args)
+# that mold does not accept; using clang with `-fuse-ld=mold` avoids that.
+linker = "clang"
+
+# Ensure rustc/clang uses mold by default via RUSTFLAGS. This will pass the
+# `-fuse-ld=mold` option to clang which then invokes mold correctly.
+# You can override this by setting RUSTFLAGS or CARGO_BUILD_JOBS in your env.

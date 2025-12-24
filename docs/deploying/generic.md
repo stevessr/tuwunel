@@ -148,7 +148,14 @@ We recommend Caddy as a reverse proxy, as it is trivial to use, handling TLS cer
 - **[Caddy Setup Guide](reverse-proxy-caddy.md)** - Recommended for ease of use and automatic TLS
 - **[Nginx Setup Guide](reverse-proxy-nginx.md)** - Popular choice with extensive documentation
 
-### Quick Overview
+```caddyfile
+your.server.name, your.server.name:443 {
+    # TCP reverse_proxy
+    reverse_proxy localhost:8008
+    # UNIX socket
+    #reverse_proxy unix//run/tuwunel/tuwunel.sock
+}
+```
 
 Regardless of which reverse proxy you choose, you will need to:
 
