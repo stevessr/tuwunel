@@ -23,7 +23,7 @@ pub(crate) async fn logout_route(
 ) -> Result<logout::v3::Response> {
 	services
 		.users
-		.remove_device(body.sender_user(), body.sender_device())
+		.remove_device(body.sender_user(), body.sender_device()?)
 		.await;
 
 	Ok(logout::v3::Response::new())

@@ -15,7 +15,7 @@ pub(crate) enum SyncCommand {
 	/// Show details of sliding sync connection by ID.
 	ShowConnection {
 		user_id: OwnedUserId,
-		device_id: OwnedDeviceId,
+		device_id: Option<OwnedDeviceId>,
 		conn_id: Option<String>,
 	},
 
@@ -43,7 +43,7 @@ pub(super) async fn list_connections(&self) -> Result {
 pub(super) async fn show_connection(
 	&self,
 	user_id: OwnedUserId,
-	device_id: OwnedDeviceId,
+	device_id: Option<OwnedDeviceId>,
 	conn_id: Option<String>,
 ) -> Result {
 	let key = into_connection_key(user_id, device_id, conn_id);

@@ -59,7 +59,7 @@ pub struct Room {
 
 type Connections = TokioMutex<BTreeMap<ConnectionKey, ConnectionVal>>;
 pub type ConnectionVal = Arc<TokioMutex<Connection>>;
-pub type ConnectionKey = (OwnedUserId, OwnedDeviceId, Option<ConnectionId>);
+pub type ConnectionKey = (OwnedUserId, Option<OwnedDeviceId>, Option<ConnectionId>);
 
 pub type Subscriptions = BTreeMap<OwnedRoomId, request::ListConfig>;
 pub type Lists = BTreeMap<ListId, request::List>;
@@ -107,7 +107,7 @@ pub async fn clear_connections(
 		.await
 		.retain(|(conn_user_id, conn_device_id, conn_conn_id), _| {
 			let retain = user_id.is_none_or(is_equal_to!(conn_user_id))
-				&& device_id.is_none_or(is_equal_to!(conn_device_id))
+				&& (device_id.is_none() || device_id == conn_device_id.as_deref())
 				&& (conn_id.is_none() || conn_id == conn_conn_id.as_ref());
 
 			if !retain {
@@ -215,13 +215,17 @@ pub async fn is_connection_stored(&self, key: &ConnectionKey) -> bool {
 }
 
 #[inline]
-pub fn into_connection_key<U, D, C>(user_id: U, device_id: D, conn_id: Option<C>) -> ConnectionKey
+pub fn into_connection_key<U, D, C>(
+	user_id: U,
+	device_id: Option<D>,
+	conn_id: Option<C>,
+) -> ConnectionKey
 where
 	U: Into<OwnedUserId>,
 	D: Into<OwnedDeviceId>,
 	C: Into<ConnectionId>,
 {
-	(user_id.into(), device_id.into(), conn_id.map(Into::into))
+	(user_id.into(), device_id.map(Into::into), conn_id.map(Into::into))
 }
 
 #[implement(Connection)]

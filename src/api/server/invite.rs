@@ -3,13 +3,13 @@ use axum_client_ip::InsecureClientIp;
 use base64::{Engine as _, engine::general_purpose};
 use futures::StreamExt;
 use ruma::{
-	CanonicalJsonValue, OwnedUserId, UserId,
+	CanonicalJsonValue, OwnedRoomId, OwnedUserId, RoomId, UserId,
 	api::{
 		client::error::ErrorKind,
 		federation::membership::{RawStrippedState, create_invite},
 	},
 	events::{
-		GlobalAccountDataEventType,
+		GlobalAccountDataEventType, StateEventType,
 		push_rules::PushRulesEvent,
 		room::member::{MembershipState, RoomMemberEventContent},
 	},
@@ -78,6 +78,26 @@ pub(crate) async fn create_invite_route(
 	let mut signed_event = utils::to_canonical_object(&body.event)
 		.map_err(|_| err!(Request(InvalidParam("Invite event is invalid."))))?;
 
+	let room_id: OwnedRoomId = signed_event
+		.get("room_id")
+		.try_into()
+		.map(RoomId::to_owned)
+		.map_err(|e| err!(Request(InvalidParam("Invalid room_id property: {e}"))))?;
+
+	if body.room_id != room_id {
+		return Err!(Request(InvalidParam("Event room_id does not match the request path.")));
+	}
+
+	let kind: StateEventType = signed_event
+		.get("type")
+		.and_then(CanonicalJsonValue::as_str)
+		.ok_or_else(|| err!(Request(BadJson("Missing type in event."))))?
+		.into();
+
+	if kind != StateEventType::RoomMember {
+		return Err!(Request(InvalidParam("Event must be m.room.member type.")));
+	}
+
 	let invited_user: OwnedUserId = signed_event
 		.get("state_key")
 		.try_into()
@@ -89,6 +109,19 @@ pub(crate) async fn create_invite_route(
 		.server_is_ours(invited_user.server_name())
 	{
 		return Err!(Request(InvalidParam("User does not belong to this homeserver.")));
+	}
+
+	let content: RoomMemberEventContent = signed_event
+		.get("content")
+		.cloned()
+		.map(Into::into)
+		.map(serde_json::from_value)
+		.transpose()
+		.map_err(|e| err!(Request(InvalidParam("Invalid content object in event: {e}"))))?
+		.ok_or_else(|| err!(Request(BadJson("Missing content in event."))))?;
+
+	if content.membership != MembershipState::Invite {
+		return Err!(Request(InvalidParam("Event membership must be invite.")));
 	}
 
 	// Make sure we're not ACL'ed from their room.
@@ -108,10 +141,26 @@ pub(crate) async fn create_invite_route(
 	// Add event_id back
 	signed_event.insert("event_id".into(), CanonicalJsonValue::String(event_id.to_string()));
 
+	let origin: Option<&str> = signed_event
+		.get("origin")
+		.and_then(CanonicalJsonValue::as_str);
+
 	let sender: &UserId = signed_event
 		.get("sender")
 		.try_into()
 		.map_err(|e| err!(Request(InvalidParam("Invalid sender property: {e}"))))?;
+
+	if sender.server_name() != body.origin() {
+		return Err!(Request(Forbidden("Can only send invites on behalf of your users.")));
+	}
+
+	if origin.is_some_and(|origin| origin != sender.server_name()) {
+		return Err!(Request(Forbidden("Your users can only be from your origin.")));
+	}
+
+	if origin.is_some_and(|origin| origin != body.origin()) {
+		return Err!(Request(Forbidden("Can only send events from your origin.")));
+	}
 
 	if services.metadata.is_banned(&body.room_id).await
 		&& !services.users.is_admin(&invited_user).await

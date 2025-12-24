@@ -9,6 +9,10 @@ pub(super) async fn collect(
 	SyncInfo { services, sender_user, sender_device, .. }: SyncInfo<'_>,
 	conn: &Connection,
 ) -> Result<Option<response::ToDevice>> {
+	let Some(sender_device) = sender_device else {
+		return Ok(None);
+	};
+
 	services
 		.users
 		.remove_to_device_events(sender_user, sender_device, conn.globalsince)

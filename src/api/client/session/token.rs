@@ -50,7 +50,8 @@ pub(crate) async fn login_token_route(
 
 	// This route SHOULD have UIA
 	// TODO: How do we make only UIA sessions that have not been used before valid?
-	let (sender_user, sender_device) = body.sender();
+	let sender_user = body.sender_user();
+	let sender_device = body.sender_device()?;
 
 	let password_flow = uiaa::AuthFlow { stages: vec![uiaa::AuthType::Password] };
 

@@ -113,8 +113,7 @@ pub(crate) async fn get_relating_events_route(
 	name = "relations",
 	level = "debug",
 	skip_all,
-	fields(room_id, target, from, to, dir, limit, recurse),
-	ret(level = "trace")
+	fields(room_id, target, from, to, dir, limit, recurse)
 )]
 async fn paginate_relations_with_filter(
 	services: &Services,

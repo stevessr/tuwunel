@@ -37,9 +37,7 @@ pub fn check_pdu_format(pdu: &CanonicalJsonObject, rules: &EventFormatRules) -> 
 		.map_err(|e| err!(Request(BadJson("Failed to serialize canonical JSON: {e}"))))?;
 
 	if json.len() > MAX_PDU_BYTES {
-		return Err!(Request(InvalidParam(
-			"PDU is larger than maximum of {MAX_PDU_BYTES} bytes"
-		)));
+		return Err!(Request(TooLarge("PDU is larger than maximum of {MAX_PDU_BYTES} bytes")));
 	}
 
 	// Check the presence, type and length of the `type` field.
@@ -133,7 +131,7 @@ fn extract_optional_string_field<'a>(
 	match object.get(field) {
 		| Some(CanonicalJsonValue::String(value)) =>
 			if value.len() > ID_MAX_BYTES {
-				Err!(Request(InvalidParam(
+				Err!(Request(TooLarge(
 					"invalid `{field}` field in PDU: string length is larger than maximum of \
 					 {ID_MAX_BYTES} bytes"
 				)))
@@ -177,7 +175,7 @@ fn extract_required_array_field<'a>(
 	match object.get(field) {
 		| Some(CanonicalJsonValue::Array(value)) =>
 			if value.len() > max_len {
-				Err!(Request(InvalidParam(
+				Err!(Request(TooLarge(
 					"invalid `{field}` field in PDU: array length is larger than maximum of \
 					 {max_len}"
 				)))

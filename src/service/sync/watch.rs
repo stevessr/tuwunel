@@ -8,25 +8,18 @@ use tuwunel_database::{Interfix, Separator, serialize_key};
 pub async fn watch<'a, Rooms>(
 	&self,
 	user_id: &UserId,
-	device_id: &DeviceId,
+	device_id: Option<&DeviceId>,
 	rooms: Rooms,
 ) -> Result
 where
 	Rooms: Stream<Item = &'a RoomId> + Send + 'a,
 {
-	let userdeviceid_prefix = (user_id, device_id, Interfix);
 	let globaluserdata_prefix = (Separator, user_id, Interfix);
 	let roomuserdataid_prefix = (Option::<&RoomId>::None, user_id, Interfix);
 	let userid_prefix =
 		serialize_key((user_id, Interfix)).expect("failed to serialize watch prefix");
 
 	let watchers = [
-		// Return when *any* user changed their key
-		// TODO: only send for user they share a room with
-		self.db
-			.todeviceid_events
-			.watch_prefix(&userdeviceid_prefix)
-			.boxed(),
 		self.db
 			.userroomid_joined
 			.watch_raw_prefix(&userid_prefix)
@@ -72,8 +65,20 @@ where
 			.boxed(),
 	];
 
-	let mut futures = FuturesUnordered::new();
-	futures.extend(watchers.into_iter());
+	let device_watchers = device_id.into_iter().map(|device_id| {
+		// Return when *any* user changed their key
+		// TODO: only send for user they share a room with
+		let userdeviceid_prefix = (user_id, device_id, Interfix);
+		self.db
+			.todeviceid_events
+			.watch_prefix(&userdeviceid_prefix)
+			.boxed()
+	});
+
+	let mut futures: FuturesUnordered<_> = watchers
+		.into_iter()
+		.chain(device_watchers)
+		.collect();
 
 	pin_mut!(rooms);
 	while let Some(room_id) = rooms.next().await {

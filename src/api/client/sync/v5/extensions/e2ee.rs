@@ -32,6 +32,9 @@ pub(super) async fn collect(
 	conn: &Connection,
 ) -> Result<response::E2EE> {
 	let SyncInfo { services, sender_user, sender_device, .. } = sync_info;
+	let Some(sender_device) = sender_device else {
+		return Ok(response::E2EE::default());
+	};
 
 	let keys_changed = services
 		.users

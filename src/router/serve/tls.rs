@@ -27,12 +27,6 @@ pub(super) async fn serve(
 		.as_ref()
 		.ok_or_else(|| err!(Config("tls.key", "Missing required value in tls config section")))?;
 
-	// we use ring for ruma and hashing state, but aws-lc-rs is the new default.
-	// without this, TLS mode will panic.
-	rustls::crypto::aws_lc_rs::default_provider()
-		.install_default()
-		.expect("failed to initialise aws-lc-rs rustls crypto provider");
-
 	info!(
 		"Note: It is strongly recommended that you use a reverse proxy instead of running \
 		 tuwunel directly with TLS."

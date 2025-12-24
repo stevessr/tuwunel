@@ -6,6 +6,7 @@ use ruma::{
 use crate::{
 	Result, extract_variant, is_equal_to,
 	matrix::{PduEvent, room_version},
+	state_res::{self},
 };
 
 pub fn into_outgoing_federation(
@@ -94,6 +95,8 @@ pub fn from_incoming_federation(
 	if !room_rules.event_format.require_event_id {
 		pdu_json.insert("event_id".into(), CanonicalJsonValue::String(event_id.into()));
 	}
+
+	state_res::check_pdu_format(pdu_json, &room_rules.event_format)?;
 
 	PduEvent::from_val(pdu_json)
 }

@@ -1,10 +1,10 @@
 mod data;
 
-use std::{ops::Range, sync::Arc};
+use std::{collections::HashSet, ops::Range, sync::Arc};
 
 use data::Data;
 use ruma::{OwnedUserId, RoomAliasId, ServerName, UserId};
-use tuwunel_core::{Result, Server, error};
+use tuwunel_core::{Result, Server, err, error};
 
 use crate::service;
 
@@ -13,8 +13,7 @@ pub struct Service {
 	server: Arc<Server>,
 
 	pub server_user: OwnedUserId,
-	pub turn_secret: String,
-	pub registration_token: Option<String>,
+	pub turn_secret: Option<String>,
 }
 
 impl crate::Service for Service {
@@ -22,32 +21,17 @@ impl crate::Service for Service {
 		let db = Data::new(args);
 		let config = &args.server.config;
 
-		let turn_secret = config.turn_secret_file.as_ref().map_or_else(
-			|| config.turn_secret.clone(),
-			|path| {
-				std::fs::read_to_string(path).unwrap_or_else(|e| {
-					error!("Failed to read the TURN secret file: {e}");
-
-					config.turn_secret.clone()
-				})
-			},
-		);
-
-		let registration_token = config
-			.registration_token_file
+		let turn_secret = config
+			.turn_secret_file
 			.as_ref()
-			.map_or_else(
-				|| config.registration_token.clone(),
-				|path| {
-					let Ok(token) = std::fs::read_to_string(path).inspect_err(|e| {
-						error!("Failed to read the registration token file: {e}");
-					}) else {
-						return config.registration_token.clone();
-					};
-
-					Some(token)
-				},
-			);
+			.and_then(|path| {
+				std::fs::read_to_string(path)
+					.inspect_err(|e| {
+						error!("Failed to read the TURN secret file: {e}");
+					})
+					.ok()
+			})
+			.or_else(|| config.turn_secret.clone());
 
 		Ok(Arc::new(Self {
 			db,
@@ -58,7 +42,6 @@ impl crate::Service for Service {
 			)
 			.expect("@conduit:server_name is valid"),
 			turn_secret,
-			registration_token,
 		}))
 	}
 
@@ -122,4 +105,41 @@ impl Service {
 	#[inline]
 	#[must_use]
 	pub fn is_read_only(&self) -> bool { self.db.db.is_read_only() }
+
+	pub async fn get_registration_tokens(&self) -> HashSet<String> {
+		let mut tokens = HashSet::new();
+		if let Some(file) = &self
+			.server
+			.config
+			.registration_token_file
+			.as_ref()
+		{
+			match std::fs::read_to_string(file) {
+				| Err(e) => error!("Failed to read the registration token file: {e}"),
+				| Ok(text) => {
+					text.split_ascii_whitespace().for_each(|token| {
+						tokens.insert(token.to_owned());
+					});
+				},
+			}
+		}
+
+		if let Some(token) = &self.server.config.registration_token {
+			tokens.insert(token.to_owned());
+		}
+
+		tokens
+	}
+
+	pub fn init_rustls_provider(&self) -> Result {
+		if rustls::crypto::CryptoProvider::get_default().is_none() {
+			rustls::crypto::aws_lc_rs::default_provider()
+				.install_default()
+				.map_err(|_provider| {
+					err!(error!("Error initialising aws_lc_rs rustls crypto backend"))
+				})
+		} else {
+			Ok(())
+		}
+	}
 }

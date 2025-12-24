@@ -9,7 +9,7 @@ use axum::{
 use futures::{Future, TryFutureExt};
 use http::Method;
 use ruma::api::IncomingRequest;
-use tuwunel_core::Result;
+use tuwunel_core::{Result, trace};
 
 use super::{Ruma, RumaResponse, State};
 
@@ -42,7 +42,7 @@ macro_rules! ruma_handler {
 			Fut: Future<Output = Result<Req::OutgoingResponse, Err>> + Send,
 			Req: IncomingRequest + Debug + Send + Sync + 'static,
 			Err: IntoResponse + Debug + Send,
-			<Req as IncomingRequest>::OutgoingResponse: Send,
+			<Req as IncomingRequest>::OutgoingResponse: Debug + Send,
 			$( $tx: FromRequestParts<State> + Send + Sync + 'static, )*
 		{
 			fn add_routes(&'static self, router: Router<State>) -> Router<State> {
@@ -53,8 +53,13 @@ macro_rules! ruma_handler {
 			}
 
 			fn add_route(&'static self, router: Router<State>, path: &str) -> Router<State> {
-				let action = |$($tx,)* req| self($($tx,)* req).map_ok(RumaResponse);
 				let method = method_to_filter(&Req::METADATA.method);
+				let action = |$($tx,)* req| {
+					self($($tx,)* req)
+						.inspect_ok(|result| trace!(?result))
+						.map_ok(RumaResponse)
+				};
+
 				router.route(path, on(method, action))
 			}
 		}

@@ -120,13 +120,15 @@ type PresenceUpdates = HashMap<OwnedUserId, PresenceEventContent>;
 	skip_all,
 	fields(
 		user_id = %body.sender_user(),
+		device_id = %body.sender_device.as_deref().map_or("<no device>", |x| x.as_str()),
     )
 )]
 pub(crate) async fn sync_events_route(
 	State(services): State<crate::State>,
 	body: Ruma<sync_events::v3::Request>,
 ) -> Result<sync_events::v3::Response> {
-	let (sender_user, sender_device) = body.sender();
+	let sender_user = body.sender_user();
+	let sender_device = body.sender_device.as_deref();
 
 	let filter: OptionFuture<_> = body
 		.body
@@ -195,7 +197,8 @@ pub(crate) async fn sync_events_route(
 		if since < next_batch || full_state {
 			let response = build_sync_events(
 				&services,
-				body.sender(),
+				sender_user,
+				sender_device,
 				since,
 				next_batch,
 				full_state,
@@ -216,7 +219,8 @@ pub(crate) async fn sync_events_route(
 
 		// Wait for activity
 		if time::timeout_at(stop_at, watchers).await.is_err() || services.server.is_stopping() {
-			let response = build_empty_response(&services, body.sender(), next_batch).await;
+			let response =
+				build_empty_response(&services, sender_user, sender_device, next_batch).await;
 			trace!(since, next_batch, "empty response");
 			return Ok(response);
 		}
@@ -235,14 +239,22 @@ pub(crate) async fn sync_events_route(
 
 async fn build_empty_response(
 	services: &Services,
-	(sender_user, sender_device): (&UserId, &DeviceId),
+	sender_user: &UserId,
+	sender_device: Option<&DeviceId>,
 	next_batch: u64,
 ) -> sync_events::v3::Response {
+	let device_one_time_keys_count: OptionFuture<_> = sender_device
+		.map(|sender_device| {
+			services
+				.users
+				.count_one_time_keys(sender_user, sender_device)
+		})
+		.into();
+
 	sync_events::v3::Response {
-		device_one_time_keys_count: services
-			.users
-			.count_one_time_keys(sender_user, sender_device)
-			.await,
+		device_one_time_keys_count: device_one_time_keys_count
+			.await
+			.unwrap_or_default(),
 
 		..sync_events::v3::Response::new(to_small_string(next_batch))
 	}
@@ -251,7 +263,6 @@ async fn build_empty_response(
 #[tracing::instrument(
 	name = "build",
 	level = INFO_SPAN_LEVEL,
-	ret(level = "trace"),
 	skip_all,
 	fields(
 		%since,
@@ -261,7 +272,8 @@ async fn build_empty_response(
 )]
 async fn build_sync_events(
 	services: &Services,
-	(sender_user, sender_device): (&UserId, &DeviceId),
+	sender_user: &UserId,
+	sender_device: Option<&DeviceId>,
 	since: u64,
 	next_batch: u64,
 	full_state: bool,
@@ -387,27 +399,38 @@ async fn build_sync_events(
 		.map(ToOwned::to_owned)
 		.collect::<HashSet<_>>();
 
-	let to_device_events = services
-		.users
-		.get_to_device_events(sender_user, sender_device, Some(since), Some(next_batch))
-		.map(at!(1))
-		.collect::<Vec<_>>();
+	let to_device_events: OptionFuture<_> = sender_device
+		.map(|sender_device| {
+			services
+				.users
+				.get_to_device_events(sender_user, sender_device, Some(since), Some(next_batch))
+				.map(at!(1))
+				.collect::<Vec<_>>()
+		})
+		.into();
 
-	let device_one_time_keys_count = services
-		.users
-		.count_one_time_keys(sender_user, sender_device);
+	let device_one_time_keys_count: OptionFuture<_> = sender_device
+		.map(|sender_device| {
+			services
+				.users
+				.count_one_time_keys(sender_user, sender_device)
+		})
+		.into();
 
 	// Remove all to-device events the device received *last time*
-	let remove_to_device_events =
-		services
-			.users
-			.remove_to_device_events(sender_user, sender_device, since);
+	let remove_to_device_events: OptionFuture<_> = sender_device
+		.map(|sender_device| {
+			services
+				.users
+				.remove_to_device_events(sender_user, sender_device, since)
+		})
+		.into();
 
 	let (
 		account_data,
 		keys_changed,
-		device_one_time_keys_count,
-		((), to_device_events, presence_updates),
+		presence_updates,
+		(_, to_device_events, device_one_time_keys_count),
 		(
 			(joined_rooms, mut device_list_updates, left_encrypted_users),
 			left_rooms,
@@ -417,8 +440,8 @@ async fn build_sync_events(
 	) = join5(
 		account_data,
 		keys_changed,
-		device_one_time_keys_count,
-		join3(remove_to_device_events, to_device_events, presence_updates),
+		presence_updates,
+		join3(remove_to_device_events, to_device_events, device_one_time_keys_count),
 		join4(joined_rooms, left_rooms, invited_rooms, knocked_rooms),
 	)
 	.boxed()
@@ -454,7 +477,7 @@ async fn build_sync_events(
 			left: device_list_left,
 			changed: device_list_updates.into_iter().collect(),
 		},
-		device_one_time_keys_count,
+		device_one_time_keys_count: device_one_time_keys_count.unwrap_or_default(),
 		// Fallback keys are not yet supported
 		device_unused_fallback_key_types: None,
 		next_batch: to_small_string(next_batch),
@@ -465,7 +488,9 @@ async fn build_sync_events(
 			invite: invited_rooms,
 			knock: knocked_rooms,
 		},
-		to_device: ToDevice { events: to_device_events },
+		to_device: ToDevice {
+			events: to_device_events.unwrap_or_default(),
+		},
 	})
 }
 
@@ -732,7 +757,7 @@ async fn load_left_room(
 async fn load_joined_room(
 	services: &Services,
 	sender_user: &UserId,
-	sender_device: &DeviceId,
+	sender_device: Option<&DeviceId>,
 	ref room_id: OwnedRoomId,
 	since: u64,
 	next_batch: u64,
@@ -841,7 +866,7 @@ async fn load_joined_room(
 
 	let lazy_loading_context = &lazy_loading::Context {
 		user_id: sender_user,
-		device_id: Some(sender_device),
+		device_id: sender_device,
 		room_id,
 		token: Some(since),
 		options: Some(&filter.room.state.lazy_load_options),

@@ -52,6 +52,8 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 	let timer = Instant::now();
 	let room_rules = room_version::rules(room_version)?;
 
+	state_res::check_pdu_format(&val, &room_rules.event_format)?;
+
 	// 10. Fetch missing state and auth chain events by calling /state_ids at
 	//     backwards extremities doing all the checks in this list starting at 1.
 	//     These are not timeline events.

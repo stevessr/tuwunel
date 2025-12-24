@@ -1,11 +1,11 @@
 # Tuwunel<sup>💕</sup>
 
-![GitHub License](https://img.shields.io/github/license/matrix-construct/tuwunel?style=flat&color=%238A2BE2)
-![GitHub Created At](https://img.shields.io/github/created-at/matrix-construct/tuwunel?style=flat&color=%238A2BE2)
-![GitHub Commit Activity](https://img.shields.io/github/commit-activity/m/matrix-construct/tuwunel?style=flat&link=https%3A%2F%2Fgithub.com%2Fmatrix-construct%2Ftuwunel%2Fpulse%2Fmonthly&color=%238A2BE2)
-![Docker Pulls](https://img.shields.io/docker/pulls/jevolk/tuwunel?style=flat&color=8A2BE2)
-![GitHub Repo Stars](https://img.shields.io/github/stars/matrix-construct/tuwunel?style=flat&link=https%3A%2F%2Fgithub.com%2Fmatrix-construct%2Ftuwunel&color=%238A2BE2)
-[![CI/CD](https://github.com/matrix-construct/tuwunel/actions/workflows/main.yml/badge.svg?branch=main&style=flat)](https://github.com/matrix-construct/tuwunel/actions/workflows/main.yml)
+![GitHub License](https://img.shields.io/github/license/matrix-construct/tuwunel?style=flat%2Dsquare&color=%238A2BE2)
+![GitHub Created At](https://img.shields.io/github/created-at/matrix-construct/tuwunel?style=flat%2Dsquare&color=%238A2BE2)
+![GitHub Commit Activity](https://img.shields.io/github/commit-activity/m/matrix-construct/tuwunel?style=flat%2Dsquare&link=https%3A%2F%2Fgithub.com%2Fmatrix-construct%2Ftuwunel%2Fpulse%2Fmonthly&color=%238A2BE2)
+![Docker Pulls](https://img.shields.io/docker/pulls/jevolk/tuwunel?style=flat%2Dsquare&color=8A2BE2)
+![GitHub Repo Stars](https://img.shields.io/github/stars/matrix-construct/tuwunel?style=flat%2Dsquare&link=https%3A%2F%2Fgithub.com%2Fmatrix-construct%2Ftuwunel&color=%238A2BE2)
+[![CI/CD](https://github.com/matrix-construct/tuwunel/actions/workflows/main.yml/badge.svg?branch=main&style=flat%2Dsquare)](https://github.com/matrix-construct/tuwunel/actions/workflows/main.yml)
 
 <!-- ANCHOR: catchphrase -->
 
@@ -15,19 +15,20 @@
 
 <!-- ANCHOR: body -->
 
+[![Documentation](https://img.shields.io/badge/documentation%2D_?color=%238A2BE2&style=for-the-badge&logo=mdBook&logoColor=white)](https://matrix-construct.github.io/tuwunel/)
+[![Support Chat](https://img.shields.io/matrix/tuwunel%3Amatrix.org.svg?color=%238A2BE2&style=for-the-badge&label=Support%20Chat)](https://matrix.to/#/#tuwunel:grin.hu)
+
 Tuwunel is a featureful [Matrix](https://matrix.org/) homeserver you can use instead of Synapse
 with your favorite [client](https://matrix.org/ecosystem/clients/),
 [bridge](https://matrix.org/ecosystem/bridges/) or
 [bot](https://matrix.org/ecosystem/integrations/). It is written entirely in Rust to be a scalable,
-lightweight, low-cost, community-driven alternative covering all but the most niche uses.
+low-cost, enterprise-ready, community-driven alternative, fully implementing the
+[Matrix Specification](https://spec.matrix.org/latest/) for all but the most niche uses.
 
-This project is the official successor to conduwuit, which
-was a featureful and high-performance fork of [Conduit](https://gitlab.com/famedly/conduit), all
-community-lead homeservers implementing the compatible
-[Matrix Specification](https://spec.matrix.org/latest/).
-
-Tuwunel is operated by enterprise users with a vested interest in sponsoring its continued
-development. It is now maintained by full-time staff.
+This project is the official successor to [conduwuit](https://github.com/x86pup/conduwuit) after it
+reached stability. Tuwunel is now used by many companies with a vested interest in its continued
+development by full-time staff. It is primarily sponsored by the government of
+Switzerland 🇨🇭 where it is currently deployed for citizens.
 
 ### Getting Started
 
@@ -38,7 +39,7 @@ development. It is now maintained by full-time staff.
 - Static binaries available as [releases](https://github.com/matrix-construct/tuwunel/releases) or [build artifacts](https://github.com/matrix-construct/tuwunel/actions?query=branch%3Amain).
 - Deb and RPM packages available as [releases](https://github.com/matrix-construct/tuwunel/releases) or [build artifacts](https://github.com/matrix-construct/tuwunel/actions?query=branch%3Amain).
 - Arch package available as [tuwunel](https://aur.archlinux.org/packages/tuwunel) or [tuwunel-git](https://aur.archlinux.org/packages/tuwunel-git).
-- Nix package still [needs some love](https://github.com/NixOS/nixpkgs/issues/415469).
+- Nix package available as [`matrix-tuwunel`](https://search.nixos.org/packages?query=matrix-tuwunel) and NixOS module available as [`services.matrix-tuwunel`](https://search.nixos.org/options?query=services.matrix-tuwunel).
 
 **1.** [Configure](https://matrix-construct.github.io/tuwunel/configuration.html) by
 copying and editing the `tuwunel-example.toml`. The `server_name` and `database_path` must be

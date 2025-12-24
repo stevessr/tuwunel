@@ -29,7 +29,7 @@ license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/matrix-construct/tuwunel"
 rust-version = "1.89.0"
-version = "1.4.7"
+version = "1.4.8"
 
 [workspace.metadata.crane]
 name = "tuwunel"
@@ -233,7 +233,7 @@ version = "0.14"
 
 [workspace.dependencies.jevmalloc]
 git = "https://github.com/matrix-construct/jevmalloc"
-rev = "29fde02533ee2c6a5e9b87095324e6f7a5d43738"
+rev = "93795449913f65ab533b7fa482333eef63fc3ae0"
 
 [workspace.dependencies.jsonwebtoken]
 version = "9.3"
@@ -242,7 +242,7 @@ features = ["use_pem"]
 
 [workspace.dependencies.ldap3]
 git = "https://github.com/matrix-construct/ldap3"
-rev = "7d423314b9dbc66347284e38fc2b78c3d8f3d494"
+rev = "fdfbba2bf916b53e5f73cdb1a495ebb649978079"
 default-features = false
 features = ["sync", "tls-rustls"]
 
@@ -324,7 +324,7 @@ default-features = false
 
 [workspace.dependencies.ruma]
 git = "https://github.com/matrix-construct/ruma"
-rev = "f8aa292ce48f28ee6c82b29a811d26c6ccb5aad2"
+rev = "214ab27fdc3d7004f6d46e0aa89fba573b59c66f"
 features = [
     "__compat",
     "appservice-api-c",
@@ -364,7 +364,7 @@ features = [
 [workspace.dependencies.rustls]
 version = "0.23"
 default-features = false
-features = ["aws_lc_rs"]
+features = ["aws_lc_rs", "logging", "tls12", "prefer-post-quantum"]
 
 [workspace.dependencies.rustyline-async]
 version = "0.4.6"
@@ -372,7 +372,7 @@ default-features = false
 
 [workspace.dependencies.rust-rocksdb]
 git = "https://github.com/matrix-construct/rust-rocksdb"
-rev = "31e6f8dd4a531b379c132e82773efc9315b0489a"
+rev = "c11395350bc1f2090a0152f2d15c8c5847821eba"
 default-features = false
 features = [
 	"bzip2",

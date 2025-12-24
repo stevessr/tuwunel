@@ -195,6 +195,9 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::room_initial_sync_route)
 		.route("/client/server.json", get(client::syncv3_client_server_json));
 
+	// SS endpoint not related to federation
+	router = router.ruma_route(&server::get_openid_userinfo_route);
+
 	if config.allow_federation {
 		router = router
 			.ruma_route(&server::get_server_version_route)
@@ -226,7 +229,6 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 			.ruma_route(&server::get_profile_information_route)
 			.ruma_route(&server::get_keys_route)
 			.ruma_route(&server::claim_keys_route)
-			.ruma_route(&server::get_openid_userinfo_route)
 			.ruma_route(&server::get_hierarchy_route)
 			.ruma_route(&server::well_known_server)
 			.ruma_route(&server::get_content_route)

@@ -41,11 +41,6 @@ pub(crate) struct Args<T> {
 
 impl<T> Args<T> {
 	#[inline]
-	pub(crate) fn sender(&self) -> (&UserId, &DeviceId) {
-		(self.sender_user(), self.sender_device())
-	}
-
-	#[inline]
 	pub(crate) fn sender_user(&self) -> &UserId {
 		self.sender_user
 			.as_deref()
@@ -53,17 +48,17 @@ impl<T> Args<T> {
 	}
 
 	#[inline]
-	pub(crate) fn sender_device(&self) -> &DeviceId {
-		self.sender_device
-			.as_deref()
-			.expect("user must be authenticated and device identified")
-	}
-
-	#[inline]
 	pub(crate) fn origin(&self) -> &ServerName {
 		self.origin
 			.as_deref()
 			.expect("server must be authenticated for this handler")
+	}
+
+	#[inline]
+	pub(crate) fn sender_device(&self) -> Result<&DeviceId> {
+		self.sender_device
+			.as_deref()
+			.ok_or(err!(Request(Forbidden("user must be authenticated and device identified"))))
 	}
 }
 
