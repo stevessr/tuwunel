@@ -20,21 +20,26 @@ jobs:
       - name: Install Tools (cross, cargo-deb)
         run: |
           cargo install cross cargo-deb
-          # 安装 aarch64 strip 工具，用于减小 .deb 体积
+          # 安装 aarch64 strip 工具
           sudo apt-get update && sudo apt-get install -y binutils-aarch64-linux-gnu
 
       - name: Configure Cross (Custom Docker Image)
         run: |
-          # 1. 创建一个 Dockerfile，基于 cross 默认镜像，但安装新版 clang
+          # 1. 创建 Dockerfile
+          # clang/libclang-dev: 用于 bindgen (运行在 x86 宿主)
+          # liburing-dev:arm64: 用于 rocksdb 链接 (目标架构 aarch64)
           cat <<EOF > Cross.Dockerfile
           FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main
           
-          # 安装新版 clang 和 libclang-dev (bindgen 需要)
-          RUN apt-get update && \
-              apt-get install -y clang libclang-dev
+          ENV DEBIAN_FRONTEND=noninteractive
+          
+          # 启用 arm64 架构包安装（cross 镜像通常已配置好源，但需确保架构支持）
+          RUN dpkg --add-architecture arm64 && \
+              apt-get update && \
+              apt-get install -y clang libclang-dev liburing-dev:arm64
           EOF
           
-          # 2. 创建 Cross.toml 告诉 cross 使用我们刚才定义的 Dockerfile
+          # 2. 创建 Cross.toml
           cat <<EOF > Cross.toml
           [target.aarch64-unknown-linux-gnu]
           dockerfile = "./Cross.Dockerfile"
@@ -42,13 +47,12 @@ jobs:
 
       - name: Build aarch64 binary
         run: |
-          # cross 会自动读取 Cross.toml 并构建刚才定义的 Docker 镜像
+          # 这一步会自动构建 Docker 镜像并编译
           cross build --release --target aarch64-unknown-linux-gnu
 
       - name: Build .deb
         run: |
           export STRIP=aarch64-linux-gnu-strip
-          # --no-build 因为上一步已经编译好了
           cargo deb --target aarch64-unknown-linux-gnu --no-build
 
       - name: Find .deb and upload
