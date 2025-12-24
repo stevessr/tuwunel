@@ -15,6 +15,7 @@
 ### For more information, see:
 ### https://tuwunel.chat/configuration.html
 
+
 [global]
 
 # The server_name is the pretty name of this server. It is used as a
@@ -1833,6 +1834,8 @@
 #
 #one_time_key_limit = 256
 
+
+
 #[global.tls]
 
 # Path to a valid TLS certificate file.
@@ -1850,6 +1853,8 @@
 # Whether to listen and allow for HTTP and HTTPS connections (insecure!)
 #
 #dual_protocol = false
+
+
 
 #[global.well_known]
 
@@ -1913,6 +1918,8 @@
 #
 #rtc_transports = []
 
+
+
 #[global.blurhashing]
 
 # blurhashing x component, 4 is recommended by https://blurha.sh/
@@ -1930,6 +1937,8 @@
 # is 33.55MB. Setting it to 0 disables blurhashing.
 #
 #blurhash_max_raw_size = 33554432
+
+
 
 #[global.ldap]
 
@@ -2018,6 +2027,8 @@
 #
 #admin_filter =
 
+
+
 #[global.jwt]
 
 # Enable JWT logins
@@ -2084,6 +2095,8 @@
 #
 #validate_signature = true
 
+
+
 #[global.appservice.<ID>]
 
 # The URL for the application service.
@@ -2125,6 +2138,8 @@
 # of MSC4190.
 #
 #device_management = false
+
+
 
 #[[global.appservice.<ID>.<users|rooms|aliases>]]
 
