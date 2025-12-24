@@ -42,5 +42,4 @@ jobs:
         with:
           name: tuwunel-deb-aarch64
           path: |
-            target/debian/**/*.deb
-            target/**/*.deb
+            target/aarch64-unknown-linux-gnu/debian/*.deb
