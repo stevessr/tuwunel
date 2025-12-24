@@ -163,7 +163,7 @@ async fn into_http_response(
 		request_url = ?url,
 		response_url = ?response.url(),
 		"Received response from {}",
-		actual.to_string(),
+		actual.string(),
 	);
 
 	let mut http_response_builder = http::Response::builder()
@@ -249,7 +249,7 @@ where
 	};
 
 	let mut request = request
-		.try_into_http_request::<Vec<u8>>(actual.to_string().as_str(), SATIR, &supported)
+		.try_into_http_request::<Vec<u8>>(actual.string().as_str(), SATIR, &supported)
 		.map_err(|e| err!(BadServerResponse("Invalid destination: {e:?}")))?;
 
 	if matches!(T::METADATA.authentication, AuthScheme::ServerSignatures) {

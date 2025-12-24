@@ -316,7 +316,11 @@ features = [
 	"socks",
 	"hickory-dns",
 	"http2",
+	"json",
 ]
+
+[workspace.dependencies.urlencoding]
+version = "2.1"
 
 [workspace.dependencies.ring]
 version = "0.17"
@@ -728,7 +732,7 @@ debug = 0
 
 [profile.dev.package.tuwunel_core]
 inherits = "dev"
-incremental = false
+incremental = true
 #rustflags = [
 #	'--cfg', 'tuwunel_mods',
 #	'-Ztime-passes',
@@ -749,6 +753,12 @@ incremental = false
 
 [profile.dev.package.tuwunel]
 inherits = "dev"
+# Enable incremental compilation and increase codegen units to speed up
+# parallel compilation during development iterations. 16 is a reasonable
+# default for modern multi-core machines; adjust in `.cargo/config.toml`
+# if necessary.
+incremental = true
+codegen-units = 16
 #rustflags = [
 #	'--cfg', 'tuwunel_mods',
 #	'-Ztime-passes',
@@ -767,9 +777,9 @@ inherits = "dev"
 
 [profile.dev.package.'*']
 inherits = "dev"
-debug = 0
-incremental = false
-codegen-units = 1
+debug = "limited"
+incremental = true
+codegen-units = 16
 opt-level = 'z'
 #rustflags = [
 #	'--cfg', 'tuwunel_mods',

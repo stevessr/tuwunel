@@ -59,7 +59,13 @@ pub struct Room {
 
 type Connections = TokioMutex<BTreeMap<ConnectionKey, ConnectionVal>>;
 pub type ConnectionVal = Arc<TokioMutex<Connection>>;
-pub type ConnectionKey = (OwnedUserId, Option<OwnedDeviceId>, Option<ConnectionId>);
+/// ConnectionKey is used to identify client sync connections.
+///
+/// We include an optional `x_forwarded_for` string so that when the server is
+/// behind a proxy that sets `X-Forwarded-For` we can key the connection cache
+/// on that header as well. This allows caching/lookup to behave correctly when
+/// requests are forwarded and the client IP differs from the TCP peer.
+pub type ConnectionKey = (OwnedUserId, OwnedDeviceId, Option<ConnectionId>, Option<String>);
 
 pub type Subscriptions = BTreeMap<OwnedRoomId, request::ListConfig>;
 pub type Lists = BTreeMap<ListId, request::List>;
@@ -105,15 +111,15 @@ pub async fn clear_connections(
 	self.connections
 		.lock()
 		.await
-		.retain(|(conn_user_id, conn_device_id, conn_conn_id), _| {
+		.retain(|(conn_user_id, conn_device_id, conn_conn_id, conn_xff), _| {
 			let retain = user_id.is_none_or(is_equal_to!(conn_user_id))
-				&& (device_id.is_none() || device_id == conn_device_id.as_deref())
+				&& (device_id.is_none() || device_id == Some(conn_device_id.as_ref()))
 				&& (conn_id.is_none() || conn_id == conn_conn_id.as_ref());
 
 			if !retain {
 				self.db
 					.userdeviceconnid_conn
-					.del((conn_user_id, conn_device_id, conn_conn_id));
+					.del((conn_user_id, conn_device_id, conn_conn_id, conn_xff));
 			}
 
 			retain
@@ -123,10 +129,10 @@ pub async fn clear_connections(
 #[implement(Service)]
 #[tracing::instrument(level = "debug", skip(self))]
 pub async fn drop_connection(&self, key: &ConnectionKey) {
-	let mut cache = self.connections.lock().await;
-
-	self.db.userdeviceconnid_conn.del(key);
-	cache.remove(key);
+	self.connections
+		.lock()
+		.await
+		.remove(key);
 }
 
 #[implement(Service)]
@@ -212,20 +218,6 @@ pub async fn is_connection_loaded(&self, key: &ConnectionKey) -> bool {
 #[tracing::instrument(level = "trace", skip(self))]
 pub async fn is_connection_stored(&self, key: &ConnectionKey) -> bool {
 	self.db.userdeviceconnid_conn.contains(key).await
-}
-
-#[inline]
-pub fn into_connection_key<U, D, C>(
-	user_id: U,
-	device_id: Option<D>,
-	conn_id: Option<C>,
-) -> ConnectionKey
-where
-	U: Into<OwnedUserId>,
-	D: Into<OwnedDeviceId>,
-	C: Into<ConnectionId>,
-{
-	(user_id.into(), device_id.map(Into::into), conn_id.map(Into::into))
 }
 
 #[implement(Connection)]
@@ -369,4 +361,70 @@ fn some_or_sticky<T: Clone>(target: Option<&T>, cached: &mut Option<T>) {
 	if let Some(target) = target {
 		cached.replace(target.clone());
 	}
+}
+
+
+
+#[implement(Service)]
+#[tracing::instrument(level = "trace", skip(self))]
+pub async fn list_connections(&self) -> Vec<ConnectionKey> {
+	self.connections
+		.lock()
+		.await
+		.keys()
+		.cloned()
+		.collect()
+}
+
+#[implement(Service)]
+#[tracing::instrument(level = "debug", skip(self))]
+pub async fn init_connection(&self, key: &ConnectionKey) -> ConnectionVal {
+	self.connections
+		.lock()
+		.await
+		.entry(key.clone())
+		.and_modify(|existing| *existing = ConnectionVal::default())
+		.or_default()
+		.clone()
+}
+
+#[implement(Service)]
+#[tracing::instrument(level = "debug", skip(self))]
+pub async fn find_connection(&self, key: &ConnectionKey) -> Result<ConnectionVal> {
+	self.connections
+		.lock()
+		.await
+		.get(key)
+		.cloned()
+		.ok_or_else(|| err!(Request(NotFound("Connection not found."))))
+}
+
+#[implement(Service)]
+#[tracing::instrument(level = "trace", skip(self))]
+pub async fn contains_connection(&self, key: &ConnectionKey) -> bool {
+	self.connections
+		.lock()
+		.await
+		.contains_key(key)
+}
+
+#[inline]
+pub fn into_connection_key<U, D, C, S>(
+	user_id: U,
+	device_id: D,
+	conn_id: Option<C>,
+	x_forwarded_for: Option<S>,
+) -> ConnectionKey
+where
+	U: Into<OwnedUserId>,
+	D: Into<OwnedDeviceId>,
+	C: Into<ConnectionId>,
+	S: Into<String>,
+{
+	(
+		user_id.into(),
+		device_id.into(),
+		conn_id.map(Into::into),
+		x_forwarded_for.map(Into::into),
+	)
 }

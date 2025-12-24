@@ -383,6 +383,8 @@ impl Service {
 		Err!(FeatureDisabled("ldap"))
 	}
 
+
+
 	async fn update_all_rooms(&self, user_id: &UserId, rooms: Vec<(PduBuilder, &OwnedRoomId)>) {
 		for (pdu_builder, room_id) in rooms {
 			let state_lock = self.services.state.mutex.lock(room_id).await;

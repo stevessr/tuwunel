@@ -46,12 +46,12 @@ pub(super) async fn show_connection(
 	device_id: Option<OwnedDeviceId>,
 	conn_id: Option<String>,
 ) -> Result {
-	let key = into_connection_key(user_id, device_id, conn_id);
-	let cache = self
-		.services
-		.sync
-		.get_loaded_connection(&key)
-		.await?;
+	// Admin CLI/backend calls don't have an X-Forwarded-For header context,
+	// so pass None for the forwarded-for field.
+	let device_id = device_id
+		.ok_or_else(|| tuwunel_core::err!(Request(MissingParam("device_id is required"))))?;
+	let key = into_connection_key(user_id, device_id, conn_id, None::<String>);
+	let cache = self.services.sync.find_connection(&key).await?;
 
 	let out;
 	{

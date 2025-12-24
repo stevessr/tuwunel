@@ -103,7 +103,10 @@ EOF
 
 FROM input AS complement-testee
 
-EXPOSE 8008 8448
+WORKDIR /
+COPY --link --from=input . .
+
+EXPOSE 8008 443
 RUN mkdir /database
 COPY --from=complement-config * /complement/
 ENV TUWUNEL_CONFIG="/complement/complement.toml"
@@ -112,7 +115,10 @@ ENTRYPOINT tuwunel -Oserver_name=\""$SERVER_NAME\""
 
 FROM input AS complement-testee-valgrind
 
-EXPOSE 8008 8448
+WORKDIR /
+COPY --link --from=input . .
+
+EXPOSE 8008 443
 RUN mkdir /database
 COPY --from=complement-config * /complement/
 ENV TUWUNEL_CONFIG="/complement/complement.toml"
