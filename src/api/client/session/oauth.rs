@@ -274,7 +274,7 @@ pub(crate) async fn get_or_create_user(
 		// Set display name if available
 		if let Some(name) = &userinfo.name {
 			// set_displayname is synchronous (writes to DB map), no await
-			let _ = services
+			services
 				.users
 				.set_displayname(&user_id, Some(name.clone()));
 		}

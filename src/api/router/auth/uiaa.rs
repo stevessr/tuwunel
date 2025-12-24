@@ -70,7 +70,7 @@ where
 					uiaainfo.session = Some(utils::random_string(SESSION_ID_LENGTH));
 					services
 						.uiaa
-						.create(sender_user, body.sender_device(), &uiaainfo, json);
+						.create(sender_user, body.sender_device()?, &uiaainfo, json);
 					Err(Error::Uiaa(uiaainfo))
 				},
 				_ => Err!(Request(NotJson("JSON body is not valid"))),

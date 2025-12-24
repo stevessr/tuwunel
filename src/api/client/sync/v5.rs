@@ -81,7 +81,6 @@ pub(crate) async fn sync_events_v5_route(
 	body: Ruma<Request>,
 ) -> Result<Response> {
 	let sender_user = body.sender_user();
-	let sender_device = body.sender_device.as_deref();
 	let request = &body.body;
 	let since = request
 		.pos
@@ -102,11 +101,11 @@ pub(crate) async fn sync_events_v5_route(
 		})
 		.unwrap_or(0);
 
-	let (sender_user, sender_device) = body.sender();
 	// Use the client IP we extracted via the `axum_client_ip` extractor. This
 	// respects the trusted `SecureClientIpSource` set in our middleware and
 	// will take X-Forwarded-For into account when configured.
 	let x_forwarded_for = Some(client.to_string());
+	let sender_device = body.sender_device()?;
 
 	let conn_key = into_connection_key(
 		sender_user,
@@ -124,7 +123,7 @@ pub(crate) async fn sync_events_v5_route(
 	let conn = conn_val.lock();
 	let ping_presence = services
 		.presence
-		.maybe_ping_presence(sender_user, sender_device, &request.set_presence)
+		.maybe_ping_presence(sender_user, Some(sender_device), &request.set_presence)
 		.inspect_err(inspect_log)
 		.ok();
 
@@ -171,7 +170,7 @@ pub(crate) async fn sync_events_v5_route(
 		.checked_add(Duration::from_millis(timeout))
 		.expect("configuration must limit maximum timeout");
 
-	let sync_info = SyncInfo { services, sender_user, sender_device };
+	let sync_info = SyncInfo { services, sender_user, sender_device: Some(sender_device) };
 	loop {
 		debug_assert!(
 			conn.globalsince <= conn.next_batch,
@@ -181,7 +180,7 @@ pub(crate) async fn sync_events_v5_route(
 		let window;
 		let watchers = services.sync.watch(
 			sender_user,
-			sender_device,
+			Some(sender_device),
 			services.state_cache.rooms_joined(sender_user),
 		);
 
