@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{borrow::Cow, time::Duration};
 
 use axum::extract::State;
 use axum_client_ip::InsecureClientIp;
@@ -55,10 +55,10 @@ struct GrantQuery<'a> {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct GrantCookie<'a> {
-	client_id: &'a str,
-	state: &'a str,
-	nonce: &'a str,
-	redirect_uri: &'a str,
+	client_id: Cow<'a, str>,
+	state: Cow<'a, str>,
+	nonce: Cow<'a, str>,
+	redirect_uri: Cow<'a, str>,
 }
 
 static GRANT_SESSION_COOKIE: &str = "tuwunel_grant_session";
@@ -136,10 +136,10 @@ pub(crate) async fn sso_login_with_provider_route(
 		})?;
 
 	let cookie_val = GrantCookie {
-		client_id: query.client_id,
-		state: query.state,
-		nonce: &cookie_nonce,
-		redirect_uri: redirect_url.as_str(),
+		client_id: query.client_id.into(),
+		state: query.state.into(),
+		nonce: cookie_nonce.as_str().into(),
+		redirect_uri: redirect_url.as_str().into(),
 	};
 
 	let cookie_path = provider
@@ -251,15 +251,15 @@ pub(crate) async fn sso_callback_route(
 		.transpose()?
 		.ok_or_else(|| err!(Request(Unauthorized("Missing cookie {GRANT_SESSION_COOKIE:?}"))))?;
 
-	if cookie.client_id != client_id {
+	if cookie.client_id.as_ref() != client_id.as_str() {
 		return Err!(Request(Unauthorized("Client ID {client_id:?} cookie mismatch.")));
 	}
 
-	if Some(cookie.nonce) != session.cookie_nonce.as_deref() {
+	if Some(cookie.nonce.as_ref()) != session.cookie_nonce.as_deref() {
 		return Err!(Request(Unauthorized("Cookie nonce does not match session state.")));
 	}
 
-	if cookie.state != sess_id {
+	if cookie.state.as_ref() != sess_id {
 		return Err!(Request(Unauthorized("Session ID {sess_id:?} cookie mismatch.")));
 	}
 
