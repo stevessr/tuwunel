@@ -4,19 +4,16 @@ use axum::extract::State;
 use axum_client_ip::InsecureClientIp;
 use ruma::{
 	OwnedUserId,
-	api::client::{
-		session::{
-			get_login_token,
-			login::v3::{Request, Token},
-		},
-		uiaa,
+	api::client::session::{
+		get_login_token,
+		login::v3::{Request, Token},
 	},
 };
 use tuwunel_core::{Err, Result, utils::random_string};
-use tuwunel_service::{Services, uiaa::SESSION_ID_LENGTH};
+use tuwunel_service::Services;
 
 use super::TOKEN_LENGTH;
-use crate::Ruma;
+use crate::{Ruma, router::auth_uiaa};
 
 pub(super) async fn handle_login(
 	services: &Services,
@@ -48,48 +45,11 @@ pub(crate) async fn login_token_route(
 		return Err!(Request(Forbidden("Login via an existing session is not enabled")));
 	}
 
-	// This route SHOULD have UIA
-	// TODO: How do we make only UIA sessions that have not been used before valid?
-	let sender_user = body.sender_user();
-	let sender_device = body.sender_device()?;
-
-	let password_flow = uiaa::AuthFlow { stages: vec![uiaa::AuthType::Password] };
-
-	let mut uiaainfo = uiaa::UiaaInfo {
-		flows: vec![password_flow],
-		..Default::default()
-	};
-
-	match &body.auth {
-		| Some(auth) => {
-			let (worked, uiaainfo) = services
-				.uiaa
-				.try_auth(sender_user, sender_device, auth, &uiaainfo)
-				.await?;
-
-			if !worked {
-				return Err!(Uiaa(uiaainfo));
-			}
-
-			// Success!
-		},
-		| _ => match body.json_body.as_ref() {
-			| Some(json) => {
-				uiaainfo.session = Some(random_string(SESSION_ID_LENGTH));
-				services
-					.uiaa
-					.create(sender_user, sender_device, &uiaainfo, json);
-
-				return Err!(Uiaa(uiaainfo));
-			},
-			| _ => return Err!(Request(NotJson("No JSON body was sent when required."))),
-		},
-	}
-
+	let sender_user = auth_uiaa(&services, &body).await?;
 	let login_token = random_string(TOKEN_LENGTH);
 	let expires_in = services
 		.users
-		.create_login_token(sender_user, &login_token);
+		.create_login_token(&sender_user, &login_token);
 
 	Ok(get_login_token::v1::Response {
 		expires_in: Duration::from_millis(expires_in),
