@@ -91,6 +91,29 @@ impl crate::Service for Service {
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
 
+/// Gets the summary of a space using either local or remote (federation)
+/// sources
+#[implement(Service)]
+pub async fn get_summary_and_children_client(
+	&self,
+	current_room: &RoomId,
+	suggested_only: bool,
+	user_id: &UserId,
+	via: &[OwnedServerName],
+) -> Result<Option<SummaryAccessibility>> {
+	let identifier = Identifier::UserId(user_id);
+
+	if let Ok(Some(response)) = self
+		.get_summary_and_children_local(current_room, &identifier)
+		.await
+	{
+		return Ok(Some(response));
+	}
+
+	self.get_summary_and_children_federation(current_room, suggested_only, user_id, via)
+		.await
+}
+
 /// Gets the summary of a space using solely local information
 #[implement(Service)]
 pub async fn get_summary_and_children_local(
@@ -223,29 +246,6 @@ async fn get_summary_and_children_federation(
 	};
 
 	Ok(Some(accessibility))
-}
-
-/// Gets the summary of a space using either local or remote (federation)
-/// sources
-#[implement(Service)]
-pub async fn get_summary_and_children_client(
-	&self,
-	current_room: &RoomId,
-	suggested_only: bool,
-	user_id: &UserId,
-	via: &[OwnedServerName],
-) -> Result<Option<SummaryAccessibility>> {
-	let identifier = Identifier::UserId(user_id);
-
-	if let Ok(Some(response)) = self
-		.get_summary_and_children_local(current_room, &identifier)
-		.await
-	{
-		return Ok(Some(response));
-	}
-
-	self.get_summary_and_children_federation(current_room, suggested_only, user_id, via)
-		.await
 }
 
 #[implement(Service)]
@@ -468,41 +468,14 @@ async fn cache_insert(
 	current_room: &RoomId,
 	child: RoomSummary,
 ) {
-	let RoomSummary {
-		canonical_alias,
-		name,
-		num_joined_members,
-		room_id,
-		topic,
-		world_readable,
-		guest_can_join,
-		avatar_url,
-		join_rule,
-		room_type,
-		encryption,
-		room_version,
-	} = child;
-
 	let summary = SpaceHierarchyParentSummary {
-		summary: RoomSummary {
-			canonical_alias,
-			name,
-			num_joined_members,
-			topic,
-			world_readable,
-			guest_can_join,
-			avatar_url,
-			join_rule,
-			room_type,
-			room_id: room_id.clone(),
-			encryption,
-			room_version,
-		},
 		children_state: self
-			.get_space_child_events(&room_id)
+			.get_space_child_events(&child.room_id)
 			.map(Event::into_format)
 			.collect()
 			.await,
+
+		summary: child,
 	};
 
 	cache.insert(current_room.to_owned(), Some(CachedSpaceHierarchySummary { summary }));
