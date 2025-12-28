@@ -46,6 +46,10 @@ pub(crate) async fn login_token_route(
 	}
 
 	let sender_user = auth_uiaa(&services, &body).await?;
+	if !services.users.is_active_local(&sender_user).await {
+		return Err!(Request(UserDeactivated("This user has been deactivated.")));
+	}
+
 	let login_token = random_string(TOKEN_LENGTH);
 	let expires_in = services
 		.users

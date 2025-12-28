@@ -105,10 +105,6 @@ pub(crate) async fn login_route(
 		},
 	};
 
-	if !services.users.is_active_local(&user_id).await {
-		return Err!(Request(UserDeactivated("This user has been deactivated.")));
-	}
-
 	// Generate a new token for the device
 	let (access_token, expires_in) = services
 		.users
