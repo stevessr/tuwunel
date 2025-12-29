@@ -31,7 +31,7 @@ use tuwunel_core::{
 	matrix::{event::gen_event_id_canonical_json, room_version},
 	pdu::{PduBuilder, format::from_incoming_federation},
 	state_res, trace,
-	utils::{self, IterStream, ReadyExt, future::TryExtExt, shuffle},
+	utils::{self, IterStream, ReadyExt, future::TryExtExt, math::Expected, shuffle},
 	warn,
 };
 
@@ -302,24 +302,32 @@ pub async fn join_remote(
 		}
 	}
 
-	self.services
+	let shortroomid = self
+		.services
 		.short
 		.get_or_create_shortroomid(room_id)
 		.await;
 
-	info!("Parsing join event");
+	info!(
+		%room_id,
+		%shortroomid,
+		"Initialized room. Parsing join event..."
+	);
 	let parsed_join_pdu =
 		from_incoming_federation(room_id, &event_id, &mut join_event, &room_version_rules)?;
 
-	info!("Acquiring server signing keys for response events");
 	let resp_state = &response.state;
 	let resp_auth = &response.auth_chain;
+	info!(
+		events = resp_state.len().expected_add(resp_auth.len()),
+		"Acquiring server signing keys for response events..."
+	);
 	self.services
 		.server_keys
 		.acquire_events_pubkeys(resp_auth.iter().chain(resp_state.iter()))
 		.await;
 
-	info!("Going through send_join response room_state");
+	info!(events = response.state.len(), "Going through send_join response room_state...");
 	let cork = self.services.db.cork_and_flush();
 	let state = response
 		.state
@@ -361,7 +369,10 @@ pub async fn join_remote(
 
 	drop(cork);
 
-	info!("Going through send_join response auth_chain");
+	info!(
+		events = response.auth_chain.len(),
+		"Going through send_join response auth_chain..."
+	);
 	let cork = self.services.db.cork_and_flush();
 	response
 		.auth_chain
@@ -392,7 +403,7 @@ pub async fn join_remote(
 
 	drop(cork);
 
-	debug!("Running send_join auth check");
+	debug!("Running send_join auth check...");
 	state_res::auth_check(
 		&room_version_rules,
 		&parsed_join_pdu,
@@ -415,7 +426,7 @@ pub async fn join_remote(
 	.boxed()
 	.await?;
 
-	info!("Compressing state from send_join");
+	info!(events = state.len(), "Compressing state from send_join...");
 	let compressed: CompressedState = self
 		.services
 		.state_compressor
@@ -423,7 +434,7 @@ pub async fn join_remote(
 		.collect()
 		.await;
 
-	debug!("Saving compressed state");
+	debug!("Saving compressed state...");
 	let HashSetCompressStateEvent {
 		shortstatehash: statehash_before_join,
 		added,
@@ -434,13 +445,15 @@ pub async fn join_remote(
 		.save_state(room_id, Arc::new(compressed))
 		.await?;
 
-	debug!("Forcing state for new room");
+	debug!(
+		state_hash = ?statehash_before_join,
+		"Forcing state for new room..."
+	);
 	self.services
 		.state
 		.force_state(room_id, statehash_before_join, added, removed, state_lock)
 		.await?;
 
-	info!("Updating joined counts for new room");
 	self.services
 		.state_cache
 		.update_joined_count(room_id)
@@ -455,7 +468,11 @@ pub async fn join_remote(
 		.append_to_state(&parsed_join_pdu)
 		.await?;
 
-	info!("Appending new room join event");
+	info!(
+		event_id = %parsed_join_pdu.event_id,
+		"Appending new room join event..."
+	);
+
 	self.services
 		.timeline
 		.append_pdu(
@@ -466,12 +483,16 @@ pub async fn join_remote(
 		)
 		.await?;
 
-	info!("Setting final room state for new room");
 	// We set the room state after inserting the pdu, so that we never have a moment
 	// in time where events in the current room state do not exist
 	self.services
 		.state
 		.set_room_state(room_id, statehash_after_join, state_lock);
+
+	info!(
+		statehash = %statehash_after_join,
+		"Set final room state for new room."
+	);
 
 	Ok(())
 }
@@ -881,14 +902,12 @@ pub(super) async fn get_servers_for_room(
 	// 2. (room id server)?
 	// 3. shuffle [via query + resolve servers]?
 	// 4. shuffle [invited via, inviters servers]?
-
-	info!("{servers:?}");
+	debug!(?servers);
 
 	// dedup preserving order
 	let mut set = HashSet::new();
 	servers.retain(|x| set.insert(x.clone()));
-
-	info!("{servers:?}");
+	debug!(?servers);
 
 	// sort deprioritized servers last
 	if !servers.is_empty() {
@@ -905,5 +924,6 @@ pub(super) async fn get_servers_for_room(
 		}
 	}
 
+	debug_info!(?servers);
 	Ok(servers)
 }

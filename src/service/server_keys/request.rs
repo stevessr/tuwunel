@@ -8,7 +8,7 @@ use ruma::{
 		get_server_keys,
 	},
 };
-use tuwunel_core::{Err, Result, debug, implement};
+use tuwunel_core::{Err, Result, debug, implement, info};
 
 #[implement(super::Service)]
 pub(super) async fn batch_notary_request<'a, S, K>(
@@ -36,18 +36,20 @@ where
 		batch
 	});
 
-	debug_assert!(!server_keys.is_empty(), "empty batch request to notary");
+	let total_keys = server_keys.len();
+	debug_assert!(total_keys > 0, "empty batch request to notary");
+
+	let batch_max = self
+		.services
+		.server
+		.config
+		.trusted_server_batch_size;
 
 	let mut results = Vec::new();
 	while let Some(batch) = server_keys
 		.keys()
 		.rev()
-		.take(
-			self.services
-				.server
-				.config
-				.trusted_server_batch_size,
-		)
+		.take(batch_max)
 		.next_back()
 		.cloned()
 	{
@@ -74,6 +76,13 @@ where
 			.filter_map(Result::ok);
 
 		results.extend(response);
+
+		info!(
+			"obtained {0} of {1} keys with {2} more to request",
+			results.len(),
+			total_keys,
+			server_keys.len(),
+		);
 	}
 
 	Ok(results)
