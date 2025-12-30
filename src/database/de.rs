@@ -272,6 +272,12 @@ impl<'a, 'de: 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
 	{
 		match name {
 			| "$serde_json::private::RawValue" => visitor.visit_map(self),
+			| "Json" => visitor
+				.visit_newtype_struct(&mut serde_json::Deserializer::from_slice(
+					self.record_trail(),
+				))
+				.map_err(|e| Self::Error::SerdeDe(format!("{name}: {e}").into())),
+
 			| "Cbor" => visitor
 				.visit_newtype_struct(&mut minicbor_serde::Deserializer::new(self.record_trail()))
 				.map_err(|e| Self::Error::SerdeDe(format!("{name}: {e}").into())),

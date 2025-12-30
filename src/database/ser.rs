@@ -52,7 +52,7 @@ pub(crate) struct Serializer<'a, W: Write> {
 }
 
 /// Newtype for JSON serialization.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Json<T>(pub T);
 
 /// Newtype for CBOR serialization.
