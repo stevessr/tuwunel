@@ -1,9 +1,14 @@
 use std::collections::HashSet;
 
-use futures::{FutureExt, StreamExt, TryFutureExt, future::ready, pin_mut};
+use futures::{
+	FutureExt, StreamExt, TryFutureExt,
+	future::{join3, ready},
+	pin_mut,
+};
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, OwnedServerName, RoomId, UserId,
 	api::federation,
+	canonical_json::to_canonical_value,
 	events::{
 		StateEventType,
 		room::member::{MembershipState, RoomMemberEventContent},
@@ -14,7 +19,10 @@ use tuwunel_core::{
 	matrix::{PduCount, room_version},
 	pdu::PduBuilder,
 	state_res,
-	utils::{self, FutureBoolExt, future::ReadyBoolExt},
+	utils::{
+		self, FutureBoolExt,
+		future::{ReadyBoolExt, TryExtExt},
+	},
 	warn,
 };
 
@@ -96,7 +104,11 @@ pub async fn leave(
 
 	// Ask a remote server if we don't have this room and are not knocking on it
 	if remote_leave_now || dont_have_room.and(not_knocked).await {
-		if let Err(e) = self.remote_leave(user_id, room_id).boxed().await {
+		if let Err(e) = self
+			.remote_leave(user_id, room_id, reason)
+			.boxed()
+			.await
+		{
 			warn!(%user_id, "Failed to leave room {room_id} remotely: {e}");
 			// Don't tell the client about this error
 		}
@@ -178,7 +190,12 @@ pub async fn leave(
 
 #[implement(Service)]
 #[tracing::instrument(name = "remote", level = "debug", skip_all)]
-async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
+async fn remote_leave(
+	&self,
+	user_id: &UserId,
+	room_id: &RoomId,
+	reason: Option<String>,
+) -> Result {
 	let mut make_leave_response_and_server =
 		Err!(BadServerResponse("No remote server available to assist in leaving {room_id}."));
 
@@ -281,17 +298,34 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 
 	let room_version_rules = room_version::rules(&room_version_id)?;
 
-	let mut leave_event_stub = serde_json::from_str::<CanonicalJsonObject>(
-		make_leave_response.event.get(),
-	)
-	.map_err(|e| {
-		err!(BadServerResponse(warn!(
-			"Invalid make_leave event json received from {remote_server} for {room_id}: {e:?}"
-		)))
-	})?;
+	let mut event = serde_json::from_str::<CanonicalJsonObject>(make_leave_response.event.get())
+		.map_err(|e| {
+			err!(BadServerResponse(warn!(
+				"Invalid make_leave event json received from {remote_server} for {room_id}: \
+				 {e:?}"
+			)))
+		})?;
 
-	// TODO: Is origin needed?
-	leave_event_stub.insert(
+	let displayname = self.services.users.displayname(user_id).ok();
+
+	let avatar_url = self.services.users.avatar_url(user_id).ok();
+
+	let blurhash = self.services.users.blurhash(user_id).ok();
+
+	let (displayname, avatar_url, blurhash) = join3(displayname, avatar_url, blurhash).await;
+
+	event.insert(
+		"content".into(),
+		to_canonical_value(RoomMemberEventContent {
+			displayname,
+			avatar_url,
+			blurhash,
+			reason,
+			..RoomMemberEventContent::new(MembershipState::Leave)
+		})?,
+	);
+
+	event.insert(
 		"origin".into(),
 		CanonicalJsonValue::String(
 			self.services
@@ -301,24 +335,26 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 				.to_owned(),
 		),
 	);
-	leave_event_stub.insert(
+
+	event.insert(
 		"origin_server_ts".into(),
-		CanonicalJsonValue::Integer(
-			utils::millis_since_unix_epoch()
-				.try_into()
-				.expect("Timestamp is valid js_int value"),
-		),
+		CanonicalJsonValue::Integer(utils::millis_since_unix_epoch().try_into()?),
 	);
+
+	event.insert("room_id".into(), CanonicalJsonValue::String(room_id.as_str().into()));
+
+	event.insert("state_key".into(), CanonicalJsonValue::String(user_id.as_str().into()));
+
+	event.insert("sender".into(), CanonicalJsonValue::String(user_id.as_str().into()));
+
+	event.insert("type".into(), CanonicalJsonValue::String("m.room.member".into()));
 
 	let event_id = self
 		.services
 		.server_keys
-		.gen_id_hash_and_sign_event(&mut leave_event_stub, &room_version_id)?;
+		.gen_id_hash_and_sign_event(&mut event, &room_version_id)?;
 
-	state_res::check_pdu_format(&leave_event_stub, &room_version_rules.event_format)?;
-
-	// It has enough fields to be called a proper event now
-	let leave_event = leave_event_stub;
+	state_res::check_pdu_format(&event, &room_version_rules.event_format)?;
 
 	self.services
 		.federation
@@ -328,7 +364,7 @@ async fn remote_leave(&self, user_id: &UserId, room_id: &RoomId) -> Result {
 			pdu: self
 				.services
 				.federation
-				.format_pdu_into(leave_event.clone(), Some(&room_version_id))
+				.format_pdu_into(event.clone(), Some(&room_version_id))
 				.await,
 		})
 		.await?;

@@ -168,6 +168,7 @@ pub async fn join_remote(
 	let room_version_rules = room_version::rules(&room_version_id)?;
 	let (mut join_event, event_id, join_authorized_via_users_server) = self
 		.create_join_event(
+			room_id,
 			sender_user,
 			&make_join_response.event,
 			&room_version_id,
@@ -636,6 +637,7 @@ pub async fn join_local(
 	let room_version_rules = room_version::rules(&room_version_id)?;
 	let (join_event, event_id, _) = self
 		.create_join_event(
+			room_id,
 			sender_user,
 			&make_join_response.event,
 			&room_version_id,
@@ -689,6 +691,7 @@ pub async fn join_local(
 #[tracing::instrument(name = "make_join", level = "debug", skip_all)]
 async fn create_join_event(
 	&self,
+	room_id: &RoomId,
 	sender_user: &UserId,
 	join_event_stub: &RawJsonValue,
 	room_version_id: &RoomVersionId,
@@ -711,22 +714,6 @@ async fn create_join_event(
 		})
 		.and_then(|s| OwnedUserId::try_from(s.as_str().unwrap_or_default()).ok());
 
-	event.insert(
-		"origin".into(),
-		CanonicalJsonValue::String(
-			self.services
-				.globals
-				.server_name()
-				.as_str()
-				.to_owned(),
-		),
-	);
-
-	event.insert(
-		"origin_server_ts".into(),
-		CanonicalJsonValue::Integer(utils::millis_since_unix_epoch().try_into()?),
-	);
-
 	let displayname = self.services.users.displayname(sender_user).ok();
 
 	let avatar_url = self.services.users.avatar_url(sender_user).ok();
@@ -746,6 +733,30 @@ async fn create_join_event(
 			..RoomMemberEventContent::new(MembershipState::Join)
 		})?,
 	);
+
+	event.insert(
+		"origin".into(),
+		CanonicalJsonValue::String(
+			self.services
+				.globals
+				.server_name()
+				.as_str()
+				.to_owned(),
+		),
+	);
+
+	event.insert(
+		"origin_server_ts".into(),
+		CanonicalJsonValue::Integer(utils::millis_since_unix_epoch().try_into()?),
+	);
+
+	event.insert("room_id".into(), CanonicalJsonValue::String(room_id.as_str().into()));
+
+	event.insert("sender".into(), CanonicalJsonValue::String(sender_user.as_str().into()));
+
+	event.insert("state_key".into(), CanonicalJsonValue::String(sender_user.as_str().into()));
+
+	event.insert("type".into(), CanonicalJsonValue::String("m.room.member".into()));
 
 	let event_id = self
 		.services
