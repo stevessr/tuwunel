@@ -16,22 +16,9 @@ use crate::{
 	utils::{result::LogDebugErr, string::SplitInfallible},
 };
 
-/// Multi-Device (md) i.e. software raid properties.
+/// Device characteristics useful for random access throughput
 #[derive(Clone, Debug, Default)]
-pub struct MultiDevice {
-	/// Type of raid (i.e. `raid1`); None if no raid present or detected.
-	pub level: Option<String>,
-
-	/// Number of participating devices.
-	pub raid_disks: usize,
-
-	/// The MQ's discovered on the devices; or empty.
-	pub md: Vec<MultiQueue>,
-}
-
-/// Multi-Queue (mq) characteristics.
-#[derive(Clone, Debug, Default)]
-pub struct MultiQueue {
+pub struct Parallelism {
 	/// Number of requests for the device.
 	pub nr_requests: Option<usize>,
 
@@ -39,7 +26,7 @@ pub struct MultiQueue {
 	pub mq: Vec<Queue>,
 }
 
-/// Single-queue characteristics
+/// Device queue characteristics
 #[derive(Clone, Debug, Default)]
 pub struct Queue {
 	/// Queue's indice.
@@ -52,59 +39,18 @@ pub struct Queue {
 	pub cpu_list: Vec<usize>,
 }
 
-/// Get properties of a MultiDevice (md) storage system
+/// Get device characteristics useful for random access throughput by name.
 #[must_use]
-pub fn md_discover(path: &Path) -> MultiDevice {
+pub fn parallelism(path: &Path) -> Parallelism {
 	let dev_id = dev_from_path(path)
 		.log_debug_err()
 		.unwrap_or_default();
 
-	let md_path = block_path(dev_id).join("md/");
+	let mq_path = block_path(dev_id).join("mq/");
 
-	let raid_disks_path = md_path.join("raid_disks");
+	let nr_requests_path = block_path(dev_id).join("queue/nr_requests");
 
-	let raid_disks: usize = read_to_string(&raid_disks_path)
-		.ok()
-		.as_deref()
-		.map(str::trim)
-		.map(str::parse)
-		.flat_ok()
-		.unwrap_or(0);
-
-	let single_fallback = raid_disks.eq(&0).then(|| block_path(dev_id));
-
-	MultiDevice {
-		raid_disks,
-
-		level: read_to_string(md_path.join("level"))
-			.ok()
-			.as_deref()
-			.map(str::trim)
-			.map(ToOwned::to_owned),
-
-		md: (0..raid_disks)
-			.map(|i| format!("rd{i}/block"))
-			.map(|path| md_path.join(&path))
-			.filter_map(|ref path| path.canonicalize().ok())
-			.map(|mut path| {
-				path.pop();
-				path
-			})
-			.chain(single_fallback)
-			.map(|path| mq_discover(&path))
-			.filter(|mq| !mq.mq.is_empty())
-			.collect(),
-	}
-}
-
-/// Get properties of a MultiQueue within a MultiDevice.
-#[must_use]
-fn mq_discover(path: &Path) -> MultiQueue {
-	let mq_path = path.join("mq/");
-
-	let nr_requests_path = path.join("queue/nr_requests");
-
-	MultiQueue {
+	Parallelism {
 		nr_requests: read_to_string(&nr_requests_path)
 			.ok()
 			.as_deref()
@@ -122,13 +68,13 @@ fn mq_discover(path: &Path) -> MultiQueue {
 					.as_ref()
 					.is_ok_and(FileType::is_dir)
 			})
-			.map(|dir| queue_discover(&dir.path()))
+			.map(|dir| queue_parallelism(&dir.path()))
 			.collect(),
 	}
 }
 
-/// Get properties of a Queue within a MultiQueue.
-fn queue_discover(dir: &Path) -> Queue {
+/// Get device queue characteristics by mq path on sysfs(5)
+fn queue_parallelism(dir: &Path) -> Queue {
 	let queue_id = dir.file_name();
 
 	let nr_tags_path = dir.join("nr_tags");
