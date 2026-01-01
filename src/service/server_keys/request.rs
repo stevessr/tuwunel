@@ -78,7 +78,7 @@ where
 		results.extend(response);
 
 		info!(
-			"obtained {0} of {1} keys with {2} more to request",
+			"obtained {0} of {1} results with {2} more to request",
 			results.len(),
 			total_keys,
 			server_keys.len(),
