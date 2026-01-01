@@ -41,6 +41,9 @@ on:
       docker_repo:
         type: string
         description: DockerHub Repository
+      docker_acct:
+        type: string
+        description: DockerHub account name
       release_url:
         type: string
         description: For release assets
@@ -114,7 +117,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: docker.io
-          username: ${{ github.actor }}
+          username: ${{ inputs.docker_acct }}
           password: ${{ secrets.dockerhub_token }}
 
       - name: Bake
@@ -176,7 +179,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: docker.io
-          username: ${{ github.actor }}
+          username: ${{ inputs.docker_acct }}
           password: ${{ secrets.dockerhub_token }}
 
       - name: Release Branch
@@ -283,7 +286,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: docker.io
-          username: ${{ github.actor }}
+          username: ${{ inputs.docker_acct }}
           password: ${{ secrets.dockerhub_token }}
 
       - name: Push Branch

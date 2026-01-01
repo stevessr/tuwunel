@@ -46,6 +46,7 @@ jobs:
       complement: ${{vars.COMPLEMENT != 'false'}}
       complement_runner: 'het'
       docker_repo: ${{vars.DOCKER_REPO}}
+      docker_acct: ${{vars.DOCKER_ACCT}}
       release_url: ${{steps.release.outputs.upload_url}}
       pages_url: 'https://matrix-construct.github.io/tuwunel/'
       rust_sdk_integ: ${{vars.RUST_SDK_INTEGRATION != 'false'}}
@@ -297,6 +298,7 @@ jobs:
     uses: ./.github/workflows/publish.yml
     with:
       docker_repo: ${{needs.init.outputs.docker_repo}}
+      docker_acct: ${{needs.init.outputs.docker_acct}}
       release_url: ${{needs.init.outputs.release_url}}
       pages_url: ${{needs.init.outputs.pages_url}}
       cargo_profiles: ${{needs.init.outputs.cargo_profiles}}
