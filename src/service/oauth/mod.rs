@@ -5,7 +5,10 @@ pub mod user_info;
 use std::sync::Arc;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD as b64encode};
-use reqwest::{Method, header::ACCEPT};
+use reqwest::{
+	Method,
+	header::{ACCEPT, CONTENT_TYPE},
+};
 use ruma::UserId;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
@@ -49,12 +52,15 @@ pub async fn request_userinfo(
 	&self,
 	(provider, session): (&Provider, &Session),
 ) -> Result<UserInfo> {
+	#[derive(Debug, Serialize)]
+	struct Query;
+
 	let url = provider
 		.userinfo_url
 		.clone()
 		.ok_or_else(|| err!(Config("userinfo_url", "Missing userinfo URL in config")))?;
 
-	self.request((Some(provider), Some(session)), Method::GET, url)
+	self.request((Some(provider), Some(session)), Method::GET, url, Option::<Query>::None)
 		.await
 		.and_then(|value| serde_json::from_value(value).map_err(Into::into))
 		.log_err()
@@ -66,6 +72,9 @@ pub async fn request_tokeninfo(
 	&self,
 	(provider, session): (&Provider, &Session),
 ) -> Result<UserInfo> {
+	#[derive(Debug, Serialize)]
+	struct Query;
+
 	let url = provider
 		.introspection_url
 		.clone()
@@ -73,7 +82,7 @@ pub async fn request_tokeninfo(
 			err!(Config("introspection_url", "Missing introspection URL in config"))
 		})?;
 
-	self.request((Some(provider), Some(session)), Method::GET, url)
+	self.request((Some(provider), Some(session)), Method::GET, url, Option::<Query>::None)
 		.await
 		.and_then(|value| serde_json::from_value(value).map_err(Into::into))
 		.log_err()
@@ -93,17 +102,12 @@ pub async fn revoke_token(&self, (provider, session): (&Provider, &Session)) -> 
 		client_secret: &provider.client_secret,
 	};
 
-	let query = serde_html_form::to_string(&query)?;
 	let url = provider
 		.revocation_url
 		.clone()
-		.map(|mut url| {
-			url.set_query(Some(&query));
-			url
-		})
 		.ok_or_else(|| err!(Config("revocation_url", "Missing revocation URL in config")))?;
 
-	self.request((Some(provider), Some(session)), Method::POST, url)
+	self.request((Some(provider), Some(session)), Method::POST, url, Some(query))
 		.await
 		.log_err()
 		.map(|_| ())
@@ -135,17 +139,12 @@ pub async fn request_token(
 		redirect_uri: provider.callback_url.as_ref().map(Url::as_str),
 	};
 
-	let query = serde_html_form::to_string(&query)?;
 	let url = provider
 		.token_url
 		.clone()
-		.map(|mut url| {
-			url.set_query(Some(&query));
-			url
-		})
 		.ok_or_else(|| err!(Config("token_url", "Missing token URL in config")))?;
 
-	self.request((Some(provider), Some(session)), Method::POST, url)
+	self.request((Some(provider), Some(session)), Method::POST, url, Some(query))
 		.await
 		.and_then(|value| serde_json::from_value(value).map_err(Into::into))
 		.log_err()
@@ -160,20 +159,30 @@ pub async fn request_token(
 	name = "request",
 	level = "debug",
 	ret(level = "trace"),
-	skip(self)
+	skip(self, body)
 )]
-pub async fn request(
+pub async fn request<Body>(
 	&self,
 	(provider, session): (Option<&Provider>, Option<&Session>),
 	method: Method,
 	url: Url,
-) -> Result<JsonValue> {
+	body: Option<Body>,
+) -> Result<JsonValue>
+where
+	Body: Serialize,
+{
 	let mut request = self
 		.services
 		.client
 		.oauth
 		.request(method, url)
 		.header(ACCEPT, "application/json");
+
+	if let Some(body) = body.map(serde_html_form::to_string).transpose()? {
+		request = request
+			.header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+			.body(body);
+	}
 
 	if let Some(session) = session {
 		if let Some(access_token) = session.access_token.clone() {
