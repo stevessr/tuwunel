@@ -5080,7 +5080,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tuwunel"
-version = "1.4.8"
+version = "1.4.9"
 dependencies = [
  "clap",
  "const-str",
@@ -5112,7 +5112,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_admin"
-version = "1.4.8"
+version = "1.4.9"
 dependencies = [
  "base64",
  "clap",
@@ -5135,7 +5135,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_api"
-version = "1.4.8"
+version = "1.4.9"
 dependencies = [
  "async-trait",
  "axum",
@@ -5169,7 +5169,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_core"
-version = "1.4.8"
+version = "1.4.9"
 dependencies = [
  "argon2",
  "arrayvec",
@@ -5230,7 +5230,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_database"
-version = "1.4.8"
+version = "1.4.9"
 dependencies = [
  "async-channel",
  "const-str",
@@ -5251,7 +5251,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_macros"
-version = "1.4.8"
+version = "1.4.9"
 dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
@@ -5261,7 +5261,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_router"
-version = "1.4.8"
+version = "1.4.9"
 dependencies = [
  "axum",
  "axum-client-ip",
@@ -5295,7 +5295,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_service"
-version = "1.4.8"
+version = "1.4.9"
 dependencies = [
  "async-trait",
  "base64",
