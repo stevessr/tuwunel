@@ -75,7 +75,8 @@ pub(crate) async fn sso_login_route(
 	_body: Ruma<sso_login::v3::Request>,
 ) -> Result<sso_login::v3::Response> {
 	Err!(Request(NotImplemented(
-		"SSO login without specific provider has not been implemented."
+		"sso_custom_providers_page has been enabled but this URL has not been overridden with \
+		 any custom page listing the available providers..."
 	)))
 }
 

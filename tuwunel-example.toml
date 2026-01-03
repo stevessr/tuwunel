@@ -1834,7 +1834,20 @@
 #
 #one_time_key_limit = 256
 
-# This item is undocumented. Please contribute documentation for it.
+# Setting this option to true replaces the list of identity providers on
+# the client's login screen with a single button "Sign in with single
+# sign-on" linking to the URL `/_matrix/client/v3/login/sso/redirect`. The
+# deployment is expected to intercept this URL with their reverse-proxy to
+# provide a custom webpage listing providers; each entry linking or
+# redirecting back to one of the configured identity providers at
+# /_matrix/client/v3/login/sso/redirect/<client_id>`.
+#
+# This option defaults to false, allowing the client to generate the list
+# of providers or hide all SSO-related options when none configured.
+#
+#sso_custom_providers_page = false
+
+# Under development; do not enable.
 #
 #sso_aware_preferred = false
 

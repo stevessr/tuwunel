@@ -22,7 +22,10 @@ use ruma::api::client::session::{
 		v3::{DiscoveryInfo, HomeserverInfo, LoginInfo},
 	},
 };
-use tuwunel_core::{Err, Result, info, utils::stream::ReadyExt};
+use tuwunel_core::{
+	Err, Result, info,
+	utils::{BoolExt, stream::ReadyExt},
+};
 use tuwunel_service::users::device::generate_refresh_token;
 
 use self::{ldap::ldap_login, password::password_login};
@@ -45,28 +48,45 @@ pub(crate) async fn get_login_types_route(
 	InsecureClientIp(client): InsecureClientIp,
 	_body: Ruma<get_login_types::v3::Request>,
 ) -> Result<get_login_types::v3::Response> {
-	Ok(get_login_types::v3::Response::new(vec![
-		LoginType::Password(PasswordLoginType::default()),
+	let get_login_token = services.config.login_via_existing_session;
+
+	let identity_providers = services
+		.config
+		.sso_custom_providers_page
+		.is_false()
+		.then(|| services.config.identity_provider.iter())
+		.into_iter()
+		.flatten()
+		.cloned()
+		.map(|config| IdentityProvider {
+			id: config.id().to_owned(),
+			brand: Some(config.brand.clone().into()),
+			icon: config.icon,
+			name: config.name.unwrap_or(config.brand),
+		})
+		.collect();
+
+	let flows = [
 		LoginType::ApplicationService(ApplicationServiceLoginType::default()),
 		LoginType::Jwt(JwtLoginType::default()),
-		LoginType::Token(TokenLoginType {
-			get_login_token: services.config.login_via_existing_session,
-		}),
-		LoginType::Sso(SsoLoginType {
-			identity_providers: services
-				.config
-				.identity_provider
-				.iter()
-				.cloned()
-				.map(|config| IdentityProvider {
-					id: config.id().to_owned(),
-					brand: Some(config.brand.clone().into()),
-					icon: config.icon,
-					name: config.name.unwrap_or(config.brand),
-				})
-				.collect(),
-		}),
-	]))
+		LoginType::Password(PasswordLoginType::default()),
+		LoginType::Sso(SsoLoginType { identity_providers }),
+		LoginType::Token(TokenLoginType { get_login_token }),
+	];
+
+	Ok(get_login_types::v3::Response {
+		flows: flows
+			.into_iter()
+			.filter(|login_type| match login_type {
+				| LoginType::Sso(SsoLoginType { identity_providers })
+					if !services.config.sso_custom_providers_page
+						&& identity_providers.is_empty() =>
+					false,
+
+				| _ => true,
+			})
+			.collect(),
+	})
 }
 
 /// # `POST /_matrix/client/v3/login`

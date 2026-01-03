@@ -2139,6 +2139,23 @@ pub struct Config {
 	#[serde(default = "default_one_time_key_limit")]
 	pub one_time_key_limit: usize,
 
+	/// Setting this option to true replaces the list of identity providers on
+	/// the client's login screen with a single button "Sign in with single
+	/// sign-on" linking to the URL `/_matrix/client/v3/login/sso/redirect`. The
+	/// deployment is expected to intercept this URL with their reverse-proxy to
+	/// provide a custom webpage listing providers; each entry linking or
+	/// redirecting back to one of the configured identity providers at
+	/// /_matrix/client/v3/login/sso/redirect/<client_id>`.
+	///
+	/// This option defaults to false, allowing the client to generate the list
+	/// of providers or hide all SSO-related options when none configured.
+	#[serde(default)]
+	pub sso_custom_providers_page: bool,
+
+	/// Under development; do not enable.
+	#[serde(default)]
+	pub sso_aware_preferred: bool,
+
 	// external structure; separate section
 	#[serde(default)]
 	pub blurhashing: BlurhashConfig,
@@ -2158,9 +2175,6 @@ pub struct Config {
 	// external structure; separate sections
 	#[serde(default)]
 	pub identity_provider: HashSet<IdentityProvider>,
-
-	#[serde(default)]
-	pub sso_aware_preferred: bool,
 
 	#[serde(flatten)]
 	#[allow(clippy::zero_sized_map_values)]
