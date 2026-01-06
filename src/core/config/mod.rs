@@ -2473,6 +2473,129 @@ pub struct JwtConfig {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+pub struct OAuthProviderConfig {
+	/// Display name shown to clients for this provider
+	///
+	/// default:
+	#[serde(default)]
+	pub name: String,
+
+	/// Provider icon shown to clients (MXC URI)
+	///
+	/// default:
+	#[serde(default)]
+	pub icon: Option<String>,
+
+	/// Provider brand hint (google, github, gitlab, apple, etc.)
+	///
+	/// default:
+	#[serde(default)]
+	pub brand: Option<String>,
+
+	/// OAuth 2.0 issuer URL (e.g., https://accounts.google.com)
+	///
+	/// This is the base URL of the OAuth 2.0 authorization server
+	///
+	/// default:
+	#[serde(default)]
+	pub issuer: String,
+
+	/// OAuth 2.0 client ID
+	///
+	/// display: sensitive
+	/// default:
+	#[serde(default)]
+	pub client_id: String,
+
+	/// OAuth 2.0 client secret
+	///
+	/// display: sensitive
+	/// default:
+	#[serde(default)]
+	pub client_secret: String,
+
+	/// OAuth 2.0 redirect URI
+	///
+	/// The redirect URI registered with the OAuth provider
+	///
+	/// default:
+	#[serde(default)]
+	pub redirect_uri: String,
+
+	/// OAuth 2.0 scopes to request
+	///
+	/// default: ["openid", "profile", "email"]
+	#[serde(default = "default_oauth_scopes")]
+	pub scopes: Vec<String>,
+
+	/// Automatically create new user from a valid OAuth claim
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub register_user: bool,
+
+	/// OAuth 2.0 authorization endpoint (optional, can be auto-discovered)
+	///
+	/// default:
+	#[serde(default)]
+	pub authorization_endpoint: Option<String>,
+
+	/// OAuth 2.0 token endpoint (optional, can be auto-discovered)
+	///
+	/// default:
+	#[serde(default)]
+	pub token_endpoint: Option<String>,
+
+	/// OAuth 2.0 userinfo endpoint (optional, can be auto-discovered)
+	///
+	/// default:
+	#[serde(default)]
+	pub userinfo_endpoint: Option<String>,
+
+	/// JWKS (JSON Web Key Set) URI for token verification
+	///
+	/// default:
+	#[serde(default)]
+	pub jwks_uri: Option<String>,
+
+	/// Enable OIDC discovery (.well-known/openid-configuration)
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub enable_discovery: bool,
+
+	/// Claim to use as the Matrix user ID localpart
+	///
+	/// Common values: "sub", "email", "preferred_username"
+	///
+	/// default: "sub"
+	#[serde(default = "default_oauth_subject_claim")]
+	pub subject_claim: String,
+
+	/// Claim to use as the display name
+	///
+	/// default: "name"
+	#[serde(default = "default_oauth_displayname_claim")]
+	pub displayname_claim: String,
+
+	/// MSC3861: Account management URL
+	///
+	/// URL where users can manage their OAuth account
+	///
+	/// default:
+	#[serde(default)]
+	pub account_management_url: Option<String>,
+
+	/// MSC3861: Enable experimental OAuth delegation mode
+	///
+	/// When enabled, Matrix tokens are delegated to the OAuth provider
+	///
+	/// default: false
+	#[serde(default)]
+	pub experimental_msc3861: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
 #[config_example_generator(filename = "tuwunel-example.toml", section = "global.oauth")]
 pub struct OAuthConfig {
 	/// Enable OAuth 2.0 logins
@@ -2582,6 +2705,20 @@ pub struct OAuthConfig {
 	/// default: false
 	#[serde(default)]
 	pub experimental_msc3861: bool,
+
+	/// Named OAuth providers (MSC2858 multi-provider support)
+	///
+	/// Use `[global.oauth.providers.<id>]` to define each provider.
+	///
+	/// default: {}
+	#[serde(default)]
+	pub providers: BTreeMap<String, OAuthProviderConfig>,
+
+	/// Default provider ID to use when multiple providers are configured
+	///
+	/// default:
+	#[serde(default)]
+	pub default_provider: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

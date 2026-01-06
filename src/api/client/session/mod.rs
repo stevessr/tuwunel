@@ -26,6 +26,7 @@ use tuwunel_core::{Err, Result, info, utils::stream::ReadyExt};
 use tuwunel_service::users::device::generate_refresh_token;
 
 use self::{ldap::ldap_login, password::password_login};
+use super::oauth_provider::oauth_identity_providers;
 pub(crate) use self::{
 	logout::{logout_all_route, logout_route},
 	refresh::refresh_token_route,
@@ -55,7 +56,8 @@ pub(crate) async fn get_login_types_route(
 
 	// Add SSO/OAuth login type if enabled
 	if services.config.oauth.enable {
-		flows.push(LoginType::Sso(SsoLoginType::default()));
+		let identity_providers = oauth_identity_providers(&services.config.oauth);
+		flows.push(LoginType::Sso(SsoLoginType { identity_providers, ..Default::default() }));
 	}
 
 	Ok(get_login_types::v3::Response::new(flows))

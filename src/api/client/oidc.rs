@@ -3,6 +3,8 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use tuwunel_core::{Err, Result};
 
+use crate::client::oauth_provider::resolve_oauth_provider;
+
 
 /// OIDC Discovery metadata
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -32,34 +34,37 @@ pub(crate) struct OidcDiscovery {
 pub(crate) async fn oidc_discovery_route(
 	State(services): State<crate::State>,
 ) -> Result<Json<OidcDiscovery>> {
-	if !services.config.oauth.enable || !services.config.oauth.enable_discovery {
+	if !services.config.oauth.enable {
 		return Err!(Request(Unknown("OIDC discovery is not enabled.")));
 	}
 
-	let oauth_config = &services.config.oauth;
+	let provider = resolve_oauth_provider(&services.config.oauth, None)?;
+	if !provider.enable_discovery {
+		return Err!(Request(Unknown("OIDC discovery is not enabled.")));
+	}
 
 	let discovery = OidcDiscovery {
-		issuer: oauth_config.issuer.clone(),
-		authorization_endpoint: oauth_config
+		issuer: provider.issuer.clone(),
+		authorization_endpoint: provider
 			.authorization_endpoint
 			.clone()
-			.unwrap_or_else(|| format!("{}/oauth2/authorize", oauth_config.issuer)),
-		token_endpoint: oauth_config
+			.unwrap_or_else(|| format!("{}/oauth2/authorize", provider.issuer)),
+		token_endpoint: provider
 			.token_endpoint
 			.clone()
-			.unwrap_or_else(|| format!("{}/oauth2/token", oauth_config.issuer)),
-		userinfo_endpoint: oauth_config
+			.unwrap_or_else(|| format!("{}/oauth2/token", provider.issuer)),
+		userinfo_endpoint: provider
 			.userinfo_endpoint
 			.clone()
-			.or_else(|| Some(format!("{}/oauth2/userinfo", oauth_config.issuer))),
-		jwks_uri: oauth_config
+			.or_else(|| Some(format!("{}/oauth2/userinfo", provider.issuer))),
+		jwks_uri: provider
 			.jwks_uri
 			.clone()
-			.or_else(|| Some(format!("{}/.well-known/jwks.json", oauth_config.issuer))),
+			.or_else(|| Some(format!("{}/.well-known/jwks.json", provider.issuer))),
 		response_types_supported: vec!["code".to_owned()],
 		subject_types_supported: vec!["public".to_owned()],
 		id_token_signing_alg_values_supported: vec!["RS256".to_owned()],
-		scopes_supported: Some(oauth_config.scopes.clone()),
+		scopes_supported: Some(provider.scopes.clone()),
 		token_endpoint_auth_methods_supported: Some(vec![
 			"client_secret_basic".to_owned(),
 			"client_secret_post".to_owned(),
@@ -72,8 +77,8 @@ pub(crate) async fn oidc_discovery_route(
 			"preferred_username".to_owned(),
 		]),
 		// MSC3861: Include account management information if configured
-		account_management_uri: oauth_config.account_management_url.clone(),
-		account_management_actions_supported: oauth_config
+		account_management_uri: provider.account_management_url.clone(),
+		account_management_actions_supported: provider
 			.account_management_url
 			.as_ref()
 			.map(|_| vec![
@@ -106,10 +111,10 @@ pub(crate) async fn oauth_issuer_route(
 		return Err!(Request(Unknown("OAuth is not enabled.")));
 	}
 
-	let oauth_config = &services.config.oauth;
+	let provider = resolve_oauth_provider(&services.config.oauth, None)?;
 
 	Ok(Json(MatrixOAuthAccount {
-		issuer: oauth_config.issuer.clone(),
+		issuer: provider.issuer.clone(),
 		account: Some(services.server.name.to_string()),
 	}))
 }
@@ -130,15 +135,18 @@ pub(crate) struct AccountManagementInfo {
 pub(crate) async fn msc3861_account_management_route(
 	State(services): State<crate::State>,
 ) -> Result<Json<AccountManagementInfo>> {
-	if !services.config.oauth.enable || !services.config.oauth.experimental_msc3861 {
+	if !services.config.oauth.enable {
 		return Err!(Request(Unknown("MSC3861 is not enabled.")));
 	}
 
-	let oauth_config = &services.config.oauth;
+	let provider = resolve_oauth_provider(&services.config.oauth, None)?;
+	if !provider.experimental_msc3861 {
+		return Err!(Request(Unknown("MSC3861 is not enabled.")));
+	}
 
 	Ok(Json(AccountManagementInfo {
-		account_management_uri: oauth_config.account_management_url.clone(),
-		account_management_actions_supported: oauth_config
+		account_management_uri: provider.account_management_url.clone(),
+		account_management_actions_supported: provider
 			.account_management_url
 			.as_ref()
 			.map(|_| vec![

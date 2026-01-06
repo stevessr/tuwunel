@@ -7,6 +7,7 @@ use serde_json::Value as JsonValue;
 use serde::{Deserialize, Serialize};
 use tuwunel_core::{Err, Result, err, error::inspect_log};
 use crate::Ruma;
+use crate::client::oauth_provider::resolve_oauth_provider;
 
 /// MSC3861: Authentication information for .well-known/matrix/client
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -47,11 +48,14 @@ pub(crate) async fn well_known_client(
 	};
 
 	// MSC3861: Include OAuth authentication information if enabled
-	let authentication = if services.config.oauth.enable && services.config.oauth.experimental_msc3861 {
-		Some(AuthenticationInfo {
-			issuer: services.config.oauth.issuer.clone(),
-			account: Some(services.server.name.to_string()),
-		})
+	let authentication = if services.config.oauth.enable {
+		match resolve_oauth_provider(&services.config.oauth, None) {
+			| Ok(provider) if provider.experimental_msc3861 => Some(AuthenticationInfo {
+				issuer: provider.issuer,
+				account: Some(services.server.name.to_string()),
+			}),
+			| _ => None,
+		}
 	} else {
 		None
 	};

@@ -1,4 +1,5 @@
 use crate::client::TOKEN_LENGTH;
+use crate::client::oauth_provider::{ResolvedOAuthProvider, resolve_oauth_provider};
 use axum::extract::State;
 use axum::response::{IntoResponse, Redirect};
 use axum_client_ip::InsecureClientIp;
@@ -16,7 +17,8 @@ const STATE_TTL: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone)]
 struct StateEntry {
-	redirect_url: String,
+	redirect_url: Option<String>,
+	provider_id: String,
 	expires_at: Instant,
 }
 
@@ -28,7 +30,7 @@ fn purge_expired(store: &mut HashMap<String, StateEntry>) {
 	store.retain(|_, entry| entry.expires_at > now);
 }
 
-fn remember_redirect(state_token: &str, redirect_url: &str) {
+fn remember_state(state_token: &str, provider_id: &str, redirect_url: Option<&str>) {
 	let mut store = STATE_STORE
 		.lock()
 		.unwrap_or_else(|poison| poison.into_inner());
@@ -36,20 +38,60 @@ fn remember_redirect(state_token: &str, redirect_url: &str) {
 	store.insert(
 		state_token.to_owned(),
 		StateEntry {
-			redirect_url: redirect_url.to_owned(),
+			redirect_url: redirect_url.map(str::to_owned),
+			provider_id: provider_id.to_owned(),
 			expires_at: Instant::now() + STATE_TTL,
 		},
 	);
 }
 
-fn consume_redirect(state_token: &str) -> Option<String> {
+fn consume_state(state_token: &str) -> Option<StateEntry> {
 	let mut store = STATE_STORE
 		.lock()
 		.unwrap_or_else(|poison| poison.into_inner());
 	purge_expired(&mut store);
-	store
-		.remove(state_token)
-		.map(|entry| entry.redirect_url)
+	store.remove(state_token)
+}
+
+fn build_state(
+	state_token: &str,
+	provider: &ResolvedOAuthProvider,
+	redirect_url: &str,
+) -> String {
+	let encoded_redirect = if redirect_url.is_empty() {
+		String::new()
+	} else {
+		urlencoding::encode(redirect_url).into_owned()
+	};
+
+	format!("{}|{}|{}", state_token, provider.id, encoded_redirect)
+}
+
+fn parse_state(state: &str) -> (String, Option<String>, Option<String>) {
+	let pipe_count = state.matches('|').count();
+
+	if pipe_count == 1 {
+		let mut parts = state.splitn(2, '|');
+		let token = parts.next().unwrap_or("").to_owned();
+		let redirect = parts
+			.next()
+			.and_then(|value| (!value.is_empty()).then_some(value))
+			.and_then(|value| urlencoding::decode(value).ok())
+			.map(|value| value.into_owned());
+		return (token, None, redirect);
+	}
+
+	let mut parts = state.splitn(3, '|');
+	let token = parts.next().unwrap_or("").to_owned();
+	let provider_id = parts
+		.next()
+		.and_then(|value| (!value.is_empty()).then_some(value.to_owned()));
+	let redirect = parts
+		.next()
+		.and_then(|value| (!value.is_empty()).then_some(value))
+		.and_then(|value| urlencoding::decode(value).ok())
+		.map(|value| value.into_owned());
+	(token, provider_id, redirect)
 }
 
 /// OAuth 2.0 token response
@@ -94,8 +136,6 @@ pub(crate) async fn oauth_redirect_route(
 		return Err!(Request(Unknown("OAuth login is not enabled.")));
 	}
 
-	let oauth_config = &services.config.oauth;
-
 	// Generate state parameter for CSRF protection
 	let state_token = utils::random_string(32);
 	let query = uri.query().unwrap_or_default();
@@ -106,30 +146,29 @@ pub(crate) async fn oauth_redirect_route(
 		.get("redirectUrl")
 		.map(|s| s.as_str())
 		.unwrap_or("");
+	let idp_id = params.get("idp_id").map(|s| s.as_str());
 
-	// If redirect_url provided, store mapping state -> redirect_url with TTL
-	if !redirect_url.is_empty() {
-		remember_redirect(&state_token, redirect_url);
-	}
+	let provider = resolve_oauth_provider(&services.config.oauth, idp_id)?;
+	let state = build_state(&state_token, &provider, redirect_url);
 
-	let state = if redirect_url.is_empty() {
-		state_token.clone()
-	} else {
-		format!("{}|{}", state_token, urlencoding::encode(redirect_url))
-	};
+	remember_state(
+		&state_token,
+		&provider.id,
+		(!redirect_url.is_empty()).then_some(redirect_url),
+	);
 
-	let auth_endpoint = oauth_config
+	let auth_endpoint = provider
 		.authorization_endpoint
 		.as_deref()
 		.ok_or_else(|| err!(Request(Unknown("OAuth authorization endpoint not configured"))))?;
 
 	// Build authorization URL with parameters
-	let scopes = oauth_config.scopes.join(" ");
+	let scopes = provider.scopes.join(" ");
 	let auth_url = format!(
 		"{}?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
 		auth_endpoint,
-		urlencoding::encode(&oauth_config.client_id),
-		urlencoding::encode(&oauth_config.redirect_uri),
+		urlencoding::encode(&provider.client_id),
+		urlencoding::encode(&provider.redirect_uri),
 		urlencoding::encode(&scopes),
 		urlencoding::encode(&state)
 	);
@@ -141,12 +180,10 @@ pub(crate) async fn oauth_redirect_route(
 /// Exchange OAuth authorization code for access token
 pub(crate) async fn exchange_code_for_token(
 	services: &Services,
+	provider: &ResolvedOAuthProvider,
 	code: &str,
-	redirect_uri: &str,
 ) -> Result<OAuthTokenResponse> {
-	let oauth_config = &services.config.oauth;
-
-	let token_endpoint = oauth_config
+	let token_endpoint = provider
 		.token_endpoint
 		.as_deref()
 		.ok_or_else(|| err!(Request(Unknown("OAuth token endpoint not configured"))))?;
@@ -155,13 +192,13 @@ pub(crate) async fn exchange_code_for_token(
 	let mut params = HashMap::new();
 	params.insert("grant_type", "authorization_code");
 	params.insert("code", code);
-	params.insert("redirect_uri", redirect_uri);
+	params.insert("redirect_uri", provider.redirect_uri.as_str());
 
 	// Make HTTP POST request to token endpoint using form encoding and HTTP Basic auth
 	let client = &services.client.default;
 	let response = client
 		.post(token_endpoint)
-		.basic_auth(&oauth_config.client_id, Some(&oauth_config.client_secret))
+		.basic_auth(&provider.client_id, Some(&provider.client_secret))
 		.form(&params)
 		.send()
 		.await
@@ -189,12 +226,11 @@ pub(crate) async fn exchange_code_for_token(
 /// Validate OAuth token and extract user information
 pub(crate) async fn validate_oauth_token(
 	services: &Services,
+	provider: &ResolvedOAuthProvider,
 	access_token: &str,
 ) -> Result<OAuthUserInfo> {
-	let oauth_config = &services.config.oauth;
-
 	// Get userinfo endpoint
-	let userinfo_endpoint = oauth_config
+	let userinfo_endpoint = provider
 		.userinfo_endpoint
 		.as_deref()
 		.ok_or_else(|| err!(Request(Unknown("OAuth userinfo endpoint not configured"))))?;
@@ -231,12 +267,11 @@ pub(crate) async fn validate_oauth_token(
 /// Create or get Matrix user ID from OAuth user info
 pub(crate) async fn get_or_create_user(
 	services: &Services,
+	provider: &ResolvedOAuthProvider,
 	userinfo: &OAuthUserInfo,
 ) -> Result<OwnedUserId> {
-	let oauth_config = &services.config.oauth;
-
 	// Extract localpart from userinfo based on configured claim
-	let localpart = match oauth_config.subject_claim.as_str() {
+	let localpart = match provider.subject_claim.as_str() {
 		| "sub" => &userinfo.sub,
 		| "email" => userinfo.email.as_deref().unwrap_or(&userinfo.sub),
 		| "preferred_username" => userinfo
@@ -260,7 +295,7 @@ pub(crate) async fn get_or_create_user(
 
 	// Check if user exists
 	if !services.users.exists(&user_id).await {
-		if !oauth_config.register_user {
+		if !provider.register_user {
 			return Err!(Request(Forbidden("User registration via OAuth is disabled")));
 		}
 
@@ -306,20 +341,28 @@ pub(crate) async fn oauth_callback_route(
 		.get("state")
 		.map(|s| s.as_str())
 		.unwrap_or("");
-	let state_token = state
-		.split_once('|')
-		.map(|(token, _)| token)
-		.unwrap_or(state);
+
+	let (state_token, mut provider_id, mut app_redirect) = parse_state(state);
+	let state_entry = consume_state(&state_token);
+	if let Some(entry) = state_entry {
+		if !entry.provider_id.is_empty() {
+			provider_id = Some(entry.provider_id);
+		}
+		if entry.redirect_url.is_some() {
+			app_redirect = entry.redirect_url;
+		}
+	}
+
+	let provider = resolve_oauth_provider(&services.config.oauth, provider_id.as_deref())?;
 
 	// perform token exchange
-	let token =
-		exchange_code_for_token(&services, code, &services.config.oauth.redirect_uri).await?;
+	let token = exchange_code_for_token(&services, &provider, code).await?;
 
 	// validate / get userinfo
-	let userinfo = validate_oauth_token(&services, &token.access_token).await?;
+	let userinfo = validate_oauth_token(&services, &provider, &token.access_token).await?;
 
 	// get or create local user
-	let user_id = get_or_create_user(&services, &userinfo).await?;
+	let user_id = get_or_create_user(&services, &provider, &userinfo).await?;
 
 	// 生成一次性 SSO login_token
 	let login_token = {
@@ -331,22 +374,6 @@ pub(crate) async fn oauth_callback_route(
 			.create_login_token(user_id_ref, &token);
 		token
 	};
-
-	// If state contains an embedded redirect URL (we encoded it earlier), extract and redirect
-	let mut app_redirect: Option<String> = consume_redirect(state_token);
-
-	// Fall back to embedded state payload when not found in the map
-	if app_redirect.is_none() && state.contains('|') {
-		let mut parts = state.splitn(2, '|');
-		let _ = parts.next();
-		if let Some(enc) = parts.next() {
-			if !enc.is_empty() {
-				if let Ok(decoded) = urlencoding::decode(enc) {
-					app_redirect = Some(decoded.into_owned());
-				}
-			}
-		}
-	}
 
 	if let Some(mut redirect_to) = app_redirect {
 		// If the redirect URL contains a fragment (hash routing, e.g. /#/home),
