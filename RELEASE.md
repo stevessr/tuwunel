@@ -1,9 +1,9 @@
-# Tuwunel 1.4.8
+# Tuwunel 1.4.9
 
-December 21, 2025
+December 30, 2025
 
-All federating deployments must upgrade to this patch for mitigations to severe vulnerabilities in Matrix protocol implementation logic. This is an off-schedule coordinated security release. Full release notes will be included with the next scheduled release.
+All federating deployments must upgrade for follow-up mitigations similar to those patched by 1.4.8 now uncovered as a wider class of vulnerabilities in additional locations. This is an off-schedule coordinated security release. Full release notes will be included with the next scheduled release.
 
 ### Security Fixes
 
-- Requests to the [Federation Invite API](https://spec.matrix.org/v1.17/server-server-api/#put_matrixfederationv2inviteroomideventid) lacked sufficient validation on all input fields. An attacker can use this route to process other kinds of events: upon acceptance, they are signed by the victim's server as specified by the Matrix protocol. The attacker can therefore forge events on behalf of the victim's authority to gain control of a room. This vulnerability was present in all versions and derivatives of Conduit.
+- Federation responses processed from a remote server assisting in membership state transitions lacked input validation: trusting, signing, and disseminating an event crafted by the remote server. These vulnerabilities were uncovered in a classic follow-up to the initial forgery attack pattern described in patch 1.4.8 also present in additional locations.

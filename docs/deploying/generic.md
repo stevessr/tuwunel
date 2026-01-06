@@ -147,6 +147,7 @@ We recommend Caddy as a reverse proxy, as it is trivial to use, handling TLS cer
 
 - **[Caddy Setup Guide](reverse-proxy-caddy.md)** - Recommended for ease of use and automatic TLS
 - **[Nginx Setup Guide](reverse-proxy-nginx.md)** - Popular choice with extensive documentation
+- **[Traefik Setup Guide](reverse-proxy-traefik.md)** - _Please help us document this choice_
 
 ```caddyfile
 your.server.name, your.server.name:443 {

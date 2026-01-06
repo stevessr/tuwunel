@@ -5,6 +5,7 @@ mod logout;
 pub(crate) mod oauth;
 mod password;
 mod refresh;
+mod sso;
 mod token;
 
 use axum::extract::State;
@@ -13,8 +14,8 @@ use ruma::api::client::session::{
 	get_login_types::{
 		self,
 		v3::{
-			ApplicationServiceLoginType, JwtLoginType, LoginType, PasswordLoginType,
-			SsoLoginType, TokenLoginType,
+			ApplicationServiceLoginType, IdentityProvider, JwtLoginType, LoginType,
+			PasswordLoginType, SsoLoginType, TokenLoginType,
 		},
 	},
 	login::{
@@ -22,14 +23,17 @@ use ruma::api::client::session::{
 		v3::{DiscoveryInfo, HomeserverInfo, LoginInfo},
 	},
 };
-use tuwunel_core::{Err, Result, info, utils::stream::ReadyExt};
+use tuwunel_core::{
+	Err, Result, info,
+	utils::{BoolExt, stream::ReadyExt},
+};
 use tuwunel_service::users::device::generate_refresh_token;
 
 use self::{ldap::ldap_login, password::password_login};
-use super::oauth_provider::oauth_identity_providers;
 pub(crate) use self::{
 	logout::{logout_all_route, logout_route},
 	refresh::refresh_token_route,
+	sso::{sso_callback_route, sso_login_route, sso_login_with_provider_route},
 	token::login_token_route,
 };
 use super::TOKEN_LENGTH;
@@ -45,22 +49,45 @@ pub(crate) async fn get_login_types_route(
 	InsecureClientIp(client): InsecureClientIp,
 	_body: Ruma<get_login_types::v3::Request>,
 ) -> Result<get_login_types::v3::Response> {
-	let mut flows = vec![
-		LoginType::Password(PasswordLoginType::default()),
+	let get_login_token = services.config.login_via_existing_session;
+
+	let identity_providers = services
+		.config
+		.sso_custom_providers_page
+		.is_false()
+		.then(|| services.config.identity_provider.iter())
+		.into_iter()
+		.flatten()
+		.cloned()
+		.map(|config| IdentityProvider {
+			id: config.id().to_owned(),
+			brand: Some(config.brand.clone().into()),
+			icon: config.icon,
+			name: config.name.unwrap_or(config.brand),
+		})
+		.collect();
+
+	let flows = [
 		LoginType::ApplicationService(ApplicationServiceLoginType::default()),
 		LoginType::Jwt(JwtLoginType::default()),
-		LoginType::Token(TokenLoginType {
-			get_login_token: services.config.login_via_existing_session,
-		}),
+		LoginType::Password(PasswordLoginType::default()),
+		LoginType::Sso(SsoLoginType { identity_providers }),
+		LoginType::Token(TokenLoginType { get_login_token }),
 	];
 
-	// Add SSO/OAuth login type if enabled
-	if services.config.oauth.enable {
-		let identity_providers = oauth_identity_providers(&services.config.oauth);
-		flows.push(LoginType::Sso(SsoLoginType { identity_providers, ..Default::default() }));
-	}
+	Ok(get_login_types::v3::Response {
+		flows: flows
+			.into_iter()
+			.filter(|login_type| match login_type {
+				| LoginType::Sso(SsoLoginType { identity_providers })
+					if !services.config.sso_custom_providers_page
+						&& identity_providers.is_empty() =>
+					false,
 
-	Ok(get_login_types::v3::Response::new(flows))
+				| _ => true,
+			})
+			.collect(),
+	})
 }
 
 /// # `POST /_matrix/client/v3/login`

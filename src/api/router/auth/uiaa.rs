@@ -5,7 +5,7 @@ use ruma::{
 		client::uiaa::{AuthData, AuthFlow, AuthType, Jwt, UiaaInfo},
 	},
 };
-use tuwunel_core::{Err, Error, Result, err, utils};
+use tuwunel_core::{Err, Error, Result, err, is_equal_to, utils};
 use tuwunel_service::{Services, uiaa::SESSION_ID_LENGTH};
 
 use crate::{Ruma, client::jwt};
@@ -56,25 +56,31 @@ where
 			}
 			Ok(sender_user.to_owned())
 		},
-		_ => {
-			// 如果已经通过 access token 认证（即 sender_user 存在），且没有 auth 字段，则直接通过
-			if let Some(sender_user) = body.sender_user.as_ref() {
-				return Ok(sender_user.to_owned());
-			}
-			match body.json_body {
-				Some(ref json) => {
-					let sender_user = body
-						.sender_user
-						.as_ref()
-						.ok_or_else(|| err!(Request(MissingToken("Missing access token."))))?;
-					uiaainfo.session = Some(utils::random_string(SESSION_ID_LENGTH));
-					services
-						.uiaa
-						.create(sender_user, body.sender_device()?, &uiaainfo, json);
-					Err(Error::Uiaa(uiaainfo))
-				},
-				_ => Err!(Request(NotJson("JSON body is not valid"))),
-			}
-		}
+		| _ => match body.json_body {
+			| Some(ref json) => {
+				let sender_user = body
+					.sender_user
+					.as_deref()
+					.ok_or_else(|| err!(Request(MissingToken("Missing access token."))))?;
+
+				// Skip UIAA for SSO/OIDC users.
+				if services
+					.users
+					.origin(sender_user)
+					.await
+					.is_ok_and(is_equal_to!("sso"))
+				{
+					return Ok(sender_user.to_owned());
+				}
+
+				uiaainfo.session = Some(utils::random_string(SESSION_ID_LENGTH));
+				services
+					.uiaa
+					.create(sender_user, sender_device, &uiaainfo, json);
+
+				Err(Error::Uiaa(uiaainfo))
+			},
+			| _ => Err!(Request(NotJson("JSON body is not valid"))),
+		},
 	}
 }

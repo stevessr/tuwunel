@@ -1,24 +1,52 @@
-use std::fmt::Write;
-
 use futures::FutureExt;
 use ruma::{UserId, events::GlobalAccountDataEventType, push};
 use tuwunel_core::{Err, Result, error, implement, info, is_equal_to, warn};
 
 use crate::appservice::RegistrationInfo;
 
+#[derive(Debug, Default)]
+pub struct Register<'a> {
+	pub user_id: Option<&'a UserId>,
+	pub username: Option<&'a str>,
+	pub password: Option<&'a str>,
+	pub origin: Option<&'a str>,
+	pub appservice_info: Option<&'a RegistrationInfo>,
+	pub is_guest: bool,
+	pub grant_first_user_admin: bool,
+	pub displayname: Option<&'a str>,
+	pub omit_displayname_suffix: bool,
+}
+
 /// Fully register a local user
 ///
 /// Returns a device id and access token for the registered user
 #[implement(super::Service)]
+#[tracing::instrument(level = "info", skip(self))]
 pub async fn full_register(
 	&self,
-	user_id: &UserId,
-	password: Option<&str>,
-	origin: Option<&str>,
-	appservice_info: Option<&RegistrationInfo>,
-	is_guest: bool,
-	grant_admin: bool,
+	Register {
+		username,
+		user_id,
+		password,
+		origin,
+		appservice_info,
+		is_guest,
+		grant_first_user_admin,
+		displayname,
+		omit_displayname_suffix,
+	}: Register<'_>,
 ) -> Result {
+	let ref user_id = user_id
+		.map(ToOwned::to_owned)
+		.map(Ok)
+		.or_else(|| {
+			username.map(|username| {
+				UserId::parse_with_server_name(username, self.services.globals.server_name())
+			})
+		})
+		.transpose()?
+		.expect("Caller failed to supply either user_id or username parameter");
+
 	if !self.services.globals.user_is_local(user_id) {
 		return Err!("Cannot register remote user");
 	}
@@ -33,31 +61,33 @@ pub async fn full_register(
 		.create(user_id, password, origin)
 		.await?;
 
-	// Default to pretty displayname
-	let mut displayname = user_id.localpart().to_owned();
-
-	// If `new_user_displayname_suffix` is set, registration will push whatever
-	// content is set to the user's display name with a space before it
-	if !self
+	let displayname_suffix = self
 		.services
 		.config
 		.new_user_displayname_suffix
-		.is_empty()
-		&& appservice_info.is_none()
-	{
-		write!(
-			displayname,
-			" {}",
-			self.services
-				.server
-				.config
-				.new_user_displayname_suffix
-		)?;
-	}
+		.as_str();
 
-	self.services
-		.users
-		.set_displayname(user_id, Some(displayname.clone()));
+	let add_displayname_suffix = !displayname_suffix.is_empty() && !omit_displayname_suffix;
+
+	if let Some(displayname) =
+		displayname.or_else(|| add_displayname_suffix.then(|| user_id.localpart()))
+	{
+		// If `new_user_displayname_suffix` is set, registration will push whatever
+		// content is set to the user's display name with a space before it
+		let displayname = format!(
+			"{displayname}{}{}",
+			add_displayname_suffix
+				.then_some(" ")
+				.unwrap_or(""),
+			add_displayname_suffix
+				.then_some(displayname_suffix)
+				.unwrap_or("")
+		);
+
+		self.services
+			.users
+			.set_displayname(user_id, Some(displayname));
+	}
 
 	// Initial account data
 	self.services
@@ -80,7 +110,7 @@ pub async fn full_register(
 	// users
 	// Note: the server user is generated first
 	if !is_guest
-		&& grant_admin
+		&& grant_first_user_admin
 		&& self.services.config.grant_admin_to_first_user
 		&& let Ok(admin_room) = self.services.admin.get_admin_room().await
 		&& self

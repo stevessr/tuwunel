@@ -1,6 +1,7 @@
 use std::{fmt::Debug, mem, ops::Deref};
 
 use axum::{body::Body, extract::FromRequest};
+use axum_extra::extract::cookie::CookieJar;
 use bytes::{BufMut, Bytes, BytesMut};
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, DeviceId, OwnedDeviceId, OwnedServerName,
@@ -17,6 +18,9 @@ use crate::State;
 pub(crate) struct Args<T> {
 	/// Request struct body
 	pub(crate) body: T,
+
+	/// Cookies received from the useragent.
+	pub(crate) cookie: CookieJar,
 
 	/// Federation server authentication: X-Matrix origin
 	/// None when not a federation server.
@@ -110,6 +114,7 @@ where
 		let auth = auth::auth(services, &mut request, json_body.as_ref(), &T::METADATA).await?;
 		Ok(Self {
 			body: make_body::<T>(services, &mut request, json_body.as_mut(), &auth)?,
+			cookie: request.cookie,
 			origin: auth.origin,
 			sender_user: auth.sender_user,
 			sender_device: auth.sender_device,

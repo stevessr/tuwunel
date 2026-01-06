@@ -14,15 +14,15 @@ use ruma::{
 	events::{GlobalAccountDataEventType, ignored_user_list::IgnoredUserListEvent},
 };
 use tuwunel_core::{
-	Err, Result, debug_warn, err, is_equal_to,
+	Err, Result, debug_warn, err,
 	pdu::PduBuilder,
 	trace,
-	utils::{self, ReadyExt, stream::TryIgnore},
+	utils::{self, ReadyExt, result::LogErr, stream::TryIgnore},
 	warn,
 };
 use tuwunel_database::{Deserialized, Json, Map};
 
-pub use self::keys::parse_master_key;
+pub use self::{keys::parse_master_key, register::Register};
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
@@ -132,6 +132,16 @@ impl Service {
 
 	/// Deactivate account
 	pub async fn deactivate_account(&self, user_id: &UserId) -> Result {
+		// Revoke any SSO authorizations
+		if let Ok((provider, session)) = self.services.oauth.get_user(user_id).await {
+			self.services
+				.oauth
+				.revoke_token((&provider, &session))
+				.await
+				.log_err()
+				.ok();
+		}
+
 		// Remove all associated devices
 		self.all_device_ids(user_id)
 			.for_each(|device_id| self.remove_device(user_id, device_id))
@@ -227,18 +237,15 @@ impl Service {
 		// Cannot change the password of a LDAP user. There are two special cases :
 		// - a `None` password can be used to deactivate a LDAP user
 		// - a "*" password is used as the default password of an active LDAP user
-		if cfg!(feature = "ldap")
-			&& password.is_some()
+		//
+		// The above now applies to all non-password origin users including SSO
+		// users. Note that users with no origin are also password-origin users.
+		if password.is_some()
 			&& password != Some("*")
-			&& self
-				.db
-				.userid_origin
-				.get(user_id)
-				.await
-				.deserialized::<String>()
-				.is_ok_and(is_equal_to!("ldap"))
+			&& let Ok(origin) = self.origin(user_id).await
+			&& origin != "password"
 		{
-			return Err!(Request(InvalidParam("Cannot change password of a LDAP user")));
+			return Err!(Request(InvalidParam("Cannot change password of an {origin:?} user.")));
 		}
 
 		password

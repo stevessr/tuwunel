@@ -1,6 +1,7 @@
 use std::str;
 
 use axum::{RequestExt, RequestPartsExt, extract::Path};
+use axum_extra::extract::cookie::CookieJar;
 use bytes::Bytes;
 use http::request::Parts;
 use serde::Deserialize;
@@ -17,6 +18,7 @@ pub(super) type UserId = SmallString<[u8; 48]>;
 
 #[derive(Debug)]
 pub(super) struct Request {
+	pub(super) cookie: CookieJar,
 	pub(super) path: Path<PathParams>,
 	pub(super) query: QueryParams,
 	pub(super) body: Bytes,
@@ -33,6 +35,7 @@ pub(super) async fn from(
 	let limited = request.with_limited_body();
 	let (mut parts, body) = limited.into_parts();
 
+	let cookie: CookieJar = parts.extract().await?;
 	let path: Path<PathParams> = parts.extract().await?;
 	let query = parts.uri.query().unwrap_or_default();
 	let query = serde_html_form::from_str(query)
@@ -44,5 +47,5 @@ pub(super) async fn from(
 		.await
 		.map_err(|e| err!(Request(TooLarge("Request body too large: {e}"))))?;
 
-	Ok(Request { path, query, body, parts })
+	Ok(Request { cookie, path, query, body, parts })
 }

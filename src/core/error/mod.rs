@@ -57,6 +57,10 @@ pub enum Error {
 	#[error(transparent)]
 	Figment(#[from] figment::error::Error),
 	#[error(transparent)]
+	HtmlFormDe(#[from] serde_html_form::de::Error),
+	#[error(transparent)]
+	HtmlFormSer(#[from] serde_html_form::ser::Error),
+	#[error(transparent)]
 	Http(#[from] http::Error),
 	#[error(transparent)]
 	HttpHeader(#[from] http::header::InvalidHeaderValue),
@@ -90,6 +94,8 @@ pub enum Error {
 	TracingReload(#[from] tracing_subscriber::reload::Error),
 	#[error(transparent)]
 	TypedHeader(#[from] axum_extra::typed_header::TypedHeaderRejection),
+	#[error(transparent)]
+	UrlParse(#[from] url::ParseError),
 	#[error(transparent)]
 	Yaml(#[from] serde_yaml::Error),
 

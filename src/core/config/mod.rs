@@ -3,7 +3,8 @@ pub mod manager;
 pub mod proxy;
 
 use std::{
-	collections::{BTreeMap, BTreeSet},
+	collections::{BTreeMap, BTreeSet, HashSet},
+	hash::{Hash, Hasher},
 	net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 	path::{Path, PathBuf},
 };
@@ -16,7 +17,7 @@ use figment::providers::{Env, Format, Toml};
 pub use figment::{Figment, value::Value as FigmentValue};
 use regex::RegexSet;
 use ruma::{
-	OwnedRoomOrAliasId, OwnedServerName, OwnedUserId, RoomVersionId,
+	OwnedMxcUri, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId, RoomVersionId,
 	api::client::discovery::discover_support::ContactRole,
 };
 use serde::{Deserialize, de::IgnoredAny};
@@ -28,6 +29,7 @@ pub use self::{check::check, manager::Manager};
 use crate::{
 	Result, err,
 	error::Error,
+	utils,
 	utils::{string::EMPTY, sys},
 };
 
@@ -56,8 +58,8 @@ use crate::{
 ### For more information, see:
 ### https://tuwunel.chat/configuration.html
 "#,
-	ignore = "catchall well_known tls blurhashing allow_invalid_tls_certificates ldap jwt oauth \
-	          appservice"
+	ignore = "catchall well_known tls blurhashing allow_invalid_tls_certificates ldap jwt \
+	          appservice identity_provider"
 )]
 pub struct Config {
 	/// The server_name is the pretty name of this server. It is used as a
@@ -2137,6 +2139,23 @@ pub struct Config {
 	#[serde(default = "default_one_time_key_limit")]
 	pub one_time_key_limit: usize,
 
+	/// Setting this option to true replaces the list of identity providers on
+	/// the client's login screen with a single button "Sign in with single
+	/// sign-on" linking to the URL `/_matrix/client/v3/login/sso/redirect`. The
+	/// deployment is expected to intercept this URL with their reverse-proxy to
+	/// provide a custom webpage listing providers; each entry linking or
+	/// redirecting back to one of the configured identity providers at
+	/// /_matrix/client/v3/login/sso/redirect/<client_id>`.
+	///
+	/// This option defaults to false, allowing the client to generate the list
+	/// of providers or hide all SSO-related options when none configured.
+	#[serde(default)]
+	pub sso_custom_providers_page: bool,
+
+	/// Under development; do not enable.
+	#[serde(default)]
+	pub sso_aware_preferred: bool,
+
 	// external structure; separate section
 	#[serde(default)]
 	pub blurhashing: BlurhashConfig,
@@ -2156,6 +2175,10 @@ pub struct Config {
 	// external structure; separate section
 	#[serde(default)]
 	pub appservice: BTreeMap<String, AppService>,
+
+	// external structure; separate sections
+	#[serde(default)]
+	pub identity_provider: HashSet<IdentityProvider>,
 
 	#[serde(flatten)]
 	#[allow(clippy::zero_sized_map_values)]
@@ -2470,6 +2493,134 @@ pub struct JwtConfig {
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub validate_signature: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "[global.identity_provider]"
+)]
+pub struct IdentityProvider {
+	/// The brand-name of the service (e.g. Apple, Facebook, GitHub, GitLab,
+	/// Google) or the software (e.g. keycloak, MAS) providing the identity.
+	/// When a brand is recognized we apply certain defaults to this config
+	/// for your convenience. For certain brands we apply essential internal
+	/// workarounds specific to that provider; it is important to configure this
+	/// field properly when a provider needs to be recognized (like GitHub for
+	/// example). Several configured providers can share the same brand name. It
+	/// is not case-sensitive.
+	#[serde(deserialize_with = "utils::string::de::to_lowercase")]
+	pub brand: String,
+
+	/// The ID of your OAuth application which the provider generates upon
+	/// registration. This ID then uniquely identifies this configuration
+	/// instance itself, becoming the identity provider's ID and must be unique
+	/// and remain unchanged.
+	pub client_id: String,
+
+	/// Secret key the provider generated for you along with the `client_id`
+	/// above. Unlike the `client_id`, the `client_secret` can be changed here
+	/// whenever the provider regenerates one for you.
+	pub client_secret: String,
+
+	/// The callback URL configured when registering the OAuth application with
+	/// the provider. Tuwunel's callback URL must be strictly formatted exactly
+	/// as instructed. The URL host must point directly at the matrix server and
+	/// use the following path:
+	/// `/_matrix/client/unstable/login/sso/callback/<client_id>` where
+	/// `<client_id>` is the same one configured for this provider above.
+	pub callback_url: Option<Url>,
+
+	/// Optional display-name for this provider instance seen on the login page
+	/// by users. It defaults to `brand`. When configuring multiple providers
+	/// using the same `brand` this can be set to distinguish them.
+	pub name: Option<String>,
+
+	/// Optional icon for the provider. The canonical providers have a default
+	/// icon based on the `brand` supplied above when this is not supplied. Note
+	/// that it uses an MXC url which is curious in the auth-media era and may
+	/// not be reliable.
+	pub icon: Option<OwnedMxcUri>,
+
+	/// Optional list of scopes to authorize. An empty array does not impose any
+	/// restrictions from here, effectively defaulting to all scopes you
+	/// configured for the OAuth application at the provider. This setting
+	/// allows for restricting to a subset of those scopes for this instance.
+	/// Note the user can further restrict scopes during their authorization.
+	///
+	/// default: []
+	#[serde(default)]
+	pub scope: BTreeSet<String>,
+
+	/// List of userinfo claims which shape and restrict the way we compute a
+	/// Matrix UserId for new registrations. Reviewing Tuwunel's documentation
+	/// will be necessary for a complete description in detail. An empty array
+	/// imposes no restriction here, avoiding generated fallbacks as much as
+	/// possible. For simplicity we reserve a claim called "unique" which can be
+	/// listed alone to ensure *only* generated ID's are used for registrations.
+	///
+	/// default: []
+	#[serde(default)]
+	pub userid_claims: BTreeSet<String>,
+
+	/// Issuer URL the provider publishes for you. We have pre-supplied default
+	/// values for some of the canonical providers, making this field optional
+	/// based on the `brand` set above. Otherwise it is required for OIDC
+	/// discovery to acquire additional provider configuration, and it must be
+	/// correct to pass validations during various interactions.
+	pub issuer_url: Option<Url>,
+
+	/// Extra path components after the issuer_url leading to the location of
+	/// the `.well-known` directory used for discovery. This will be empty for
+	/// specification-compliant providers. We have supplied any known values
+	/// based on `brand` (e.g. `/login/oauth` for GitHub).
+	pub base_path: Option<String>,
+
+	/// Overrides the `.well-known` location where the provider's OIDC
+	/// configuration is found. It is very unlikely you will need to set this;
+	/// available for developers or special purposes only.
+	pub discovery_url: Option<Url>,
+
+	/// Overrides the authorize URL requested during the grant phase. This is
+	/// generally discovered or derived automatically, but may be required as a
+	/// workaround for any non-standard or undiscoverable provider.
+	pub authorization_url: Option<Url>,
+
+	/// Overrides the access token URL; the same caveats apply as with the other
+	/// URL overrides.
+	pub token_url: Option<Url>,
+
+	/// Overrides the revocation URL; the same caveats apply as with the other
+	/// URL overrides.
+	pub revocation_url: Option<Url>,
+
+	/// Overrides the introspection URL; the same caveats apply as with the
+	/// other URL overrides.
+	pub introspection_url: Option<Url>,
+
+	/// Overrides the userinfo URL; the same caveats apply as with the other URL
+	/// overrides.
+	pub userinfo_url: Option<Url>,
+
+	/// Whether to perform discovery and adjust this provider's configuration
+	/// accordingly. This defaults to true. When true, it is an error when
+	/// discovery fails and authorizations will not be attempted to the
+	/// provider.
+	#[serde(default = "true_fn")]
+	pub discovery: bool,
+
+	/// The duration in seconds before a grant authorization session expires.
+	#[serde(default = "default_sso_grant_session_duration")]
+	pub grant_session_duration: Option<u64>,
+}
+
+impl IdentityProvider {
+	#[must_use]
+	pub fn id(&self) -> &str { self.client_id.as_str() }
+}
+
+impl Hash for IdentityProvider {
+	fn hash<H: Hasher>(&self, state: &mut H) { self.id().hash(state) }
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -3277,3 +3428,5 @@ fn default_one_time_key_limit() -> usize { 256 }
 fn default_max_make_join_attempts_per_join_attempt() -> usize { 48 }
 
 fn default_max_join_attempts_per_join_request() -> usize { 3 }
+
+fn default_sso_grant_session_duration() -> Option<u64> { Some(180) }

@@ -21,6 +21,7 @@ pub struct Service {
 	pub sender: ClientLazylock,
 	pub appservice: ClientLazylock,
 	pub pusher: ClientLazylock,
+	pub oauth: ClientLazylock,
 
 	pub cidr_range_denylist: Vec<IPAddress>,
 }
@@ -111,6 +112,11 @@ impl crate::Service for Service {
 				.pool_max_idle_per_host(1)
 				.pool_idle_timeout(Duration::from_secs(config.pusher_idle_timeout))
 				.redirect(redirect::Policy::limited(2))),
+
+			oauth: create_client!(config, services; base(config)?
+				.dns_resolver2(Arc::clone(&services.resolver.resolver))
+				.redirect(redirect::Policy::limited(0))
+				.pool_max_idle_per_host(1)),
 
 			cidr_range_denylist: config
 				.ip_range_denylist

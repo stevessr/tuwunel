@@ -12,7 +12,7 @@ use crate::{
 	account_data, admin, appservice, client, config, deactivate, emergency, federation, globals,
 	key_backups,
 	manager::Manager,
-	media, membership, presence, pusher, resolver, rooms, sending, server_keys,
+	media, membership, oauth, presence, pusher, resolver, rooms, sending, server_keys,
 	service::{Args, Service},
 	sync, transaction_ids, uiaa, users,
 };
@@ -58,6 +58,7 @@ pub struct Services {
 	pub users: Arc<users::Service>,
 	pub membership: Arc<membership::Service>,
 	pub deactivate: Arc<deactivate::Service>,
+	pub oauth: Arc<oauth::Service>,
 
 	manager: Mutex<Option<Arc<Manager>>>,
 	pub server: Arc<Server>,
@@ -115,6 +116,7 @@ pub async fn build(server: Arc<Server>) -> Result<Arc<Self>> {
 		users: users::Service::build(&args)?,
 		membership: membership::Service::build(&args)?,
 		deactivate: deactivate::Service::build(&args)?,
+		oauth: oauth::Service::build(&args)?,
 
 		manager: Mutex::new(None),
 		server,
@@ -173,6 +175,7 @@ pub(crate) fn services(&self) -> impl Iterator<Item = Arc<dyn Service>> + Send {
 		cast!(self.users),
 		cast!(self.membership),
 		cast!(self.deactivate),
+		cast!(self.oauth),
 	]
 	.into_iter()
 }

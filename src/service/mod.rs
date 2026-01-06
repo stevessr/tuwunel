@@ -1,3 +1,4 @@
+#![recursion_limit = "256"]
 #![type_length_limit = "98304"]
 #![allow(refining_impl_trait)]
 
@@ -19,6 +20,7 @@ pub mod globals;
 pub mod key_backups;
 pub mod media;
 pub mod membership;
+pub mod oauth;
 pub mod presence;
 pub mod pusher;
 pub mod resolver;
@@ -32,6 +34,8 @@ pub mod users;
 
 pub(crate) use once_services::OnceServices;
 pub(crate) use service::{Args, Service};
+
+pub(crate) type SelfServices = std::sync::Arc<OnceServices>;
 
 pub use crate::services::Services;
 

@@ -2,19 +2,18 @@ use std::fmt::Write;
 
 use axum::extract::State;
 use axum_client_ip::InsecureClientIp;
-use register::RegistrationKind;
 use ruma::{
 	UserId,
 	api::client::{
 		account::{
 			check_registration_token_validity, get_username_availability,
-			register::{self, LoginType},
+			register::{self, LoginType, RegistrationKind},
 		},
 		uiaa::{AuthFlow, AuthType, UiaaInfo},
 	},
 };
 use tuwunel_core::{Err, Error, Result, debug_info, debug_warn, info, utils};
-use tuwunel_service::users::device::generate_refresh_token;
+use tuwunel_service::users::{Register, device::generate_refresh_token};
 
 use super::SESSION_ID_LENGTH;
 use crate::Ruma;
@@ -337,7 +336,14 @@ pub(crate) async fn register_route(
 
 	services
 		.users
-		.full_register(&user_id, password, None, body.appservice_info.as_ref(), is_guest, true)
+		.full_register(Register {
+			user_id: Some(&user_id),
+			password,
+			appservice_info: body.appservice_info.as_ref(),
+			is_guest,
+			grant_first_user_admin: true,
+			..Default::default()
+		})
 		.await?;
 
 	if (!is_guest && body.inhibit_login)

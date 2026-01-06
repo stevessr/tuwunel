@@ -39,6 +39,7 @@ pub use self::{
 	time::{
 		exponential_backoff::{continue_exponential_backoff, continue_exponential_backoff_secs},
 		now_millis as millis_since_unix_epoch, timepoint_ago, timepoint_from_now,
+		timepoint_has_passed,
 	},
 };
 

@@ -114,6 +114,14 @@ pub(super) static MAPS: &[Descriptor] = &[
 		..descriptor::RANDOM_SMALL
 	},
 	Descriptor {
+		name: "oauthid_session",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
+		name: "oauthuniqid_oauthid",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
 		name: "onetimekeyid_onetimekeys",
 		..descriptor::RANDOM_SMALL
 	},
@@ -401,6 +409,10 @@ pub(super) static MAPS: &[Descriptor] = &[
 	},
 	Descriptor {
 		name: "userid_masterkeyid",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
+		name: "userid_oauthid",
 		..descriptor::RANDOM_SMALL
 	},
 	Descriptor {
