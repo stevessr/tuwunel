@@ -15,6 +15,7 @@
 ### For more information, see:
 ### https://tuwunel.chat/configuration.html
 
+
 [global]
 
 # The server_name is the pretty name of this server. It is used as a
@@ -1833,6 +1834,25 @@
 #
 #one_time_key_limit = 256
 
+# Setting this option to true replaces the list of identity providers on
+# the client's login screen with a single button "Sign in with single
+# sign-on" linking to the URL `/_matrix/client/v3/login/sso/redirect`. The
+# deployment is expected to intercept this URL with their reverse-proxy to
+# provide a custom webpage listing providers; each entry linking or
+# redirecting back to one of the configured identity providers at
+# /_matrix/client/v3/login/sso/redirect/<client_id>`.
+#
+# This option defaults to false, allowing the client to generate the list
+# of providers or hide all SSO-related options when none configured.
+#
+#sso_custom_providers_page = false
+
+# Under development; do not enable.
+#
+#sso_aware_preferred = false
+
+
+
 #[global.tls]
 
 # Path to a valid TLS certificate file.
@@ -1850,6 +1870,8 @@
 # Whether to listen and allow for HTTP and HTTPS connections (insecure!)
 #
 #dual_protocol = false
+
+
 
 #[global.well_known]
 
@@ -1913,6 +1935,8 @@
 #
 #rtc_transports = []
 
+
+
 #[global.blurhashing]
 
 # blurhashing x component, 4 is recommended by https://blurha.sh/
@@ -1930,6 +1954,8 @@
 # is 33.55MB. Setting it to 0 disables blurhashing.
 #
 #blurhash_max_raw_size = 33554432
+
+
 
 #[global.ldap]
 
@@ -2018,6 +2044,8 @@
 #
 #admin_filter =
 
+
+
 #[global.jwt]
 
 # Enable JWT logins
@@ -2084,6 +2112,133 @@
 #
 #validate_signature = true
 
+
+
+#[[global.identity_provider]]
+
+# The brand-name of the service (e.g. Apple, Facebook, GitHub, GitLab,
+# Google) or the software (e.g. keycloak, MAS) providing the identity.
+# When a brand is recognized we apply certain defaults to this config
+# for your convenience. For certain brands we apply essential internal
+# workarounds specific to that provider; it is important to configure this
+# field properly when a provider needs to be recognized (like GitHub for
+# example). Several configured providers can share the same brand name. It
+# is not case-sensitive.
+#
+#brand =
+
+# The ID of your OAuth application which the provider generates upon
+# registration. This ID then uniquely identifies this configuration
+# instance itself, becoming the identity provider's ID and must be unique
+# and remain unchanged.
+#
+#client_id =
+
+# Secret key the provider generated for you along with the `client_id`
+# above. Unlike the `client_id`, the `client_secret` can be changed here
+# whenever the provider regenerates one for you.
+#
+#client_secret =
+
+# The callback URL configured when registering the OAuth application with
+# the provider. Tuwunel's callback URL must be strictly formatted exactly
+# as instructed. The URL host must point directly at the matrix server and
+# use the following path:
+# `/_matrix/client/unstable/login/sso/callback/<client_id>` where
+# `<client_id>` is the same one configured for this provider above.
+#
+#callback_url =
+
+# Optional display-name for this provider instance seen on the login page
+# by users. It defaults to `brand`. When configuring multiple providers
+# using the same `brand` this can be set to distinguish them.
+#
+#name =
+
+# Optional icon for the provider. The canonical providers have a default
+# icon based on the `brand` supplied above when this is not supplied. Note
+# that it uses an MXC url which is curious in the auth-media era and may
+# not be reliable.
+#
+#icon =
+
+# Optional list of scopes to authorize. An empty array does not impose any
+# restrictions from here, effectively defaulting to all scopes you
+# configured for the OAuth application at the provider. This setting
+# allows for restricting to a subset of those scopes for this instance.
+# Note the user can further restrict scopes during their authorization.
+#
+#scope = []
+
+# List of userinfo claims which shape and restrict the way we compute a
+# Matrix UserId for new registrations. Reviewing Tuwunel's documentation
+# will be necessary for a complete description in detail. An empty array
+# imposes no restriction here, avoiding generated fallbacks as much as
+# possible. For simplicity we reserve a claim called "unique" which can be
+# listed alone to ensure *only* generated ID's are used for registrations.
+#
+#userid_claims = []
+
+# Issuer URL the provider publishes for you. We have pre-supplied default
+# values for some of the canonical providers, making this field optional
+# based on the `brand` set above. Otherwise it is required for OIDC
+# discovery to acquire additional provider configuration, and it must be
+# correct to pass validations during various interactions.
+#
+#issuer_url =
+
+# Extra path components after the issuer_url leading to the location of
+# the `.well-known` directory used for discovery. This will be empty for
+# specification-compliant providers. We have supplied any known values
+# based on `brand` (e.g. `/login/oauth` for GitHub).
+#
+#base_path =
+
+# Overrides the `.well-known` location where the provider's OIDC
+# configuration is found. It is very unlikely you will need to set this;
+# available for developers or special purposes only.
+#
+#discovery_url =
+
+# Overrides the authorize URL requested during the grant phase. This is
+# generally discovered or derived automatically, but may be required as a
+# workaround for any non-standard or undiscoverable provider.
+#
+#authorization_url =
+
+# Overrides the access token URL; the same caveats apply as with the other
+# URL overrides.
+#
+#token_url =
+
+# Overrides the revocation URL; the same caveats apply as with the other
+# URL overrides.
+#
+#revocation_url =
+
+# Overrides the introspection URL; the same caveats apply as with the
+# other URL overrides.
+#
+#introspection_url =
+
+# Overrides the userinfo URL; the same caveats apply as with the other URL
+# overrides.
+#
+#userinfo_url =
+
+# Whether to perform discovery and adjust this provider's configuration
+# accordingly. This defaults to true. When true, it is an error when
+# discovery fails and authorizations will not be attempted to the
+# provider.
+#
+#discovery = true
+
+# The duration in seconds before a grant authorization session expires.
+#
+#grant_session_duration =
+
+
+
 #[global.appservice.<ID>]
 
 # The URL for the application service.
@@ -2125,6 +2280,8 @@
 # of MSC4190.
 #
 #device_management = false
+
+
 
 #[[global.appservice.<ID>.<users|rooms|aliases>]]
 

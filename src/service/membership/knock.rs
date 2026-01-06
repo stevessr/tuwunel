@@ -257,6 +257,17 @@ async fn knock_room_helper_local(
 		.expect("event is valid, we just created it"),
 	);
 
+	knock_event_stub
+		.insert("room_id".into(), CanonicalJsonValue::String(room_id.as_str().into()));
+
+	knock_event_stub
+		.insert("state_key".into(), CanonicalJsonValue::String(sender_user.as_str().into()));
+
+	knock_event_stub
+		.insert("sender".into(), CanonicalJsonValue::String(sender_user.as_str().into()));
+
+	knock_event_stub.insert("type".into(), CanonicalJsonValue::String("m.room.member".into()));
+
 	// In order to create a compatible ref hash (EventID) the `hashes` field needs
 	// to be present
 	self.services
@@ -418,6 +429,17 @@ async fn knock_room_helper_remote(
 		})
 		.expect("event is valid, we just created it"),
 	);
+
+	knock_event_stub
+		.insert("room_id".into(), CanonicalJsonValue::String(room_id.as_str().into()));
+
+	knock_event_stub
+		.insert("state_key".into(), CanonicalJsonValue::String(sender_user.as_str().into()));
+
+	knock_event_stub
+		.insert("sender".into(), CanonicalJsonValue::String(sender_user.as_str().into()));
+
+	knock_event_stub.insert("type".into(), CanonicalJsonValue::String("m.room.member".into()));
 
 	// In order to create a compatible ref hash (EventID) the `hashes` field needs
 	// to be present

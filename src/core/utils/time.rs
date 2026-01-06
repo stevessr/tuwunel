@@ -61,6 +61,14 @@ pub fn parse_duration(duration: &str) -> Result<Duration> {
 		.map_err(|error| err!("'{duration:?}' is not a valid duration string: {error:?}"))
 }
 
+#[inline]
+#[must_use]
+pub fn timepoint_has_passed(timepoint: SystemTime) -> bool {
+	SystemTime::now()
+		.duration_since(timepoint)
+		.is_ok()
+}
+
 #[must_use]
 pub fn rfc2822_from_seconds(epoch: i64) -> String {
 	use chrono::{DateTime, Utc};

@@ -15,8 +15,9 @@
 
 <!-- ANCHOR: body -->
 
-[![Documentation](https://img.shields.io/badge/documentation%2D_?color=%238A2BE2&style=for-the-badge&logo=mdBook&logoColor=white)](https://matrix-construct.github.io/tuwunel/)
-[![Support Chat](https://img.shields.io/matrix/tuwunel%3Amatrix.org.svg?color=%238A2BE2&style=for-the-badge&label=Support%20Chat)](https://matrix.to/#/#tuwunel:grin.hu)
+[![Documentation](https://img.shields.io/badge/documentation%2D_?color=%238A2BE2&style=for-the-badge&logo=mdBook&logoColor=FFFFFF)](https://matrix-construct.github.io/tuwunel/)
+[![Demo Server](https://img.shields.io/badge/demo%20server%2D_?color=%238A2BE2&style=for-the-badge&logo=Element&logoColor=FFFFFF)](https://try.tuwunel.chat)
+[![Support Chat](https://img.shields.io/matrix/tuwunel%3Amatrix.org.svg?color=098A09&style=for-the-badge&label=Support%20Chat&labelColor=8A2BE2&logo=Matrix)](https://matrix.to/#/#tuwunel:grin.hu)
 
 Tuwunel is a featureful [Matrix](https://matrix.org/) homeserver you can use instead of Synapse
 with your favorite [client](https://matrix.org/ecosystem/clients/),
@@ -40,6 +41,7 @@ Switzerland 🇨🇭 where it is currently deployed for citizens.
 - Deb and RPM packages available as [releases](https://github.com/matrix-construct/tuwunel/releases) or [build artifacts](https://github.com/matrix-construct/tuwunel/actions?query=branch%3Amain).
 - Arch package available as [tuwunel](https://aur.archlinux.org/packages/tuwunel) or [tuwunel-git](https://aur.archlinux.org/packages/tuwunel-git).
 - Nix package available as [`matrix-tuwunel`](https://search.nixos.org/packages?query=matrix-tuwunel) and NixOS module available as [`services.matrix-tuwunel`](https://search.nixos.org/options?query=services.matrix-tuwunel).
+- Alpine package available as [tuwunel](https://pkgs.alpinelinux.org/package/edge/testing/x86_64/tuwunel).
 
 **1.** [Configure](https://matrix-construct.github.io/tuwunel/configuration.html) by
 copying and editing the `tuwunel-example.toml`. The `server_name` and `database_path` must be

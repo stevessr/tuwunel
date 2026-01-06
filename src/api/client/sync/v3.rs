@@ -10,7 +10,7 @@ use futures::{
 	pin_mut,
 };
 use ruma::{
-	DeviceId, EventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
+	DeviceId, EventId, OwnedRoomId, OwnedUserId, RoomId, UInt, UserId,
 	api::client::{
 		filter::FilterDefinition,
 		sync::sync_events::{
@@ -995,6 +995,13 @@ async fn load_joined_room(
 		.flatten()
 		.is_none_or(|last_count| last_count.gt(&since));
 
+	let send_notification_resets = last_notification_read
+		.flatten()
+		.is_some_and(|last_count| last_count.gt(&since));
+
+	let send_notification_count_filter =
+		|count: &UInt| *count != uint!(0) || send_notification_resets;
+
 	let notification_count: OptionFuture<_> = send_notification_counts
 		.then(|| {
 			services
@@ -1169,7 +1176,10 @@ async fn load_joined_room(
 				.map(Event::into_format)
 				.collect(),
 		},
-		unread_notifications: UnreadNotificationsCount { highlight_count, notification_count },
+		unread_notifications: UnreadNotificationsCount {
+			highlight_count: highlight_count.filter(send_notification_count_filter),
+			notification_count: notification_count.filter(send_notification_count_filter),
+		},
 		unread_thread_notifications: BTreeMap::new(),
 	};
 

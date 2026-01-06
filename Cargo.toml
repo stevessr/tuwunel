@@ -29,7 +29,7 @@ license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/matrix-construct/tuwunel"
 rust-version = "1.89.0"
-version = "1.4.8"
+version = "1.4.9"
 
 [workspace.metadata.crane]
 name = "tuwunel"
@@ -76,6 +76,7 @@ version = "0.7"
 version = "0.10"
 default-features = false
 features = [
+	"cookie",
 	"typed-header",
 	"tracing",
 ]
@@ -312,10 +313,12 @@ version = "1.12"
 version = "0.12"
 default-features = false
 features = [
-	"rustls-tls-native-roots",
-	"socks",
+	"charset",
 	"hickory-dns",
 	"http2",
+	"json",
+	"rustls-tls-native-roots",
+	"socks",
 ]
 
 [workspace.dependencies.ring]
@@ -324,7 +327,7 @@ default-features = false
 
 [workspace.dependencies.ruma]
 git = "https://github.com/matrix-construct/ruma"
-rev = "214ab27fdc3d7004f6d46e0aa89fba573b59c66f"
+rev = "ff66bdd9975152f0382d753120dddddf3577ad51"
 features = [
     "__compat",
     "appservice-api-c",
@@ -417,6 +420,10 @@ version = "0.45"
 version = "1.0"
 default-features = false
 features = ["rc"]
+
+[workspace.dependencies.serde_core]
+version = "1.0"
+default-features = false
 
 [workspace.dependencies.serde_html_form]
 version = "0.2"
@@ -524,7 +531,7 @@ features = [
 ]
 
 [workspace.dependencies.tracing]
-version = "0.1"
+version = "=0.1.43"
 default-features = false
 
 [workspace.dependencies.tracing-core]
@@ -982,6 +989,7 @@ assertions_on_constants = { level = "allow", priority = 1 }
 module_inception = { level = "allow", priority = 1 }
 obfuscated_if_else = { level = "allow", priority = 1 }
 collapsible_if = { level = "allow", priority = 1 }                   # TODO stable v. nightly 05-21-25
+toplevel-ref-arg = { level = "allow", priority = 1 }
 
 ###################
 suspicious = { level = "warn", priority = -1 }
