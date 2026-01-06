@@ -38,7 +38,6 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::login_route)
 		.ruma_route(&client::login_token_route)
 		.ruma_route(&client::refresh_token_route)
-		.ruma_route(&client::sso_login_route)
 		.ruma_route(&client::sso_login_with_provider_route)
 		.ruma_route(&client::sso_callback_route)
 		.ruma_route(&client::whoami_route)
@@ -197,6 +196,20 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.route("/_tuwunel/server_version", get(client::tuwunel_server_version))
 		.ruma_route(&client::room_initial_sync_route)
 		.route("/client/server.json", get(client::syncv3_client_server_json));
+
+	if config.sso_custom_providers_page {
+		router = router
+			.route(
+				"/_matrix/client/v3/login/sso/redirect",
+				get(client::sso_login_custom_page_route),
+			)
+			.route(
+				"/_matrix/client/r0/login/sso/redirect",
+				get(client::sso_login_custom_page_route),
+			);
+	} else {
+		router = router.ruma_route(&client::sso_login_route);
+	}
 
 	// SS endpoint not related to federation
 	router = router.ruma_route(&server::get_openid_userinfo_route);

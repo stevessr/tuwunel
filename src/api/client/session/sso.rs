@@ -1,11 +1,15 @@
 use std::{borrow::Cow, time::Duration};
 
-use axum::extract::State;
+use axum::{
+	extract::{RawQuery, State},
+	response::{Html, IntoResponse},
+};
 use axum_client_ip::InsecureClientIp;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD as b64};
 use futures::{StreamExt, TryFutureExt, future::try_join};
 use itertools::Itertools;
+use http::StatusCode;
 use reqwest::header::{CONTENT_TYPE, HeaderValue};
 use ruma::{
 	Mxc, OwnedRoomId, OwnedUserId, ServerName, UserId,
@@ -63,6 +67,12 @@ struct GrantCookie<'a> {
 
 static GRANT_SESSION_COOKIE: &str = "tuwunel_grant_session";
 
+#[derive(Debug, Deserialize)]
+struct SsoRedirectQuery {
+	#[serde(rename = "redirectUrl")]
+	redirect_url: Option<String>,
+}
+
 #[tracing::instrument(
 	name = "sso_login",
 	level = "debug",
@@ -70,14 +80,124 @@ static GRANT_SESSION_COOKIE: &str = "tuwunel_grant_session";
 	fields(%client),
 )]
 pub(crate) async fn sso_login_route(
-	State(_services): State<crate::State>,
+	State(services): State<crate::State>,
 	InsecureClientIp(client): InsecureClientIp,
-	_body: Ruma<sso_login::v3::Request>,
+	body: Ruma<sso_login::v3::Request>,
 ) -> Result<sso_login::v3::Response> {
-	Err!(Request(NotImplemented(
-		"sso_custom_providers_page has been enabled but this URL has not been overridden with \
-		 any custom page listing the available providers..."
-	)))
+	#[derive(Debug, Serialize)]
+	struct RedirectQuery<'a> {
+		#[serde(rename = "redirectUrl")]
+		redirect_url: &'a str,
+	}
+
+	let redirect_url = body.body.redirect_url;
+	let mut providers = services.config.identity_provider.iter();
+	let Some(provider) = providers.next() else {
+		return Err!(Request(NotFound("No identity providers configured.")));
+	};
+
+	let idp_id = provider.id();
+	let query = RedirectQuery { redirect_url: &redirect_url };
+	let query = serde_html_form::to_string(&query)?;
+	let location = format!("/_matrix/client/v3/login/sso/redirect/{idp_id}?{query}");
+
+	Ok(sso_login::v3::Response {
+		location: location.into(),
+		cookie: None,
+	})
+}
+
+#[tracing::instrument(
+	name = "sso_login_custom_page",
+	level = "info",
+	skip_all,
+	fields(%client),
+)]
+pub(crate) async fn sso_login_custom_page_route(
+	State(services): State<crate::State>,
+	InsecureClientIp(client): InsecureClientIp,
+	RawQuery(raw_query): RawQuery,
+) -> impl IntoResponse {
+	#[derive(Debug, Serialize)]
+	struct RedirectQuery<'a> {
+		#[serde(rename = "redirectUrl")]
+		redirect_url: &'a str,
+	}
+
+	let Some(raw_query) = raw_query.as_deref() else {
+		let body = "Missing redirectUrl query parameter.".to_owned();
+		return (StatusCode::BAD_REQUEST, Html(body)).into_response();
+	};
+
+	let Ok(query) = serde_html_form::from_str::<SsoRedirectQuery>(raw_query) else {
+		let body = "Invalid redirectUrl query parameter.".to_owned();
+		return (StatusCode::BAD_REQUEST, Html(body)).into_response();
+	};
+
+	let Some(redirect_url) = query.redirect_url else {
+		let body = "Missing redirectUrl query parameter.".to_owned();
+		return (StatusCode::BAD_REQUEST, Html(body)).into_response();
+	};
+	let Ok(redirect_url) = redirect_url.parse::<Url>() else {
+		let body = "Invalid redirectUrl query parameter.".to_owned();
+		return (StatusCode::BAD_REQUEST, Html(body)).into_response();
+	};
+
+	let providers: Vec<_> = services.config.identity_provider.iter().collect();
+	if providers.is_empty() {
+		let body = "No identity providers configured.".to_owned();
+		return (StatusCode::NOT_FOUND, Html(body)).into_response();
+	}
+
+	let query = match serde_html_form::to_string(&RedirectQuery {
+		redirect_url: redirect_url.as_str(),
+	}) {
+		| Ok(query) => query,
+		| Err(_) => {
+			let body = "Invalid redirectUrl query parameter.".to_owned();
+			return (StatusCode::BAD_REQUEST, Html(body)).into_response();
+		},
+	};
+
+	let mut items = String::new();
+	for provider in providers {
+		let idp_id = provider.id();
+		let name = provider.name.clone().unwrap_or(provider.brand.clone());
+		let href = format!("/_matrix/client/v3/login/sso/redirect/{idp_id}?{query}");
+		let href = escape_attr(&href);
+		let name = escape_html(&name);
+		items.push_str(&format!("<li><a href=\"{href}\">{name}</a></li>"));
+	}
+
+	let body = format!(
+		"<!doctype html>\
+<html lang=\"en\">\
+<head>\
+<meta charset=\"utf-8\">\
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\
+<title>Single Sign-On</title>\
+<style>\
+body{{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;margin:0;padding:2rem;background:#f5f7fb;color:#1b1f24;}}\
+main{{max-width:32rem;margin:0 auto;background:#fff;padding:1.5rem 1.75rem;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.08);}}\
+h1{{font-size:1.35rem;margin:0 0 0.75rem 0;}}\
+p{{margin:0 0 1rem 0;line-height:1.5;}}\
+ul{{list-style:none;padding:0;margin:0;}}\
+li{{margin:0 0 0.5rem 0;}}\
+a{{display:block;padding:0.6rem 0.9rem;border:1px solid #d6dde7;border-radius:8px;text-decoration:none;color:#1b1f24;background:#f8fafc;}}\
+a:hover{{background:#eef3f9;}}\
+</style>\
+</head>\
+<body>\
+<main>\
+<h1>Choose a provider</h1>\
+<p>Select the identity provider you want to use for sign-in.</p>\
+<ul>{items}</ul>\
+</main>\
+</body>\
+</html>"
+	);
+
+	(StatusCode::OK, Html(body)).into_response()
 }
 
 #[tracing::instrument(
@@ -599,4 +719,19 @@ fn parse_user_id(server_name: &ServerName, username: &str) -> Result<OwnedUserId
 			)))),
 		},
 	}
+}
+
+fn escape_attr(value: &str) -> String {
+	value
+		.replace('&', "&amp;")
+		.replace('<', "&lt;")
+		.replace('>', "&gt;")
+		.replace('"', "&quot;")
+}
+
+fn escape_html(value: &str) -> String {
+	value
+		.replace('&', "&amp;")
+		.replace('<', "&lt;")
+		.replace('>', "&gt;")
 }
