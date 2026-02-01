@@ -56,8 +56,7 @@ use crate::{
 ### For more information, see:
 ### https://tuwunel.chat/configuration.html
 "#,
-	ignore = "catchall well_known tls blurhashing allow_invalid_tls_certificates ldap jwt \
-	          appservice identity_provider"
+	ignore = "catchall well_known tls blurhashing ldap jwt appservice identity_provider"
 )]
 pub struct Config {
 	/// The server_name is the pretty name of this server. It is used as a
@@ -2143,15 +2142,6 @@ pub struct Config {
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub config_reload_signal: bool,
-
-	/// Toggles ignore checking/validating TLS certificates
-	///
-	/// This applies to everything, including URL previews, federation requests,
-	/// etc. This is a hidden argument that should NOT be used in production as
-	/// it is highly insecure and I will personally yell at you if I catch you
-	/// using this.
-	#[serde(default)]
-	pub allow_invalid_tls_certificates: bool,
 
 	/// Sets the `Access-Control-Allow-Origin` header included by this server in
 	/// all responses. A list of multiple values can be specified. The default
