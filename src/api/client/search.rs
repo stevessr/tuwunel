@@ -157,11 +157,56 @@ async fn category_room_events(
 		.collect()
 		.await;
 
-	let highlights = criteria
-		.search_term
-		.split_terminator(|c: char| !c.is_alphanumeric())
-		.map(str::to_lowercase)
-		.collect();
+	// Generate highlights from search terms.
+	// For CJK characters, tokenize character by character.
+	// For other text, split by non-alphanumeric characters.
+	let highlights = {
+		let mut tokens = Vec::new();
+		let mut current_token = String::new();
+		
+		for ch in criteria.search_term.chars() {
+			// Check if character is CJK (Chinese, Japanese, Korean)
+			let is_cjk = matches!(ch,
+				'\u{4E00}'..='\u{9FFF}' |  // CJK Unified Ideographs
+				'\u{3400}'..='\u{4DBF}' |  // CJK Unified Ideographs Extension A
+				'\u{20000}'..='\u{2A6DF}' | // CJK Unified Ideographs Extension B
+				'\u{2A700}'..='\u{2B73F}' | // CJK Unified Ideographs Extension C
+				'\u{2B740}'..='\u{2B81F}' | // CJK Unified Ideographs Extension D
+				'\u{2B820}'..='\u{2CEAF}' | // CJK Unified Ideographs Extension E
+				'\u{F900}'..='\u{FAFF}' |   // CJK Compatibility Ideographs
+				'\u{2F800}'..='\u{2FA1F}' | // CJK Compatibility Ideographs Supplement
+				'\u{3040}'..='\u{309F}' |   // Hiragana
+				'\u{30A0}'..='\u{30FF}' |   // Katakana
+				'\u{31F0}'..='\u{31FF}' |   // Katakana Phonetic Extensions
+				'\u{AC00}'..='\u{D7AF}'     // Hangul Syllables
+			);
+			
+			if is_cjk {
+				// Add any pending non-CJK token
+				if !current_token.is_empty() {
+					tokens.push(current_token.to_lowercase());
+					current_token.clear();
+				}
+				// Add CJK character as its own token
+				tokens.push(ch.to_lowercase().to_string());
+			} else if ch.is_alphanumeric() {
+				current_token.push(ch);
+			} else {
+				// Non-alphanumeric separator
+				if !current_token.is_empty() {
+					tokens.push(current_token.to_lowercase());
+					current_token.clear();
+				}
+			}
+		}
+		
+		// Add final token if exists
+		if !current_token.is_empty() {
+			tokens.push(current_token.to_lowercase());
+		}
+		
+		tokens
+	};
 
 	let next_batch = (results.len() >= limit)
 		.then_some(next_batch.saturating_add(results.len()))

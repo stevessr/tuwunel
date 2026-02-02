@@ -215,11 +215,93 @@ pub async fn delete_all_search_tokenids_for_room(&self, room_id: &RoomId) -> Res
 ///
 /// This may be used to tokenize both message bodies (for indexing) or search
 /// queries (for querying).
+///
+/// For CJK (Chinese, Japanese, Korean) text, uses character-based tokenization
+/// to support languages that don't use spaces between words.
 fn tokenize(body: &str) -> impl Iterator<Item = String> + Send + '_ {
-	body.split_terminator(|c: char| !c.is_alphanumeric())
-		.filter(|s| !s.is_empty())
-		.filter(|word| word.len() <= WORD_MAX_LEN)
-		.map(str::to_lowercase)
+	TokenIterator::new(body)
+}
+
+/// Iterator that handles both regular word-based tokenization and CJK character tokenization
+struct TokenIterator<'a> {
+	text: &'a str,
+	position: usize,
+}
+
+impl<'a> TokenIterator<'a> {
+	fn new(text: &'a str) -> Self {
+		Self { text, position: 0 }
+	}
+
+	/// Check if a character is CJK (Chinese, Japanese, Korean)
+	fn is_cjk(c: char) -> bool {
+		matches!(c,
+			'\u{4E00}'..='\u{9FFF}' |  // CJK Unified Ideographs
+			'\u{3400}'..='\u{4DBF}' |  // CJK Unified Ideographs Extension A
+			'\u{20000}'..='\u{2A6DF}' | // CJK Unified Ideographs Extension B
+			'\u{2A700}'..='\u{2B73F}' | // CJK Unified Ideographs Extension C
+			'\u{2B740}'..='\u{2B81F}' | // CJK Unified Ideographs Extension D
+			'\u{2B820}'..='\u{2CEAF}' | // CJK Unified Ideographs Extension E
+			'\u{F900}'..='\u{FAFF}' |   // CJK Compatibility Ideographs
+			'\u{2F800}'..='\u{2FA1F}' | // CJK Compatibility Ideographs Supplement
+			'\u{3040}'..='\u{309F}' |   // Hiragana
+			'\u{30A0}'..='\u{30FF}' |   // Katakana
+			'\u{31F0}'..='\u{31FF}' |   // Katakana Phonetic Extensions
+			'\u{AC00}'..='\u{D7AF}'     // Hangul Syllables
+		)
+	}
+}
+
+impl Iterator for TokenIterator<'_> {
+	type Item = String;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let remaining = &self.text[self.position..];
+		if remaining.is_empty() {
+			return None;
+		}
+
+		// Skip non-alphanumeric characters
+		let start = remaining
+			.char_indices()
+			.find(|(_, c)| c.is_alphanumeric())
+			.map(|(i, _)| i)?;
+
+		let remaining = &remaining[start..];
+		let first_char = remaining.chars().next()?;
+
+		if Self::is_cjk(first_char) {
+			// For CJK characters, tokenize character by character
+			let char_len = first_char.len_utf8();
+			self.position += start + char_len;
+			
+			// Return single CJK character as token
+			let token = first_char.to_lowercase().to_string();
+			if token.len() <= WORD_MAX_LEN {
+				Some(token)
+			} else {
+				self.next()
+			}
+		} else {
+			// For non-CJK text, use word-based tokenization
+			let word_end = remaining
+				.char_indices()
+				.skip(1)
+				.find(|(_, c)| !c.is_alphanumeric())
+				.map(|(i, _)| i)
+				.unwrap_or(remaining.len());
+
+			let word = &remaining[..word_end];
+			self.position += start + word_end;
+
+			let token = word.to_lowercase();
+			if token.len() <= WORD_MAX_LEN {
+				Some(token)
+			} else {
+				self.next()
+			}
+		}
+	}
 }
 
 fn make_tokenid(shortroomid: ShortRoomId, word: &str, pdu_id: &RawPduId) -> TokenId {
@@ -240,4 +322,69 @@ fn prefix_len(word: &str) -> usize {
 	size_of::<ShortRoomId>()
 		.saturating_add(word.len())
 		.saturating_add(1)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_tokenize_english() {
+		let text = "Hello world! This is a test.";
+		let tokens: Vec<String> = tokenize(text).collect();
+		assert_eq!(tokens, vec!["hello", "world", "this", "is", "a", "test"]);
+	}
+
+	#[test]
+	fn test_tokenize_chinese() {
+		let text = "你好世界";
+		let tokens: Vec<String> = tokenize(text).collect();
+		// Each Chinese character should be a separate token
+		assert_eq!(tokens, vec!["你", "好", "世", "界"]);
+	}
+
+	#[test]
+	fn test_tokenize_mixed() {
+		let text = "Hello 你好 world";
+		let tokens: Vec<String> = tokenize(text).collect();
+		assert_eq!(tokens, vec!["hello", "你", "好", "world"]);
+	}
+
+	#[test]
+	fn test_tokenize_chinese_with_punctuation() {
+		let text = "你好，世界！";
+		let tokens: Vec<String> = tokenize(text).collect();
+		assert_eq!(tokens, vec!["你", "好", "世", "界"]);
+	}
+
+	#[test]
+	fn test_tokenize_japanese() {
+		let text = "こんにちは世界";
+		let tokens: Vec<String> = tokenize(text).collect();
+		// Both Hiragana and Kanji should be tokenized character by character
+		assert_eq!(tokens, vec!["こ", "ん", "に", "ち", "は", "世", "界"]);
+	}
+
+	#[test]
+	fn test_tokenize_empty() {
+		let text = "";
+		let tokens: Vec<String> = tokenize(text).collect();
+		assert!(tokens.is_empty());
+	}
+
+	#[test]
+	fn test_tokenize_only_punctuation() {
+		let text = "!@#$%^&*()";
+		let tokens: Vec<String> = tokenize(text).collect();
+		assert!(tokens.is_empty());
+	}
+
+	#[test]
+	fn test_tokenize_max_length() {
+		// Create a word that exceeds WORD_MAX_LEN
+		let long_word = "a".repeat(WORD_MAX_LEN + 10);
+		let tokens: Vec<String> = tokenize(&long_word).collect();
+		// Long words should be filtered out
+		assert!(tokens.is_empty());
+	}
 }
