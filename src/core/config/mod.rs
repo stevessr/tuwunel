@@ -2999,9 +2999,6 @@ impl Config {
 			.extract::<Self>()
 			.map_err(|e| err!("There was a problem with your configuration file: {e}"))?;
 
-		// don't start if we're listening on both UNIX sockets and TCP at same time
-		check::is_dual_listening(raw_config)?;
-
 		Ok(config)
 	}
 

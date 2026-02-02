@@ -3,15 +3,15 @@ use std::{
 	time::Duration,
 };
 
-use axum_server::Handle as ServerHandle;
+use futures::{TryFutureExt, future::Either};
 use tokio::{
 	sync::broadcast::{self, Sender},
 	task::JoinHandle,
 };
-use tuwunel_core::{Error, Result, Server, debug, debug_error, debug_info, error, info};
+use tuwunel_core::{Error, Result, Server, debug, debug_error, debug_info, err, error, info};
 use tuwunel_service::Services;
 
-use crate::serve;
+use crate::{handle::ServerHandle, serve};
 
 /// Main loop base
 #[tracing::instrument(skip_all)]
@@ -24,15 +24,24 @@ pub(crate) async fn run(services: Arc<Services>) -> Result {
 
 	// Setup shutdown/signal handling
 	let handle = ServerHandle::new();
-	let (tx, _) = broadcast::channel::<()>(1);
+	let (tx, rx) = broadcast::channel::<()>(1);
 	let sigs = server
 		.runtime()
 		.spawn(signal(server.clone(), tx.clone(), handle.clone()));
 
-	let mut listener =
-		server
-			.runtime()
-			.spawn(serve::serve(services.clone(), handle.clone(), tx.subscribe()));
+	// ???
+	let fut = if services.config.listening {
+		Either::Left(serve::serve(services.clone(), handle))
+	} else {
+		Either::Right(async move {
+			let mut rx = rx;
+			rx.recv()
+				.map_err(|e| err!(error!("channel error: {e}")))
+				.await
+		})
+	};
+
+	let mut listener = server.runtime().spawn(fut);
 
 	// Focal point
 	debug!("Running");
@@ -104,12 +113,12 @@ pub(crate) async fn stop(services: Arc<Services>) -> Result {
 }
 
 #[tracing::instrument(skip_all)]
-async fn signal(server: Arc<Server>, tx: Sender<()>, handle: axum_server::Handle) {
+async fn signal(server: Arc<Server>, tx: Sender<()>, handle: ServerHandle) {
 	server.until_shutdown().await;
 	handle_shutdown(&server, &tx, &handle);
 }
 
-fn handle_shutdown(server: &Arc<Server>, tx: &Sender<()>, handle: &axum_server::Handle) {
+fn handle_shutdown(server: &Arc<Server>, tx: &Sender<()>, handle: &ServerHandle) {
 	if let Err(e) = tx.send(()) {
 		error!("failed sending shutdown transaction to channel: {e}");
 	}

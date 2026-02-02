@@ -1,7 +1,6 @@
 use std::env::consts::OS;
 
 use either::Either;
-use figment::Figment;
 use itertools::Itertools;
 
 use super::{DEPRECATED_KEYS, IdentityProvider};
@@ -411,19 +410,4 @@ fn warn_unknown_key(config: &Config) -> Result {
 	} else {
 		Ok(())
 	}
-}
-
-/// Checks the presence of the `address` and `unix_socket_path` keys in the
-/// raw_config, exiting the process if both keys were detected.
-pub(super) fn is_dual_listening(raw_config: &Figment) -> Result {
-	let contains_address = raw_config.contains("address");
-	let contains_unix_socket = raw_config.contains("unix_socket_path");
-	if contains_address && contains_unix_socket {
-		return Err!(
-			"TOML keys \"address\" and \"unix_socket_path\" were both defined. Please specify \
-			 only one option."
-		);
-	}
-
-	Ok(())
 }
