@@ -255,6 +255,7 @@ impl<'a> TokenIterator<'a> {
 impl Iterator for TokenIterator<'_> {
 	type Item = String;
 
+	#[allow(clippy::string_slice)]
 	fn next(&mut self) -> Option<Self::Item> {
 		let remaining = &self.text[self.position..];
 		if remaining.is_empty() {
@@ -267,13 +268,14 @@ impl Iterator for TokenIterator<'_> {
 			.find(|(_, c)| c.is_alphanumeric())
 			.map(|(i, _)| i)?;
 
+		// start comes from char_indices(), so it's a valid UTF-8 boundary
 		let remaining = &remaining[start..];
 		let first_char = remaining.chars().next()?;
 
 		if Self::is_cjk(first_char) {
 			// For CJK characters, tokenize character by character
 			let char_len = first_char.len_utf8();
-			self.position += start + char_len;
+			self.position = self.position.saturating_add(start).saturating_add(char_len);
 			
 			// Return single CJK character as token
 			let token = first_char.to_lowercase().to_string();
@@ -291,8 +293,9 @@ impl Iterator for TokenIterator<'_> {
 				.map(|(i, _)| i)
 				.unwrap_or(remaining.len());
 
+			// word_end comes from char_indices() or len(), so it's a valid UTF-8 boundary
 			let word = &remaining[..word_end];
-			self.position += start + word_end;
+			self.position = self.position.saturating_add(start).saturating_add(word_end);
 
 			let token = word.to_lowercase();
 			if token.len() <= WORD_MAX_LEN {
