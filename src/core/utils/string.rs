@@ -153,3 +153,28 @@ pub fn string_from_bytes(bytes: &[u8]) -> Result<String> {
 /// Parses the bytes into a string.
 #[inline]
 pub fn str_from_bytes(bytes: &[u8]) -> Result<&str> { Ok(std::str::from_utf8(bytes)?) }
+
+/// Check if a character is CJK (Chinese, Japanese, Korean).
+///
+/// This covers:
+/// - Chinese characters (CJK Unified Ideographs and extensions)
+/// - Japanese Hiragana and Katakana
+/// - Korean Hangul syllables
+#[inline]
+#[must_use]
+pub const fn is_cjk(c: char) -> bool {
+	matches!(c,
+		'\u{4E00}'..='\u{9FFF}' |  // CJK Unified Ideographs
+		'\u{3400}'..='\u{4DBF}' |  // CJK Unified Ideographs Extension A
+		'\u{20000}'..='\u{2A6DF}' | // CJK Unified Ideographs Extension B
+		'\u{2A700}'..='\u{2B73F}' | // CJK Unified Ideographs Extension C
+		'\u{2B740}'..='\u{2B81F}' | // CJK Unified Ideographs Extension D
+		'\u{2B820}'..='\u{2CEAF}' | // CJK Unified Ideographs Extension E
+		'\u{F900}'..='\u{FAFF}' |   // CJK Compatibility Ideographs
+		'\u{2F800}'..='\u{2FA1F}' | // CJK Compatibility Ideographs Supplement
+		'\u{3040}'..='\u{309F}' |   // Hiragana
+		'\u{30A0}'..='\u{30FF}' |   // Katakana
+		'\u{31F0}'..='\u{31FF}' |   // Katakana Phonetic Extensions
+		'\u{AC00}'..='\u{D7AF}'     // Hangul Syllables
+	)
+}

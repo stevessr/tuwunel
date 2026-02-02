@@ -16,7 +16,7 @@ use tuwunel_core::{
 	Err, Result, at, is_true,
 	matrix::Event,
 	result::FlatOk,
-	utils::{IterStream, option::OptionExt, stream::ReadyExt},
+	utils::{IterStream, option::OptionExt, stream::ReadyExt, string::is_cjk},
 };
 use tuwunel_service::{Services, rooms::search::RoomQuery};
 
@@ -165,23 +165,7 @@ async fn category_room_events(
 		let mut current_token = String::new();
 		
 		for ch in criteria.search_term.chars() {
-			// Check if character is CJK (Chinese, Japanese, Korean)
-			let is_cjk = matches!(ch,
-				'\u{4E00}'..='\u{9FFF}' |  // CJK Unified Ideographs
-				'\u{3400}'..='\u{4DBF}' |  // CJK Unified Ideographs Extension A
-				'\u{20000}'..='\u{2A6DF}' | // CJK Unified Ideographs Extension B
-				'\u{2A700}'..='\u{2B73F}' | // CJK Unified Ideographs Extension C
-				'\u{2B740}'..='\u{2B81F}' | // CJK Unified Ideographs Extension D
-				'\u{2B820}'..='\u{2CEAF}' | // CJK Unified Ideographs Extension E
-				'\u{F900}'..='\u{FAFF}' |   // CJK Compatibility Ideographs
-				'\u{2F800}'..='\u{2FA1F}' | // CJK Compatibility Ideographs Supplement
-				'\u{3040}'..='\u{309F}' |   // Hiragana
-				'\u{30A0}'..='\u{30FF}' |   // Katakana
-				'\u{31F0}'..='\u{31FF}' |   // Katakana Phonetic Extensions
-				'\u{AC00}'..='\u{D7AF}'     // Hangul Syllables
-			);
-			
-			if is_cjk {
+			if is_cjk(ch) {
 				// Add any pending non-CJK token
 				if !current_token.is_empty() {
 					tokens.push(current_token.to_lowercase());
