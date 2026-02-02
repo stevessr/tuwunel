@@ -16,9 +16,9 @@ use tuwunel_core::{
 	Err, Result, at, is_true,
 	matrix::Event,
 	result::FlatOk,
-	utils::{IterStream, option::OptionExt, stream::ReadyExt, string::is_cjk},
+	utils::{IterStream, option::OptionExt, stream::ReadyExt},
 };
-use tuwunel_service::{Services, rooms::search::RoomQuery};
+use tuwunel_service::{Services, rooms::search::{RoomQuery, tokenize}};
 
 use crate::Ruma;
 
@@ -157,40 +157,8 @@ async fn category_room_events(
 		.collect()
 		.await;
 
-	// Generate highlights from search terms.
-	// For CJK characters, tokenize character by character.
-	// For other text, split by non-alphanumeric characters.
-	let highlights = {
-		let mut tokens = Vec::new();
-		let mut current_token = String::new();
-		
-		for ch in criteria.search_term.chars() {
-			if is_cjk(ch) {
-				// Add any pending non-CJK token
-				if !current_token.is_empty() {
-					tokens.push(current_token.to_lowercase());
-					current_token.clear();
-				}
-				// Add CJK character as its own token
-				tokens.push(ch.to_lowercase().to_string());
-			} else if ch.is_alphanumeric() {
-				current_token.push(ch);
-			} else {
-				// Non-alphanumeric separator
-				if !current_token.is_empty() {
-					tokens.push(current_token.to_lowercase());
-					current_token.clear();
-				}
-			}
-		}
-		
-		// Add final token if exists
-		if !current_token.is_empty() {
-			tokens.push(current_token.to_lowercase());
-		}
-		
-		tokens
-	};
+	// Generate highlights from search terms using the same tokenization as indexing
+	let highlights = tokenize(&criteria.search_term).collect();
 
 	let next_batch = (results.len() >= limit)
 		.then_some(next_batch.saturating_add(results.len()))

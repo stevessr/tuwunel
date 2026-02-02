@@ -219,7 +219,7 @@ pub async fn delete_all_search_tokenids_for_room(&self, room_id: &RoomId) -> Res
 ///
 /// For CJK (Chinese, Japanese, Korean) text, uses character-based tokenization
 /// to support languages that don't use spaces between words.
-fn tokenize(body: &str) -> impl Iterator<Item = String> + Send + '_ {
+pub fn tokenize(body: &str) -> impl Iterator<Item = String> + Send + '_ {
 	TokenIterator::new(body)
 }
 
