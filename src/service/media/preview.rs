@@ -118,7 +118,7 @@ pub async fn get_url_preview(&self, url: &Url) -> Result<UrlPreviewData> {
 }
 
 #[implement(Service)]
-async fn request_url_preview(&self, url: &Url) -> Result<UrlPreviewData> {
+pub async fn request_url_preview(&self, url: &Url) -> Result<UrlPreviewData> {
 	self.check_url_host(url)?;
 
 	let client = &self.services.client.url_preview;
