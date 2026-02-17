@@ -9,9 +9,12 @@ pub struct UserInfo {
 	/// `oauthidpsub_oauthid`.
 	///
 	/// Considered for user mxid only if none of the better fields are defined.
-	/// `login` alias intended for github.
-	#[serde(alias = "login")]
+	/// May be normalized from `login` in oauth::request_userinfo() when absent.
+	#[serde(default)]
 	pub sub: String,
+
+	/// Login username from providers like GitHub.
+	pub login: Option<String>,
 
 	/// The login username we first consider when defined.
 	pub preferred_username: Option<String>,

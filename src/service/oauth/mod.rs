@@ -107,7 +107,7 @@ pub async fn request_userinfo(
 
 	self.request((Some(provider), Some(session)), Method::GET, url, Option::<Query>::None)
 		.await
-		.and_then(|value| serde_json::from_value(value).map_err(Into::into))
+		.and_then(parse_userinfo)
 		.log_err()
 }
 
@@ -131,8 +131,27 @@ pub async fn request_tokeninfo(
 
 	self.request((Some(provider), Some(session)), Method::GET, url, Option::<Query>::None)
 		.await
-		.and_then(|value| serde_json::from_value(value).map_err(Into::into))
+		.and_then(parse_userinfo)
 		.log_err()
+}
+
+fn parse_userinfo(value: JsonValue) -> Result<UserInfo> {
+	let mut userinfo: UserInfo = serde_json::from_value(value)?;
+
+	// Some providers (e.g. GitHub) use `login` instead of `sub`.
+	if userinfo.sub.is_empty()
+		&& let Some(login) = userinfo.login.as_deref()
+	{
+		userinfo.sub = login.into();
+	}
+
+	if userinfo.sub.is_empty() {
+		return Err!(Request(Forbidden(
+			"Missing subject claim from provider userinfo response."
+		)));
+	}
+
+	Ok(userinfo)
 }
 
 /// Network request to a Provider revoking a Session's token.

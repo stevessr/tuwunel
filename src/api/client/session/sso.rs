@@ -627,7 +627,7 @@ async fn decide_user_id(
 		provider
 			.brand
 			.eq(&"github")
-			.then_some(userinfo.sub.as_str())
+			.then(|| userinfo.login.as_deref().unwrap_or(userinfo.sub.as_str()))
 			.map(str::to_lowercase)
 			.filter(|_| allowed("login")),
 		userinfo
