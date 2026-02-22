@@ -104,6 +104,7 @@ lru-cache.workspace = true
 rand.workspace = true
 regex.workspace = true
 reqwest.workspace = true
+ring.workspace = true
 ruma.workspace = true
 rustls.workspace = true
 rustyline-async.workspace = true
