@@ -2738,33 +2738,6 @@
 
 
 
-#[global.blurhashing]
-
-# blurhashing x component, 4 is recommended by https://blurha.sh/
-#
-# reloadable: yes
-#
-#components_x = 4
-
-# blurhashing y component, 3 is recommended by https://blurha.sh/
-#
-# reloadable: yes
-#
-#components_y = 3
-
-# Max raw size that the server will blurhash, this is the size of the
-# image after converting it to raw data, it should be higher than the
-# upload limit but not too high. The higher it is the higher the
-# potential load will be for clients requesting blurhashes. Accepts an
-# integer byte count or a string with SI/IEC suffix such as "32 MiB".
-# Setting it to 0 disables blurhashing.
-#
-# reloadable: yes
-#
-#blurhash_max_raw_size = 33554432
-
-
-
 #[global.ldap]
 
 # Whether to enable LDAP login.
