@@ -810,6 +810,14 @@
 #
 #login_via_token = true
 
+# Whether to enable login using traditional user/password authorization
+# flow.
+#
+# Set this option to false if you intend to allow logging in only using
+# other mechanisms, such as SSO.
+#
+#login_with_password = true
+
 # Login token expiration/TTL in milliseconds.
 #
 # These are short-lived tokens for the m.login.token endpoint.

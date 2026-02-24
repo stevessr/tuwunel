@@ -984,6 +984,16 @@ pub struct Config {
 	#[serde(default = "true_fn")]
 	pub login_via_token: bool,
 
+	/// Whether to enable login using traditional user/password authorization
+	/// flow.
+	///
+	/// Set this option to false if you intend to allow logging in only using
+	/// other mechanisms, such as SSO.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub login_with_password: bool,
+
 	/// Login token expiration/TTL in milliseconds.
 	///
 	/// These are short-lived tokens for the m.login.token endpoint.
