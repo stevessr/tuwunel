@@ -4,7 +4,7 @@ use std::{
 	time::Duration,
 };
 
-use futures::{FutureExt, StreamExt};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, EventId, OwnedEventId, RoomId, RoomVersionId,
 	ServerName, api::federation::event::get_event,
@@ -89,6 +89,7 @@ where
 						if next_id == id {
 							pdus.push((pdu, Some(json)));
 						}
+						self.cancel_back_off(&next_id);
 					} else {
 						self.back_off(&next_id);
 					}
@@ -152,8 +153,11 @@ async fn fetch_auth_chain(
 			.services
 			.federation
 			.execute(origin, get_event::v1::Request { event_id: next_id.clone() })
+			.inspect_err(|e| debug_error!(?next_id, "Failed to fetch event: {e}"))
+			.inspect_ok(|_| {
+				self.cancel_back_off(&next_id);
+			})
 			.await
-			.inspect_err(|e| debug_error!("Failed to fetch event {next_id}: {e}"))
 		else {
 			debug_warn!("Backing off from {next_id}");
 			self.back_off(&next_id);
@@ -168,6 +172,7 @@ async fn fetch_auth_chain(
 			continue;
 		};
 
+		self.cancel_back_off(&next_id);
 		if calculated_event_id != next_id {
 			warn!(
 				"Server didn't return event id we requested: requested: {next_id}, we got \

@@ -170,6 +170,9 @@ pub async fn handle_incoming_pdu<'a>(
 				warn!("Prev {prev_id} failed: {e}");
 				self.back_off(prev_id);
 			})
+			.inspect_ok(|()| {
+				self.cancel_back_off(prev_id);
+			})
 			.map(|_| self.services.server.check_running())
 		})
 		.boxed()
