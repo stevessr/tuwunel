@@ -312,3 +312,13 @@ async fn set_difference_sorted_stream2() {
 		.await;
 	assert_eq!(r, &["aaa", "eee", "hhh"]);
 }
+
+#[test]
+fn page_size() {
+	use crate::utils::sys::page_size;
+
+	let val = page_size().expect("Failed to get system page size");
+	println!("{val:?}");
+
+	assert!(val != 0, "page size was zero");
+}
