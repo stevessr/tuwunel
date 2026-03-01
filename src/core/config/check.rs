@@ -371,6 +371,58 @@ pub fn check(config: &Config) -> Result {
 		);
 	}
 
+	if config.matrix_authentication_service.enabled {
+		if config
+			.matrix_authentication_service
+			.secret
+			.is_some()
+			&& config
+				.matrix_authentication_service
+				.secret_file
+				.is_some()
+		{
+			return Err!(Config(
+				"matrix_authentication_service.secret",
+				"`matrix_authentication_service.secret` and \
+				 `matrix_authentication_service.secret_file` are mutually exclusive."
+			));
+		}
+
+		let secret = if let Some(secret) = config
+			.matrix_authentication_service
+			.secret
+			.as_deref()
+		{
+			Some(secret.to_owned())
+		} else if let Some(secret_path) = &config.matrix_authentication_service.secret_file {
+			let Ok(secret) = std::fs::read_to_string(secret_path) else {
+				return Err!(Config(
+					"matrix_authentication_service.secret_file",
+					"Secret file was specified but failed to be read."
+				));
+			};
+
+			Some(secret.trim().to_owned())
+		} else {
+			None
+		};
+
+		if secret.is_none() {
+			return Err!(Config(
+				"matrix_authentication_service.secret",
+				"MAS integration requires either `matrix_authentication_service.secret` or \
+				 `matrix_authentication_service.secret_file`."
+			));
+		}
+
+		if secret.as_deref().is_some_and(str::is_empty) {
+			return Err!(Config(
+				"matrix_authentication_service.secret",
+				"MAS integration secret is empty."
+			));
+		}
+	}
+
 	Ok(())
 }
 

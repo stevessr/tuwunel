@@ -57,7 +57,7 @@ use crate::{
 ### https://tuwunel.chat/configuration.html
 "#,
 	ignore = "catchall well_known tls blurhashing allow_invalid_tls_certificates ldap jwt \
-	          appservice identity_provider"
+	          appservice identity_provider matrix_authentication_service"
 )]
 pub struct Config {
 	/// The server_name is the pretty name of this server. It is used as a
@@ -2307,6 +2307,10 @@ pub struct Config {
 
 	// external structure; separate section
 	#[serde(default)]
+	pub matrix_authentication_service: MatrixAuthenticationServiceConfig,
+
+	// external structure; separate section
+	#[serde(default)]
 	pub blurhashing: BlurhashConfig,
 
 	// external structure; separate section
@@ -2423,6 +2427,57 @@ pub struct WellKnownConfig {
 	/// default: []
 	#[serde(default)]
 	pub rtc_transports: Vec<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "global.matrix_authentication_service"
+)]
+pub struct MatrixAuthenticationServiceConfig {
+	/// Whether to enable Matrix Authentication Service (MAS) delegated-auth
+	/// integration.
+	///
+	/// default: false
+	#[serde(default)]
+	pub enabled: bool,
+
+	/// The base URL where tuwunel can reach MAS. This endpoint must expose
+	/// both `/.well-known/openid-configuration` and `/oauth2/introspect`.
+	///
+	/// default: "http://localhost:8080"
+	#[serde(default = "default_matrix_authentication_service_endpoint")]
+	pub endpoint: Url,
+
+	/// Shared secret used for authenticating requests to MAS.
+	///
+	/// display: sensitive
+	pub secret: Option<String>,
+
+	/// Shared secret file path used instead of `secret`.
+	pub secret_file: Option<PathBuf>,
+}
+
+impl Default for MatrixAuthenticationServiceConfig {
+	fn default() -> Self {
+		Self {
+			enabled: false,
+			endpoint: default_matrix_authentication_service_endpoint(),
+			secret: None,
+			secret_file: None,
+		}
+	}
+}
+
+impl MatrixAuthenticationServiceConfig {
+	pub async fn get_secret(&self) -> Result<Option<String>> {
+		if let Some(secret_file) = &self.secret_file {
+			let secret = tokio::fs::read_to_string(secret_file).await?;
+			return Ok(Some(secret.trim().to_owned()));
+		}
+
+		Ok(self.secret.clone())
+	}
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Default)]
@@ -3290,6 +3345,11 @@ fn default_request_idle_per_host() -> u16 { 1 }
 fn default_well_known_conn_timeout() -> u64 { 6 }
 
 fn default_well_known_timeout() -> u64 { 10 }
+
+fn default_matrix_authentication_service_endpoint() -> Url {
+	Url::parse("http://localhost:8080")
+		.expect("default Matrix Authentication Service endpoint URL must be valid")
+}
 
 fn default_federation_timeout() -> u64 { 25 }
 

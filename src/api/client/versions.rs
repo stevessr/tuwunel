@@ -51,8 +51,9 @@ static VERSIONS: [&str; 17] = [
 	"v1.15",  /* custom profile fields */
 ];
 
-static UNSTABLE_FEATURES: [&str; 18] = [
+static UNSTABLE_FEATURES: [&str; 19] = [
 	"org.matrix.e2e_cross_signing",
+	"org.matrix.msc2965.authentication",
 	// private read receipts (https://github.com/matrix-org/matrix-spec-proposals/pull/2285)
 	"org.matrix.msc2285.stable",
 	// appservice ping https://github.com/matrix-org/matrix-spec-proposals/pull/2659)
