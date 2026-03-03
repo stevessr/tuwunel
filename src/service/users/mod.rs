@@ -24,6 +24,9 @@ use tuwunel_database::{Deserialized, Json, Map};
 
 pub use self::{keys::parse_master_key, register::Register};
 
+pub const PASSWORD_SENTINEL: &str = "*";
+pub const PASSWORD_DISABLED: &str = "";
+
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
 	db: Data,
@@ -222,10 +225,7 @@ impl Service {
 		// exception is made for that origin in the condition below. Note that users
 		// with no origin are also password-origin users.
 		let allowed_origins = ["password", "sso"];
-
-		if let Some(password) = password
-			&& password != "*"
-		{
+		if password.is_some() && password != Some(PASSWORD_SENTINEL) {
 			let origin = self.origin(user_id).await;
 			let origin = origin.as_deref().unwrap_or("password");
 
@@ -236,17 +236,20 @@ impl Service {
 			}
 		}
 
-		let is_sentinel = password.is_some_and(|p| p == "*");
-
 		match password.map(utils::hash::password) {
 			| None => {
-				self.db.userid_password.insert(user_id, b"");
+				self.db
+					.userid_password
+					.insert(user_id, PASSWORD_DISABLED);
+			},
+			| Some(Ok(_)) if password == Some(PASSWORD_SENTINEL) => {
+				self.db
+					.userid_password
+					.insert(user_id, PASSWORD_SENTINEL);
 			},
 			| Some(Ok(hash)) => {
 				self.db.userid_password.insert(user_id, hash);
-				if !is_sentinel {
-					self.db.userid_origin.insert(user_id, "password");
-				}
+				self.db.userid_origin.insert(user_id, "password");
 			},
 			| Some(Err(e)) => {
 				return Err!(Request(InvalidParam(

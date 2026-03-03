@@ -34,7 +34,7 @@ use tuwunel_service::{
 	oauth::{
 		CODE_VERIFIER_LENGTH, Provider, SESSION_ID_LENGTH, Session, UserInfo, unique_id_sub,
 	},
-	users::Register,
+	users::{PASSWORD_SENTINEL, Register},
 };
 use url::Url;
 
@@ -480,7 +480,7 @@ async fn register_user(
 		.users
 		.full_register(Register {
 			user_id: Some(user_id),
-			password: Some("*"),
+			password: Some(PASSWORD_SENTINEL),
 			origin: Some("sso"),
 			displayname: userinfo.name.as_deref(),
 			grant_first_user_admin: true,
