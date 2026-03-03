@@ -14,7 +14,12 @@ use crate::{Err, Error, Result, debug::type_name, err};
 macro_rules! checked {
 	($($input:tt)+) => {
 		$crate::utils::math::checked_ops!($($input)+)
-			.ok_or_else(|| $crate::err!(Arithmetic("operation overflowed or result invalid")))
+			.ok_or_else(
+				// The compiler will now attempt to inline the math predicate
+				// while moving the error handling out to .text.unlikely.
+				#[cold]
+				|| $crate::err!(Arithmetic("operation overflowed or result invalid"))
+			)
 	};
 }
 
