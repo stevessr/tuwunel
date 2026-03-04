@@ -636,14 +636,14 @@ async fn decide_user_id(
 	];
 
 	for choice in choices.into_iter().flatten() {
-		if let Some(user_id) = try_user_id(services, &choice, false).await {
+		if let Some(user_id) = try_user_id(services, provider, &choice, false).await {
 			return Ok(user_id);
 		}
 	}
 
 	let length = Some(15..23);
 	let unique_id = truncate_deterministic(unique_id, length).to_lowercase();
-	if let Some(user_id) = try_user_id(services, &unique_id, true).await {
+	if let Some(user_id) = try_user_id(services, provider, &unique_id, true).await {
 		return Ok(user_id);
 	}
 
@@ -653,8 +653,9 @@ async fn decide_user_id(
 #[tracing::instrument(level = "debug", skip_all, fields(username))]
 async fn try_user_id(
 	services: &Services,
+	provider: &Provider,
 	username: &str,
-	may_exist: bool,
+	unique_id: bool,
 ) -> Option<OwnedUserId> {
 	let server_name = services.globals.server_name();
 	let user_id = parse_user_id(server_name, username)
@@ -671,7 +672,15 @@ async fn try_user_id(
 	}
 
 	if services.users.exists(&user_id).await {
-		debug_warn!(?username, "Username exists.");
+		if provider.trusted {
+			info!(
+				?username,
+				provider = ?provider.brand,
+				"Authorizing trusted provider access to existing account."
+			);
+
+			return Some(user_id);
+		}
 
 		if services
 			.users
@@ -680,11 +689,12 @@ async fn try_user_id(
 			.ok()
 			.is_none_or(|origin| origin != "sso")
 		{
-			debug_warn!(?username, "Username has non-sso origin.");
+			debug_warn!(?username, "Existing username has non-sso origin.");
 			return None;
 		}
 
-		if !may_exist {
+		if !unique_id {
+			debug_warn!(?username, "Username exists.");
 			return None;
 		}
 	}

@@ -2343,6 +2343,23 @@
 #
 #userid_claims = []
 
+# Trusted providers can cause username conflicts (i.e. account hijacking)
+# but this is precisely how an existing matrix account can be associated
+# with a provider. When this option is set to true, the way we compute a
+# Matrix UserId from userinfo claims is inverted: we find the first
+# matching user and grant access to it. Whereas by default, when set to
+# false, we skip matching users and register the first available username;
+# falling-back to random characters to avoid conflicts.
+#
+# Only set this option to true for providers you self-host and control.
+# Never set this option to true for the public providers such as GitHub,
+# GitLab, etc.
+#
+# Note that associating an existing user with an untrusted provider is
+# still possible but only with the command '!admin query oauth associate'.
+#
+#trusted = false
+
 # Optional extra path components after the issuer_url leading to the
 # location of the `.well-known` directory used for discovery. If the path
 # starts with a slash it will be treated as absolute, meaning overwriting
