@@ -278,35 +278,37 @@ pub fn get_event_auth_chain_ids<'a>(
 			.collect(),
 	};
 
+	let eval = |auth_events: AuthEvents, mut state: State<_>| {
+		let push = |auth_event: &OwnedEventId| {
+			trace!(todo = state.todo.len(), ?auth_event, "push");
+			state
+				.todo
+				.push(self.get_event_auth_event_ids(room_id, auth_event.clone()));
+		};
+
+		let seen = |auth_event: OwnedEventId| {
+			state
+				.seen
+				.insert(auth_event.clone())
+				.then_some(auth_event)
+		};
+
+		let out = auth_events
+			.into_iter()
+			.filter_map(seen)
+			.inspect(push)
+			.collect::<AuthEvents>()
+			.into_iter()
+			.stream();
+
+		(out, state)
+	};
+
 	unfold(state, move |mut state| async move {
 		match state.todo.next().await {
 			| None => None,
 			| Some(Err(_)) => Some((AuthEvents::new().into_iter().stream(), state)),
-			| Some(Ok(auth_events)) => {
-				let push = |auth_event: &OwnedEventId| {
-					trace!(?event_id, ?auth_event, "push");
-					state
-						.todo
-						.push(self.get_event_auth_event_ids(room_id, auth_event.clone()));
-				};
-
-				let seen = |auth_event: OwnedEventId| {
-					state
-						.seen
-						.insert(auth_event.clone())
-						.then_some(auth_event)
-				};
-
-				let out = auth_events
-					.into_iter()
-					.filter_map(seen)
-					.inspect(push)
-					.collect::<AuthEvents>()
-					.into_iter()
-					.stream();
-
-				Some((out, state))
-			},
+			| Some(Ok(auth_events)) => Some(eval(auth_events, state)),
 		}
 	})
 	.flatten()
