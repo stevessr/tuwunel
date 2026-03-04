@@ -206,6 +206,14 @@ impl Service {
 			.deserialized()
 	}
 
+	/// Returns whether the user has a password. Disabled accounts and
+	/// registrations setting a sentinel password will return false here.
+	pub async fn has_password(&self, user_id: &UserId) -> Result<bool> {
+		self.password_hash(user_id)
+			.map_ok(|value| value != PASSWORD_DISABLED && value != PASSWORD_SENTINEL)
+			.await
+	}
+
 	/// Returns the password hash for the given user.
 	pub async fn password_hash(&self, user_id: &UserId) -> Result<String> {
 		self.db
