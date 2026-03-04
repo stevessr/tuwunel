@@ -602,6 +602,7 @@ pub struct Config {
 	/// - "all": All created rooms are encrypted.
 	/// - "invite": Any room created with `private_chat` or
 	///   `trusted_private_chat` presets.
+	/// - "none": Explicit value for no effect.
 	/// - Other values default to no effect.
 	#[serde(default)]
 	pub encryption_enabled_by_default_for_room_type: Option<String>,
