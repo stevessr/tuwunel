@@ -8,6 +8,7 @@
     - [Reverse Proxy - Caddy](deploying/reverse-proxy-caddy.md)
     - [Reverse Proxy - Nginx](deploying/reverse-proxy-nginx.md)
     - [Reverse Proxy - Traefik](deploying/reverse-proxy-traefik.md)
+    - [Example: root domain delegation](deploying/root-domain-delegation.md)
   - [NixOS](deploying/nixos.md)
   - [Docker](deploying/docker.md)
   - [Kubernetes](deploying/kubernetes.md)
