@@ -92,10 +92,27 @@ At a minimum, the following JSON files should be created:
 
 ### Option 2: Reverse proxy
 
-This is an example configuration if `example.com` is reverse-proxied behing Nginx.
+These are example configurations if `example.com` is reverse-proxied behing Nginx or Caddy.
 
 > [!NOTE]  
 > Replace `tuwunel` with the URL where tuwunel is listening; this may look like `127.0.0.1:8008`, `matrix.example.com`, or `tuwunel` if you declared an `upstream tuwunel` block.
+
+> [!IMPORTANT]  
+> These configurations need to be applied to the reverse proxy for `example.com`, **not** `matrix.example.com`.
+
+#### Caddy
+
+<!-- from https://github.com/spantaleev/matrix-docker-ansible-deploy/blob/c9bb48ff110dfca73946c69780ef8633e87b22f9/docs/configuring-well-known.md?plain=1#L150,L156 -->
+
+```caddy
+example.com {
+	reverse_proxy /.well-known/matrix/* https://matrix.example.com {
+		header_up Host {upstream_hostport}
+	}
+}
+```
+
+#### Nginx
 
 ```nginx,hidelines=~
 server {
@@ -116,3 +133,9 @@ server {
 ## Testing
 
 Navigate to `example.com/.well-known/matrix/client` and `example.com/.well-known/matrix/server`. These should display results similar to the [JSON snippets above](#option-1-static-json-files).
+
+Entering `example.com` in the [Matrix federation tester](https://federationtester.matrix.org/) should also work.
+
+## Additional resources
+
+For a more complete guide, see the Matrix setup with Ansible and Docker [documentation on setting up `.well-known`](https://github.com/spantaleev/matrix-docker-ansible-deploy/blob/master/docs/configuring-well-known.md).
