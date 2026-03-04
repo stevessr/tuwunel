@@ -2360,6 +2360,33 @@
 #
 #trusted = false
 
+# Setting this option to false will inhibit unique ID's from being
+# generated as a last-resort when determining a UserId from a provider's
+# claims. In the case of untrusted providers, when all provided claims
+# conflict with existing user accounts, a unique fallback ID needs
+# to be generated for registration to not be denied with an error.
+#
+# Set this option to false if you operate a private server or a trusted
+# identity provider where random UserId's are undesirable; the result of a
+# misconfiguration or other issue where an error is warranted.
+#
+# This option should be set to true for public servers or some users may
+# never be able to register.
+#
+#unique_id_fallbacks = true
+
+# Controls whether new user registration is possible from this provider.
+# When this option is set to false, authorizations from this provider
+# only affect existing users and will never result in a new registration
+# when the claims fail to match any existing user (in the case of trusted
+# providers) or an available username is found (in the case of untrusted
+# providers).
+#
+# Setting this option to false is generally not useful unless there is
+# an explicit reason to do so.
+#
+#registration = true
+
 # Optional extra path components after the issuer_url leading to the
 # location of the `.well-known` directory used for discovery. If the path
 # starts with a slash it will be treated as absolute, meaning overwriting

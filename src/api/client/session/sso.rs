@@ -396,6 +396,10 @@ pub(crate) async fn sso_callback_route(
 
 	// Attempt to register a non-existing user.
 	if !services.users.exists(&user_id).await {
+		if !provider.registration {
+			return Err!(Request(Forbidden("Registration from this provider is disabled")));
+		}
+
 		register_user(&services, &provider, &session, &userinfo, &user_id).await?;
 	}
 
@@ -697,6 +701,14 @@ async fn try_user_id(
 			debug_warn!(?username, "Username exists.");
 			return None;
 		}
+	} else if unique_id && !provider.unique_id_fallbacks {
+		debug_warn!(
+			?username,
+			provider = ?provider.brand,
+			"Unique ID fallbacks disabled.",
+		);
+
+		return None;
 	}
 
 	Some(user_id)
