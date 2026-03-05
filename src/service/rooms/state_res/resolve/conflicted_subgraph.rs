@@ -10,7 +10,8 @@ use futures::{
 };
 use ruma::OwnedEventId;
 use tuwunel_core::{
-	Result, implement,
+	Result, implement, is_equal_to,
+	itertools::Itertools,
 	matrix::{Event, pdu::AuthEvents},
 	smallvec::SmallVec,
 	utils::{
@@ -19,10 +20,11 @@ use tuwunel_core::{
 	},
 };
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct Global<Fut: Future + Send> {
 	subgraph: Subgraph,
 	todo: Todo<Fut>,
+	iter: usize,
 }
 
 #[derive(Default, Debug)]
@@ -72,6 +74,7 @@ where
 	let state = Global {
 		subgraph: Map::with_capacity(initial_capacity),
 		todo: Todo::<_>::new(),
+		iter: 0,
 	};
 
 	let inputs = conflicted_set
@@ -112,6 +115,7 @@ where
 			.flatten()
 			.stream();
 
+		state.iter = state.iter.saturating_add(1);
 		Some((outputs, (inputs, state)))
 	})
 	.flatten()
@@ -123,18 +127,18 @@ where
 	level = "trace",
 	skip_all,
 	fields(
-		subgraph = ?state
+		i = state.iter,
+		s = ?state
 			.subgraph
 			.values()
 			.fold((0_u64, 0_u64), |(a, b), v| {
 				(a.saturating_add(u64::from(v.subgraph)), b.saturating_add(u64::from(v.seen)))
 			}),
 
-		?event_id,
+		%event_id,
 		id = self.id,
 		path = self.path.len(),
 		stack = self.stack.iter().flatten().count(),
-		frames = self.stack.len(),
 	)
 )]
 fn eval<Fut: Future + Send>(
@@ -201,7 +205,15 @@ fn eval<Fut: Future + Send>(
 		.then(|| insert_path(subgraph, &self))
 		.unwrap_or_default();
 
-	(self, Some(event_id), path)
+	let next_id = self
+		.path
+		.iter()
+		.dropping_back(1)
+		.any(is_equal_to!(&event_id))
+		.is_false()
+		.then_some(event_id);
+
+	(self, next_id, path)
 }
 
 #[implement(Local)]
