@@ -278,6 +278,11 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 		)
 		.await?;
 
+	debug_assert!(
+		pdu_id.is_some() || soft_fail,
+		"Ok(None) returned by timeline for soft-failed PDU's"
+	);
+
 	if soft_fail {
 		self.services
 			.pdu_metadata

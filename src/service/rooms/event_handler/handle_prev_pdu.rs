@@ -7,8 +7,8 @@ use ruma::{
 use tuwunel_core::{
 	Err, Result, debug,
 	debug::INFO_SPAN_LEVEL,
-	implement,
-	matrix::{Event, PduEvent},
+	debug_warn, implement,
+	matrix::{Event, PduEvent, pdu::RawPduId},
 };
 
 #[implement(super::Service)]
@@ -29,7 +29,7 @@ pub(super) async fn handle_prev_pdu(
 	first_ts_in_room: MilliSecondsSinceUnixEpoch,
 	prev_id: &EventId,
 	create_event_id: &EventId,
-) -> Result {
+) -> Result<Option<(RawPduId, bool)>> {
 	// Check for disabled again because it might have changed
 	if self.services.metadata.is_disabled(room_id).await {
 		return Err!(Request(Forbidden(debug_warn!(
@@ -38,21 +38,23 @@ pub(super) async fn handle_prev_pdu(
 		))));
 	}
 
+	let Some((pdu, json)) = eventid_info else {
+		debug!(?prev_id, "Missing eventid_info.");
+		return Ok(None);
+	};
+
+	// Skip old events
+	if pdu.origin_server_ts() < first_ts_in_room {
+		debug_warn!(?prev_id, "origin_server_ts older than room");
+		return Ok(None);
+	}
+
 	if self.is_backed_off(prev_id, Range {
 		start: Duration::from_secs(5 * 60),
 		end: Duration::from_secs(60 * 60 * 24),
 	}) {
 		debug!(?prev_id, "Backing off from prev_event");
-		return Ok(());
-	}
-
-	let Some((pdu, json)) = eventid_info else {
-		return Ok(());
-	};
-
-	// Skip old events
-	if pdu.origin_server_ts() < first_ts_in_room {
-		return Ok(());
+		return Ok(None);
 	}
 
 	self.upgrade_outlier_to_timeline_pdu(
@@ -64,7 +66,5 @@ pub(super) async fn handle_prev_pdu(
 		create_event_id,
 	)
 	.boxed()
-	.await?;
-
-	Ok(())
+	.await
 }
