@@ -3,10 +3,18 @@ use std::collections::BTreeMap;
 use axum::extract::State;
 use ruma::{
 	api::client::message::send_message_event,
-	events::{MessageLikeEventType, room::redaction::RoomRedactionEventContent},
+	events::{
+		MessageLikeEventType, reaction::ReactionEventContent,
+		room::redaction::RoomRedactionEventContent,
+	},
 };
 use serde_json::from_str;
-use tuwunel_core::{Err, Result, err, matrix::pdu::PduBuilder, utils, warn};
+use tuwunel_core::{
+	Err, Event, Result, err,
+	matrix::pdu::PduBuilder,
+	utils::{self, ReadyExt},
+	warn,
+};
 
 use crate::Ruma;
 
@@ -70,6 +78,33 @@ pub(crate) async fn send_message_event_route(
 			.await
 	{
 		return Err!(Request(Forbidden("Room call invites are not allowed in public rooms")));
+	}
+
+	// Forbid duplicate reactions
+	if body.event_type == MessageLikeEventType::Reaction
+		&& let Ok(content) = body
+			.body
+			.body
+			.deserialize_as_unchecked::<ReactionEventContent>()
+		&& let Ok(reacted_to_pdu_id) = services
+			.timeline
+			.get_pdu_id(&content.relates_to.event_id)
+			.await
+	{
+		let shortroomid = u64::from_be_bytes(reacted_to_pdu_id.shortroomid());
+		let is_duplicate = services
+			.pdu_metadata
+			.get_relations(shortroomid, reacted_to_pdu_id.pdu_count(), None, ruma::api::Direction::Forward, Some(sender_user))
+			// Potentially wasteful to deserialuze whole PDU content
+			.ready_filter_map(|(_, pdu)| pdu.get_content::<ReactionEventContent>().ok())
+			.ready_filter(|other_reaction| other_reaction.relates_to.key == content.relates_to.key)
+			// Will return `false` if there are no elements
+			.ready_any(|_| true)
+			.await;
+
+		if is_duplicate {
+			return Err!(Request(DuplicateAnnotation("Duplicate reactions are not allowed.")));
+		}
 	}
 
 	// Check if this is a new transaction id
