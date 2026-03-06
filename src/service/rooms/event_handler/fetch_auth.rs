@@ -11,7 +11,7 @@ use ruma::{
 };
 use tuwunel_core::{
 	debug, debug_error, debug_warn, implement,
-	matrix::{PduEvent, event::gen_event_id_canonical_json},
+	matrix::{PduEvent, event::gen_event_id_canonical_json, pdu::MAX_AUTH_EVENTS},
 	trace,
 	utils::stream::{BroadbandExt, IterStream, ReadyExt},
 	warn,
@@ -181,23 +181,16 @@ async fn fetch_auth_chain(
 			);
 		}
 
-		if let Some(auth_events) = value
+		value
 			.get("auth_events")
 			.and_then(CanonicalJsonValue::as_array)
-		{
-			for auth_event in auth_events {
-				match serde_json::from_value::<OwnedEventId>(auth_event.clone().into()) {
-					| Ok(auth_event) => {
-						todo_auth_events.push_back(auth_event);
-					},
-					| _ => {
-						warn!("Auth event id is not valid");
-					},
-				}
-			}
-		} else {
-			warn!("Auth event list invalid");
-		}
+			.into_iter()
+			.flatten()
+			.filter_map(|auth_event| auth_event.try_into().ok())
+			.take(MAX_AUTH_EVENTS)
+			.for_each(|auth_event: &EventId| {
+				todo_auth_events.push_back(auth_event.to_owned());
+			});
 
 		events_in_reverse_order.push((next_id.clone(), value));
 		events_all.insert(next_id);

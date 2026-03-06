@@ -110,7 +110,7 @@ pub async fn handle_incoming_pdu<'a>(
 
 	let room_version = room_version::from_create_event(create_event)?;
 
-	let (incoming_pdu, val) = self
+	let (incoming_pdu, pdu) = self
 		.handle_outlier_pdu(origin, room_id, event_id, pdu, &room_version, false)
 		.await?;
 
@@ -183,7 +183,7 @@ pub async fn handle_incoming_pdu<'a>(
 		origin,
 		room_id,
 		incoming_pdu,
-		val,
+		pdu,
 		&room_version,
 		create_event.event_id(),
 	)

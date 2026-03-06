@@ -7,7 +7,7 @@ use ruma::{
 };
 use tuwunel_core::{
 	Result, debug_warn, err, implement,
-	matrix::{Event, PduEvent},
+	matrix::{Event, PduEvent, pdu::MAX_PREV_EVENTS},
 	utils::stream::IterStream,
 };
 
@@ -91,6 +91,11 @@ where
 
 		if pdu.origin_server_ts() > first_ts_in_room {
 			amount = amount.saturating_add(1);
+			debug_assert!(
+				pdu.prev_events().count() <= MAX_PREV_EVENTS,
+				"PduEvent {prev_event_id} has too many prev_events"
+			);
+
 			for prev_prev in pdu.prev_events() {
 				if graph.contains_key(prev_prev) {
 					continue;
@@ -135,6 +140,17 @@ where
 	let sorted = state_res::topological_sort(&graph, &event_fetch)
 		.await
 		.map_err(|e| err!(Database(error!("Error sorting prev events: {e}"))))?;
+
+	debug_assert_eq!(
+		sorted.len(),
+		graph.len(),
+		"topological sort returned a different number of outputs than inputs"
+	);
+
+	debug_assert!(
+		sorted.len() >= eventid_info.len(),
+		"returned topologically sorted events differ from eventid_info"
+	);
 
 	Ok((sorted, eventid_info))
 }
