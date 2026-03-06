@@ -139,7 +139,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 
 	// Soft fail check before doing state res
 	trace!("Performing soft-fail check");
-	let soft_fail = match incoming_pdu.redacts_id(room_version) {
+	let soft_fail = match incoming_pdu.redacts_id(&room_rules) {
 		| None => false,
 		| Some(redact_id) =>
 			!self
