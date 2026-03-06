@@ -598,6 +598,11 @@ async fn fix_hashed_sentinel_passwords(services: &Services) -> Result {
 
 	const PASSWORD_SENTINEL: &str = "*";
 
+	if services.config.identity_provider.is_empty() {
+		debug!("Skipping sentinel password migration since no SSO IdP configured.");
+		return Ok(());
+	}
+
 	let db = &services.db;
 	let cork = db.cork_and_sync();
 	let userid_password = db["userid_password"].clone();
