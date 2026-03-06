@@ -604,6 +604,8 @@ pub struct Config {
 	///   `trusted_private_chat` presets.
 	/// - "none": Explicit value for no effect.
 	/// - Other values default to no effect.
+	///
+	/// default: "none"
 	#[serde(default)]
 	pub encryption_enabled_by_default_for_room_type: Option<String>,
 

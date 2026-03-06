@@ -475,7 +475,7 @@
 # - "none": Explicit value for no effect.
 # - Other values default to no effect.
 #
-#encryption_enabled_by_default_for_room_type = false
+#encryption_enabled_by_default_for_room_type = "none"
 
 # Controls whether federation is allowed or not. It is not recommended to
 # disable this after installation due to potential federation breakage but
