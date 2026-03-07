@@ -799,6 +799,10 @@ opt-level = 'z'
 inherits = "dev"
 debug = "full"
 
+[profile.dbg.package.'*']
+inherits = "dbg"
+debug = "limited"
+
 # primarily used for CI
 [profile.test]
 debug = "limited"
