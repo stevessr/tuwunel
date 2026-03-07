@@ -92,7 +92,7 @@ At a minimum, the following JSON files should be created:
 
 ### Option 2: Reverse proxy
 
-These are example configurations if `example.com` is reverse-proxied behing Nginx or Caddy.
+These are example configurations if `example.com` is reverse-proxied behind Nginx or Caddy.
 
 > [!NOTE]  
 > Replace `tuwunel` with the URL where tuwunel is listening; this may look like `127.0.0.1:8008`, `matrix.example.com`, or `tuwunel` if you declared an `upstream tuwunel` block.
