@@ -126,10 +126,9 @@ async fn fetch_auth_chain(
 	// c. Ask origin server over federation
 	// We also handle its auth chain here so we don't get a stack overflow in
 	// handle_outlier_pdu.
+	let mut events_all = HashSet::new();
+	let mut events_in_reverse_order = Vec::new();
 	let mut todo_auth_events: VecDeque<_> = [event_id.to_owned()].into();
-	let mut events_in_reverse_order = Vec::with_capacity(todo_auth_events.len());
-
-	let mut events_all = HashSet::with_capacity(todo_auth_events.len());
 	while let Some(next_id) = todo_auth_events.pop_front() {
 		if events_all.contains(&next_id) {
 			continue;
