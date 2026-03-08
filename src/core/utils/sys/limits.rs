@@ -29,7 +29,7 @@ pub fn maximize_fd_limit() -> Result {
 #[cfg(not(unix))]
 pub fn maximize_fd_limit() -> Result { Ok(()) }
 
-#[cfg(unix)]
+#[cfg(all(unix, not(target_os = "macos")))]
 /// Some distributions ship with very low defaults for thread counts; similar to
 /// low default file descriptor limits. But unlike fd's, thread limit is rarely
 /// reached, though on large systems (32+ cores) shipping with defaults of
@@ -48,7 +48,7 @@ pub fn maximize_thread_limit() -> Result {
 	Ok(())
 }
 
-#[cfg(not(unix))]
+#[cfg(any(not(unix), target_os = "macos"))]
 pub fn maximize_thread_limit() -> Result { Ok(()) }
 
 #[cfg(unix)]
@@ -75,7 +75,7 @@ pub fn max_stack_size() -> Result<(usize, usize)> {
 #[inline]
 pub fn max_stack_size() -> Result<(usize, usize)> { Ok((usize::MAX, usize::MAX)) }
 
-#[cfg(any(linux_android, netbsdlike, target_os = "freebsd",))]
+#[cfg(all(unix, not(target_os = "macos")))]
 #[inline]
 pub fn max_memory_locked() -> Result<(usize, usize)> {
 	getrlimit(Resource::RLIMIT_MEMLOCK)
@@ -83,16 +83,11 @@ pub fn max_memory_locked() -> Result<(usize, usize)> {
 		.map_err(Into::into)
 }
 
-#[cfg(not(any(linux_android, netbsdlike, target_os = "freebsd",)))]
+#[cfg(any(not(unix), target_os = "macos"))]
 #[inline]
 pub fn max_memory_locked() -> Result<(usize, usize)> { Ok((usize::MIN, usize::MIN)) }
 
-#[cfg(any(
-	linux_android,
-	netbsdlike,
-	target_os = "aix",
-	target_os = "freebsd",
-))]
+#[cfg(all(unix, not(target_os = "macos")))]
 #[inline]
 pub fn max_threads() -> Result<(usize, usize)> {
 	getrlimit(Resource::RLIMIT_NPROC)
@@ -100,12 +95,7 @@ pub fn max_threads() -> Result<(usize, usize)> {
 		.map_err(Into::into)
 }
 
-#[cfg(not(any(
-	linux_android,
-	netbsdlike,
-	target_os = "aix",
-	target_os = "freebsd",
-)))]
+#[cfg(any(not(unix), target_os = "macos"))]
 #[inline]
 pub fn max_threads() -> Result<(usize, usize)> { Ok((usize::MAX, usize::MAX)) }
 
