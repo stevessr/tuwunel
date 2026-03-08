@@ -159,6 +159,10 @@ impl Service {
 	) -> Result<()> {
 		let pending = self.db.search_pending_mxc(mxc).await;
 		let Some((owner_id, expires_at)) = pending else {
+			if self.get_metadata(mxc).await.is_some() {
+				return Err!(Request(CannotOverwriteMedia("Media ID already has content")));
+			}
+
 			return Err!(Request(NotFound("Media not found")));
 		};
 
