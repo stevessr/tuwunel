@@ -177,7 +177,7 @@ fn thumbnail_generate(
 
 fn into_filemeta(data: Metadata, content: Vec<u8>) -> FileMeta {
 	FileMeta {
-		content: Some(content),
+		content,
 		content_type: data.content_type,
 		content_disposition: data.content_disposition,
 	}

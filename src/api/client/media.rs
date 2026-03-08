@@ -184,7 +184,7 @@ pub(crate) async fn get_content_thumbnail_route(
 	} = fetch_thumbnail(&services, &mxc, user, body.timeout_ms, &dim).await?;
 
 	Ok(get_content_thumbnail::v1::Response {
-		file: content.expect("entire file contents"),
+		file: content,
 		content_type: content_type.map(Into::into),
 		cross_origin_resource_policy: Some(CORP_CROSS_ORIGIN.into()),
 		cache_control: Some(CACHE_CONTROL_IMMUTABLE.into()),
@@ -220,7 +220,7 @@ pub(crate) async fn get_content_route(
 	} = fetch_file(&services, &mxc, user, body.timeout_ms, None).await?;
 
 	Ok(get_content::v1::Response {
-		file: content.expect("entire file contents"),
+		file: content,
 		content_type: content_type.map(Into::into),
 		cross_origin_resource_policy: Some(CORP_CROSS_ORIGIN.into()),
 		cache_control: Some(CACHE_CONTROL_IMMUTABLE.into()),
@@ -256,7 +256,7 @@ pub(crate) async fn get_content_as_filename_route(
 	} = fetch_file(&services, &mxc, user, body.timeout_ms, Some(&body.filename)).await?;
 
 	Ok(get_content_as_filename::v1::Response {
-		file: content.expect("entire file contents"),
+		file: content,
 		content_type: content_type.map(Into::into),
 		cross_origin_resource_policy: Some(CORP_CROSS_ORIGIN.into()),
 		cache_control: Some(CACHE_CONTROL_IMMUTABLE.into()),

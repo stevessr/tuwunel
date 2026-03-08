@@ -218,7 +218,7 @@ async fn handle_thumbnail_file(
 	)
 	.await
 	.map(|()| FileMeta {
-		content: Some(content.file),
+		content: content.file,
 		content_type: content.content_type.map(Into::into),
 		content_disposition: Some(content_disposition),
 	})
@@ -246,7 +246,7 @@ async fn handle_content_file(
 	)
 	.await
 	.map(|()| FileMeta {
-		content: Some(content.file),
+		content: content.file,
 		content_type: content.content_type.map(Into::into),
 		content_disposition: Some(content_disposition),
 	})
@@ -298,7 +298,7 @@ async fn location_request(&self, location: &str) -> Result<FileMeta> {
 		.map(Vec::from)
 		.map_err(Into::into)
 		.map(|content| FileMeta {
-			content: Some(content),
+			content,
 			content_type: content_type.clone(),
 			content_disposition: Some(make_content_disposition(
 				content_disposition.as_ref(),
