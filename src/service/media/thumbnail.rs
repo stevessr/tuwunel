@@ -85,7 +85,7 @@ impl super::Service {
 #[tracing::instrument(name = "saved", level = "debug", skip(self, data))]
 async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<Media>> {
 	let mut content = Vec::new();
-	let path = self.get_media_file(&data.key);
+	let path = self.get_media_path_sha256(&data.key);
 	fs::File::open(path)
 		.await?
 		.read_to_end(&mut content)
@@ -105,7 +105,7 @@ async fn get_thumbnail_generate(
 	data: Metadata,
 ) -> Result<Option<Media>> {
 	let mut content = Vec::new();
-	let path = self.get_media_file(&data.key);
+	let path = self.get_media_path_sha256(&data.key);
 	fs::File::open(path)
 		.await?
 		.read_to_end(&mut content)

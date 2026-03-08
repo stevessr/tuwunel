@@ -284,7 +284,7 @@ impl Service {
 		{
 			| Ok(Metadata { content_disposition, content_type, key }) => {
 				let mut content = Vec::with_capacity(8192);
-				let path = self.get_media_file(&key);
+				let path = self.get_media_path_sha256(&key);
 				BufReader::new(fs::File::open(path).await?)
 					.read_to_end(&mut content)
 					.await?;
@@ -450,7 +450,7 @@ impl Service {
 				continue;
 			}
 
-			let path = self.get_media_file(&key);
+			let path = self.get_media_path_sha256(&key);
 
 			let file_metadata = match fs::metadata(path.clone()).await {
 				| Ok(file_metadata) => file_metadata,
@@ -526,8 +526,8 @@ impl Service {
 	}
 
 	async fn remove_media_file(&self, key: &[u8]) -> Result {
-		let path = self.get_media_file(key);
-		let legacy = self.get_media_file_b64(key);
+		let path = self.get_media_path_sha256(key);
+		let legacy = self.get_media_path_b64(key);
 		debug!(?key, ?path, ?legacy, "Removing media file");
 
 		let file_rm = fs::remove_file(&path);
@@ -543,12 +543,12 @@ impl Service {
 	}
 
 	async fn create_media_file(&self, key: &[u8]) -> Result<fs::File> {
-		let path = self.get_media_file(key);
+		let path = self.get_media_path_sha256(key);
 		debug!(?key, ?path, "Creating media file");
 
 		let file = fs::File::create(&path).await?;
 		if self.services.server.config.media_compat_file_link {
-			let legacy = self.get_media_file_b64(key);
+			let legacy = self.get_media_path_b64(key);
 			if let Err(e) = fs::symlink(&path, &legacy).await {
 				debug_error!(
 					key = ?encode_key(key), ?path, ?legacy,
@@ -570,27 +570,29 @@ impl Service {
 
 	#[inline]
 	#[must_use]
-	pub fn get_media_file(&self, key: &[u8]) -> PathBuf { self.get_media_file_sha256(key) }
-
-	/// new SHA256 file name media function. requires database migrated. uses
-	/// SHA256 hash of the base64 key as the file name
-	#[must_use]
-	pub fn get_media_file_sha256(&self, key: &[u8]) -> PathBuf {
+	pub fn get_media_path_sha256(&self, key: &[u8]) -> PathBuf {
 		let mut r = self.get_media_dir();
-		// Using the hash of the base64 key as the filename
-		// This is to prevent the total length of the path from exceeding the maximum
-		// length in most filesystems
-		let digest = <sha2::Sha256 as sha2::Digest>::digest(key);
-		let encoded = encode_key(&digest);
-		r.push(encoded);
+		r.push(self.get_media_name_sha256(key));
 		r
 	}
 
-	/// old base64 file name media function
-	/// This is the old version of `get_media_file` that uses the full base64
-	/// key as the filename.
+	/// new SHA256 file name media function. requires database migrated. uses
+	/// SHA256 hash of the base64 key as the file name
+	#[inline]
 	#[must_use]
-	pub fn get_media_file_b64(&self, key: &[u8]) -> PathBuf {
+	pub fn get_media_name_sha256(&self, key: &[u8]) -> String {
+		// Using the hash of the base64 key as the filename prevents the total
+		// length of the path from exceeding the maximum length in most
+		// filesystems
+		let digest = <sha2::Sha256 as sha2::Digest>::digest(key);
+		encode_key(&digest)
+	}
+
+	/// old base64 file name media function
+	/// This is the old version of `get_media_path_sha256` that uses the full
+	/// base64 key as the filename.
+	#[must_use]
+	pub fn get_media_path_b64(&self, key: &[u8]) -> PathBuf {
 		let mut r = self.get_media_dir();
 		let encoded = encode_key(key);
 		r.push(encoded);
