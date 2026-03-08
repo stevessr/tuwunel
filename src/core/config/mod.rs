@@ -57,7 +57,7 @@ use crate::{
 ### https://tuwunel.chat/configuration.html
 "#,
 	ignore = "catchall well_known tls blurhashing allow_invalid_tls_certificates ldap jwt \
-	          appservice identity_provider"
+	          appservice identity_provider s3_provider"
 )]
 pub struct Config {
 	/// The server_name is the pretty name of this server. It is used as a
@@ -2317,6 +2317,10 @@ pub struct Config {
 
 	// external structure; separate section
 	#[serde(default)]
+	pub s3_provider: Option<S3Provider>,
+
+	// external structure; separate section
+	#[serde(default)]
 	pub ldap: LdapConfig,
 
 	// external structure; separate section
@@ -2950,6 +2954,35 @@ mod identity_provider_serde {
 			Ok(ret)
 		}
 	}
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "global.s3_provider"
+)]
+pub struct S3Provider {
+	/// The endpoint of the S3 provider, including the scheme. You should only
+	/// use http when testing and not in production.
+	///
+	/// example: "https://s3.us-east-1.amazonaws.com"
+	#[allow(rustdoc::bare_urls)] // The URL is not meant to be clickable
+	pub endpoint: Option<String>,
+
+	/// The region of the S3 bucket.
+	pub region: Option<String>,
+
+	/// The name of the S3 bucket.
+	pub bucket: String,
+
+	/// The path in the S3 bucket to place media assets in.
+	pub path: Option<String>,
+
+	/// The access key for the S3 bucket.
+	pub key: String,
+
+	/// The secret access key for the S3 bucket.
+	pub secret: String,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]

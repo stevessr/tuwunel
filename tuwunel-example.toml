@@ -2475,6 +2475,37 @@
 
 
 
+#[global.s3_provider]
+
+# The endpoint of the S3 provider, including the scheme. You should only
+# use http when testing and not in production.
+#
+# example: "https://s3.us-east-1.amazonaws.com"
+#
+#endpoint =
+
+# The region of the S3 bucket.
+#
+#region =
+
+# The name of the S3 bucket.
+#
+#bucket =
+
+# The path in the S3 bucket to place media assets in.
+#
+#path =
+
+# The access key for the S3 bucket.
+#
+#key =
+
+# The secret access key for the S3 bucket.
+#
+#secret =
+
+
+
 #[global.appservice.<ID>]
 
 # The URL for the application service.

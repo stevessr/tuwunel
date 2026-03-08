@@ -15,6 +15,11 @@ use std::{
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
 use http::StatusCode;
+use object_store::{
+	ObjectStoreExt, PutPayload,
+	aws::{AmazonS3, AmazonS3Builder},
+	path::Path,
+};
 use ruma::{
 	Mxc, OwnedMxcUri, OwnedUserId, UserId,
 	api::client::error::{ErrorKind, RetryAfter},
@@ -54,6 +59,7 @@ pub struct Service {
 	services: Arc<crate::services::OnceServices>,
 	url_preview_mutex: MutexMap<String, ()>,
 	mxc_state: MXCState,
+	s3: Option<AmazonS3>,
 }
 
 /// generated MXC ID (`media-id`) length
@@ -68,6 +74,25 @@ pub const CORP_CROSS_ORIGIN: &str = "cross-origin";
 #[async_trait]
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
+		let s3 = match &args.server.config.s3_provider {
+			| Some(b) => {
+				let mut builder = AmazonS3Builder::new()
+					.with_allow_http(true)
+					.with_bucket_name(b.bucket.clone())
+					.with_access_key_id(b.key.clone())
+					.with_secret_access_key(b.secret.clone());
+				if let Some(endpoint) = &b.endpoint {
+					builder = builder.with_endpoint(endpoint.clone());
+				}
+				if let Some(region) = &b.region {
+					builder = builder.with_region(region.clone());
+				}
+				let result = builder.build()?;
+				Some(result)
+			},
+			| _ => None,
+		};
+
 		Ok(Arc::new(Self {
 			db: Data::new(args.db),
 			services: args.services.clone(),
@@ -76,6 +101,7 @@ impl crate::Service for Service {
 				notifiers: Mutex::new(HashMap::new()),
 				ratelimiter: Mutex::new(HashMap::new()),
 			},
+			s3,
 		}))
 	}
 
@@ -215,10 +241,7 @@ impl Service {
 		)?;
 
 		//TODO: Dangling metadata in database if creation fails
-		let mut f = self.create_media_file(&key).await?;
-		f.write_all(file).await?;
-
-		Ok(())
+		self.create_media_file(&key, file).await
 	}
 
 	/// Deletes a file in the database and from the media directory via an MXC
@@ -227,7 +250,7 @@ impl Service {
 			| Ok(keys) => {
 				for key in keys {
 					trace!(?mxc, "MXC Key: {key:?}");
-					debug_info!(?mxc, "Deleting from filesystem");
+					debug_info!(?mxc, "Deleting from storage provider");
 
 					if let Err(e) = self.remove_media_file(&key).await {
 						debug_error!(?mxc, "Failed to remove media file: {e}");
@@ -277,25 +300,37 @@ impl Service {
 
 	/// Downloads a media file.
 	pub async fn get(&self, mxc: &Mxc<'_>) -> Result<Option<Media>> {
-		match self
+		let meta = self
 			.db
 			.search_file_metadata(mxc, &Dim::default())
 			.await
-		{
-			| Ok(Metadata { content_disposition, content_type, key }) => {
-				let mut content = Vec::with_capacity(8192);
-				let path = self.get_media_path_sha256(&key);
-				BufReader::new(fs::File::open(path).await?)
-					.read_to_end(&mut content)
-					.await?;
+			.ok();
 
-				Ok(Some(Media {
-					content,
-					content_type,
-					content_disposition,
-				}))
-			},
-			| _ => Ok(None),
+		let Some(Metadata { content_type, content_disposition, key }) = meta else {
+			return Ok(None);
+		};
+
+		if let Some(s3) = &self.s3 {
+			let path = self.get_s3_path_sha256(&key);
+			let result = s3.get(&path).await?;
+			let bytes = result.bytes().await?;
+			Ok(Some(Media {
+				content: bytes.to_vec(),
+				content_type,
+				content_disposition,
+			}))
+		} else {
+			let mut content = Vec::with_capacity(8192);
+			let path = self.get_media_path_sha256(&key);
+			BufReader::new(fs::File::open(path).await?)
+				.read_to_end(&mut content)
+				.await?;
+
+			Ok(Some(Media {
+				content,
+				content_type,
+				content_disposition,
+			}))
 		}
 	}
 
@@ -450,38 +485,59 @@ impl Service {
 				continue;
 			}
 
-			let path = self.get_media_path_sha256(&key);
+			let file_created_at = if let Some(s3) = &self.s3 {
+				let path = self.get_s3_path_sha256(&key);
 
-			let file_metadata = match fs::metadata(path.clone()).await {
-				| Ok(file_metadata) => file_metadata,
-				| Err(e) => {
-					error!(
-						"Failed to obtain file metadata for MXC {mxc} at file path \
-						 \"{path:?}\", skipping: {e}"
-					);
-					continue;
-				},
+				let file_metadata = match s3.head(&path).await {
+					| Ok(file_metadata) => file_metadata,
+					| Err(e) => {
+						error!(
+							"Failed to obtain S3 file metadata for MXC {mxc} at file path \
+							 \"{path:?}\", skipping: {e}"
+						);
+						continue;
+					},
+				};
+
+				trace!(%mxc, ?path, "S3 file metadata: {file_metadata:?}");
+				SystemTime::from(file_metadata.last_modified)
+			} else {
+				let path = self.get_media_path_sha256(&key);
+
+				let file_metadata = match fs::metadata(path.clone()).await {
+					| Ok(file_metadata) => file_metadata,
+					| Err(e) => {
+						error!(
+							"Failed to obtain local file metadata for MXC {mxc} at file path \
+							 \"{path:?}\", skipping: {e}"
+						);
+						continue;
+					},
+				};
+
+				trace!(%mxc, ?path, "Local file metadata: {file_metadata:?}");
+
+				match file_metadata.modified() {
+					| Ok(value) => value,
+					| Err(err) => {
+						error!(
+							"Failed to obtain last modification time for MXC {mxc} at file path \
+							 \"{path:?}\" {err:?}. Skipping..."
+						);
+						continue;
+					},
+				}
 			};
 
-			trace!(%mxc, ?path, "File metadata: {file_metadata:?}");
+			debug!("File created at: {file_created_at:?}");
 
-			let file_modified_at = match file_metadata.modified() {
-				| Ok(value) => value,
-				| Err(err) => {
-					error!("Could not delete MXC {mxc} at path {path:?}: {err:?}. Skipping...");
-					continue;
-				},
-			};
-
-			debug!("File modified at: {file_modified_at:?}");
-
-			if file_modified_at <= time && older_than {
+			if file_created_at <= time && older_than {
 				debug!(
 					"File is older than user duration, pushing to list of file paths and keys \
 					 to delete."
 				);
 				remote_mxcs.push(mxc.to_string());
-			} else if file_modified_at >= time && newer_than {
+			} else if file_created_at >= time && newer_than {
 				debug!(
 					"File is newer than user duration, pushing to list of file paths and keys \
 					 to delete."
@@ -526,38 +582,56 @@ impl Service {
 	}
 
 	async fn remove_media_file(&self, key: &[u8]) -> Result {
-		let path = self.get_media_path_sha256(key);
-		let legacy = self.get_media_path_b64(key);
-		debug!(?key, ?path, ?legacy, "Removing media file");
+		if let Some(s3) = &self.s3 {
+			let path = self.get_s3_path_sha256(key);
+			debug!(?key, ?path, "Deleting media file in s3");
 
-		let file_rm = fs::remove_file(&path);
-		let legacy_rm = fs::remove_file(&legacy);
-		let (file_rm, legacy_rm) = tokio::join!(file_rm, legacy_rm);
-		if let Err(e) = legacy_rm
-			&& self.services.server.config.media_compat_file_link
-		{
-			debug_error!(?key, ?legacy, "Failed to remove legacy media symlink: {e}");
+			s3.delete(&path).await?;
+			Ok(())
+		} else {
+			let path = self.get_media_path_sha256(key);
+			let legacy = self.get_media_path_b64(key);
+			debug!(?key, ?path, ?legacy, "Removing local media file");
+
+			let file_rm = fs::remove_file(&path);
+			let legacy_rm = fs::remove_file(&legacy);
+			let (file_rm, legacy_rm) = tokio::join!(file_rm, legacy_rm);
+			if let Err(e) = legacy_rm
+				&& self.services.server.config.media_compat_file_link
+			{
+				debug_error!(?key, ?legacy, "Failed to remove legacy media symlink: {e}");
+			}
+
+			Ok(file_rm?)
 		}
-
-		Ok(file_rm?)
 	}
 
-	async fn create_media_file(&self, key: &[u8]) -> Result<fs::File> {
-		let path = self.get_media_path_sha256(key);
-		debug!(?key, ?path, "Creating media file");
+	async fn create_media_file(&self, key: &[u8], file: &[u8]) -> Result {
+		if let Some(s3) = &self.s3 {
+			let path = self.get_s3_path_sha256(key);
+			debug!(?key, ?path, "Creating media file in s3");
 
-		let file = fs::File::create(&path).await?;
-		if self.services.server.config.media_compat_file_link {
-			let legacy = self.get_media_path_b64(key);
-			if let Err(e) = fs::symlink(&path, &legacy).await {
-				debug_error!(
-					key = ?encode_key(key), ?path, ?legacy,
-					"Failed to create legacy media symlink: {e}"
-				);
+			s3.put(&path, PutPayload::from(file.to_vec()))
+				.await?;
+		} else {
+			let path = self.get_media_path_sha256(key);
+			debug!(?key, ?path, "Creating local media file");
+
+			let mut f = fs::File::create(&path).await?;
+			if self.services.server.config.media_compat_file_link {
+				let legacy = self.get_media_path_b64(key);
+				if let Err(e) = fs::symlink(&path, &legacy).await {
+					debug_error!(
+						key = ?encode_key(key), ?path, ?legacy,
+						"Failed to create legacy media symlink: {e}"
+					);
+				}
 			}
+
+			f.write_all(file).await?;
 		}
 
-		Ok(file)
+		Ok(())
 	}
 
 	#[inline]
@@ -566,6 +640,18 @@ impl Service {
 			.search_file_metadata(mxc, &Dim::default())
 			.await
 			.ok()
+	}
+
+	#[inline]
+	#[must_use]
+	pub fn get_s3_path_sha256(&self, key: &[u8]) -> Path {
+		let file_name = self.get_media_name_sha256(key);
+		let s3 = self.services.config.s3_provider.as_ref();
+		if let Some(path) = s3.and_then(|b| b.path.clone()) {
+			Path::from_iter([path, file_name])
+		} else {
+			Path::from(file_name)
+		}
 	}
 
 	#[inline]

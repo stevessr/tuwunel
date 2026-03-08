@@ -7,11 +7,9 @@
 
 use std::{cmp, num::Saturating as Sat};
 
+use object_store::ObjectStoreExt;
 use ruma::{Mxc, UInt, UserId, http_headers::ContentDisposition, media::Method};
-use tokio::{
-	fs,
-	io::{AsyncReadExt, AsyncWriteExt},
-};
+use tokio::{fs, io::AsyncReadExt};
 use tuwunel_core::{Result, checked, err, implement};
 
 use super::{Media, data::Metadata};
@@ -40,9 +38,7 @@ impl super::Service {
 				.create_file_metadata(mxc, user, dim, content_disposition, content_type)?;
 
 		//TODO: Dangling metadata in database if creation fails
-		let mut f = self.create_media_file(&key).await?;
-		f.write_all(file).await?;
-
+		self.create_media_file(&key, file).await?;
 		Ok(())
 	}
 
@@ -84,14 +80,21 @@ impl super::Service {
 #[implement(super::Service)]
 #[tracing::instrument(name = "saved", level = "debug", skip(self, data))]
 async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<Media>> {
-	let mut content = Vec::new();
-	let path = self.get_media_path_sha256(&data.key);
-	fs::File::open(path)
-		.await?
-		.read_to_end(&mut content)
-		.await?;
+	if let Some(s3) = &self.s3 {
+		let path = self.get_s3_path_sha256(&data.key);
+		let result = s3.get(&path).await?;
+		let bytes = result.bytes().await?;
+		Ok(Some(into_media(data, bytes.to_vec())))
+	} else {
+		let mut content = Vec::new();
+		let path = self.get_media_path_sha256(&data.key);
+		fs::File::open(path)
+			.await?
+			.read_to_end(&mut content)
+			.await?;
 
-	Ok(Some(into_media(data, content)))
+		Ok(Some(into_media(data, content)))
+	}
 }
 
 /// Generate a thumbnail
@@ -104,20 +107,17 @@ async fn get_thumbnail_generate(
 	dim: &Dim,
 	data: Metadata,
 ) -> Result<Option<Media>> {
-	let mut content = Vec::new();
-	let path = self.get_media_path_sha256(&data.key);
-	fs::File::open(path)
-		.await?
-		.read_to_end(&mut content)
-		.await?;
+	let Some(media) = self.get(mxc).await? else {
+		return tuwunel_core::Err!("Could not find original media.");
+	};
 
-	let Ok(image) = image::load_from_memory(&content) else {
+	let Ok(image) = image::load_from_memory(&media.content) else {
 		// Couldn't parse file to generate thumbnail, send original
-		return Ok(Some(into_media(data, content)));
+		return Ok(Some(into_media(data, media.content)));
 	};
 
 	if dim.width > image.width() || dim.height > image.height() {
-		return Ok(Some(into_media(data, content)));
+		return Ok(Some(into_media(data, media.content)));
 	}
 
 	let mut thumbnail_bytes = Vec::new();
@@ -136,9 +136,8 @@ async fn get_thumbnail_generate(
 		data.content_type.as_deref(),
 	)?;
 
-	let mut f = self.create_media_file(&thumbnail_key).await?;
-	f.write_all(&thumbnail_bytes).await?;
-
+	self.create_media_file(&thumbnail_key, &thumbnail_bytes)
+		.await?;
 	Ok(Some(into_media(data, thumbnail_bytes)))
 }
 
