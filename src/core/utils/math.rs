@@ -1,3 +1,4 @@
+mod expect_into;
 mod expected;
 mod tried;
 
@@ -5,7 +6,7 @@ use std::convert::TryFrom;
 
 pub use checked_ops::checked_ops;
 
-pub use self::{expected::Expected, tried::Tried};
+pub use self::{expect_into::ExpectInto, expected::Expected, tried::Tried};
 use crate::{Err, Error, Result, debug::type_name, err};
 
 /// Checked arithmetic expression. Returns a Result<R, Error::Arithmetic>
@@ -99,6 +100,11 @@ pub fn ruma_from_usize(val: usize) -> ruma::UInt {
 #[must_use]
 #[expect(clippy::as_conversions, clippy::cast_possible_truncation)]
 pub fn usize_from_u64_truncated(val: u64) -> usize { val as usize }
+
+#[inline]
+pub fn expect_into<Dst: TryFrom<Src>, Src>(src: Src) -> Dst {
+	try_into(src).expect("failed conversion from Src to Dst")
+}
 
 #[inline]
 pub fn try_into<Dst: TryFrom<Src>, Src>(src: Src) -> Result<Dst> {

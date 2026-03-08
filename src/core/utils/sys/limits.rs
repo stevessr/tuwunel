@@ -2,7 +2,7 @@
 use nix::sys::resource::{Resource, getrlimit};
 use nix::unistd::{SysconfVar, sysconf};
 
-use crate::{Result, apply, debug, utils::math::usize_from_u64_truncated};
+use crate::{Result, apply, debug, utils::math::ExpectInto};
 
 #[cfg(unix)]
 /// This is needed for opening lots of file descriptors, which tends to
@@ -55,7 +55,7 @@ pub fn maximize_thread_limit() -> Result { Ok(()) }
 #[inline]
 pub fn max_file_descriptors() -> Result<(usize, usize)> {
 	getrlimit(Resource::RLIMIT_NOFILE)
-		.map(apply!(2, usize_from_u64_truncated))
+		.map(apply!(2, ExpectInto::expect_into))
 		.map_err(Into::into)
 }
 
@@ -67,7 +67,7 @@ pub fn max_file_descriptors() -> Result<(usize, usize)> { Ok((usize::MAX, usize:
 #[inline]
 pub fn max_stack_size() -> Result<(usize, usize)> {
 	getrlimit(Resource::RLIMIT_STACK)
-		.map(apply!(2, usize_from_u64_truncated))
+		.map(apply!(2, ExpectInto::expect_into))
 		.map_err(Into::into)
 }
 
@@ -79,7 +79,7 @@ pub fn max_stack_size() -> Result<(usize, usize)> { Ok((usize::MAX, usize::MAX))
 #[inline]
 pub fn max_memory_locked() -> Result<(usize, usize)> {
 	getrlimit(Resource::RLIMIT_MEMLOCK)
-		.map(apply!(2, usize_from_u64_truncated))
+		.map(apply!(2, ExpectInto::expect_into))
 		.map_err(Into::into)
 }
 
@@ -96,7 +96,7 @@ pub fn max_memory_locked() -> Result<(usize, usize)> { Ok((usize::MIN, usize::MI
 #[inline]
 pub fn max_threads() -> Result<(usize, usize)> {
 	getrlimit(Resource::RLIMIT_NPROC)
-		.map(apply!(2, usize_from_u64_truncated))
+		.map(apply!(2, ExpectInto::expect_into))
 		.map_err(Into::into)
 }
 
