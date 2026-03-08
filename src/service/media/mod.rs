@@ -561,15 +561,10 @@ impl Service {
 	}
 
 	#[inline]
-	pub async fn get_metadata(&self, mxc: &Mxc<'_>) -> Option<FileMeta> {
+	pub async fn get_metadata(&self, mxc: &Mxc<'_>) -> Option<Metadata> {
 		self.db
 			.search_file_metadata(mxc, &Dim::default())
 			.await
-			.map(|metadata| FileMeta {
-				content_disposition: metadata.content_disposition,
-				content_type: metadata.content_type,
-				content: None,
-			})
 			.ok()
 	}
 
