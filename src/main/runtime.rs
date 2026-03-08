@@ -27,7 +27,7 @@ const WORKER_THREAD_MIN: usize = 2;
 const BLOCKING_THREAD_KEEPALIVE: u64 = 36;
 const BLOCKING_THREAD_NAME: &str = "tuwunel:spawned";
 const BLOCKING_THREAD_MAX: usize = 1024;
-const RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(10000);
+const RUNTIME_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 #[cfg(all(not(target_env = "msvc"), feature = "jemalloc"))]
 const DISABLE_MUZZY_THRESHOLD: usize = 8;
 

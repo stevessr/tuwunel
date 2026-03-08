@@ -50,8 +50,8 @@ pub(super) async fn handle_prev_pdu(
 	}
 
 	if self.is_backed_off(prev_id, Range {
-		start: Duration::from_secs(5 * 60),
-		end: Duration::from_secs(60 * 60 * 24),
+		start: Duration::from_mins(5),
+		end: Duration::from_hours(24),
 	}) {
 		debug!(?prev_id, "Backing off from prev_event");
 		return Ok(None);

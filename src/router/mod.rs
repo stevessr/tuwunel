@@ -1,5 +1,5 @@
 #![type_length_limit = "32768"] //TODO: reduce me
-#![expect(clippy::duration_suboptimal_units)] // remove after MSRV 1.91
+#![allow(unused_features)] // 1.96.0-nightly 2026-03-07 bug
 
 mod handle;
 mod layers;
