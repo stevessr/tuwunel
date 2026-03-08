@@ -285,6 +285,12 @@ features = [
 [workspace.dependencies.num-traits]
 version = "0.2"
 
+[workspace.dependencies.object_store]
+version = "0.13.1"
+features = [
+	"aws"
+]
+
 [workspace.dependencies.opentelemetry]
 version = "0.31"
 
