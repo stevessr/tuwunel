@@ -3,7 +3,7 @@ use std::{cmp, convert::TryFrom};
 use rocksdb::{Cache, DBRecoveryMode, Env, LogLevel, Options, statistics::StatsLevel};
 use tuwunel_core::{Config, Result, utils};
 
-use super::{cf_opts::cache_size_f64, logger::handle as handle_log};
+use super::{cf_opts::cache_size_f64, events::Events, logger::handle as handle_log};
 use crate::util::map_err;
 
 /// Create database-wide options suitable for opening the database. This also
@@ -22,6 +22,7 @@ pub(crate) fn db_options(config: &Config, env: &Env, row_cache: &Cache) -> Resul
 
 	// Logging
 	set_logging_defaults(&mut opts, config);
+	opts.add_event_listener(Events::new(config, env));
 
 	// Processing
 	opts.set_max_background_jobs(num_threads::<i32>(config)?);
