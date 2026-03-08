@@ -208,7 +208,7 @@ pub async fn handle_incoming_pdu<'a>(
 				},
 				| Err(e) => {
 					self.back_off(&prev_id);
-					warn!(?i, ?prev_id, "Prev event processing failed: {e}");
+					warn!(?i, ?prev_id, ?event_id, ?room_id, "Prev event processing failed: {e}");
 
 					Ok((prev_id, Err(e)))
 				},
