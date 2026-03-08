@@ -24,8 +24,10 @@ use crate::rooms::{
 	name = "upgrade",
 	level = "debug",
 	ret(level = "debug"),
-	skip_all
+	skip_all,
+	fields(lev = %recursion_level)
 )]
+#[expect(clippy::too_many_arguments)]
 pub(super) async fn upgrade_outlier_to_timeline_pdu(
 	&self,
 	origin: &ServerName,
@@ -33,6 +35,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 	incoming_pdu: PduEvent,
 	val: CanonicalJsonObject,
 	room_version: &RoomVersionId,
+	recursion_level: usize,
 	create_event_id: &EventId,
 ) -> Result<Option<(RawPduId, bool)>> {
 	// Skip the PDU if we already have it as a timeline event
@@ -79,7 +82,14 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 
 	if state_at_incoming_event.is_none() {
 		state_at_incoming_event = self
-			.fetch_state(origin, room_id, incoming_pdu.event_id(), room_version, create_event_id)
+			.fetch_state(
+				origin,
+				room_id,
+				incoming_pdu.event_id(),
+				room_version,
+				recursion_level,
+				create_event_id,
+			)
 			.boxed()
 			.await?;
 	}

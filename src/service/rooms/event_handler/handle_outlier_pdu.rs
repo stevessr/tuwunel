@@ -15,6 +15,13 @@ use super::check_room_id;
 use crate::rooms::state_res;
 
 #[implement(super::Service)]
+#[cfg_attr(unabridged, tracing::instrument(
+    name = "outlier",
+    level = "debug",
+    skip_all,
+    fields(lev = %recursion_level)
+))]
+#[expect(clippy::too_many_arguments)]
 pub(super) async fn handle_outlier_pdu(
 	&self,
 	origin: &ServerName,
@@ -22,9 +29,10 @@ pub(super) async fn handle_outlier_pdu(
 	event_id: &EventId,
 	mut pdu_json: CanonicalJsonObject,
 	room_version: &RoomVersionId,
+	recursion_level: usize,
 	auth_events_known: bool,
 ) -> Result<(PduEvent, CanonicalJsonObject)> {
-	debug!(?event_id, ?auth_events_known, "handle outlier");
+	debug!(?event_id, ?auth_events_known, %recursion_level, "handle outlier");
 
 	// 1. Remove unsigned field
 	pdu_json.remove("unsigned");
@@ -86,7 +94,14 @@ pub(super) async fn handle_outlier_pdu(
 		//    the auth events are also rejected "due to auth events"
 		// NOTE: Step 5 is not applied anymore because it failed too often
 		debug!("Fetching auth events");
-		Box::pin(self.fetch_auth(origin, room_id, event.auth_events(), room_version)).await;
+		Box::pin(self.fetch_auth(
+			origin,
+			room_id,
+			event.auth_events(),
+			room_version,
+			recursion_level,
+		))
+		.await;
 	}
 
 	// 6. Reject "due to auth events" if the event doesn't pass auth based on the

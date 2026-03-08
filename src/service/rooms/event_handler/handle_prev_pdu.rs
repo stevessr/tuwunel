@@ -26,6 +26,7 @@ pub(super) async fn handle_prev_pdu(
 	event_id: &EventId,
 	eventid_info: Option<(PduEvent, CanonicalJsonObject)>,
 	room_version: &RoomVersionId,
+	recursion_level: usize,
 	first_ts_in_room: MilliSecondsSinceUnixEpoch,
 	prev_id: &EventId,
 	create_event_id: &EventId,
@@ -63,6 +64,7 @@ pub(super) async fn handle_prev_pdu(
 		pdu,
 		json,
 		room_version,
+		recursion_level,
 		create_event_id,
 	)
 	.boxed()

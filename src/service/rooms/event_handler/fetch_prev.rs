@@ -18,7 +18,10 @@ use crate::rooms::state_res;
 #[tracing::instrument(
 	level = "debug",
 	skip_all,
-	fields(%origin),
+	fields(
+		%origin,
+		events = %initial_set.clone().count(),
+	),
 )]
 #[expect(clippy::type_complexity)]
 pub(super) async fn fetch_prev<'a, Events>(
@@ -27,10 +30,11 @@ pub(super) async fn fetch_prev<'a, Events>(
 	room_id: &RoomId,
 	initial_set: Events,
 	room_version: &RoomVersionId,
+	recursion_level: usize,
 	first_ts_in_room: MilliSecondsSinceUnixEpoch,
 ) -> Result<(Vec<OwnedEventId>, HashMap<OwnedEventId, (PduEvent, CanonicalJsonObject)>)>
 where
-	Events: Iterator<Item = &'a EventId> + Send,
+	Events: Iterator<Item = &'a EventId> + Clone + Send,
 {
 	let mut todo_outlier_stack: FuturesOrdered<_> = initial_set
 		.stream()
@@ -46,7 +50,7 @@ where
 		.map(async |event_id| {
 			let events = once(event_id.as_ref());
 			let auth = self
-				.fetch_auth(origin, room_id, events, room_version)
+				.fetch_auth(origin, room_id, events, room_version, recursion_level)
 				.await;
 
 			(event_id, auth)
@@ -104,7 +108,13 @@ where
 				let prev_prev = prev_prev.to_owned();
 				let fetch = async move {
 					let fetch = self
-						.fetch_auth(origin, room_id, once(prev_prev.as_ref()), room_version)
+						.fetch_auth(
+							origin,
+							room_id,
+							once(prev_prev.as_ref()),
+							room_version,
+							recursion_level,
+						)
 						.await;
 
 					(prev_prev, fetch)

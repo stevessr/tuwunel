@@ -124,9 +124,10 @@ pub async fn handle_incoming_pdu<'a>(
 	}
 
 	let room_version = room_version::from_create_event(create_event)?;
+	let recursion_level = 0;
 
 	let (incoming_pdu, pdu) = self
-		.handle_outlier_pdu(origin, room_id, event_id, pdu, &room_version, false)
+		.handle_outlier_pdu(origin, room_id, event_id, pdu, &room_version, recursion_level, false)
 		.await?;
 
 	// 8. if not timeline event: stop
@@ -158,7 +159,14 @@ pub async fn handle_incoming_pdu<'a>(
 	// 9. Fetch any missing prev events doing all checks listed here starting at 1.
 	//    These are timeline events
 	let (sorted_prev_events, mut eventid_info) = self
-		.fetch_prev(origin, room_id, incoming_pdu.prev_events(), &room_version, first_ts_in_room)
+		.fetch_prev(
+			origin,
+			room_id,
+			incoming_pdu.prev_events(),
+			&room_version,
+			recursion_level,
+			first_ts_in_room,
+		)
 		.await?;
 
 	trace!(
@@ -180,6 +188,7 @@ pub async fn handle_incoming_pdu<'a>(
 					event_id,
 					eventid_info,
 					&room_version,
+					recursion_level,
 					first_ts_in_room,
 					&prev_id,
 					create_event.event_id(),
@@ -221,6 +230,7 @@ pub async fn handle_incoming_pdu<'a>(
 		incoming_pdu,
 		pdu,
 		&room_version,
+		recursion_level,
 		create_event.event_id(),
 	)
 	.boxed()

@@ -10,7 +10,7 @@ use ruma::{
 	ServerName, api::federation::event::get_event,
 };
 use tuwunel_core::{
-	debug, debug_error, debug_warn, implement,
+	debug, debug_error, debug_warn, expected, implement,
 	matrix::{PduEvent, event::gen_event_id_canonical_json, pdu::MAX_AUTH_EVENTS},
 	trace,
 	utils::stream::{BroadbandExt, IterStream, ReadyExt},
@@ -30,7 +30,11 @@ use tuwunel_core::{
 #[tracing::instrument(
 	level = "debug",
 	skip_all,
-	fields(%origin),
+	fields(
+		%origin,
+		events = %events.clone().count(),
+		lev = %recursion_level,
+	),
 )]
 pub(super) async fn fetch_auth<'a, Events>(
 	&self,
@@ -38,9 +42,10 @@ pub(super) async fn fetch_auth<'a, Events>(
 	room_id: &RoomId,
 	events: Events,
 	room_version: &RoomVersionId,
+	recursion_level: usize,
 ) -> Vec<(PduEvent, Option<CanonicalJsonObject>)>
 where
-	Events: Iterator<Item = &'a EventId> + Send,
+	Events: Iterator<Item = &'a EventId> + Clone + Send,
 {
 	let events_with_auth_events: Vec<_> = events
 		.stream()
@@ -79,6 +84,7 @@ where
 						&next_id,
 						value.clone(),
 						room_version,
+						expected!(recursion_level + 1),
 						true,
 					));
 
