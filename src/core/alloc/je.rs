@@ -304,12 +304,22 @@ pub fn stats_reset() -> Result { notify(&mallctl!("stats.mutexes.reset")) }
 
 pub fn prof_reset() -> Result { notify(&mallctl!("prof.reset")) }
 
+pub fn prof_dump() -> Result { notify(&mallctl!("prof.dump")) }
+
+pub fn prof_gdump(enable: bool) -> Result<bool> {
+	set::<u8>(&mallctl!("prof.gdump"), enable.into()).map(is_nonzero!())
+}
+
 pub fn prof_enable(enable: bool) -> Result<bool> {
 	set::<u8>(&mallctl!("prof.active"), enable.into()).map(is_nonzero!())
 }
 
 pub fn is_prof_enabled() -> Result<bool> {
 	get::<u8>(&mallctl!("prof.active")).map(is_nonzero!())
+}
+
+pub fn prof_interval() -> Result<u64> {
+	get::<u64>(&mallctl!("prof.interval")).and_then(math::try_into)
 }
 
 pub fn trim<I: Into<Option<usize>> + Copy>(arena: I) -> Result {
