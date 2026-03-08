@@ -15,7 +15,10 @@ use ruma::{
 };
 use tuwunel_core::{
 	Err, Result, err,
-	utils::{self, content_disposition::make_content_disposition, math::ruma_from_usize},
+	utils::{
+		self, content_disposition::make_content_disposition, math::ruma_from_usize,
+		time::now_millis,
+	},
 };
 use tuwunel_service::{
 	Services,
@@ -100,20 +103,14 @@ pub(crate) async fn create_mxc_uri_route(
 		media_id: &utils::random_string(MXC_LENGTH),
 	};
 
-	let unused_expires_at = u64::try_from(
-		std::time::SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.expect("Time went backwards")
-			.as_millis(),
-	)?
-	.saturating_add(
+	// safe because even if it overflows, it will be greater than the current time
+	// and the unused media will be deleted anyway
+	let unused_expires_at = now_millis().saturating_add(
 		services
-				.server
-				.config
+			.server
+			.config
 			.media_create_unused_expiration_time
-			// safe because even if it overflows, it will be greater than the current time
-			// and the unused media will be deleted anyway
-				.saturating_mul(1000),
+			.saturating_mul(1000),
 	);
 	services
 		.media

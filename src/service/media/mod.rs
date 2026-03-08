@@ -6,22 +6,28 @@ mod remote;
 mod tests;
 mod thumbnail;
 use std::{
+	collections::HashMap,
 	path::PathBuf,
-	sync::Arc,
+	sync::{Arc, Mutex},
 	time::{Duration, Instant, SystemTime},
 };
 
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
-use ruma::{Mxc, OwnedMxcUri, UserId, http_headers::ContentDisposition};
+use http::StatusCode;
+use ruma::{
+	Mxc, OwnedMxcUri, OwnedUserId, UserId,
+	api::client::error::{ErrorKind, RetryAfter},
+	http_headers::ContentDisposition,
+};
 use tokio::{
 	fs,
 	io::{AsyncReadExt, AsyncWriteExt, BufReader},
 	sync::Notify,
 };
 use tuwunel_core::{
-	Err, Result, debug, debug_error, debug_info, debug_warn, err, error, trace,
-	utils::{self, MutexMap},
+	Err, Error, Result, debug, debug_error, debug_info, debug_warn, err, error, trace,
+	utils::{self, MutexMap, time::now_millis},
 	warn,
 };
 
@@ -34,20 +40,20 @@ pub struct FileMeta {
 	pub content_type: Option<String>,
 	pub content_disposition: Option<ContentDisposition>,
 }
+
 /// For MSC2246
-pub(super) struct MXCState {
+struct MXCState {
 	/// Save the notifier for each pending media upload
-	pub(super) notifiers: std::sync::Mutex<std::collections::HashMap<String, Arc<Notify>>>,
+	notifiers: Mutex<HashMap<String, Arc<Notify>>>,
 	/// Save the ratelimiter for each user
-	pub(super) ratelimiter:
-		std::sync::Mutex<std::collections::HashMap<ruma::OwnedUserId, (Instant, f64)>>,
+	ratelimiter: Mutex<HashMap<OwnedUserId, (Instant, f64)>>,
 }
 
 pub struct Service {
-	url_preview_mutex: MutexMap<String, ()>,
-	mxc_state: MXCState,
 	pub(super) db: Data,
 	services: Arc<crate::services::OnceServices>,
+	url_preview_mutex: MutexMap<String, ()>,
+	mxc_state: MXCState,
 }
 
 /// generated MXC ID (`media-id`) length
@@ -63,13 +69,13 @@ pub const CORP_CROSS_ORIGIN: &str = "cross-origin";
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		Ok(Arc::new(Self {
-			url_preview_mutex: MutexMap::new(),
-			mxc_state: MXCState {
-				notifiers: std::sync::Mutex::new(std::collections::HashMap::new()),
-				ratelimiter: std::sync::Mutex::new(std::collections::HashMap::new()),
-			},
 			db: Data::new(args.db),
 			services: args.services.clone(),
+			url_preview_mutex: MutexMap::new(),
+			mxc_state: MXCState {
+				notifiers: Mutex::new(HashMap::new()),
+				ratelimiter: Mutex::new(HashMap::new()),
+			},
 		}))
 	}
 
@@ -112,10 +118,10 @@ impl Service {
 				*last_time = now;
 				*tokens = new_tokens - 1.0;
 			} else {
-				return Err(tuwunel_core::Error::Request(
-					ruma::api::client::error::ErrorKind::LimitExceeded { retry_after: None },
+				return Err(Error::Request(
+					ErrorKind::LimitExceeded { retry_after: None },
 					"Too many pending media creation requests.".into(),
-					http::StatusCode::TOO_MANY_REQUESTS,
+					StatusCode::TOO_MANY_REQUESTS,
 				));
 			}
 		}
@@ -126,25 +132,19 @@ impl Service {
 
 		// Check if the user has reached the maximum number of pending media uploads
 		if current_uploads >= max_uploads {
-			let retry_after = earliest_expiration.saturating_sub(u64::try_from(
-				SystemTime::now()
-					.duration_since(std::time::UNIX_EPOCH)
-					.unwrap()
-					.as_millis(),
-			)?);
-			return Err(tuwunel_core::Error::Request(
-				ruma::api::client::error::ErrorKind::LimitExceeded {
-					retry_after: Some(ruma::api::client::error::RetryAfter::Delay(
-						Duration::from_millis(retry_after),
-					)),
+			let retry_after = earliest_expiration.saturating_sub(now_millis());
+			return Err(Error::Request(
+				ErrorKind::LimitExceeded {
+					retry_after: Some(RetryAfter::Delay(Duration::from_millis(retry_after))),
 				},
 				"Maximum number of pending media uploads reached.".into(),
-				http::StatusCode::TOO_MANY_REQUESTS,
+				StatusCode::TOO_MANY_REQUESTS,
 			));
 		}
 
 		self.db
 			.insert_pending_mxc(mxc, user, unused_expires_at);
+
 		Ok(())
 	}
 
@@ -156,9 +156,8 @@ impl Service {
 		content_disposition: Option<&ContentDisposition>,
 		content_type: Option<&str>,
 		file: &[u8],
-	) -> Result<()> {
-		let pending = self.db.search_pending_mxc(mxc).await;
-		let Some((owner_id, expires_at)) = pending else {
+	) -> Result {
+		let Some((owner_id, expires_at)) = self.db.search_pending_mxc(mxc).await else {
 			if self.get_metadata(mxc).await.is_some() {
 				return Err!(Request(CannotOverwriteMedia("Media ID already has content")));
 			}
@@ -170,13 +169,7 @@ impl Service {
 			return Err!(Request(Forbidden("You did not create this media ID")));
 		}
 
-		let current_time = u64::try_from(
-			SystemTime::now()
-				.duration_since(std::time::UNIX_EPOCH)
-				.expect("Time went backwards")
-				.as_millis(),
-		)?;
-
+		let current_time = now_millis();
 		if expires_at < current_time {
 			return Err!(Request(NotFound("Pending media ID expired")));
 		}
@@ -189,8 +182,7 @@ impl Service {
 		if let Some(notifier) = self
 			.mxc_state
 			.notifiers
-			.lock()
-			.unwrap()
+			.lock()?
 			.get(&mxc.to_string())
 			.cloned()
 		{
@@ -315,10 +307,9 @@ impl Service {
 			return Ok(Some(meta));
 		}
 
-		let pending = self.db.search_pending_mxc(mxc).await;
-		if pending.is_none() {
+		let Some(_pending) = self.db.search_pending_mxc(mxc).await else {
 			return Ok(None);
-		}
+		};
 
 		let notifier = {
 			let mut map = self.mxc_state.notifiers.lock().unwrap();
@@ -348,10 +339,9 @@ impl Service {
 			return Ok(Some(meta));
 		}
 
-		let pending = self.db.search_pending_mxc(mxc).await;
-		if pending.is_none() {
+		let Some(_pending) = self.db.search_pending_mxc(mxc).await else {
 			return Ok(None);
-		}
+		};
 
 		let notifier = {
 			let mut map = self.mxc_state.notifiers.lock().unwrap();

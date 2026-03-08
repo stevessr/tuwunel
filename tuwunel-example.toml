@@ -320,15 +320,18 @@
 #
 #max_request_size = 24 MiB
 
-# Maximum number of concurrently pending (asynchronous) media uploads a user can have.
+# Maximum number of concurrently pending (asynchronous) media uploads a
+# user can have.
 #
 #max_pending_media_uploads = 5
 
-# The time in seconds before an unused pending MXC URI expires and is removed.
+# The time in seconds before an unused pending MXC URI expires and is
+# removed.
 #
 #media_create_unused_expiration_time = 86400 (24 hours)
 
-# The maximum number of media create requests per second allowed from a single user.
+# The maximum number of media create requests per second allowed from a
+# single user.
 #
 #rc_media_create_per_second = 10
 

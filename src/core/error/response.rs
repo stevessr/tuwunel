@@ -57,23 +57,23 @@ pub(super) fn bad_request_code(kind: &ErrorKind) -> StatusCode {
 	use ErrorKind::*;
 
 	match kind {
+		// 504
+		| NotYetUploaded => StatusCode::GATEWAY_TIMEOUT,
+
 		// 429
 		| LimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 
-		// 409
-		| CannotOverwriteMedia => StatusCode::CONFLICT,
-
 		// 413
 		| TooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+
+		// 409
+		| CannotOverwriteMedia => StatusCode::CONFLICT,
 
 		// 405
 		| Unrecognized => StatusCode::METHOD_NOT_ALLOWED,
 
 		// 404
 		| NotFound | NotImplemented | FeatureDisabled => StatusCode::NOT_FOUND,
-
-		// 504
-		| NotYetUploaded => StatusCode::GATEWAY_TIMEOUT,
 
 		// 403
 		| GuestAccessForbidden

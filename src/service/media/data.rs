@@ -3,7 +3,7 @@ use std::{sync::Arc, time::Duration};
 use futures::{StreamExt, pin_mut};
 use ruma::{Mxc, OwnedMxcUri, UserId, http_headers::ContentDisposition};
 use tuwunel_core::{
-	Err, Result, debug, debug_info, err,
+	Err, Result, debug, debug_error, debug_info, err, error,
 	utils::{ReadyExt, str_from_bytes, stream::TryIgnore, string_from_bytes},
 };
 use tuwunel_database::{Database, Interfix, Map, serialize_key};
@@ -61,13 +61,9 @@ impl Data {
 		user: &UserId,
 		unused_expires_at: u64,
 	) {
+		debug!(?mxc, ?user, ?unused_expires_at, "Inserting pending MXC");
+
 		let key = mxc.to_string();
-		tracing::info!(
-			"Inserting pending MXC: key={}, user={}, expires_at={}",
-			key,
-			user,
-			unused_expires_at
-		);
 		// 8 bytes for unused_expires_at (u64), 1 byte for 0xFF, and
 		// user.as_bytes().len() for user value: [unused_expires_at, 0xFF, user]
 		let mut value = Vec::with_capacity(
@@ -119,12 +115,13 @@ impl Data {
 		&self,
 		mxc: &Mxc<'_>,
 	) -> Option<(ruma::OwnedUserId, u64)> {
+		debug!(?mxc, "Searching for pending MXC");
+
 		let key = mxc.to_string();
-		tracing::info!("Searching for pending MXC: key={}", key);
 		let value = match self.mediaid_pending.get(key.as_bytes()).await {
 			| Ok(v) => v,
 			| Err(e) => {
-				tracing::info!("pending MXC not found or error for {}: {}", key, e);
+				debug_error!(?key, "pending MXC not found or error: {e}");
 				return None;
 			},
 		};
@@ -134,30 +131,26 @@ impl Data {
 		let expires_at = match expires_at_bytes.try_into() {
 			| Ok(v) => u64::from_be_bytes(v),
 			| Err(_) => {
-				tracing::error!("Failed to parse expires_at for {}", key);
+				debug_error!(?key, "Failed to parse expires_at for key");
 				return None;
 			},
 		};
 		let user_id_bytes = parts.next()?;
 
 		let Ok(user_str) = str_from_bytes(user_id_bytes) else {
-			tracing::error!("Failed to parse user_str for {}", key);
+			error!(?key, "Failed to parse user_str for key");
 			return None;
 		};
 		let user_id = match user_str.try_into() {
 			| Ok(v) => v,
 			| Err(e) => {
-				tracing::error!("Failed to parse user_id for {}: {}", key, e);
+				error!(?key, "Failed to parse user_id for key: {e}");
 				return None;
 			},
 		};
 
-		tracing::info!(
-			"Found pending MXC for {}: user={}, expires_at={}",
-			key,
-			user_id,
-			expires_at
-		);
+		debug!(?key, ?user_id, ?expires_at, "Found pending MXC");
+
 		Some((user_id, expires_at))
 	}
 
