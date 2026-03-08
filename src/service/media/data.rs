@@ -70,7 +70,12 @@ impl Data {
 		);
 		// 8 bytes for unused_expires_at (u64), 1 byte for 0xFF, and
 		// user.as_bytes().len() for user value: [unused_expires_at, 0xFF, user]
-		let mut value = Vec::with_capacity(user.as_bytes().len() + 9);
+		let mut value = Vec::with_capacity(
+			user.as_bytes()
+				.len()
+				.checked_add(9)
+				.expect("User len too large,capacity overflow!"),
+		);
 		value.extend_from_slice(&unused_expires_at.to_be_bytes());
 		value.push(0xFF);
 		value.extend_from_slice(user.as_bytes());
@@ -80,7 +85,7 @@ impl Data {
 
 	/// Count the number of pending MXC URIs for a specific user
 	pub(super) async fn count_pending_mxc_for_user(&self, user: &UserId) -> (usize, u64) {
-		let mut count = 0;
+		let mut count: usize = 0;
 		let mut earliest_expiration = u64::MAX;
 		let user_bytes = user.as_bytes();
 
@@ -89,18 +94,19 @@ impl Data {
 			.ignore_err()
 			.ready_for_each(|(_key, value)| {
 				let mut parts = value.splitn(2, |&b| b == 0xFF);
-				if let Some(expires_at_bytes) = parts.next() {
-					if let Some(user_id_bytes) = parts.next() {
-						if user_id_bytes == user_bytes {
-							count += 1;
-							let expires_at = u64::from_be_bytes(
-								expires_at_bytes.try_into().unwrap_or([0u8; 8]),
-							);
-							if expires_at < earliest_expiration {
-								earliest_expiration = expires_at;
-							}
+				match (parts.next(), parts.next()) {
+					| (Some(expires_at_bytes), Some(user_id_bytes))
+						if user_id_bytes == user_bytes =>
+					{
+						// safe to add 1 even if count = usize::MAX it also > max_uploads
+						count = count.saturating_add(1_usize);
+						let expires_at =
+							u64::from_be_bytes(expires_at_bytes.try_into().unwrap_or([0_u8; 8]));
+						if expires_at < earliest_expiration {
+							earliest_expiration = expires_at;
 						}
-					}
+					},
+					| _ => {},
 				}
 			})
 			.await;
@@ -133,12 +139,10 @@ impl Data {
 			},
 		};
 		let user_id_bytes = parts.next()?;
-		let user_str = match str_from_bytes(user_id_bytes) {
-			| Ok(v) => v,
-			| Err(_) => {
-				tracing::error!("Failed to parse user_str for {}", key);
-				return None;
-			},
+
+		let Ok(user_str) = str_from_bytes(user_id_bytes) else {
+			tracing::error!("Failed to parse user_str for {}", key);
+			return None;
 		};
 		let user_id = match user_str.try_into() {
 			| Ok(v) => v,

@@ -93,8 +93,8 @@ impl Service {
 		let config = &self.services.server.config;
 
 		// Rate limiting (rc_media_create)
-		let rate = config.rc_media_create_per_second as f64;
-		let burst = config.rc_media_create_burst_count as f64;
+		let rate = f64::from(config.rc_media_create_per_second);
+		let burst = f64::from(config.rc_media_create_burst_count);
 
 		// Check rate limiting
 		if rate > 0.0 && burst > 0.0 {
@@ -106,7 +106,7 @@ impl Service {
 				.or_insert_with(|| (now, burst));
 
 			let elapsed = now.duration_since(*last_time).as_secs_f64();
-			let new_tokens = (*tokens + elapsed * rate).min(burst);
+			let new_tokens = elapsed.mul_add(rate, *tokens).min(burst);
 
 			if new_tokens >= 1.0 {
 				*last_time = now;
@@ -126,12 +126,12 @@ impl Service {
 
 		// Check if the user has reached the maximum number of pending media uploads
 		if current_uploads >= max_uploads {
-			let retry_after = earliest_expiration.saturating_sub(
+			let retry_after = earliest_expiration.saturating_sub(u64::try_from(
 				SystemTime::now()
 					.duration_since(std::time::UNIX_EPOCH)
 					.unwrap()
-					.as_millis() as u64,
-			);
+					.as_millis(),
+			)?);
 			return Err(tuwunel_core::Error::Request(
 				ruma::api::client::error::ErrorKind::LimitExceeded {
 					retry_after: Some(ruma::api::client::error::RetryAfter::Delay(
@@ -166,10 +166,12 @@ impl Service {
 			return Err!(Request(Forbidden("You did not create this media ID")));
 		}
 
-		let current_time = SystemTime::now()
-			.duration_since(std::time::UNIX_EPOCH)
-			.expect("Time went backwards")
-			.as_millis() as u64;
+		let current_time = u64::try_from(
+			SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.expect("Time went backwards")
+				.as_millis(),
+		)?;
 
 		if expires_at < current_time {
 			return Err!(Request(NotFound("Pending media ID expired")));

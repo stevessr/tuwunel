@@ -100,17 +100,21 @@ pub(crate) async fn create_mxc_uri_route(
 		media_id: &utils::random_string(MXC_LENGTH),
 	};
 
-	let unused_expires_at = (std::time::SystemTime::now()
-		.duration_since(std::time::UNIX_EPOCH)
-		.expect("Time went backwards")
-		.as_millis() as u64)
-		.saturating_add(
-			services
+	let unused_expires_at = u64::try_from(
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.expect("Time went backwards")
+			.as_millis(),
+	)?
+	.saturating_add(
+		services
 				.server
 				.config
-				.media_create_unused_expiration_time
-				* 1000,
-		);
+			.media_create_unused_expiration_time
+			// safe because even if it overflows, it will be greater than the current time
+			// and the unused media will be deleted anyway
+				.saturating_mul(1000),
+	);
 	services
 		.media
 		.create_pending(&mxc, user, unused_expires_at)
