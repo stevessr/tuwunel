@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+	net::{SocketAddr, TcpListener},
+	sync::Arc,
+};
 
 use axum::Router;
 use axum_server::Handle;
@@ -12,6 +15,7 @@ pub(super) async fn serve(
 	handle: &Handle<SocketAddr>,
 	join_set: &mut JoinSet<core::result::Result<(), std::io::Error>>,
 	addrs: &[SocketAddr],
+	listeners: &Vec<TcpListener>,
 ) -> Result {
 	let tls = &server.config.tls;
 	let certs = tls.certs.as_ref().unwrap();
@@ -30,12 +34,16 @@ pub(super) async fn serve(
 		.clone()
 		.into_make_service_with_connect_info::<SocketAddr>();
 	if tls.dual_protocol {
-		for addr in addrs {
+		for listener in listeners {
 			join_set.spawn_on(
-				axum_server_dual_protocol::bind_dual_protocol(*addr, conf.clone())
-					.set_upgrade(false)
-					.handle(handle.clone())
-					.serve(app.clone()),
+				axum_server_dual_protocol::from_tcp_dual_protocol(
+					listener.try_clone().unwrap(),
+					conf.clone(),
+				)
+				.unwrap()
+				.set_upgrade(false)
+				.handle(handle.clone())
+				.serve(app.clone()),
 				server.runtime(),
 			);
 		}
@@ -45,9 +53,10 @@ pub(super) async fn serve(
 			 (HTTP) connections too (insecure!)",
 		);
 	} else {
-		for addr in addrs {
+		for listener in listeners {
 			join_set.spawn_on(
-				axum_server::bind_rustls(*addr, conf.clone())
+				axum_server::from_tcp_rustls(listener.try_clone().unwrap(), conf.clone())
+					.unwrap()
 					.handle(handle.clone())
 					.serve(app.clone()),
 				server.runtime(),

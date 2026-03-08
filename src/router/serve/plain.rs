@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+	net::{SocketAddr, TcpListener},
+	sync::Arc,
+};
 
 use axum::Router;
 use axum_server::Handle;
@@ -11,12 +14,14 @@ pub(super) fn serve(
 	handle: &Handle<SocketAddr>,
 	join_set: &mut JoinSet<Result<(), std::io::Error>>,
 	addrs: &[SocketAddr],
+	listeners: &Vec<TcpListener>,
 ) {
 	let router = router
 		.clone()
 		.into_make_service_with_connect_info::<SocketAddr>();
-	for addr in addrs {
-		let acceptor = axum_server::bind(*addr)
+	for listener in listeners {
+		let acceptor = axum_server::from_tcp(listener.try_clone().unwrap())
+			.unwrap()
 			.handle(handle.clone())
 			.serve(router.clone());
 		join_set.spawn_on(acceptor, server.runtime());
