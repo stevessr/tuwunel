@@ -36,7 +36,7 @@ pub use self::thumbnail::Dim;
 
 #[derive(Debug)]
 pub struct FileMeta {
-	pub content: Option<Vec<u8>>,
+	pub content: Vec<u8>,
 	pub content_type: Option<String>,
 	pub content_disposition: Option<ContentDisposition>,
 }
@@ -290,7 +290,7 @@ impl Service {
 					.await?;
 
 				Ok(Some(FileMeta {
-					content: Some(content),
+					content,
 					content_type,
 					content_disposition,
 				}))

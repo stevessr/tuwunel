@@ -42,7 +42,7 @@ pub(crate) async fn get_content_route(
 	let content_disposition =
 		make_content_disposition(content_disposition.as_ref(), content_type.as_deref(), None);
 	let content = Content {
-		file: content.expect("entire file contents"),
+		file: content,
 		content_type: content_type.map(Into::into),
 		content_disposition: Some(content_disposition),
 	};
@@ -85,7 +85,7 @@ pub(crate) async fn get_content_thumbnail_route(
 	let content_disposition =
 		make_content_disposition(content_disposition.as_ref(), content_type.as_deref(), None);
 	let content = Content {
-		file: content.expect("entire file contents"),
+		file: content,
 		content_type: content_type.map(Into::into),
 		content_disposition: Some(content_disposition),
 	};
