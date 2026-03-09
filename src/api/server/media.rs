@@ -7,7 +7,7 @@ use ruma::{
 	},
 };
 use tuwunel_core::{Err, Result, utils::content_disposition::make_content_disposition};
-use tuwunel_service::media::{Dim, FileMeta};
+use tuwunel_service::media::{Dim, Media};
 
 use crate::Ruma;
 
@@ -30,7 +30,7 @@ pub(crate) async fn get_content_route(
 		media_id: &body.media_id,
 	};
 
-	let Some(FileMeta {
+	let Some(Media {
 		content,
 		content_type,
 		content_disposition,
@@ -73,7 +73,7 @@ pub(crate) async fn get_content_thumbnail_route(
 		media_id: &body.media_id,
 	};
 
-	let Some(FileMeta {
+	let Some(Media {
 		content,
 		content_type,
 		content_disposition,

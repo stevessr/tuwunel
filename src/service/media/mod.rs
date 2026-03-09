@@ -35,7 +35,7 @@ use self::data::{Data, Metadata};
 pub use self::thumbnail::Dim;
 
 #[derive(Debug)]
-pub struct FileMeta {
+pub struct Media {
 	pub content: Vec<u8>,
 	pub content_type: Option<String>,
 	pub content_disposition: Option<ContentDisposition>,
@@ -275,8 +275,8 @@ impl Service {
 		Ok(deletion_count)
 	}
 
-	/// Downloads a file.
-	pub async fn get(&self, mxc: &Mxc<'_>) -> Result<Option<FileMeta>> {
+	/// Downloads a media file.
+	pub async fn get(&self, mxc: &Mxc<'_>) -> Result<Option<Media>> {
 		match self
 			.db
 			.search_file_metadata(mxc, &Dim::default())
@@ -289,7 +289,7 @@ impl Service {
 					.read_to_end(&mut content)
 					.await?;
 
-				Ok(Some(FileMeta {
+				Ok(Some(Media {
 					content,
 					content_type,
 					content_disposition,
@@ -304,7 +304,7 @@ impl Service {
 		&self,
 		mxc: &Mxc<'_>,
 		timeout_duration: Duration,
-	) -> Result<Option<FileMeta>> {
+	) -> Result<Option<Media>> {
 		if let Some(meta) = self.get(mxc).await? {
 			return Ok(Some(meta));
 		}
@@ -337,7 +337,7 @@ impl Service {
 		mxc: &Mxc<'_>,
 		dim: &Dim,
 		timeout_duration: Duration,
-	) -> Result<Option<FileMeta>> {
+	) -> Result<Option<Media>> {
 		if let Some(meta) = self.get_thumbnail(mxc, dim).await? {
 			return Ok(Some(meta));
 		}
