@@ -10,7 +10,11 @@ use ruma::{
 };
 use tuwunel_core::{
 	Err, Error, Result, debug_error, err, implement,
-	utils::{ReadyExt, stream::TryIgnore, string::Unquoted},
+	utils::{
+		ReadyExt,
+		stream::{TryExpect, TryIgnore, TryReadyExt},
+		string::Unquoted,
+	},
 };
 use tuwunel_database::{Deserialized, Ignore, Json};
 
@@ -117,26 +121,23 @@ pub async fn take_one_time_key(
 		.db
 		.onetimekeyid_onetimekeys
 		.raw_stream_prefix(&prefix)
-		.ignore_err()
-		.map(|(key, val)| {
+		.ready_and_then(|(key, val)| {
 			self.db.onetimekeyid_onetimekeys.remove(key);
 
 			let key = key
 				.rsplit(|&b| b == 0xFF)
 				.next()
-				.ok_or_else(|| err!(Database("OneTimeKeyId in db is invalid.")))
-				.unwrap();
+				.ok_or_else(|| err!(Database("OneTimeKeyId in db is invalid.")))?;
 
 			let key = serde_json::from_slice(key)
-				.map_err(|e| err!(Database("OneTimeKeyId in db is invalid. {e}")))
-				.unwrap();
+				.map_err(|e| err!(Database("OneTimeKeyId in db is invalid. {e}")))?;
 
 			let val = serde_json::from_slice(val)
-				.map_err(|e| err!(Database("OneTimeKeys in db are invalid. {e}")))
-				.unwrap();
+				.map_err(|e| err!(Database("OneTimeKeys in db are invalid. {e}")))?;
 
-			(key, val)
-		});
+			Ok((key, val))
+		})
+		.expect_ok();
 
 	pin_mut!(one_time_keys);
 	one_time_keys

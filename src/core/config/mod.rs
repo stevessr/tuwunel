@@ -3297,7 +3297,7 @@ fn default_jaeger_filter() -> String {
 fn default_tracing_flame_output_path() -> String { "./tracing.folded".to_owned() }
 
 fn default_trusted_servers() -> Vec<OwnedServerName> {
-	vec![OwnedServerName::try_from("matrix.org").unwrap()]
+	vec![OwnedServerName::try_from("matrix.org").expect("valid ServerName")]
 }
 
 /// do debug logging by default for debug builds
@@ -3499,7 +3499,7 @@ fn default_client_sync_timeout_max() -> u64 { 90000 }
 fn default_access_token_ttl() -> u64 { 604_800 }
 
 fn default_deprioritize_joins_through_servers() -> RegexSet {
-	RegexSet::new([r"matrix\.org"]).unwrap()
+	RegexSet::new([r"matrix\.org"]).expect("valid set of regular expressions")
 }
 
 fn default_one_time_key_limit() -> usize { 256 }

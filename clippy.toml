@@ -7,6 +7,8 @@ excessive-nesting-threshold = 8
 type-complexity-threshold = 250             # reduce me to ~200
 cognitive-complexity-threshold = 100        # TODO reduce me ALARA
 
+allow-unwrap-in-tests = true
+
 #disallowed-macros = [
 #	{ path = "log::error", reason = "use tuwunel_core::error" },
 #	{ path = "log::warn", reason = "use tuwunel_core::warn" },

@@ -14,14 +14,26 @@ pub(super) async fn serve(
 	addrs: &[SocketAddr],
 ) -> Result {
 	let tls = &server.config.tls;
-	let certs = tls.certs.as_ref().unwrap();
-	let key = tls.key.as_ref().unwrap();
+
+	let certs = tls
+		.certs
+		.as_ref()
+		.ok_or_else(|| err!(Config("tls.certs", "Invalid or missing TLS certificates")))?;
+
+	let key = tls
+		.key
+		.as_ref()
+		.ok_or_else(|| err!(Config("tls.key", "Invalid or missingTLS key")))?;
 
 	info!(
 		"Note: It is strongly recommended that you use a reverse proxy instead of running \
 		 tuwunel directly with TLS."
 	);
-	debug!("Using direct TLS. Certificate path {certs} and certificate private key path {key}",);
+
+	debug!(
+		"Using direct TLS. Certificate path {certs:?} and certificate private key path {key:?}"
+	);
+
 	let conf = RustlsConfig::from_pem_file(certs, key)
 		.await
 		.map_err(|e| err!(Config("tls", "Failed to load certificates or key: {e}")))?;
@@ -29,6 +41,7 @@ pub(super) async fn serve(
 	let app = app
 		.clone()
 		.into_make_service_with_connect_info::<SocketAddr>();
+
 	if tls.dual_protocol {
 		for addr in addrs {
 			join_set.spawn_on(

@@ -35,20 +35,19 @@ pub(crate) async fn turn_server_route(
 		)
 		.expect("time is valid");
 
-		let user = body.sender_user.unwrap_or_else(|| {
+		let random_user_id = || {
 			UserId::parse_with_server_name(
 				utils::random_string(RANDOM_USER_ID_LENGTH).to_lowercase(),
 				&services.server.name,
 			)
-			.unwrap()
-		});
+		};
 
+		let user = body.sender_user.map_or_else(random_user_id, Ok)?;
 		let username: String = format!("{}:{}", expiry.get(), user);
-
 		let mut mac = HmacSha1::new_from_slice(turn_secret.as_bytes())
 			.expect("HMAC can take key of any size");
-		mac.update(username.as_bytes());
 
+		mac.update(username.as_bytes());
 		let password: String = general_purpose::STANDARD.encode(mac.finalize().into_bytes());
 
 		(username, password)

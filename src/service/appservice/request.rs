@@ -52,13 +52,18 @@ where
 		.map(BytesMut::freeze);
 
 	let mut parts = http_request.uri().clone().into_parts();
-	let old_path_and_query = parts.path_and_query.unwrap().as_str().to_owned();
+	let old_path_and_query = parts
+		.path_and_query
+		.expect("valid request uri path and query")
+		.as_str()
+		.to_owned();
+
 	let symbol = if old_path_and_query.contains('?') { "&" } else { "?" };
 
 	parts.path_and_query = Some(
 		(old_path_and_query + symbol + "access_token=" + hs_token)
 			.parse()
-			.unwrap(),
+			.expect("valid path and query"),
 	);
 	*http_request.uri_mut() = parts
 		.try_into()

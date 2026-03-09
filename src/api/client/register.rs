@@ -233,8 +233,8 @@ pub(crate) async fn register_route(
 			let proposed_user_id = UserId::parse_with_server_name(
 				utils::random_string(RANDOM_USER_ID_LENGTH).to_lowercase(),
 				services.globals.server_name(),
-			)
-			.unwrap();
+			)?;
+
 			if !services.users.exists(&proposed_user_id).await {
 				break proposed_user_id;
 			}
@@ -295,8 +295,7 @@ pub(crate) async fn register_route(
 				let (worked, uiaainfo) = services
 					.uiaa
 					.try_auth(
-						&UserId::parse_with_server_name("", services.globals.server_name())
-							.unwrap(),
+						&UserId::parse_with_server_name("", services.globals.server_name())?,
 						"".into(),
 						auth,
 						&uiaainfo,
@@ -311,8 +310,7 @@ pub(crate) async fn register_route(
 				| Some(ref json) => {
 					uiaainfo.session = Some(utils::random_string(SESSION_ID_LENGTH));
 					services.uiaa.create(
-						&UserId::parse_with_server_name("", services.globals.server_name())
-							.unwrap(),
+						&UserId::parse_with_server_name("", services.globals.server_name())?,
 						"".into(),
 						&uiaainfo,
 						json,

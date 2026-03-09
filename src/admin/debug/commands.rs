@@ -25,6 +25,7 @@ use tuwunel_core::{
 	tokio_metrics::TaskMonitor,
 	trace, utils,
 	utils::{
+		math::Expected,
 		stream::{IterStream, ReadyExt},
 		string::EMPTY,
 		time::now_secs,
@@ -377,7 +378,7 @@ pub(super) async fn sign_json(&self) -> Result {
 		return Err!("Expected code block in command body. Add --help for details.");
 	}
 
-	let string = self.body[1..self.body.len().checked_sub(1).unwrap()].join("\n");
+	let string = self.body[1..self.body.len().expected_sub(1)].join("\n");
 	let mut value = serde_json::from_str(&string).map_err(|e| err!("Invalid json: {e}"))?;
 
 	self.services.server_keys.sign_json(&mut value)?;
@@ -395,7 +396,7 @@ pub(super) async fn verify_json(&self) -> Result {
 		return Err!("Expected code block in command body. Add --help for details.");
 	}
 
-	let string = self.body[1..self.body.len().checked_sub(1).unwrap()].join("\n");
+	let string = self.body[1..self.body.len().expected_sub(1)].join("\n");
 
 	let value = serde_json::from_str::<CanonicalJsonObject>(&string)
 		.map_err(|e| err!("Invalid json: {e}"))?;

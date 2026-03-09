@@ -36,8 +36,7 @@ pub async fn redact_pdu<Pdu: Event + Send + Sync>(
 
 	let body = pdu["content"]
 		.as_object()
-		.unwrap()
-		.get("body")
+		.and_then(|obj| obj.get("body"))
 		.and_then(|body| body.as_str());
 
 	if let Some(body) = body {
@@ -46,7 +45,7 @@ pub async fn redact_pdu<Pdu: Event + Send + Sync>(
 			.deindex_pdu(shortroomid, &pdu_id, body);
 	}
 
-	let room_id = RoomId::parse(pdu["room_id"].as_str().unwrap()).unwrap();
+	let room_id: &RoomId = pdu.get("room_id").try_into()?;
 
 	let room_version_id = self
 		.services

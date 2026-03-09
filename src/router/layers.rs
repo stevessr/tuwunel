@@ -159,7 +159,8 @@ fn cors_layer(server: &Server) -> CorsLayer {
 		header::AUTHORIZATION,
 		header::CONTENT_TYPE,
 		header::ORIGIN,
-		HeaderName::from_lowercase(b"x-requested-with").unwrap(),
+		HeaderName::from_lowercase(b"x-requested-with")
+			.expect("valid HTTP HeaderName from lowercase."),
 	];
 
 	let allow_origin_list = server

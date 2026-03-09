@@ -1,12 +1,11 @@
-use std::{
-	sync::Arc,
-	time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use ruma::{CanonicalJsonObject, EventId};
 use tuwunel_core::{
-	Result, debug_info, expected, implement, matrix::pdu::PduEvent, utils::TryReadyExt,
+	Result, debug_info, expected, implement,
+	matrix::pdu::PduEvent,
+	utils::{TryReadyExt, time::now},
 };
 use tuwunel_database::{Deserialized, Json, Map};
 
@@ -35,11 +34,7 @@ impl crate::Service for Service {
 			if retention_seconds != 0 {
 				debug_info!("Cleaning up retained events");
 
-				let now = SystemTime::now()
-					.duration_since(UNIX_EPOCH)
-					.unwrap()
-					.as_secs();
-
+				let now = now().as_secs();
 				let count = self
 					.timeredacted_eventid
 					.keys::<(u64, &EventId)>()
@@ -104,10 +99,7 @@ pub async fn save_original_pdu(
 		return;
 	}
 
-	let now = SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.unwrap()
-		.as_secs();
+	let now = now().as_secs();
 
 	self.eventid_originalpdu
 		.raw_put(event_id, Json(pdu));
