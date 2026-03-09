@@ -1,10 +1,8 @@
-use std::{fs::File, io::Read, str};
-
 use nix::sys::resource::Usage;
 #[cfg(unix)]
 use nix::sys::resource::{UsageWho, getrusage};
 
-use crate::{Error, Result, arrayvec::ArrayVec, expected};
+use crate::{Result, expected};
 
 pub fn virt() -> Result<usize> {
 	Ok(statm_bytes()?
@@ -46,6 +44,10 @@ pub fn statm_bytes() -> Result<impl Iterator<Item = usize>> {
 #[cfg(target_os = "linux")]
 #[inline]
 pub fn statm() -> Result<impl Iterator<Item = usize>> {
+	use std::{fs::File, io::Read, str};
+
+	use crate::{Error, arrayvec::ArrayVec};
+
 	File::open("/proc/self/statm")
 		.map_err(Error::from)
 		.and_then(|mut fp| {
@@ -66,7 +68,7 @@ pub fn statm() -> Result<impl Iterator<Item = usize>> {
 
 #[cfg(not(target_os = "linux"))]
 #[inline]
-pub fn statm() -> Result<usize> { Err!("proc_pid_statm(5) only available on linux systems") }
+pub fn statm() -> Result<impl Iterator<Item = usize>> { Ok([0, 0, 0, 0, 0, 0].into_iter()) }
 
 #[cfg(unix)]
 pub fn usage() -> Result<Usage> { getrusage(UsageWho::RUSAGE_SELF).map_err(Into::into) }
@@ -86,4 +88,6 @@ pub fn thread_usage() -> Result<Usage> { getrusage(UsageWho::RUSAGE_THREAD).map_
 	target_os = "freebsd",
 	target_os = "openbsd"
 )))]
-pub fn thread_usage() -> Result<Usage> { Ok(Usage::default()) }
+pub fn thread_usage() -> Result<Usage> {
+	unimplemented!("RUSAGE_THREAD available on this platform")
+}
