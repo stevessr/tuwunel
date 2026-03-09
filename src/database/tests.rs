@@ -814,3 +814,47 @@ fn serde_tuple_option_none_none_none() {
 	assert_eq!(None, cc.0);
 	assert_eq!(bb, cc);
 }
+
+#[test]
+fn serde_tuple_integer_string() {
+	let integer: u64 = 123_456;
+	let user_id: &UserId = "@user:example.com".try_into().unwrap();
+
+	let mut a = integer.to_be_bytes().to_vec();
+	a.push(0xFF);
+	a.extend_from_slice(user_id.as_bytes());
+
+	let b = (integer, user_id);
+	let s = serialize_to_vec(&b).expect("failed to serialize (integer,string) tuple");
+
+	assert_eq!(a, s);
+
+	let c: (u64, &UserId) =
+		de::from_slice(&s).expect("failed to deserialize (integer,string) tuple");
+
+	assert_eq!(c, b, "deserialized (integer,string) tuple did not match");
+}
+
+#[test]
+fn serde_tuple_string_integer_string() {
+	let room_id: &RoomId = "!room:example.com".try_into().unwrap();
+	let integer: u64 = 123_456;
+	let user_id: &UserId = "@user:example.com".try_into().unwrap();
+
+	let mut a = Vec::new();
+	a.extend_from_slice(room_id.as_bytes());
+	a.push(0xFF);
+	a.extend_from_slice(&integer.to_be_bytes());
+	a.push(0xFF);
+	a.extend_from_slice(user_id.as_bytes());
+
+	let b = (room_id, integer, user_id);
+	let s = serialize_to_vec(&b).expect("failed to serialize (string,integer,string) tuple");
+
+	assert_eq!(a, s);
+
+	let c: (&RoomId, u64, &UserId) =
+		de::from_slice(&s).expect("failed to deserialize (integer,string) tuple");
+
+	assert_eq!(c, b, "deserialized (string,integer,string) tuple did not match");
+}
