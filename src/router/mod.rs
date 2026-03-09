@@ -1,4 +1,3 @@
-#![type_length_limit = "32768"] //TODO: reduce me
 #![allow(unused_features)] // 1.96.0-nightly 2026-03-07 bug
 
 mod handle;

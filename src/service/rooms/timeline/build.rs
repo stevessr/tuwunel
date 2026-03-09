@@ -120,6 +120,7 @@ pub async fn build_and_append_pdu(
 			once(pdu.event_id()),
 			state_lock,
 		)
+		.boxed()
 		.await?;
 
 	// We set the room state after inserting the pdu, so that we never have a moment
@@ -192,8 +193,8 @@ where
 						.room_members(pdu.room_id())
 						.ready_filter(|user| self.services.globals.user_is_local(user))
 						.ready_filter(|user| *user != target)
-						.boxed()
 						.count()
+						.boxed()
 						.await;
 
 					if count < 2 {
@@ -216,8 +217,8 @@ where
 						.room_members(pdu.room_id())
 						.ready_filter(|user| self.services.globals.user_is_local(user))
 						.ready_filter(|user| *user != target)
-						.boxed()
 						.count()
+						.boxed()
 						.await;
 
 					if count < 2 {
