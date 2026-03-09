@@ -14,7 +14,7 @@ use tuwunel_core::{
 	Err, Result, err,
 	utils::{content_disposition::make_content_disposition, math::ruma_from_usize},
 };
-use tuwunel_service::media::{CACHE_CONTROL_IMMUTABLE, CORP_CROSS_ORIGIN, Dim, FileMeta};
+use tuwunel_service::media::{CACHE_CONTROL_IMMUTABLE, CORP_CROSS_ORIGIN, Dim, Media};
 
 use crate::{Ruma, RumaResponse, client::create_content_route};
 
@@ -150,7 +150,7 @@ pub(crate) async fn get_content_legacy_route(
 		.get_with_timeout(&mxc, body.timeout_ms)
 		.await?
 	{
-		| Some(FileMeta {
+		| Some(Media {
 			content,
 			content_type,
 			content_disposition,
@@ -245,7 +245,7 @@ pub(crate) async fn get_content_as_filename_legacy_route(
 		.get_with_timeout(&mxc, body.timeout_ms)
 		.await?
 	{
-		| Some(FileMeta {
+		| Some(Media {
 			content,
 			content_type,
 			content_disposition,
@@ -340,7 +340,7 @@ pub(crate) async fn get_content_thumbnail_legacy_route(
 		.get_thumbnail_with_timeout(&mxc, &dim, body.timeout_ms)
 		.await?
 	{
-		| Some(FileMeta {
+		| Some(Media {
 			content,
 			content_type,
 			content_disposition,

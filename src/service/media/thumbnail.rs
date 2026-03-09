@@ -14,7 +14,7 @@ use tokio::{
 };
 use tuwunel_core::{Result, checked, err, implement};
 
-use super::{FileMeta, data::Metadata};
+use super::{Media, data::Metadata};
 
 /// Dimension specification for a thumbnail.
 #[derive(Debug)]
@@ -60,7 +60,7 @@ impl super::Service {
 	/// For width,height <= 96 the server uses another thumbnailing algorithm
 	/// which crops the image afterwards.
 	#[tracing::instrument(skip(self), name = "thumbnail", level = "debug")]
-	pub async fn get_thumbnail(&self, mxc: &Mxc<'_>, dim: &Dim) -> Result<Option<FileMeta>> {
+	pub async fn get_thumbnail(&self, mxc: &Mxc<'_>, dim: &Dim) -> Result<Option<Media>> {
 		// 0, 0 because that's the original file
 		let dim = dim.normalized();
 
@@ -83,7 +83,7 @@ impl super::Service {
 /// Using saved thumbnail
 #[implement(super::Service)]
 #[tracing::instrument(name = "saved", level = "debug", skip(self, data))]
-async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<FileMeta>> {
+async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<Media>> {
 	let mut content = Vec::new();
 	let path = self.get_media_file(&data.key);
 	fs::File::open(path)
@@ -91,7 +91,7 @@ async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<FileMeta>> 
 		.read_to_end(&mut content)
 		.await?;
 
-	Ok(Some(into_filemeta(data, content)))
+	Ok(Some(into_media(data, content)))
 }
 
 /// Generate a thumbnail
@@ -103,7 +103,7 @@ async fn get_thumbnail_generate(
 	mxc: &Mxc<'_>,
 	dim: &Dim,
 	data: Metadata,
-) -> Result<Option<FileMeta>> {
+) -> Result<Option<Media>> {
 	let mut content = Vec::new();
 	let path = self.get_media_file(&data.key);
 	fs::File::open(path)
@@ -113,11 +113,11 @@ async fn get_thumbnail_generate(
 
 	let Ok(image) = image::load_from_memory(&content) else {
 		// Couldn't parse file to generate thumbnail, send original
-		return Ok(Some(into_filemeta(data, content)));
+		return Ok(Some(into_media(data, content)));
 	};
 
 	if dim.width > image.width() || dim.height > image.height() {
-		return Ok(Some(into_filemeta(data, content)));
+		return Ok(Some(into_media(data, content)));
 	}
 
 	let mut thumbnail_bytes = Vec::new();
@@ -139,7 +139,7 @@ async fn get_thumbnail_generate(
 	let mut f = self.create_media_file(&thumbnail_key).await?;
 	f.write_all(&thumbnail_bytes).await?;
 
-	Ok(Some(into_filemeta(data, thumbnail_bytes)))
+	Ok(Some(into_media(data, thumbnail_bytes)))
 }
 
 #[cfg(not(feature = "media_thumbnail"))]
@@ -150,7 +150,7 @@ async fn get_thumbnail_generate(
 	_mxc: &Mxc<'_>,
 	_dim: &Dim,
 	data: Metadata,
-) -> Result<Option<FileMeta>> {
+) -> Result<Option<Media>> {
 	self.get_thumbnail_saved(data).await
 }
 
@@ -175,8 +175,8 @@ fn thumbnail_generate(
 	Ok(thumbnail)
 }
 
-fn into_filemeta(data: Metadata, content: Vec<u8>) -> FileMeta {
-	FileMeta {
+fn into_media(data: Metadata, content: Vec<u8>) -> Media {
+	Media {
 		content,
 		content_type: data.content_type,
 		content_disposition: data.content_disposition,
