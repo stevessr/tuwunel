@@ -426,14 +426,14 @@ pub struct Config {
 	/// single user.
 	///
 	/// default: 10
-	#[serde(default = "default_rc_media_create_per_second")]
-	pub rc_media_create_per_second: u32,
+	#[serde(default = "default_media_rc_create_per_second")]
+	pub media_rc_create_per_second: u32,
 
 	/// The maximum burst count for media create requests from a single user.
 	///
 	/// default: 50
-	#[serde(default = "default_rc_media_create_burst_count")]
-	pub rc_media_create_burst_count: u32,
+	#[serde(default = "default_media_rc_create_burst_count")]
+	pub media_rc_create_burst_count: u32,
 
 	/// default: 192
 	#[serde(default = "default_max_fetch_prev_events")]
@@ -3274,8 +3274,8 @@ fn default_ip_lookup_strategy() -> u8 { 5 }
 fn default_max_request_size() -> usize { 24 * 1024 * 1024 }
 fn default_max_pending_media_uploads() -> usize { 5 }
 fn default_media_create_unused_expiration_time() -> u64 { 86400 }
-fn default_rc_media_create_per_second() -> u32 { 10 }
-fn default_rc_media_create_burst_count() -> u32 { 50 }
+fn default_media_rc_create_per_second() -> u32 { 10 }
+fn default_media_rc_create_burst_count() -> u32 { 50 }
 
 fn default_request_conn_timeout() -> u64 { 10 }
 

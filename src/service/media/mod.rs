@@ -44,7 +44,7 @@ pub struct FileMeta {
 /// For MSC2246
 struct MXCState {
 	/// Save the notifier for each pending media upload
-	notifiers: Mutex<HashMap<String, Arc<Notify>>>,
+	notifiers: Mutex<HashMap<OwnedMxcUri, Arc<Notify>>>,
 	/// Save the ratelimiter for each user
 	ratelimiter: Mutex<HashMap<OwnedUserId, (Instant, f64)>>,
 }
@@ -90,22 +90,23 @@ impl crate::Service for Service {
 
 impl Service {
 	/// Create a pending media upload ID.
+	#[tracing::instrument(level = "debug", skip(self))]
 	pub async fn create_pending(
 		&self,
 		mxc: &Mxc<'_>,
 		user: &UserId,
 		unused_expires_at: u64,
-	) -> Result<()> {
+	) -> Result {
 		let config = &self.services.server.config;
 
 		// Rate limiting (rc_media_create)
-		let rate = f64::from(config.rc_media_create_per_second);
-		let burst = f64::from(config.rc_media_create_burst_count);
+		let rate = f64::from(config.media_rc_create_per_second);
+		let burst = f64::from(config.media_rc_create_burst_count);
 
 		// Check rate limiting
 		if rate > 0.0 && burst > 0.0 {
 			let now = Instant::now();
-			let mut ratelimiter = self.mxc_state.ratelimiter.lock().unwrap();
+			let mut ratelimiter = self.mxc_state.ratelimiter.lock()?;
 
 			let (last_time, tokens) = ratelimiter
 				.entry(user.to_owned())
@@ -149,6 +150,7 @@ impl Service {
 	}
 
 	/// Uploads content to a pending media ID.
+	#[tracing::instrument(level = "debug", skip(self))]
 	pub async fn upload_pending(
 		&self,
 		mxc: &Mxc<'_>,
@@ -157,7 +159,7 @@ impl Service {
 		content_type: Option<&str>,
 		file: &[u8],
 	) -> Result {
-		let Some((owner_id, expires_at)) = self.db.search_pending_mxc(mxc).await else {
+		let Ok((owner_id, expires_at)) = self.db.search_pending_mxc(mxc).await else {
 			if self.get_metadata(mxc).await.is_some() {
 				return Err!(Request(CannotOverwriteMedia("Media ID already has content")));
 			}
@@ -179,16 +181,16 @@ impl Service {
 
 		self.db.remove_pending_mxc(mxc);
 
+		let mxc_uri: OwnedMxcUri = mxc.to_string().into();
 		if let Some(notifier) = self
 			.mxc_state
 			.notifiers
 			.lock()?
-			.get(&mxc.to_string())
+			.get(&mxc_uri)
 			.cloned()
 		{
 			notifier.notify_waiters();
-			let mut map = self.mxc_state.notifiers.lock().unwrap();
-			map.remove(&mxc.to_string());
+			self.mxc_state.notifiers.lock()?.remove(&mxc_uri);
 		}
 
 		Ok(())
@@ -307,16 +309,17 @@ impl Service {
 			return Ok(Some(meta));
 		}
 
-		let Some(_pending) = self.db.search_pending_mxc(mxc).await else {
+		let Ok(_pending) = self.db.search_pending_mxc(mxc).await else {
 			return Ok(None);
 		};
 
-		let notifier = {
-			let mut map = self.mxc_state.notifiers.lock().unwrap();
-			map.entry(mxc.to_string())
-				.or_insert_with(|| Arc::new(Notify::new()))
-				.clone()
-		};
+		let notifier = self
+			.mxc_state
+			.notifiers
+			.lock()?
+			.entry(mxc.to_string().into())
+			.or_insert_with(|| Arc::new(Notify::new()))
+			.clone();
 
 		if tokio::time::timeout(timeout_duration, notifier.notified())
 			.await
@@ -339,16 +342,17 @@ impl Service {
 			return Ok(Some(meta));
 		}
 
-		let Some(_pending) = self.db.search_pending_mxc(mxc).await else {
+		let Ok(_pending) = self.db.search_pending_mxc(mxc).await else {
 			return Ok(None);
 		};
 
-		let notifier = {
-			let mut map = self.mxc_state.notifiers.lock().unwrap();
-			map.entry(mxc.to_string())
-				.or_insert_with(|| Arc::new(Notify::new()))
-				.clone()
-		};
+		let notifier = self
+			.mxc_state
+			.notifiers
+			.lock()?
+			.entry(mxc.to_string().into())
+			.or_insert_with(|| Arc::new(Notify::new()))
+			.clone();
 
 		if tokio::time::timeout(timeout_duration, notifier.notified())
 			.await

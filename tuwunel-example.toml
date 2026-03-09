@@ -333,11 +333,11 @@
 # The maximum number of media create requests per second allowed from a
 # single user.
 #
-#rc_media_create_per_second = 10
+#media_rc_create_per_second = 10
 
 # The maximum burst count for media create requests from a single user.
 #
-#rc_media_create_burst_count = 50
+#media_rc_create_burst_count = 50
 
 # This item is undocumented. Please contribute documentation for it.
 #

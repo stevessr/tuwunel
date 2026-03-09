@@ -1,12 +1,16 @@
 use std::{sync::Arc, time::Duration};
 
 use futures::{StreamExt, pin_mut};
-use ruma::{Mxc, OwnedMxcUri, UserId, http_headers::ContentDisposition};
+use ruma::{Mxc, OwnedMxcUri, OwnedUserId, UserId, http_headers::ContentDisposition};
 use tuwunel_core::{
-	Err, Result, debug, debug_error, debug_info, err, error,
-	utils::{ReadyExt, str_from_bytes, stream::TryIgnore, string_from_bytes},
+	Err, Result, debug, debug_info, err,
+	utils::{
+		ReadyExt, str_from_bytes,
+		stream::{TryExpect, TryIgnore},
+		string_from_bytes,
+	},
 };
-use tuwunel_database::{Database, Interfix, Map, serialize_key};
+use tuwunel_database::{Database, Deserialized, Ignore, Interfix, Map, serialize_key};
 
 use super::{preview::UrlPreviewData, thumbnail::Dim};
 
@@ -61,102 +65,43 @@ impl Data {
 		user: &UserId,
 		unused_expires_at: u64,
 	) {
-		debug!(?mxc, ?user, ?unused_expires_at, "Inserting pending MXC");
+		let value = (unused_expires_at, user);
+		debug!(?mxc, ?user, ?unused_expires_at, "Inserting pending");
 
-		let key = mxc.to_string();
-		// 8 bytes for unused_expires_at (u64), 1 byte for 0xFF, and
-		// user.as_bytes().len() for user value: [unused_expires_at, 0xFF, user]
-		let mut value = Vec::with_capacity(
-			user.as_bytes()
-				.len()
-				.checked_add(9)
-				.expect("User len too large,capacity overflow!"),
-		);
-		value.extend_from_slice(&unused_expires_at.to_be_bytes());
-		value.push(0xFF);
-		value.extend_from_slice(user.as_bytes());
-		self.mediaid_pending
-			.insert(key.as_bytes(), &value);
+		self.mediaid_pending.put(mxc, value);
 	}
 
+	/// Remove a pending MXC URI from the database
+	pub(super) fn remove_pending_mxc(&self, mxc: &Mxc<'_>) { self.mediaid_pending.del(mxc); }
+
 	/// Count the number of pending MXC URIs for a specific user
-	pub(super) async fn count_pending_mxc_for_user(&self, user: &UserId) -> (usize, u64) {
-		let mut count: usize = 0;
-		let mut earliest_expiration = u64::MAX;
-		let user_bytes = user.as_bytes();
+	pub(super) async fn count_pending_mxc_for_user(&self, user_id: &UserId) -> (usize, u64) {
+		type KeyVal<'a> = (Ignore, (u64, &'a UserId));
 
 		self.mediaid_pending
-			.raw_stream()
-			.ignore_err()
-			.ready_for_each(|(_key, value)| {
-				let mut parts = value.splitn(2, |&b| b == 0xFF);
-				match (parts.next(), parts.next()) {
-					| (Some(expires_at_bytes), Some(user_id_bytes))
-						if user_id_bytes == user_bytes =>
-					{
-						// safe to add 1 even if count = usize::MAX it also > max_uploads
-						count = count.saturating_add(1_usize);
-						let expires_at =
-							u64::from_be_bytes(expires_at_bytes.try_into().unwrap_or([0_u8; 8]));
-						if expires_at < earliest_expiration {
-							earliest_expiration = expires_at;
-						}
-					},
-					| _ => {},
-				}
-			})
-			.await;
-
-		(count, earliest_expiration)
+			.stream()
+			.expect_ok()
+			.ready_filter(|(_, (_, pending_user_id)): &KeyVal<'_>| user_id == *pending_user_id)
+			.ready_fold(
+				(0_usize, u64::MAX),
+				|(count, earliest_expiration), (_, (expires_at, _))| {
+					(count.saturating_add(1), earliest_expiration.min(expires_at))
+				},
+			)
+			.await
 	}
 
 	/// Search for a pending MXC URI in the database
-	pub(super) async fn search_pending_mxc(
-		&self,
-		mxc: &Mxc<'_>,
-	) -> Option<(ruma::OwnedUserId, u64)> {
-		debug!(?mxc, "Searching for pending MXC");
+	pub(super) async fn search_pending_mxc(&self, mxc: &Mxc<'_>) -> Result<(OwnedUserId, u64)> {
+		type Value<'a> = (u64, OwnedUserId);
 
-		let key = mxc.to_string();
-		let value = match self.mediaid_pending.get(key.as_bytes()).await {
-			| Ok(v) => v,
-			| Err(e) => {
-				debug_error!(?key, "pending MXC not found or error: {e}");
-				return None;
-			},
-		};
-		let mut parts = value.splitn(2, |&b| b == 0xFF);
-		// value: [expires_at, 0xFF, user]
-		let expires_at_bytes = parts.next()?;
-		let expires_at = match expires_at_bytes.try_into() {
-			| Ok(v) => u64::from_be_bytes(v),
-			| Err(_) => {
-				debug_error!(?key, "Failed to parse expires_at for key");
-				return None;
-			},
-		};
-		let user_id_bytes = parts.next()?;
-
-		let Ok(user_str) = str_from_bytes(user_id_bytes) else {
-			error!(?key, "Failed to parse user_str for key");
-			return None;
-		};
-		let user_id = match user_str.try_into() {
-			| Ok(v) => v,
-			| Err(e) => {
-				error!(?key, "Failed to parse user_id for key: {e}");
-				return None;
-			},
-		};
-
-		debug!(?key, ?user_id, ?expires_at, "Found pending MXC");
-
-		Some((user_id, expires_at))
-	}
-
-	pub(super) fn remove_pending_mxc(&self, mxc: &Mxc<'_>) {
 		self.mediaid_pending
-			.remove(mxc.to_string().as_bytes());
+			.qry(mxc)
+			.await
+			.deserialized()
+			.map(|(expires_at, user_id): Value<'_>| (user_id, expires_at))
+			.inspect(|(user_id, expires_at)| debug!(?mxc, ?user_id, ?expires_at, "Found pending"))
+			.map_err(|e| err!(Request(NotFound("Pending not found or error: {e}"))))
 	}
 
 	pub(super) async fn delete_file_mxc(&self, mxc: &Mxc<'_>) {

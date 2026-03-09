@@ -130,7 +130,8 @@ pub(super) static MAPS: &[Descriptor] = &[
 	},
 	Descriptor {
 		name: "mediaid_pending",
-		..descriptor::RANDOM_SMALL
+		ttl: 60 * 60 * 24 * 7,
+		..descriptor::RANDOM_SMALL_CACHE
 	},
 	Descriptor {
 		name: "mediaid_user",
