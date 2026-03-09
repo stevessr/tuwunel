@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{Database, Engine};
 
+#[clippy::has_significant_drop]
 pub struct Cork {
 	engine: Arc<Engine>,
 	flush: bool,

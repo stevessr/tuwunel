@@ -47,6 +47,7 @@ pub struct State<F: Fn(u64) -> Result + Sync> {
 	release: F,
 }
 
+#[clippy::has_significant_drop]
 pub struct Permit<F: Fn(u64) -> Result + Sync> {
 	/// Link back to the shared-state.
 	state: Arc<Counter<F>>,

@@ -16,6 +16,7 @@ pub struct MutexMap<Key, Val> {
 }
 
 #[derive(Debug)]
+#[clippy::has_significant_drop]
 pub struct Guard<Key, Val> {
 	map: Map<Key, Val>,
 	val: Omg<Val>,
