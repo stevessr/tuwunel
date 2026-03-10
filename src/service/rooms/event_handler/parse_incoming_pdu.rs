@@ -5,6 +5,14 @@ use tuwunel_core::{Result, err, implement, matrix::event::gen_event_id, result::
 type Parsed = (OwnedRoomId, OwnedEventId, CanonicalJsonObject);
 
 #[implement(super::Service)]
+#[tracing::instrument(
+    name = "parse_incoming",
+    level = "trace",
+    skip_all,
+    fields(
+        len = pdu.get().len(),
+    )
+)]
 pub async fn parse_incoming_pdu(&self, pdu: &RawJsonValue) -> Result<Parsed> {
 	let value: CanonicalJsonObject = serde_json::from_str(pdu.get()).map_err(|e| {
 		err!(BadServerResponse(debug_error!("Error parsing incoming event: {e} {pdu:#?}")))
