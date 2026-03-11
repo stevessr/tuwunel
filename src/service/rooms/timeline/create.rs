@@ -13,7 +13,7 @@ use tuwunel_core::{
 	Error, Result, err, implement,
 	matrix::{
 		event::{Event, StateKey, TypeExt},
-		pdu::{EventHash, PduBuilder, PduEvent, PrevEvents, check_pdu_format},
+		pdu::{EventHash, PduBuilder, PduEvent, PrevEvents, check_rules},
 		room_version,
 	},
 	utils::{
@@ -195,7 +195,7 @@ pub async fn create_hash_and_sign_event(
 		pdu_json.insert("room_id".into(), CanonicalJsonValue::String(pdu.room_id.clone().into()));
 	}
 
-	check_pdu_format(&pdu_json, &version_rules.event_format)?;
+	check_rules(&pdu_json, &version_rules.event_format)?;
 
 	// Generate short event id
 	let _shorteventid = self

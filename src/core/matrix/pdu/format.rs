@@ -5,11 +5,9 @@ use ruma::{
 	room_version_rules::{EventsReferenceFormatVersion, RoomVersionRules},
 };
 
-use crate::{
-	Result, extract_variant, is_equal_to,
-	matrix::{PduEvent, room_version},
-};
+use crate::{extract_variant, is_equal_to, matrix::room_version};
 
+#[must_use]
 pub fn into_outgoing_federation(
 	mut pdu_json: CanonicalJsonObject,
 	room_version: &RoomVersionId,
@@ -68,12 +66,13 @@ fn mutate_outgoing_reference_format(value: &mut CanonicalJsonValue) {
 		});
 }
 
+#[must_use]
 pub fn from_incoming_federation(
 	room_id: &RoomId,
 	event_id: &EventId,
-	pdu_json: &mut CanonicalJsonObject,
+	mut pdu_json: CanonicalJsonObject,
 	room_rules: &RoomVersionRules,
-) -> Result<PduEvent> {
+) -> CanonicalJsonObject {
 	if matches!(room_rules.events_reference_format, EventsReferenceFormatVersion::V1) {
 		if let Some(value) = pdu_json.get_mut("auth_events") {
 			mutate_incoming_reference_format(value);
@@ -95,9 +94,7 @@ pub fn from_incoming_federation(
 		pdu_json.insert("event_id".into(), CanonicalJsonValue::String(event_id.into()));
 	}
 
-	check::check_pdu_format(pdu_json, &room_rules.event_format)?;
-
-	PduEvent::from_val(pdu_json)
+	pdu_json
 }
 
 fn mutate_incoming_reference_format(value: &mut CanonicalJsonValue) {

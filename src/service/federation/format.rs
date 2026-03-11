@@ -35,7 +35,7 @@ pub async fn format_pdu_into(
 		.as_ref()
 		.or(room_version)
 	{
-		pdu_json = pdu::format::into_outgoing_federation(pdu_json, room_version);
+		pdu_json = pdu::into_outgoing_federation(pdu_json, room_version);
 	} else {
 		pdu_json.remove("event_id");
 	}

@@ -7,11 +7,13 @@ use ruma::{
 };
 use tuwunel_core::{
 	Result, debug_warn, err, implement,
-	matrix::{Event, PduEvent, pdu::MAX_PREV_EVENTS},
+	matrix::{
+		Event, PduEvent,
+		pdu::{MAX_PREV_EVENTS, check_room_id},
+	},
 	utils::stream::IterStream,
 };
 
-use super::check_room_id;
 use crate::rooms::state_res;
 
 #[implement(super::Service)]
@@ -69,7 +71,7 @@ where
 			continue;
 		};
 
-		check_room_id(room_id, &pdu)?;
+		check_room_id(&pdu, room_id)?;
 
 		let limit = self.services.server.config.max_fetch_prev_events;
 		if amount > limit {

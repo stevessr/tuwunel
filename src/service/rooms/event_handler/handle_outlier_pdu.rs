@@ -5,13 +5,11 @@ use ruma::{
 use tuwunel_core::{
 	Err, Result, debug, debug_info, err, implement,
 	matrix::{Event, PduEvent, event::TypeExt, room_version},
-	pdu::{check_pdu_format, format::from_incoming_federation},
 	ref_at, trace,
 	utils::{future::TryExtExt, stream::IterStream},
 	warn,
 };
 
-use super::check_room_id;
 use crate::rooms::state_res;
 
 #[implement(super::Service)]
@@ -41,7 +39,7 @@ pub(super) async fn handle_outlier_pdu(
 	// anywhere?: https://matrix.org/docs/spec/rooms/v6#canonical-json
 	// 2. Check signatures, otherwise drop
 	// 3. check content hash, redact if doesn't match
-	let mut pdu_json = match self
+	let pdu_json = match self
 		.services
 		.server_keys
 		.verify_event(&pdu_json, Some(room_version))
@@ -57,7 +55,8 @@ pub(super) async fn handle_outlier_pdu(
 				)));
 			};
 
-			let Ok(obj) = ruma::canonical_json::redact(pdu_json, &rules.redaction, None) else {
+			let Ok(pdu_json) = ruma::canonical_json::redact(pdu_json, &rules.redaction, None)
+			else {
 				return Err!(Request(InvalidParam("Redaction failed")));
 			};
 
@@ -68,7 +67,7 @@ pub(super) async fn handle_outlier_pdu(
 				)));
 			}
 
-			obj
+			pdu_json
 		},
 		| Err(e) => {
 			return Err!(Request(InvalidParam(debug_error!(
@@ -77,15 +76,11 @@ pub(super) async fn handle_outlier_pdu(
 		},
 	};
 
-	let room_rules = room_version::rules(room_version)?;
-
-	check_pdu_format(&pdu_json, &room_rules.event_format)?;
-
 	// Now that we have checked the signature and hashes we can make mutations and
 	// convert to our PduEvent type.
-	let event = from_incoming_federation(room_id, event_id, &mut pdu_json, &room_rules)?;
-
-	check_room_id(room_id, &event)?;
+	let room_rules = room_version::rules(room_version)?;
+	let (event, pdu_json) =
+		PduEvent::from_object_federation(room_id, event_id, pdu_json, &room_rules)?;
 
 	if !auth_events_known {
 		// 4. fetch any missing auth events doing all checks listed here starting at 1.

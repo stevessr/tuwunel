@@ -4,10 +4,21 @@ use ruma::{
 };
 use serde_json::to_string as to_json_string;
 
-use crate::{
-	Err, Result, err,
-	matrix::pdu::{MAX_AUTH_EVENTS, MAX_PDU_BYTES, MAX_PREV_EVENTS},
-};
+use super::super::{MAX_AUTH_EVENTS, MAX_PDU_BYTES, MAX_PREV_EVENTS, Pdu};
+use crate::{Err, Result, err};
+
+pub fn check_room_id(pdu: &Pdu, room_id: &RoomId) -> Result {
+	if pdu.room_id != room_id {
+		return Err!(Request(InvalidParam(error!(
+			pdu_event_id = ?pdu.event_id,
+			pdu_room_id = ?pdu.room_id,
+			?room_id,
+			"Event in wrong room",
+		))));
+	}
+
+	Ok(())
+}
 
 /// Check that the given canonicalized PDU respects the event format of the room
 /// version and the [size limits] from the Matrix specification.
@@ -31,7 +42,7 @@ use crate::{
 ///
 /// [size limits]: https://spec.matrix.org/latest/client-server-api/#size-limits
 /// [checks performed on receipt of a PDU]: https://spec.matrix.org/latest/server-server-api/#checks-performed-on-receipt-of-a-pdu
-pub fn check_pdu_format(pdu: &CanonicalJsonObject, rules: &EventFormatRules) -> Result {
+pub fn check_rules(pdu: &CanonicalJsonObject, rules: &EventFormatRules) -> Result {
 	// Check the PDU size, it must occur on the full PDU with signatures.
 	let json = to_json_string(&pdu)
 		.map_err(|e| err!(Request(BadJson("Failed to serialize canonical JSON: {e}"))))?;
@@ -200,7 +211,7 @@ mod tests {
 	};
 	use serde_json::{from_value as from_json_value, json};
 
-	use super::check_pdu_format;
+	use super::check_rules as check_pdu_format;
 
 	/// Construct a PDU valid for the event format of room v1.
 	fn pdu_v1() -> CanonicalJsonObject {

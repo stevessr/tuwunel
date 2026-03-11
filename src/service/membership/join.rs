@@ -29,7 +29,7 @@ use serde_json::value::RawValue as RawJsonValue;
 use tuwunel_core::{
 	Err, Result, at, debug, debug_error, debug_info, debug_warn, err, error, implement, info,
 	matrix::{event::gen_event_id_canonical_json, room_version},
-	pdu::{PduBuilder, check_pdu_format, format::from_incoming_federation},
+	pdu::{Pdu, PduBuilder, check_rules},
 	trace,
 	utils::{self, BoolExt, IterStream, ReadyExt, future::TryExtExt, math::Expected, shuffle},
 	warn,
@@ -310,8 +310,8 @@ pub async fn join_remote(
 		%shortroomid,
 		"Initialized room. Parsing join event..."
 	);
-	let parsed_join_pdu =
-		from_incoming_federation(room_id, &event_id, &mut join_event, &room_version_rules)?;
+	let (parsed_join_pdu, join_event) =
+		Pdu::from_object_federation(room_id, &event_id, join_event, &room_version_rules)?;
 
 	let resp_state = &response.state;
 	let resp_auth = &response.auth_chain;
@@ -337,12 +337,12 @@ pub async fn join_remote(
 		})
 		.inspect_err(|e| debug_error!("Invalid send_join state event: {e:?}"))
 		.ready_filter_map(Result::ok)
-		.ready_filter_map(|(event_id, mut value)| {
-			from_incoming_federation(room_id, &event_id, &mut value, &room_version_rules)
+		.ready_filter_map(|(event_id, value)| {
+			Pdu::from_object_federation(room_id, &event_id, value, &room_version_rules)
 				.inspect_err(|e| {
-					debug_warn!("Invalid PDU in send_join response: {e:?}: {value:#?}");
+					debug_warn!("Invalid PDU {event_id:?} in send_join response: {e:?}");
 				})
-				.map(move |pdu| (event_id, pdu, value))
+				.map(move |(pdu, value)| (event_id, pdu, value))
 				.ok()
 		})
 		.fold(HashMap::new(), async |mut state, (event_id, pdu, value)| {
@@ -757,7 +757,7 @@ async fn create_join_event(
 		.server_keys
 		.gen_id_hash_and_sign_event(&mut event, room_version_id)?;
 
-	check_pdu_format(&event, &room_version_rules.event_format)?;
+	check_rules(&event, &room_version_rules.event_format)?;
 
 	Ok((event, event_id, join_authorized_via_users_server))
 }

@@ -553,9 +553,11 @@ pub(super) async fn force_set_room_state_from_server(
 		};
 
 		let pdu = if value["type"] == "m.room.create" {
-			PduEvent::from_rid_val(&room_id, &event_id, value.clone()).map_err(invalid_pdu_err)?
+			PduEvent::from_object_and_roomid_and_eventid(&room_id, &event_id, value.clone())
+				.map_err(invalid_pdu_err)?
 		} else {
-			PduEvent::from_id_val(&event_id, value.clone()).map_err(invalid_pdu_err)?
+			PduEvent::from_object_and_eventid(&event_id, value.clone())
+				.map_err(invalid_pdu_err)?
 		};
 
 		if !value.contains_key("room_id") {

@@ -1,6 +1,6 @@
 mod builder;
 mod count;
-pub mod format;
+mod format;
 mod hashes;
 mod id;
 mod raw_id;
@@ -13,6 +13,7 @@ use std::cmp::Ordering;
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId,
 	OwnedRoomId, OwnedServerName, OwnedUserId, RoomId, UInt, UserId, events::TimelineEventType,
+	room_version_rules::RoomVersionRules,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue as RawJsonValue;
@@ -22,7 +23,10 @@ pub use self::{
 	Count as PduCount, Id as PduId, Pdu as PduEvent, RawId as RawPduId,
 	builder::{Builder, Builder as PduBuilder},
 	count::Count,
-	format::check::check_pdu_format,
+	format::{
+		check::{check_room_id, check_rules},
+		from_incoming_federation, into_outgoing_federation,
+	},
 	hashes::EventHashes as EventHash,
 	id::Id,
 	raw_id::*,
@@ -99,28 +103,61 @@ pub const MAX_PREV_EVENTS: usize = 20;
 pub const MAX_AUTH_EVENTS: usize = 10;
 
 impl Pdu {
-	pub fn from_rid_val(
+	pub fn from_object_and_roomid_and_eventid(
 		room_id: &RoomId,
 		event_id: &EventId,
 		mut json: CanonicalJsonObject,
 	) -> Result<Self> {
 		let room_id = CanonicalJsonValue::String(room_id.into());
 		json.insert("room_id".into(), room_id);
-
-		Self::from_id_val(event_id, json)
+		Self::from_object_and_eventid(event_id, json)
 	}
 
-	pub fn from_id_val(event_id: &EventId, mut json: CanonicalJsonObject) -> Result<Self> {
+	pub fn from_object_and_eventid(
+		event_id: &EventId,
+		mut json: CanonicalJsonObject,
+	) -> Result<Self> {
 		let event_id = CanonicalJsonValue::String(event_id.into());
 		json.insert("event_id".into(), event_id);
-
-		Self::from_val(&json)
+		Self::from_object(json)
 	}
 
-	pub fn from_val(json: &CanonicalJsonObject) -> Result<Self> {
-		serde_json::to_value(json)
-			.and_then(serde_json::from_value)
-			.map_err(Into::into)
+	pub fn from_object_federation(
+		room_id: &RoomId,
+		event_id: &EventId,
+		json: CanonicalJsonObject,
+		rules: &RoomVersionRules,
+	) -> Result<(Self, CanonicalJsonObject)> {
+		let json = from_incoming_federation(room_id, event_id, json, rules);
+		let pdu = Self::from_object_checked(json.clone(), rules)?;
+		check_room_id(&pdu, room_id)?;
+		Ok((pdu, json))
+	}
+
+	pub fn from_object_checked(
+		json: CanonicalJsonObject,
+		rules: &RoomVersionRules,
+	) -> Result<Self> {
+		check_rules(&json, &rules.event_format)?;
+		Self::from_object(json)
+	}
+
+	pub fn from_object(json: CanonicalJsonObject) -> Result<Self> {
+		let json = CanonicalJsonValue::Object(json);
+		Self::from_value(json)
+	}
+
+	pub fn from_raw_value(json: &RawJsonValue) -> Result<Self> {
+		let json: CanonicalJsonValue = json.into();
+		Self::from_value(json)
+	}
+
+	pub fn from_value(json: CanonicalJsonValue) -> Result<Self> {
+		serde_json::from_value(json.into()).map_err(Into::into)
+	}
+
+	pub fn from_raw_json(json: &RawJsonValue) -> Result<Self> {
+		Self::deserialize(json).map_err(Into::into)
 	}
 }
 

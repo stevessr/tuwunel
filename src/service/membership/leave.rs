@@ -16,7 +16,7 @@ use ruma::{
 };
 use tuwunel_core::{
 	Err, Result, debug_info, debug_warn, err, implement,
-	matrix::{PduCount, pdu::check_pdu_format, room_version},
+	matrix::{PduCount, pdu::check_rules, room_version},
 	pdu::PduBuilder,
 	utils::{
 		self, FutureBoolExt,
@@ -353,7 +353,7 @@ async fn remote_leave(
 		.server_keys
 		.gen_id_hash_and_sign_event(&mut event, &room_version_id)?;
 
-	check_pdu_format(&event, &room_version_rules.event_format)?;
+	check_rules(&event, &room_version_rules.event_format)?;
 
 	self.services
 		.federation

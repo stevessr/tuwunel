@@ -7,7 +7,7 @@ use ruma::{
 };
 use tuwunel_core::{
 	Err, Result, debug, debug_info, err, implement, is_equal_to,
-	matrix::{Event, EventTypeExt, PduEvent, StateKey, pdu::check_pdu_format, room_version},
+	matrix::{Event, EventTypeExt, PduEvent, StateKey, pdu::check_rules, room_version},
 	trace,
 	utils::stream::{BroadbandExt, ReadyExt},
 	warn,
@@ -33,7 +33,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 	origin: &ServerName,
 	room_id: &RoomId,
 	incoming_pdu: PduEvent,
-	val: CanonicalJsonObject,
+	pdu_json: CanonicalJsonObject,
 	room_version: &RoomVersionId,
 	recursion_level: usize,
 	create_event_id: &EventId,
@@ -64,7 +64,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 	let room_rules = room_version::rules(room_version)?;
 
 	trace!(format = ?room_rules.event_format, "Checking format");
-	check_pdu_format(&val, &room_rules.event_format)?;
+	check_rules(&pdu_json, &room_rules.event_format)?;
 
 	// 10. Fetch missing state and auth chain events by calling /state_ids at
 	//     backwards extremities doing all the checks in this list starting at 1.
@@ -280,7 +280,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 		.timeline
 		.append_incoming_pdu(
 			&incoming_pdu,
-			val,
+			pdu_json,
 			extremities,
 			state_ids_compressed,
 			soft_fail,

@@ -19,10 +19,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use ruma::{EventId, OwnedEventId, OwnedRoomId, RoomId};
+use ruma::{EventId, OwnedEventId, OwnedRoomId};
 use tuwunel_core::{
-	Err, Result, implement,
-	matrix::{Event, PduEvent},
+	Result, implement,
+	matrix::PduEvent,
 	utils::{MutexMap, bytes::pretty, continue_exponential_backoff},
 };
 
@@ -145,17 +145,4 @@ async fn event_exists(&self, event_id: &EventId) -> bool {
 )]
 async fn event_fetch(&self, event_id: &EventId) -> Result<PduEvent> {
 	self.services.timeline.get_pdu(event_id).await
-}
-
-fn check_room_id<Pdu: Event>(room_id: &RoomId, pdu: &Pdu) -> Result {
-	if pdu.room_id() != room_id {
-		return Err!(Request(InvalidParam(error!(
-			pdu_event_id = ?pdu.event_id(),
-			pdu_room_id = ?pdu.room_id(),
-			?room_id,
-			"Found event from room in room",
-		))));
-	}
-
-	Ok(())
 }
