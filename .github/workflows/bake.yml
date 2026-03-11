@@ -116,7 +116,7 @@ jobs:
         machine: ${{fromJSON(inputs.machines)}}
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         persist-credentials: false
         fetch-depth: 0
@@ -228,7 +228,7 @@ jobs:
         !failure() && !cancelled()
         && fromJSON(inputs.artifact)[matrix.bake_target].dst
 
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         path: _artifact/*
         name: ${{matrix.cargo_profile}}-${{matrix.feat_set}}-${{matrix.sys_target}}-${{fromJSON(inputs.artifact)[matrix.bake_target].dst}}

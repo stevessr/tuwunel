@@ -389,7 +389,7 @@ jobs:
         include: ${{fromJSON(inputs.includes)}}
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v6
     - name: Execute
       id: execute
       env:
@@ -420,7 +420,7 @@ jobs:
     - if: success() || failure() && steps.execute.outcome == 'failure'
       name: Upload New Results
       id: upload-result
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: complement_results-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}.jsonl
         path: ./tests/complement/results.jsonl
@@ -428,7 +428,7 @@ jobs:
     - if: success() || (failure() && steps.execute.outcome == 'failure')
       name: Upload Log Output
       id: upload-output
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: complement_output-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}.jsonl
         path: ./tests/complement/logs.jsonl
