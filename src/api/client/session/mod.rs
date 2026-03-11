@@ -79,6 +79,7 @@ pub(crate) async fn get_login_types_route(
 					if list_idps && identity_providers.is_empty() =>
 					false,
 				| LoginType::Password(_) => services.config.login_with_password,
+				| LoginType::Jwt(_) => services.config.jwt.enable,
 				| _ => true,
 			})
 			.collect(),
