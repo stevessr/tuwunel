@@ -3,7 +3,7 @@ use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
 use futures::{FutureExt, TryFutureExt};
 use tokio::{
 	sync::{Mutex, MutexGuard},
-	task::{JoinHandle, JoinSet},
+	task::{JoinHandle, JoinSet, yield_now},
 	time::sleep,
 };
 use tuwunel_core::{
@@ -60,6 +60,8 @@ impl Manager {
 			self.start_worker(&mut workers, &service)?;
 		}
 
+		yield_now().await;
+
 		Ok(())
 	}
 
@@ -72,7 +74,7 @@ impl Manager {
 		}
 	}
 
-	async fn worker(&self) -> Result {
+	async fn worker(self: &Arc<Self>) -> Result {
 		loop {
 			let mut workers = self.workers.lock().await;
 			tokio::select! {
@@ -95,7 +97,7 @@ impl Manager {
 	}
 
 	async fn handle_result(
-		&self,
+		self: &Arc<Self>,
 		workers: &mut WorkersLocked<'_>,
 		result: WorkerResult,
 	) -> Result {
@@ -108,7 +110,7 @@ impl Manager {
 
 	#[expect(clippy::unused_self)]
 	fn handle_finished(
-		&self,
+		self: &Arc<Self>,
 		_workers: &mut WorkersLocked<'_>,
 		service: &Arc<dyn Service>,
 	) -> Result {
@@ -117,7 +119,7 @@ impl Manager {
 	}
 
 	async fn handle_error(
-		&self,
+		self: &Arc<Self>,
 		workers: &mut WorkersLocked<'_>,
 		service: &Arc<dyn Service>,
 		error: Error,
@@ -143,7 +145,7 @@ impl Manager {
 
 	/// Start the worker in a task for the service.
 	fn start_worker(
-		&self,
+		self: &Arc<Self>,
 		workers: &mut WorkersLocked<'_>,
 		service: &Arc<dyn Service>,
 	) -> Result {
@@ -155,7 +157,7 @@ impl Manager {
 		}
 
 		debug!("Service {:?} worker starting...", service.name());
-		workers.spawn_on(worker(service.clone()), self.server.runtime());
+		workers.spawn_on(worker(service.clone(), self.clone()), self.server.runtime());
 
 		Ok(())
 	}
@@ -172,7 +174,7 @@ impl Manager {
 	skip_all,
 	fields(service = %service.name()),
 )]
-async fn worker(service: Arc<dyn Service>) -> WorkerResult {
+async fn worker(service: Arc<dyn Service>, _mgr: Arc<Manager>) -> WorkerResult {
 	let service_ = Arc::clone(&service);
 	let result = AssertUnwindSafe(service_.worker())
 		.catch_unwind()

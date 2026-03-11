@@ -199,6 +199,7 @@ pub async fn start(self: &Arc<Self>) -> Result<Arc<Self>> {
 	debug_info!("Starting services...");
 
 	super::migrations::migrations(self).await?;
+
 	self.manager
 		.lock()
 		.await
@@ -206,6 +207,8 @@ pub async fn start(self: &Arc<Self>) -> Result<Arc<Self>> {
 		.clone()
 		.start()
 		.await?;
+
+	self.admin.startup_execute().await?;
 
 	debug_info!("Services startup complete.");
 

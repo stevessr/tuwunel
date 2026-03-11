@@ -86,7 +86,6 @@ impl crate::Service for Service {
 			.expect("locked for writing")
 			.insert(sender);
 
-		self.startup_execute().await?;
 		self.console_auto_start().await;
 
 		loop {
