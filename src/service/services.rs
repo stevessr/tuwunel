@@ -208,8 +208,6 @@ pub async fn start(self: &Arc<Self>) -> Result<Arc<Self>> {
 		.start()
 		.await?;
 
-	self.admin.startup_execute().await?;
-
 	debug_info!("Services startup complete.");
 
 	Ok(Arc::clone(self))

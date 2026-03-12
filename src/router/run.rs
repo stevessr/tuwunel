@@ -21,6 +21,9 @@ pub(crate) async fn run(services: Arc<Services>) -> Result {
 	// Install the admin room callback here for now
 	tuwunel_admin::init(&services.admin).await;
 
+	// Execute configured startup commands.
+	services.admin.startup_execute().await?;
+
 	// Setup shutdown/signal handling
 	let handle = ServerHandle::new();
 	let sigs = server

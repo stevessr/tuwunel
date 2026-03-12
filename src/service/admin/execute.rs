@@ -1,8 +1,5 @@
 use ruma::events::room::message::RoomMessageEventContent;
-use tokio::{
-	task::yield_now,
-	time::{Duration, sleep},
-};
+use tokio::task::yield_now;
 use tuwunel_core::{Err, Result, debug, debug_info, error, implement, info};
 
 pub(super) const SIGNAL: &str = "SIGUSR2";
@@ -34,7 +31,7 @@ pub(super) async fn console_auto_stop(&self) {
 
 /// Execute admin commands after startup
 #[implement(super::Service)]
-pub(crate) async fn startup_execute(&self) -> Result {
+pub async fn startup_execute(&self) -> Result {
 	// List of commands to execute
 	let commands = &self.services.server.config.admin_execute;
 
@@ -48,17 +45,6 @@ pub(crate) async fn startup_execute(&self) -> Result {
 			.server
 			.config
 			.admin_execute_errors_ignore;
-
-	if !commands.is_empty() {
-		for i in 0..20 {
-			if self.handle.read().await.is_some() {
-				break;
-			}
-
-			debug!(?i, "Waiting for admin module to load for startup commands...");
-			sleep(Duration::from_millis(250)).await;
-		}
-	}
 
 	for (i, command) in commands.iter().enumerate() {
 		if let Err(e) = self.execute_command(i, command.clone()).await
