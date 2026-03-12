@@ -5689,6 +5689,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "reqwest 0.13.1",
+ "ring",
  "ruma",
  "rustls",
  "rustyline-async",

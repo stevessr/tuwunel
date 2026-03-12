@@ -23,6 +23,8 @@ pub struct DcrRequest {
 	pub logo_uri: Option<String>, #[serde(default)] pub contacts: Vec<String>,
 	pub token_endpoint_auth_method: Option<String>, pub grant_types: Option<Vec<String>>,
 	pub response_types: Option<Vec<String>>, pub application_type: Option<String>,
+	pub policy_uri: Option<String>, pub tos_uri: Option<String>,
+	pub software_id: Option<String>, pub software_version: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -30,7 +32,8 @@ pub struct OidcClientRegistration {
 	pub client_id: String, pub redirect_uris: Vec<String>, pub client_name: Option<String>,
 	pub client_uri: Option<String>, pub logo_uri: Option<String>, pub contacts: Vec<String>,
 	pub token_endpoint_auth_method: String, pub grant_types: Vec<String>, pub response_types: Vec<String>,
-	pub application_type: Option<String>, pub registered_at: u64,
+	pub application_type: Option<String>, pub policy_uri: Option<String>, pub tos_uri: Option<String>,
+	pub software_id: Option<String>, pub software_version: Option<String>, pub registered_at: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -124,7 +127,8 @@ impl OidcServer {
 			token_endpoint_auth_method: auth_method,
 			grant_types: request.grant_types.unwrap_or_else(|| vec!["authorization_code".to_owned(), "refresh_token".to_owned()]),
 			response_types: request.response_types.unwrap_or_else(|| vec!["code".to_owned()]),
-			application_type: request.application_type,
+			application_type: request.application_type, policy_uri: request.policy_uri, tos_uri: request.tos_uri,
+			software_id: request.software_id, software_version: request.software_version,
 			registered_at: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap_or_default().as_secs(),
 		};
 		self.db.oidcclientid_registration.raw_put(&*client_id, Cbor(&registration));
@@ -172,6 +176,7 @@ impl OidcServer {
 
 		if let Some(challenge) = &session.code_challenge {
 			let Some(verifier) = code_verifier else { return Err!(Request(Forbidden("code_verifier required for PKCE"))); };
+			Self::validate_code_verifier(verifier)?;
 			let method = session.code_challenge_method.as_deref().unwrap_or("S256");
 			let computed = match method {
 				| "S256" => { let hash = utils::hash::sha256::hash(verifier.as_bytes()); b64.encode(hash) },
@@ -182,6 +187,19 @@ impl OidcServer {
 		}
 
 		Ok(session)
+	}
+
+	/// Validate code_verifier per RFC 7636 Section 4.1: must be 43-128
+	/// characters using only unreserved characters [A-Z] / [a-z] / [0-9] /
+	/// "-" / "." / "_" / "~".
+	fn validate_code_verifier(verifier: &str) -> Result {
+		if !(43..=128).contains(&verifier.len()) {
+			return Err!(Request(InvalidParam("code_verifier must be 43-128 characters")));
+		}
+		if !verifier.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'.' || b == b'_' || b == b'~') {
+			return Err!(Request(InvalidParam("code_verifier contains invalid characters")));
+		}
+		Ok(())
 	}
 
 	pub fn sign_id_token(&self, claims: &IdTokenClaims) -> Result<String> {
