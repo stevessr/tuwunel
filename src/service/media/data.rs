@@ -68,11 +68,14 @@ impl Data {
 		let value = (unused_expires_at, user);
 		debug!(?mxc, ?user, ?unused_expires_at, "Inserting pending");
 
-		self.mediaid_pending.put(mxc, value);
+		self.mediaid_pending
+			.raw_put(mxc.to_string(), value);
 	}
 
 	/// Remove a pending MXC URI from the database
-	pub(super) fn remove_pending_mxc(&self, mxc: &Mxc<'_>) { self.mediaid_pending.del(mxc); }
+	pub(super) fn remove_pending_mxc(&self, mxc: &Mxc<'_>) {
+		self.mediaid_pending.remove(&mxc.to_string());
+	}
 
 	/// Count the number of pending MXC URIs for a specific user
 	pub(super) async fn count_pending_mxc_for_user(&self, user_id: &UserId) -> (usize, u64) {
@@ -96,7 +99,7 @@ impl Data {
 		type Value<'a> = (u64, OwnedUserId);
 
 		self.mediaid_pending
-			.qry(mxc)
+			.get(&mxc.to_string())
 			.await
 			.deserialized()
 			.map(|(expires_at, user_id): Value<'_>| (user_id, expires_at))
