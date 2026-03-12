@@ -15,7 +15,7 @@ use ruma::UserId;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use tuwunel_core::{
-	Err, Result, err, implement, info,
+	Err, Result, err, implement, info, warn,
 	utils::{hash::sha256, result::LogErr, stream::ReadyExt},
 };
 use url::Url;
@@ -46,6 +46,9 @@ impl crate::Service for Service {
 		let oidc_server = if !args.server.config.identity_provider.is_empty()
 			|| args.server.config.well_known.client.is_some()
 		{
+			if args.server.config.identity_provider.is_empty() {
+				warn!("OIDC server enabled (well_known.client is set) but no identity_provider configured; authorization flow will not work");
+			}
 			info!("Initializing OIDC server for next-gen auth (MSC2965)");
 			Some(Arc::new(OidcServer::build(args)?))
 		} else {
