@@ -406,13 +406,13 @@ impl Service {
 		Ok(mxcs)
 	}
 
-	/// Deletes all remote only media files in the given at or after
-	/// time/duration. Returns a usize with the amount of media files deleted.
-	pub async fn delete_all_remote_media_at_after_time(
+	/// Deletes all media files before or after the given time. Returns a usize
+	/// with the number of media files deleted.
+	pub async fn delete_range(
 		&self,
 		time: SystemTime,
-		before: bool,
-		after: bool,
+		older_than: bool,
+		newer_than: bool,
 		yes_i_want_to_delete_local_media: bool,
 	) -> Result<usize> {
 		let all_keys = self.db.get_all_media_keys().await;
@@ -465,7 +465,7 @@ impl Service {
 
 			trace!(%mxc, ?path, "File metadata: {file_metadata:?}");
 
-			let file_created_at = match file_metadata.modified() {
+			let file_modified_at = match file_metadata.modified() {
 				| Ok(value) => value,
 				| Err(err) => {
 					error!("Could not delete MXC {mxc} at path {path:?}: {err:?}. Skipping...");
@@ -473,18 +473,18 @@ impl Service {
 				},
 			};
 
-			debug!("File created at: {file_created_at:?}");
+			debug!("File modified at: {file_modified_at:?}");
 
-			if file_created_at >= time && before {
+			if file_modified_at <= time && older_than {
 				debug!(
-					"File is within (before) user duration, pushing to list of file paths and \
-					 keys to delete."
+					"File is older than user duration, pushing to list of file paths and keys \
+					 to delete."
 				);
 				remote_mxcs.push(mxc.to_string());
-			} else if file_created_at <= time && after {
+			} else if file_modified_at >= time && newer_than {
 				debug!(
-					"File is not within (after) user duration, pushing to list of file paths \
-					 and keys to delete."
+					"File is newer than user duration, pushing to list of file paths and keys \
+					 to delete."
 				);
 				remote_mxcs.push(mxc.to_string());
 			}
