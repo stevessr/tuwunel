@@ -47,9 +47,8 @@ where
 		.unwrap_or(false)
 		.await;
 
-	//NOTE: Not implemented as a fallback/web for now.
-	let has_jwt = false;
 	let jwt_flow = [AuthType::Jwt];
+	let has_jwt = services.config.jwt.enable;
 
 	let mut uiaainfo = UiaaInfo {
 		flows: has_password
