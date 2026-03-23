@@ -1,34 +1,35 @@
-use std::{
-	net::{SocketAddr, TcpListener},
-	sync::Arc,
-};
+use std::net::{SocketAddr, TcpListener};
 
 use axum::Router;
 use axum_server::Handle;
-use tokio::task::JoinSet;
-use tuwunel_core::{Result, Server, info};
+use futures::{FutureExt, future::BoxFuture};
+use tuwunel_core::{Result, itertools::Itertools};
 
-pub(super) fn serve(
-	server: &Arc<Server>,
+pub(super) fn serve<'a>(
 	router: &Router,
 	handle: &Handle<SocketAddr>,
-	join_set: &mut JoinSet<Result<(), std::io::Error>>,
-	listeners: &[TcpListener],
+	listeners: impl Iterator<Item = TcpListener>,
 	addrs: &[SocketAddr],
-) -> Result {
+) -> Result<Vec<BoxFuture<'a, Result<(), std::io::Error>>>> {
 	let router = router
 		.clone()
 		.into_make_service_with_connect_info::<SocketAddr>();
 
-	for listener in listeners {
-		let acceptor = axum_server::from_tcp(listener.try_clone()?)?
-			.handle(handle.clone())
-			.serve(router.clone());
+	let bound_servers = addrs
+		.iter()
+		.map(|addr| -> Result<_> { Ok(axum_server::bind(*addr)) });
 
-		join_set.spawn_on(acceptor, server.runtime());
-	}
+	let passed_servers = listeners.map(|listener| Ok(axum_server::from_tcp(listener)?));
 
-	info!("Listening on {addrs:?}");
+	let acceptors = bound_servers
+		.chain(passed_servers)
+		.map_ok(|server| {
+			server
+				.handle(handle.clone())
+				.serve(router.clone())
+				.boxed()
+		})
+		.collect::<Result<Vec<_>>>()?;
 
-	Ok(())
+	Ok(acceptors)
 }

@@ -5,11 +5,13 @@ mod unix;
 
 use std::{
 	net::{SocketAddr, TcpListener},
+	os::unix::net::UnixListener,
+	path::Path,
 	sync::{Arc, atomic::Ordering},
 };
 
 use tokio::task::JoinSet;
-use tuwunel_core::{Result, debug_info};
+use tuwunel_core::{Err, Result, debug_info, info};
 use tuwunel_service::Services;
 
 use super::layers;
@@ -24,41 +26,58 @@ pub(super) async fn serve(services: Arc<Services>, handle: ServerHandle) -> Resu
 
 	let mut join_set = JoinSet::new();
 
+	let socket_path = &config.unix_socket_path;
+
+	let (passed_tcp_listeners, passed_unix_listeners) = systemd_listeners()?;
+
+	let addrs = config.get_bind_addrs();
+
+	let log_addrs = make_log_addrs(
+		&addrs,
+		socket_path.as_deref(),
+		&passed_tcp_listeners,
+		&passed_unix_listeners,
+	)?;
+
+	let mut futures = vec![];
+
 	#[cfg(unix)]
-	if let Some(unix_socket) = &config.unix_socket_path {
+	{
 		let socket_perms = config.get_unix_socket_perms()?;
 
-		unix::serve(server, &app, &handle.handle_unix, &mut join_set, unix_socket, socket_perms)
-			.await?;
-	}
+		let unix_futures = unix::serve(
+			&app,
+			&handle.handle_unix,
+			passed_unix_listeners.into_iter(),
+			socket_path.as_deref(),
+			socket_perms,
+		)
+		.await?;
 
-	let systemd_listeners: Vec<_> = systemd_listeners().collect();
-	let systemd_listeners_is_empty = systemd_listeners.is_empty();
-	let (listeners, addrs): (Vec<_>, Vec<_>) = config
-		.get_bind_addrs()
-		.into_iter()
-		.filter(|_| systemd_listeners_is_empty)
-		.map(|addr| {
-			let listener = TcpListener::bind(addr)
-				.expect("Failed to bind configured TcpListener to {addr:?}");
+		futures.extend(unix_futures);
+	};
 
-			(listener, addr)
-		})
-		.chain(systemd_listeners)
-		.inspect(|(listener, _)| {
-			listener
-				.set_nonblocking(true)
-				.expect("Failed to set non-blocking");
-		})
-		.unzip();
-
-	#[cfg_attr(not(feature = "direct_tls"), expect(clippy::redundant_else))]
-	if config.tls.certs.is_some() {
+	#[cfg_attr(
+		not(feature = "direct_tls"),
+		expect(clippy::redundant_else, unused_variables)
+	)]
+	if let Some((cert, key)) = config.tls.get_tls_cert_key() {
 		#[cfg(feature = "direct_tls")]
 		{
 			services.globals.init_rustls_provider()?;
-			tls::serve(server, &app, &handle.handle_ip, &mut join_set, &listeners, &addrs)
-				.await?;
+
+			let tls_futures = tls::serve(
+				&app,
+				&handle.handle_ip,
+				cert,
+				key,
+				config.tls.dual_protocol,
+				passed_tcp_listeners.into_iter(),
+				&addrs,
+			)
+			.await?;
+
+			futures.extend(tls_futures);
 		}
 
 		#[cfg(not(feature = "direct_tls"))]
@@ -67,10 +86,21 @@ pub(super) async fn serve(services: Arc<Services>, handle: ServerHandle) -> Resu
 			"tuwunel was not built with direct TLS support (\"direct_tls\")"
 		));
 	} else {
-		plain::serve(server, &app, &handle.handle_ip, &mut join_set, &listeners, &addrs)?;
+		let plain_futures =
+			plain::serve(&app, &handle.handle_ip, passed_tcp_listeners.into_iter(), &addrs)?;
+
+		futures.extend(plain_futures);
 	}
 
-	assert!(!join_set.is_empty(), "at least one listener should be installed");
+	for future in futures {
+		join_set.spawn_on(future, server.runtime());
+	}
+
+	if join_set.is_empty() {
+		return Err!("at least one listener should be installed");
+	}
+
+	info!("Listening on {log_addrs:?}");
 
 	join_set.join_all().await;
 
@@ -97,26 +127,81 @@ pub(super) async fn serve(services: Arc<Services>, handle: ServerHandle) -> Resu
 	Ok(())
 }
 
+fn make_log_addrs(
+	tcp_addrs: &[SocketAddr],
+	unix_path: Option<&Path>,
+	tcp_listeners: &[TcpListener],
+	unix_listeners: &[UnixListener],
+) -> Result<Vec<String>> {
+	let tcp_log_addrs = tcp_addrs.iter().map(|addr| format!("tcp:{addr}"));
+
+	let unix_log_addr = unix_path.as_ref().map(|socket_path| {
+		let path = socket_path.to_string_lossy();
+		format!("unix:{path}")
+	});
+
+	let passed_tcp_log_addrs = tcp_listeners.iter().map(|listener| {
+		let addr = listener.local_addr()?;
+		Ok(format!("passed:tcp:{addr}"))
+	});
+
+	let passed_unix_log_addrs = unix_listeners.iter().map(|listener| {
+		let addr = listener.local_addr()?;
+		let path = addr.as_pathname();
+		let log_path = if let Some(path) = path {
+			&path.to_string_lossy()
+		} else {
+			"?"
+		};
+		Ok(format!("passed:unix:{log_path}"))
+	});
+
+	tcp_log_addrs
+		.map(Ok)
+		.chain(unix_log_addr.into_iter().map(Ok))
+		.chain(passed_tcp_log_addrs)
+		.chain(passed_unix_log_addrs)
+		.collect()
+}
+
 #[cfg(all(feature = "systemd", target_os = "linux"))]
-fn systemd_listeners() -> impl Iterator<Item = (TcpListener, SocketAddr)> {
-	sd_notify::listen_fds()
-		.into_iter()
-		.flatten()
-		.filter_map(|fd| {
-			use std::os::fd::FromRawFd;
+fn systemd_listeners() -> Result<(Vec<TcpListener>, Vec<UnixListener>)> {
+	use std::os::fd::FromRawFd;
 
-			debug_assert!(fd >= 3, "fdno probably not a listener socket");
-			// SAFETY: systemd should already take care of providing
-			// the correct TCP socket, so we just use it via raw fd
-			let listener = unsafe { TcpListener::from_raw_fd(fd) };
+	use tuwunel_core::utils::sys::{SocketFamily, get_socket_family};
 
-			let Ok(addr) = listener.local_addr() else {
-				return None;
-			};
+	let mut tcp = vec![];
+	let mut unix = vec![];
 
-			Some((listener, addr))
-		})
+	for fd in sd_notify::listen_fds()? {
+		debug_assert!(fd >= 3, "fdno probably not a listener socket");
+
+		let family = get_socket_family(fd)?;
+
+		match family {
+			| SocketFamily::Inet => {
+				// SAFETY: systemd should already take care of providing
+				// the correct TCP socket, so we just use it via raw fd
+				let listener = unsafe { TcpListener::from_raw_fd(fd) };
+
+				listener.set_nonblocking(true)?;
+
+				tcp.push(listener);
+			},
+			| SocketFamily::Unix => {
+				// SAFETY: systemd should already take care of providing
+				// the correct UNIX socket, so we just use it via raw fd
+				let listener = unsafe { UnixListener::from_raw_fd(fd) };
+
+				listener.set_nonblocking(true)?;
+
+				unix.push(listener);
+			},
+		}
+	}
+
+	Ok((tcp, unix))
 }
 
 #[cfg(any(not(feature = "systemd"), not(target_os = "linux")))]
-fn systemd_listeners() -> impl Iterator<Item = (TcpListener, SocketAddr)> { std::iter::empty() }
+fn systemd_listeners() -> Result<(Vec<TcpListener>, Vec<UnixListener>)> { Ok((vec![], vec![])) }
