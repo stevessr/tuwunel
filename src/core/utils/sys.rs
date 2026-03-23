@@ -47,3 +47,28 @@ pub fn uevent_find<'a>(uevent: &'a str, key: &'a str) -> Option<&'a str> {
 		.find(|&(key_, _)| key.eq(key_))
 		.map(at!(1))
 }
+
+#[cfg(unix)]
+pub enum SocketFamily {
+	Inet,
+	Unix,
+}
+
+#[cfg(unix)]
+pub fn get_socket_family(fd: i32) -> Result<SocketFamily> {
+	use nix::sys::socket::{AddressFamily, SockaddrLike, SockaddrStorage};
+
+	use crate::{Err, err};
+
+	let sockname: SockaddrStorage = nix::sys::socket::getsockname(fd)?;
+
+	let family = sockname
+		.family()
+		.ok_or_else(|| err!("Invalid socket"))?;
+
+	match family {
+		| AddressFamily::Inet | AddressFamily::Inet6 => Ok(SocketFamily::Inet),
+		| AddressFamily::Unix => Ok(SocketFamily::Unix),
+		| _ => Err!("Unknown socket family: {family:?}"),
+	}
+}

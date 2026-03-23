@@ -3206,6 +3206,21 @@ impl Config {
 	pub fn check(&self) -> Result { check(self) }
 }
 
+impl TlsConfig {
+	#[must_use]
+	pub fn get_tls_cert_key(&self) -> Option<(&Path, &Path)> {
+		let cert = self.certs.as_ref()?;
+
+		let cert = Path::new(cert);
+
+		let key = self.key.as_ref()?; // this cannot fail, aborts startup on cert.is_some ^ key.is_some
+
+		let key = Path::new(key);
+
+		Some((cert, key))
+	}
+}
+
 fn true_fn() -> bool { true }
 
 #[cfg(test)]

@@ -3,51 +3,64 @@
 use std::{
 	fs,
 	net::{IpAddr, Ipv4Addr, SocketAddr},
-	os::unix::{fs::PermissionsExt, net::UnixListener},
+	os::unix::{self, fs::PermissionsExt, net::UnixListener},
 	path::Path,
-	sync::Arc,
 };
 
 use axum::{Extension, Router, extract::ConnectInfo};
 use axum_server::Handle;
-use futures::FutureExt;
-use tokio::task::JoinSet;
-use tuwunel_core::{Result, Server, info, warn};
+use futures::{FutureExt, future::BoxFuture};
+use tuwunel_core::{Result, warn};
 
 #[tracing::instrument(skip_all, level = "debug")]
-pub(super) async fn serve(
-	server: &Arc<Server>,
+pub(super) async fn serve<'a>(
 	router: &Router,
-	handle: &Handle<std::os::unix::net::SocketAddr>,
-	join_set: &mut JoinSet<core::result::Result<(), std::io::Error>>,
-	path: &Path,
+	handle: &Handle<unix::net::SocketAddr>,
+	listeners: impl Iterator<Item = UnixListener>,
+	path: Option<&Path>,
 	socket_perms: u32,
-) -> Result {
-	if path.exists() {
-		warn!("Removing existing UNIX socket {path:?} (unclean shutdown?)...");
-		fs::remove_file(path)?;
-	}
-
-	let unix_listener = UnixListener::bind(path)?;
-	unix_listener.set_nonblocking(true)?;
-
-	let perms = fs::Permissions::from_mode(socket_perms);
-	fs::set_permissions(path, perms)?;
-
+) -> Result<Vec<BoxFuture<'a, Result<(), std::io::Error>>>> {
 	let router = router
 		.clone()
 		.layer(Extension(ConnectInfo(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0))))
 		.into_make_service();
-	let acceptor = axum_server::from_unix(unix_listener)?
-		.handle(handle.clone())
-		.serve(router)
-		.map({
-			let path = path.to_owned();
-			|_| fs::remove_file(path)
-		});
-	join_set.spawn_on(acceptor, server.runtime());
 
-	info!("Listening at {path:?}");
+	let mut acceptors = listeners
+		.map(|listener| {
+			Ok(axum_server::from_unix(listener)?
+				.handle(handle.clone())
+				.serve(router.clone())
+				.boxed())
+		})
+		.collect::<Result<Vec<_>>>()?;
 
-	Ok(())
+	if let Some(path) = path {
+		if path.exists() {
+			warn!("Removing existing UNIX socket {path:?} (unclean shutdown?)...");
+			fs::remove_file(path)?;
+		}
+
+		let unix_listener = UnixListener::bind(path)?;
+		unix_listener.set_nonblocking(true)?;
+
+		let perms = fs::Permissions::from_mode(socket_perms);
+		fs::set_permissions(path, perms)?;
+
+		let bound_acceptor = axum_server::from_unix(unix_listener)?
+			.handle(handle.clone())
+			.serve(router)
+			.inspect({
+				let path = path.to_owned();
+				|_| {
+					if let Err(err) = fs::remove_file(path) {
+						warn!("Failed to remove UNIX socket: {err}");
+					}
+				}
+			})
+			.boxed();
+
+		acceptors.push(bound_acceptor);
+	}
+
+	Ok(acceptors)
 }

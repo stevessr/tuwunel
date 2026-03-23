@@ -55,16 +55,6 @@ pub fn check(config: &Config) -> Result {
 		));
 	}
 
-	if config.unix_socket_path.is_none() {
-		if config.get_bind_hosts().is_empty() {
-			return Err!(Config("address", "No TCP addresses were specified to listen on"));
-		}
-
-		if config.get_bind_ports().is_empty() {
-			return Err!(Config("port", "No ports were specified to listen on"));
-		}
-	}
-
 	let certs_set = config.tls.certs.is_some();
 	let key_set = config.tls.key.is_some();
 	if certs_set ^ key_set {
