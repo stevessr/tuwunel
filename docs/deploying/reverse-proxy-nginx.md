@@ -30,8 +30,9 @@ upstream tuwunel {
 
 # Client-Server API over HTTPS (port 443)
 server {
-  listen 443 ssl http2;
-  listen [::]:443 ssl http2;
+  listen 443 ssl;
+  listen [::]:443 ssl;
+  http2 on;
   server_name matrix.example.com;
 
   # Nginx standard body size is 1MB, which is quite small for media uploads
@@ -57,8 +58,9 @@ server {
 # Only needed if you want to federate with other homeservers
 # Don't forget to open port 8448 in your firewall!
 server {
-  listen 8448 ssl http2;
-  listen [::]:8448 ssl http2;
+  listen 8448 ssl;
+  listen [::]:8448 ssl;
+  http2 on;
   server_name matrix.example.com;
 
   # Same body size increase for larger files
