@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
 use futures::{Stream, StreamExt, TryFutureExt, future::Either};
-use ruma::{EventId, RoomId, UserId, api::Direction};
+use ruma::{
+	EventId, RoomId, UserId,
+	api::Direction,
+	events::{reaction::ReactionEventContent, relation::RelationType},
+};
 use tuwunel_core::{
 	PduId, Result,
 	arrayvec::ArrayVec,
-	implement,
-	matrix::{Event, Pdu, PduCount, RawPduId},
+	implement, is_equal_to,
+	matrix::{Event, Pdu, PduCount, RawPduId, event::RelationTypeEqual},
 	result::LogErr,
 	trace,
 	utils::{
@@ -58,6 +62,59 @@ pub fn add_relation(&self, from: PduCount, to: PduCount) {
 		},
 		| _ => {}, // TODO: Relations with backfilled pdus
 	}
+}
+
+/// Query relations of an event to determine if matching any of the trailing
+/// arguments. When all criteria are None the mere presence of a relation causes
+/// this function to return true.
+#[implement(Service)]
+pub async fn event_has_relation(
+	&self,
+	event_id: &EventId,
+	user_id: Option<&UserId>,
+	rel_type: Option<&RelationType>,
+	key: Option<&str>,
+) -> bool {
+	let Ok(pdu_id) = self.services.timeline.get_pdu_id(event_id).await else {
+		return false;
+	};
+
+	self.has_relation(pdu_id.into(), user_id, rel_type, key)
+		.await
+}
+
+/// Query relations of an event by PduId to determine if matching any of the
+/// trailing arguments. When all criteria are None the mere presence of a
+/// relation causes this function to return true.
+#[implement(Service)]
+pub async fn has_relation(
+	&self,
+	target: PduId,
+	user_id: Option<&UserId>,
+	rel_type: Option<&RelationType>,
+	key: Option<&str>,
+) -> bool {
+	self.get_relations(target.shortroomid, target.count, None, Direction::Forward, None)
+		.ready_filter(|(_, pdu)| user_id.is_none_or(is_equal_to!(pdu.sender())))
+		.ready_filter(|(_, pdu)| {
+			debug_assert!(
+				key.is_none() || rel_type.is_none_or(is_equal_to!(&RelationType::Annotation)),
+				"key argument only applies to Annotation type relations."
+			);
+
+			// When key is supplied we don't need to double-parse the content here and below.
+			key.is_some() || rel_type
+				.is_none_or(|rel_type| rel_type.relation_type_equal(&pdu))
+		})
+		.ready_filter(|(_, pdu)| {
+			key.is_none_or(|key| {
+				pdu.get_content::<ReactionEventContent>()
+					.map(|content| content.relates_to.key == key)
+					.unwrap_or(false)
+			})
+		})
+		.ready_any(|_| true) // first match or false
+		.await
 }
 
 #[implement(Service)]
