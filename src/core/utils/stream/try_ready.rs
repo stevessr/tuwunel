@@ -4,8 +4,8 @@
 use futures::{
 	future::{Ready, ready},
 	stream::{
-		AndThen, TryFilterMap, TryFold, TryForEach, TrySkipWhile, TryStream, TryStreamExt,
-		TryTakeWhile,
+		AndThen, TryFilter, TryFilterMap, TryFold, TryForEach, TrySkipWhile, TryStream,
+		TryStreamExt, TryTakeWhile,
 	},
 };
 
@@ -25,6 +25,13 @@ where
 	) -> AndThen<Self, Ready<Result<U, E>>, impl FnMut(S::Ok) -> Ready<Result<U, E>>>
 	where
 		F: Fn(S::Ok) -> Result<U, E>;
+
+	fn ready_try_filter<F>(
+		self,
+		f: F,
+	) -> TryFilter<Self, Ready<bool>, impl FnMut(&S::Ok) -> Ready<bool>>
+	where
+		F: Fn(&S::Ok) -> bool;
 
 	fn ready_try_filter_map<F, U>(
 		self,
@@ -91,6 +98,18 @@ where
 		self.and_then(move |t| ready(f(t)))
 	}
 
+	#[inline]
+	fn ready_try_filter<F>(
+		self,
+		f: F,
+	) -> TryFilter<Self, Ready<bool>, impl FnMut(&S::Ok) -> Ready<bool>>
+	where
+		F: Fn(&S::Ok) -> bool,
+	{
+		self.try_filter(move |t| ready(f(t)))
+	}
+
+	#[inline]
 	fn ready_try_filter_map<F, U>(
 		self,
 		f: F,
