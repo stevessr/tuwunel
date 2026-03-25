@@ -1,0 +1,32 @@
+#![cfg(test)]
+#![allow(unused_features)] // 1.96.0-nightly 2026-03-07 bug
+
+use insta::{assert_debug_snapshot, with_settings};
+use tokio::{
+	select,
+	time::{Duration, sleep},
+};
+use tuwunel::{Args, Server, runtime};
+use tuwunel_core::{Err, Result};
+
+#[test]
+fn listener_init_ok() -> Result {
+	with_settings!({
+		description => "Listener Initialization Ok",
+		snapshot_suffix => "listener_init_ok",
+	}, {
+		let args = Args::default_test(&["fresh", "cleanup"]);
+
+		let runtime = runtime::new(Some(&args))?;
+		let server = Server::new(Some(&args), Some(runtime.handle()))?;
+		let result = runtime.block_on(async {
+			select! {
+				() = sleep(Duration::from_secs(5)) => Ok(()),
+				_ = tuwunel::async_exec(&server) => Err!("Premature server shutdown"),
+			}
+		});
+
+		assert_debug_snapshot!(result);
+		result
+	})
+}
