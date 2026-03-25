@@ -1,12 +1,15 @@
 use std::collections::BTreeMap;
 
 use axum::extract::State;
+use futures::{FutureExt, future::try_join3};
 use ruma::{
+	DeviceId, RoomId, TransactionId, UserId,
 	api::client::message::send_message_event,
 	events::{
-		MessageLikeEventType, reaction::ReactionEventContent,
+		AnyMessageLikeEventContent, MessageLikeEventType, reaction::ReactionEventContent,
 		room::redaction::RoomRedactionEventContent,
 	},
+	serde::Raw,
 };
 use serde_json::from_str;
 use tuwunel_core::{
@@ -15,6 +18,7 @@ use tuwunel_core::{
 	utils::{self},
 	warn,
 };
+use tuwunel_service::Services;
 
 use crate::Ruma;
 
@@ -64,60 +68,22 @@ pub(crate) async fn send_message_event_route(
 	}
 
 	// Forbid m.room.encrypted if encryption is disabled
-	if MessageLikeEventType::RoomEncrypted == body.event_type && !services.config.allow_encryption
+	if body.event_type == MessageLikeEventType::RoomEncrypted && !services.config.allow_encryption
 	{
 		return Err!(Request(Forbidden("Encryption has been disabled")));
 	}
 
 	let state_lock = services.state.mutex.lock(&body.room_id).await;
 
-	if body.event_type == MessageLikeEventType::CallInvite
-		&& services
-			.directory
-			.is_public_room(&body.room_id)
-			.await
-	{
-		return Err!(Request(Forbidden("Room call invites are not allowed in public rooms")));
-	}
+	let (existing_txnid, ..) = try_join3(
+		check_existing_txnid(&services, sender_user, sender_device, &body.txn_id).map(Ok),
+		check_duplicate_reaction(&services, &body.event_type, sender_user, &body.body.body),
+		check_public_call_invite(&services, &body.event_type, &body.room_id),
+	)
+	.await?;
 
-	// Forbid duplicate reactions
-	if body.event_type == MessageLikeEventType::Reaction
-		&& let Ok(content) = body
-			.body
-			.body
-			.deserialize_as_unchecked::<ReactionEventContent>()
-		&& services
-			.pdu_metadata
-			.event_has_relation(
-				&content.relates_to.event_id,
-				Some(sender_user),
-				None,
-				Some(&content.relates_to.key),
-			)
-			.await
-	{
-		return Err!(Request(DuplicateAnnotation("Duplicate reactions are not allowed.")));
-	}
-
-	// Check if this is a new transaction id
-	if let Ok(response) = services
-		.transaction_ids
-		.existing_txnid(sender_user, sender_device, &body.txn_id)
-		.await
-	{
-		// The client might have sent a txnid of the /sendToDevice endpoint
-		// This txnid has no response associated with it
-		if response.is_empty() {
-			return Err!(Request(InvalidParam(
-				"Tried to use txn id already used for an incompatible endpoint."
-			)));
-		}
-
-		return Ok(send_message_event::v3::Response {
-			event_id: utils::string_from_bytes(&response)
-				.map(TryInto::try_into)
-				.map_err(|e| err!(Database("Invalid event_id in txnid data: {e:?}")))??,
-		});
+	if let Some(existing_txnid) = existing_txnid {
+		return existing_txnid;
 	}
 
 	let mut unsigned = BTreeMap::new();
@@ -152,4 +118,83 @@ pub(crate) async fn send_message_event_route(
 	drop(state_lock);
 
 	Ok(send_message_event::v3::Response { event_id })
+}
+
+async fn check_public_call_invite(
+	services: &Services,
+	event_type: &MessageLikeEventType,
+	room_id: &RoomId,
+) -> Result {
+	if *event_type != MessageLikeEventType::CallInvite {
+		return Ok(());
+	}
+
+	if !services.directory.is_public_room(room_id).await {
+		return Ok(());
+	}
+
+	Err!(Request(Forbidden("Room call invites are not allowed in public rooms")))
+}
+
+// Forbid duplicate reactions
+async fn check_duplicate_reaction(
+	services: &Services,
+	event_type: &MessageLikeEventType,
+	sender_user: &UserId,
+	body: &Raw<AnyMessageLikeEventContent>,
+) -> Result {
+	if *event_type != MessageLikeEventType::Reaction {
+		return Ok(());
+	}
+
+	let Ok(content) = body.deserialize_as_unchecked::<ReactionEventContent>() else {
+		return Ok(());
+	};
+
+	if !services
+		.pdu_metadata
+		.event_has_relation(
+			&content.relates_to.event_id,
+			Some(sender_user),
+			None,
+			Some(&content.relates_to.key),
+		)
+		.await
+	{
+		return Ok(());
+	}
+
+	Err!(Request(DuplicateAnnotation("Duplicate reactions are not allowed.")))
+}
+
+/// Check if this is a new transaction id. Returns Some when the transaction id
+/// exists and the send must then be terminated by returning the contained
+/// result.
+async fn check_existing_txnid(
+	services: &Services,
+	sender_user: &UserId,
+	sender_device: Option<&DeviceId>,
+	txn_id: &TransactionId,
+) -> Option<Result<send_message_event::v3::Response>> {
+	let Ok(response) = services
+		.transaction_ids
+		.existing_txnid(sender_user, sender_device, txn_id)
+		.await
+	else {
+		return None;
+	};
+
+	// The client might have sent a txnid of the /sendToDevice endpoint
+	// This txnid has no response associated with it
+	if response.is_empty() {
+		return Some(Err!(Request(InvalidParam(
+			"Tried to use txn_id already used for an incompatible endpoint."
+		))));
+	}
+
+	let Ok(Ok(event_id)) = utils::string_from_bytes(&response).map(TryInto::try_into) else {
+		return Some(Err!(Database("Invalid event_id in txn_id data: {response:?}.")));
+	};
+
+	Some(Ok(send_message_event::v3::Response { event_id }))
 }
