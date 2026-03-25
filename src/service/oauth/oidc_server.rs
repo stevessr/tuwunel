@@ -144,7 +144,9 @@ pub struct IdTokenClaims {
 
 impl ProviderMetadata {
 	#[must_use]
-	pub fn into_json(self) -> serde_json::Value { serde_json::to_value(self).unwrap() }
+	pub fn into_json(self) -> serde_json::Value {
+		serde_json::to_value(self).expect("ProviderMetadata serialization")
+	}
 }
 
 impl OidcServer {
@@ -202,9 +204,15 @@ impl OidcServer {
 		let public_bytes = key_pair.public_key().as_ref();
 		let x = b64.encode(&public_bytes[1..33]);
 		let y = b64.encode(&public_bytes[33..65]);
-		Ok(
-			serde_json::json!({"kty": "EC", "crv": "P-256", "use": "sig", "alg": "ES256", "kid": key_id, "x": x, "y": y}),
-		)
+		Ok(serde_json::json!({
+			"kty": "EC",
+			"crv": "P-256",
+			"use": "sig",
+			"alg": "ES256",
+			"kid": key_id,
+			"x": x,
+			"y": y,
+		}))
 	}
 
 	pub fn register_client(&self, request: DcrRequest) -> Result<OidcClientRegistration> {
@@ -385,7 +393,11 @@ impl OidcServer {
 	}
 
 	#[must_use]
-	pub fn jwks(&self) -> serde_json::Value { serde_json::json!({"keys": [self.jwk.clone()]}) }
+	pub fn jwks(&self) -> serde_json::Value {
+		serde_json::json!({
+			"keys": [self.jwk.clone()],
+		})
+	}
 
 	#[must_use]
 	pub fn at_hash(access_token: &str) -> String {
