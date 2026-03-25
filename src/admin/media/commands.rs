@@ -167,27 +167,22 @@ pub(super) async fn delete_list(&self) -> Result {
 }
 
 #[admin_command]
-pub(super) async fn delete_past_remote_media(
+pub(super) async fn delete_range(
 	&self,
 	duration: String,
-	before: bool,
-	after: bool,
+	older_than: bool,
+	newer_than: bool,
 	yes_i_want_to_delete_local_media: bool,
 ) -> Result {
-	if before && after {
-		return Err!("Please only pick one argument, --before or --after.",);
+	if older_than == newer_than {
+		return Err!("Please pick only one of --older_than or --newer_than.",);
 	}
 
 	let duration = parse_timepoint_ago(&duration)?;
 	let deleted_count = self
 		.services
 		.media
-		.delete_all_remote_media_at_after_time(
-			duration,
-			before,
-			after,
-			yes_i_want_to_delete_local_media,
-		)
+		.delete_range(duration, older_than, newer_than, yes_i_want_to_delete_local_media)
 		.await?;
 
 	self.write_str(&format!("Deleted {deleted_count} total files."))
