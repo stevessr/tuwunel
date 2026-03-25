@@ -95,7 +95,7 @@ async fn handle_room(
 		"Stale room shouldn't be in the window"
 	);
 
-	if *membership == Some(MembershipState::Leave) {
+	if matches!(*membership, Some(MembershipState::Leave | MembershipState::Ban)) {
 		return Ok(response::Room {
 			initial: roomsince.eq(&0).then_some(true),
 			lists: lists.clone(),
