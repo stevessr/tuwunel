@@ -137,9 +137,15 @@ pub(super) async fn filter_room_meta(
 		.is_invited(sender_user, room_id)
 		.is_false();
 
-	pin_mut!(not_visible, not_invited, not_exists, is_disabled, is_banned);
+	let not_once_joined = services
+		.state_cache
+		.once_joined(sender_user, room_id)
+		.is_false();
+
+	pin_mut!(not_visible, not_invited, not_once_joined, not_exists, is_disabled, is_banned);
 	not_visible
 		.and(not_invited)
+		.and(not_once_joined)
 		.or(not_exists)
 		.or(is_disabled)
 		.or(is_banned)
