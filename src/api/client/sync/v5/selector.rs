@@ -1,6 +1,9 @@
 use std::cmp::Ordering;
 
-use futures::{FutureExt, StreamExt, TryFutureExt, future::join5};
+use futures::{
+	FutureExt, StreamExt, TryFutureExt,
+	future::{join, join5},
+};
 use ruma::{OwnedRoomId, UInt, events::room::member::MembershipState, uint};
 use tuwunel_core::{
 	apply, is_true,
@@ -208,19 +211,20 @@ where
 		.iter()
 		.stream()
 		.broad_filter_map(async |(room_id, _)| {
-			filter_room_meta(sync_info, room_id)
-				.await
-				.into_option()?;
+			let membership = services
+				.state_cache
+				.user_membership(sender_user, room_id);
 
-			Some(WindowRoom {
+			let filter = filter_room_meta(sync_info, room_id);
+
+			let (membership, filter) = join(membership, filter).await;
+
+			filter.then(|| WindowRoom {
 				room_id: room_id.clone(),
 				lists: Default::default(),
 				ranked: usize::MAX,
 				last_count: 0,
-				membership: services
-					.state_cache
-					.user_membership(sender_user, room_id)
-					.await,
+				membership,
 			})
 		})
 		.map(|room| (room.room_id.clone(), room));
