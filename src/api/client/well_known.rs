@@ -1,12 +1,11 @@
 use axum::{Json, extract::State, response::IntoResponse};
 use ruma::api::client::discovery::{
-	discover_homeserver::{self, HomeserverInfo, RtcFocusInfo},
+	discover_homeserver::{self, HomeserverInfo},
 	discover_support::{self, Contact},
 };
-use serde_json::Value as JsonValue;
-use tuwunel_core::{Err, Result, err, error::inspect_log};
+use tuwunel_core::{Err, Result};
 
-use crate::Ruma;
+use crate::{Ruma, client::rtc};
 
 /// # `GET /.well-known/matrix/client`
 ///
@@ -23,40 +22,10 @@ pub(crate) async fn well_known_client(
 		},
 	};
 
-	// Add RTC transport configuration if available (MSC4143 / Element Call)
-	// Element Call has evolved through several versions with different field
-	// expectations
-	let mut rtc_foci: Vec<_> = services
-		.server
-		.config
-		.well_known
-		.rtc_transports
-		.iter()
-		.map(|transport| {
-			let focus_type = transport
-				.get("type")
-				.and_then(JsonValue::as_str)
-				.ok_or_else(|| err!("`type` is not a valid string"))?;
-
-			let transport = transport
-				.as_object()
-				.cloned()
-				.ok_or_else(|| err!("`rtc_transport` is not a valid object"))?;
-
-			RtcFocusInfo::new(focus_type, transport).map_err(Into::into)
-		})
-		.collect::<Result<_>>()
-		.map_err(|e| {
-			err!(Config("global.well_known.rtc_transports", "Malformed value(s): {e:?}"))
-		})
-		.inspect_err(inspect_log)?;
-
-	if let Some(livekit_url) = &services.config.well_known.livekit_url {
-		rtc_foci.push(RtcFocusInfo::livekit(livekit_url.clone()));
-	}
+	let transports = rtc::get_transports(&services)?;
 
 	Ok(discover_homeserver::Response {
-		rtc_foci,
+		rtc_foci: transports,
 		..discover_homeserver::Response::new(homeserver)
 	})
 }
