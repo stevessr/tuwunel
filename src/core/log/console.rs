@@ -14,7 +14,7 @@ use tracing_subscriber::{
 	registry::LookupSpan,
 };
 
-use crate::{Config, Result, apply, is_equal_to};
+use crate::{Config, Result, apply, debug, is_equal_to};
 
 static SYSTEMD_MODE: LazyLock<bool> =
 	LazyLock::new(|| env::var("SYSTEMD_EXEC_PID").is_ok() && env::var("JOURNAL_STREAM").is_ok());
@@ -108,7 +108,7 @@ where
 		writer: Writer<'_>,
 		event: &Event<'_>,
 	) -> Result<(), std::fmt::Error> {
-		let is_debug = cfg!(debug_assertions)
+		let is_debug = debug::logging()
 			&& event
 				.fields()
 				.map(|field| field.name())

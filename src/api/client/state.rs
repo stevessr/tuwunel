@@ -123,11 +123,11 @@ pub(crate) async fn get_state_events_for_key_route(
 		.state_accessor
 		.room_state_get(&body.room_id, &body.event_type, &body.state_key)
 		.await
-		.map_err(|_| {
+		.map_err(|e| {
 			err!(Request(NotFound(debug_warn!(
-					room_id = ?body.room_id,
-					event_type = ?body.event_type,
-					"State event not found in room.",
+				room_id = ?body.room_id,
+				event_type = ?body.event_type,
+				"Failed to get state event: {e}.",
 			))))
 		})?;
 
