@@ -10,7 +10,10 @@ use tuwunel_core::{
 };
 use tuwunel_service::Services;
 
-pub(crate) use self::{v3::sync_events_route, v5::sync_events_v5_route};
+pub(crate) use self::{
+	v3::{calculate_heroes, sync_events_route},
+	v5::sync_events_v5_route,
+};
 
 async fn load_timeline(
 	services: &Services,
