@@ -113,9 +113,23 @@ pub(crate) async fn registration_route(
 
 	Ok((
 		StatusCode::CREATED,
-		Json(
-			serde_json::json!({"client_id": reg.client_id, "client_id_issued_at": reg.registered_at, "redirect_uris": reg.redirect_uris, "client_name": reg.client_name, "client_uri": reg.client_uri, "logo_uri": reg.logo_uri, "contacts": reg.contacts, "token_endpoint_auth_method": reg.token_endpoint_auth_method, "grant_types": reg.grant_types, "response_types": reg.response_types, "application_type": reg.application_type, "policy_uri": reg.policy_uri, "tos_uri": reg.tos_uri, "software_id": reg.software_id, "software_version": reg.software_version}),
-		),
+		Json(serde_json::json!({
+			"client_id": reg.client_id,
+			"client_id_issued_at": reg.registered_at,
+			"redirect_uris": reg.redirect_uris,
+			"client_name": reg.client_name,
+			"client_uri": reg.client_uri,
+			"logo_uri": reg.logo_uri,
+			"contacts": reg.contacts,
+			"token_endpoint_auth_method": reg.token_endpoint_auth_method,
+			"grant_types": reg.grant_types,
+			"response_types": reg.response_types,
+			"application_type": reg.application_type,
+			"policy_uri": reg.policy_uri,
+			"tos_uri": reg.tos_uri,
+			"software_id": reg.software_id,
+			"software_version": reg.software_version,
+		})),
 	))
 }
 
@@ -339,7 +353,12 @@ async fn token_authorization_code(
 		None
 	};
 
-	let mut response = serde_json::json!({"access_token": access_token, "token_type": "Bearer", "scope": session.scope, "refresh_token": refresh_token});
+	let mut response = serde_json::json!({
+		"access_token": access_token,
+		"token_type": "Bearer",
+		"scope": session.scope,
+		"refresh_token": refresh_token,
+	});
 	if let Some(expires_in) = expires_in {
 		response["expires_in"] = serde_json::json!(expires_in.as_secs());
 	}
@@ -377,7 +396,11 @@ async fn token_refresh(
 		)
 		.await?;
 
-	let mut response = serde_json::json!({"access_token": new_access_token, "token_type": "Bearer", "refresh_token": new_refresh_token});
+	let mut response = serde_json::json!({
+		"access_token": new_access_token,
+		"token_type": "Bearer",
+		"refresh_token": new_refresh_token,
+	});
 	if let Some(expires_in) = expires_in {
 		response["expires_in"] = serde_json::json!(expires_in.as_secs());
 	}
@@ -422,9 +445,11 @@ pub(crate) async fn userinfo_route(
 	};
 	let displayname = services.users.displayname(&user_id).await.ok();
 	let avatar_url = services.users.avatar_url(&user_id).await.ok();
-	Ok(Json(
-		serde_json::json!({"sub": user_id.to_string(), "name": displayname, "picture": avatar_url}),
-	))
+	Ok(Json(serde_json::json!({
+		"sub": user_id.to_string(),
+		"name": displayname,
+		"picture": avatar_url,
+	})))
 }
 
 pub(crate) async fn account_route() -> impl IntoResponse {
@@ -441,7 +466,10 @@ fn oauth_error(
 ) -> http::Response<axum::body::Body> {
 	(
 		status,
-		Json(serde_json::json!({"error": error, "error_description": description})),
+		Json(serde_json::json!({
+			"error": error,
+			"error_description": description,
+		})),
 	)
 		.into_response()
 }
