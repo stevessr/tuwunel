@@ -311,9 +311,7 @@ fn update_cache_list(request: &request::List, cached: &mut request::List) {
 
 #[implement(Connection)]
 fn update_cache_subscriptions(request: &Request, cached: &mut Self) {
-	cached
-		.subscriptions
-		.extend(request.room_subscriptions.clone());
+	cached.subscriptions = request.room_subscriptions.clone();
 }
 
 #[implement(Connection)]
