@@ -101,8 +101,6 @@
 {"Action":"fail","Test":"TestDelayedEvents/delayed_state_events_can_be_cancelled"}
 {"Action":"fail","Test":"TestDelayedEvents/delayed_state_events_can_be_restarted"}
 {"Action":"fail","Test":"TestDelayedEvents/delayed_state_events_can_be_sent_on_request"}
-{"Action":"fail","Test":"TestDelayedEvents/delayed_state_is_cancelled_by_new_state_from_another_user"}
-{"Action":"fail","Test":"TestDelayedEvents/delayed_state_is_not_cancelled_by_new_state_from_the_same_user"}
 {"Action":"pass","Test":"TestDelayedEvents/parallel"}
 {"Action":"pass","Test":"TestDelayedEvents/parallel/cannot_cancel_a_delayed_event_without_a_matching_delay_ID"}
 {"Action":"pass","Test":"TestDelayedEvents/parallel/cannot_restart_a_delayed_event_without_a_matching_delay_ID"}
@@ -219,7 +217,7 @@
 {"Action":"pass","Test":"TestJoinViaRoomIDAndServerName"}
 {"Action":"fail","Test":"TestJson"}
 {"Action":"fail","Test":"TestJson/Parallel"}
-{"Action":"fail","Test":"TestJson/Parallel/Invalid_JSON_special_values"}
+{"Action":"pass","Test":"TestJson/Parallel/Invalid_JSON_special_values"}
 {"Action":"fail","Test":"TestJson/Parallel/Invalid_numerical_values"}
 {"Action":"fail","Test":"TestJumpToDateEndpoint"}
 {"Action":"fail","Test":"TestKeyChangesLocal"}
@@ -504,6 +502,8 @@
 {"Action":"pass","Test":"TestPushSync/Enabling_a_push_rule_wakes_up_an_incremental_/sync"}
 {"Action":"pass","Test":"TestPushSync/Push_rules_come_down_in_an_initial_/sync"}
 {"Action":"pass","Test":"TestPushSync/Setting_actions_for_a_push_rule_wakes_up_an_incremental_/sync"}
+{"Action":"pass","Test":"TestRedact"}
+{"Action":"pass","Test":"TestRedact/Event_content_is_redacted"}
 {"Action":"pass","Test":"TestRegistration"}
 {"Action":"pass","Test":"TestRegistration/parallel"}
 {"Action":"pass","Test":"TestRegistration/parallel/GET_/register/available_returns_M_INVALID_USERNAME_for_invalid_user_name"}
@@ -698,7 +698,7 @@
 {"Action":"pass","Test":"TestSearch/parallel/Search_results_with_rank_ordering_do_not_include_redacted_events"}
 {"Action":"pass","Test":"TestSearch/parallel/Search_results_with_recent_ordering_do_not_include_redacted_events"}
 {"Action":"pass","Test":"TestSearch/parallel/Search_works_across_an_upgraded_room_and_its_predecessor"}
-{"Action":"fail","Test":"TestSendAndFetchMessage"}
+{"Action":"pass","Test":"TestSendAndFetchMessage"}
 {"Action":"skip","Test":"TestSendJoinPartialStateResponse"}
 {"Action":"pass","Test":"TestSendMessageWithTxn"}
 {"Action":"pass","Test":"TestServerCapabilities"}
@@ -710,6 +710,8 @@
 {"Action":"pass","Test":"TestSync/parallel/Device_list_tracking/User_is_correctly_listed_when_they_leave,_even_when_lazy_loading_is_enabled"}
 {"Action":"pass","Test":"TestSync/parallel/Full_state_sync_includes_joined_rooms"}
 {"Action":"fail","Test":"TestSync/parallel/Get_presence_for_newly_joined_members_in_incremental_sync"}
+{"Action":"fail","Test":"TestSync/parallel/Initial_sync_with_lazy-loading_room_members_->_private_room_`state_after`_includes_all_members_from_timeline"}
+{"Action":"fail","Test":"TestSync/parallel/Initial_sync_with_lazy-loading_room_members_->_public_room_`state_after`_includes_all_members_from_timeline"}
 {"Action":"pass","Test":"TestSync/parallel/Newly_joined_room_has_correct_timeline_in_incremental_sync"}
 {"Action":"fail","Test":"TestSync/parallel/Newly_joined_room_includes_presence_in_incremental_sync"}
 {"Action":"pass","Test":"TestSync/parallel/Newly_joined_room_is_included_in_an_incremental_sync"}
