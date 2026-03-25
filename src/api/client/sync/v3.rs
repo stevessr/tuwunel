@@ -1305,47 +1305,42 @@ async fn calculate_counts(
 	(Some(joined_member_count), Some(invited_member_count), heroes.await)
 }
 
-async fn calculate_heroes(
+pub(crate) async fn calculate_heroes(
 	services: &Services,
 	room_id: &RoomId,
 	sender_user: &UserId,
 ) -> Vec<OwnedUserId> {
+	const LIMIT: usize = 5;
+
 	services
 		.state_accessor
 		.room_state_type_pdus(room_id, &StateEventType::RoomMember)
 		.ready_filter_map(Result::ok)
-		.fold_default(|heroes: Vec<_>, pdu| {
-			fold_hero(heroes, services, room_id, sender_user, pdu)
-		})
+		.filter_map(|pdu| filter_hero(services, room_id, sender_user, pdu))
+		.take(LIMIT)
+		.collect::<Vec<_>>()
 		.await
 }
 
-async fn fold_hero<Pdu: Event>(
-	mut heroes: Vec<OwnedUserId>,
+async fn filter_hero<Pdu: Event>(
 	services: &Services,
 	room_id: &RoomId,
 	sender_user: &UserId,
 	pdu: Pdu,
-) -> Vec<OwnedUserId> {
-	let Some(user_id): Option<&UserId> = pdu.state_key().map(TryInto::try_into).flat_ok() else {
-		return heroes;
-	};
+) -> Option<OwnedUserId> {
+	let user_id = pdu.state_key().map(TryInto::try_into).flat_ok()?;
 
 	if user_id == sender_user {
-		return heroes;
+		return None;
 	}
 
 	let Ok(content): Result<RoomMemberEventContent, _> = pdu.get_content() else {
-		return heroes;
+		return None;
 	};
 
 	// The membership was and still is invite or join
 	if !matches!(content.membership, MembershipState::Join | MembershipState::Invite) {
-		return heroes;
-	}
-
-	if heroes.iter().any(is_equal_to!(user_id)) {
-		return heroes;
+		return None;
 	}
 
 	let (is_invited, is_joined) = join(
@@ -1355,11 +1350,10 @@ async fn fold_hero<Pdu: Event>(
 	.await;
 
 	if !is_joined && is_invited {
-		return heroes;
+		return None;
 	}
 
-	heroes.push(user_id.to_owned());
-	heroes
+	Some(user_id.to_owned())
 }
 
 async fn typings_event_for_user(
