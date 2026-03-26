@@ -13,7 +13,7 @@ use std::cmp::Ordering;
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId,
 	OwnedRoomId, OwnedServerName, OwnedUserId, RoomId, UInt, UserId, events::TimelineEventType,
-	room_version_rules::RoomVersionRules,
+	room_version_rules::RoomVersionRules, serde::Raw,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue as RawJsonValue;
@@ -40,7 +40,7 @@ pub struct Pdu {
 	#[serde(rename = "type")]
 	pub kind: TimelineEventType,
 
-	pub content: Box<RawJsonValue>,
+	pub content: Raw<CanonicalJsonObject>,
 
 	pub event_id: OwnedEventId,
 
@@ -178,7 +178,7 @@ where
 	}
 
 	#[inline]
-	fn content(&self) -> &RawJsonValue { &self.content }
+	fn content(&self) -> &RawJsonValue { self.content.json() }
 
 	#[inline]
 	fn event_id(&self) -> &EventId { &self.event_id }
@@ -249,7 +249,7 @@ where
 	}
 
 	#[inline]
-	fn content(&self) -> &RawJsonValue { &self.content }
+	fn content(&self) -> &RawJsonValue { self.content.json() }
 
 	#[inline]
 	fn event_id(&self) -> &EventId { &self.event_id }

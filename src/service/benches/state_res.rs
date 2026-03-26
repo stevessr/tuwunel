@@ -452,7 +452,7 @@ where
 		origin_server_ts: ts.try_into().unwrap(),
 		state_key: state_key.map(Into::into),
 		kind: ev_type,
-		content,
+		content: content.into(),
 		redacts: None,
 		unsigned: None,
 		auth_events,
