@@ -40,7 +40,7 @@ pub struct Pdu {
 	#[serde(rename = "type")]
 	pub kind: TimelineEventType,
 
-	pub content: Raw<CanonicalJsonObject>,
+	pub content: Content,
 
 	pub event_id: OwnedEventId,
 
@@ -89,6 +89,11 @@ pub type PrevEvents = SmallVec<[OwnedEventId; 1]>;
 /// debatable whether this could be an ArrayVec but the realistic upper-bound is
 /// too high and non-deterministic in the era of restricted-type rooms.
 pub type AuthEvents = SmallVec<[OwnedEventId; 3]>;
+
+/// Tuned content buffer. This was chosen empirically based on a significantly
+/// high-rate modality in the 96-112B size class reported by jemalloc. With two
+/// additional words (hopefully) for the SmallVec it puts us squarely at 128B.
+pub type Content = Raw<CanonicalJsonObject, 112>;
 
 /// The [maximum size allowed] for a PDU.
 /// [maximum size allowed]: https://spec.matrix.org/latest/client-server-api/#size-limits
