@@ -3,7 +3,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use tracing::Level;
-use tuwunel::{Args, Server, runtime};
+use tuwunel::{Args, Runtime, Server};
 use tuwunel_core::result::ErrLog;
 
 criterion_group!(
@@ -18,8 +18,9 @@ fn dummy(c: &mut Criterion) { c.bench_function("dummy", |c| c.iter(|| {})); }
 
 fn smoke(c: &mut Criterion) {
 	let args = Args::default_test(&["fresh", "cleanup"]);
-	let runtime = runtime::new(Some(&args)).unwrap();
-	let server = Server::new(Some(&args), Some(runtime.handle())).unwrap();
+	let runtime = Runtime::new(Some(&args)).unwrap();
+	let server = Server::new(Some(&args), Some(&runtime)).unwrap();
+
 	runtime
 		.block_on(async {
 			tuwunel::async_start(&server).await?;
@@ -34,5 +35,5 @@ fn smoke(c: &mut Criterion) {
 		})
 		.unwrap();
 
-	tuwunel::shutdown(&server, runtime).unwrap();
+	drop(runtime);
 }

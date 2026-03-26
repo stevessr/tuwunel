@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicU32, AtomicU64};
+use std::sync::{
+	Arc,
+	atomic::{AtomicU32, AtomicU64},
+};
 
 use tokio::runtime;
 #[cfg(tokio_unstable)]
@@ -29,7 +32,7 @@ pub struct Metrics {
 
 impl Metrics {
 	#[must_use]
-	pub fn new(runtime: Option<&runtime::Handle>) -> Self {
+	pub fn new(runtime: Option<&runtime::Handle>) -> Arc<Self> {
 		#[cfg(tokio_unstable)]
 		let runtime_monitor = runtime.map(RuntimeMonitor::new);
 
@@ -52,7 +55,7 @@ impl Metrics {
 			},
 		);
 
-		Self {
+		Arc::new(Self {
 			_runtime: runtime.cloned(),
 
 			runtime_metrics: runtime.map(runtime::Handle::metrics),
@@ -71,7 +74,7 @@ impl Metrics {
 			requests_handle_finished: AtomicU64::new(0),
 			requests_handle_active: AtomicU32::new(0),
 			requests_panic: AtomicU32::new(0),
-		}
+		})
 	}
 
 	#[inline]

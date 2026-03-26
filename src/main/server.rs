@@ -5,10 +5,11 @@ use tuwunel_core::{
 	Error, Result,
 	config::Config,
 	implement, info,
+	metrics::Metrics,
 	utils::{stream, sys},
 };
 
-use crate::{Args, args, logging::TracingFlameGuard, runtime};
+use crate::{Args, Runtime, args, logging::TracingFlameGuard, runtime::Handle};
 
 /// Server runtime state; complete
 pub struct Server {
@@ -28,11 +29,19 @@ pub struct Server {
 }
 
 #[implement(Server)]
-pub fn new(args: Option<&Args>, runtime: Option<&runtime::Handle>) -> Result<Arc<Self>, Error> {
-	let _runtime_guard = runtime.map(runtime::Handle::enter);
-
+pub fn new(args: Option<&Args>, runtime: Option<&Runtime>) -> Result<Arc<Self>, Error> {
 	let args_default = args.is_none().then(Args::default);
+
 	let args = args.unwrap_or_else(|| args_default.as_ref().expect("default arguments"));
+
+	let handle = runtime.map(Runtime::handle);
+
+	let _runtime_guard = handle.map(Handle::enter);
+
+	let metrics = runtime
+		.map(Runtime::metrics)
+		.unwrap_or_else(|| Metrics::new(None));
+
 	let config_paths = args
 		.config
 		.as_deref()
@@ -67,7 +76,7 @@ pub fn new(args: Option<&Args>, runtime: Option<&runtime::Handle>) -> Result<Arc
 	);
 
 	Ok(Arc::new(Self {
-		server: Arc::new(tuwunel_core::Server::new(config, runtime, logger)),
+		server: Arc::new(tuwunel_core::Server::new(config, handle, logger, metrics)),
 
 		services: None.into(),
 

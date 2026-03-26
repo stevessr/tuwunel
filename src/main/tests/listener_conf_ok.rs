@@ -2,7 +2,7 @@
 #![allow(unused_features)] // 1.96.0-nightly 2026-03-07 bug
 
 use insta::{assert_debug_snapshot, with_settings};
-use tuwunel::{Args, Server, runtime};
+use tuwunel::{Args, Runtime, Server};
 use tuwunel_core::Result;
 
 #[test]
@@ -14,8 +14,8 @@ fn listener_conf_ok() -> Result {
 		let mut args = Args::default_test(&["smoke", "fresh", "cleanup"]);
 		args.option.push("address=[\"0.0.0.0\"]".into());
 
-		let runtime = runtime::new(Some(&args))?;
-		let server = Server::new(Some(&args), Some(runtime.handle()))?;
+		let runtime = Runtime::new(Some(&args))?;
+		let server = Server::new(Some(&args), Some(&runtime))?;
 		let result = tuwunel::exec(&server, runtime);
 
 		assert_debug_snapshot!(result);

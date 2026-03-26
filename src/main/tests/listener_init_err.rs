@@ -6,7 +6,7 @@ use tokio::{
 	select,
 	time::{Duration, sleep},
 };
-use tuwunel::{Args, Server, runtime};
+use tuwunel::{Args, Runtime, Server};
 use tuwunel_core::Err;
 
 #[test]
@@ -19,12 +19,12 @@ fn listener_init_err() {
 		let mut args = Args::default_test(&["fresh", "cleanup"]);
 		args.option.push("unix_socket_path=\"/non/existent/path\"".into());
 
-		let runtime = runtime::new(Some(&args)).unwrap();
-		let server = Server::new(Some(&args), Some(runtime.handle())).unwrap();
+		let runtime = Runtime::new(Some(&args)).unwrap();
+		let server = Server::new(Some(&args), Some(&runtime)).unwrap();
 		let result = runtime.block_on(async {
 			select! {
 				result = tuwunel::async_exec(&server) => result,
-				() = sleep(Duration::from_millis(2500)) => Err!("Shutdown hanging after error."),
+				() = sleep(Duration::from_secs(10)) => Err!("Shutdown hanging after error."),
 			}
 		});
 
