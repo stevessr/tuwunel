@@ -661,11 +661,13 @@ inherits = "release"
 debug = "full"
 strip = "none"
 
+[profile.release-debuginfo.package.'*']
+debug = "limited"
+
 # do not use without profile-rustflags enabled. uncomment ALL the sections for
 # profile.release-native
 [profile.release-native]
 inherits = "release"
-strip = "symbols"
 lto = "fat"
 #rustflags = [
 #	'-Ctarget-cpu=native',
@@ -698,7 +700,6 @@ inherits = "release-native.build-override"
 #]
 
 [profile.bench]
-debug = "limited"
 strip = "none"
 #rustflags = [
 #	"-Cremark=all",
@@ -739,7 +740,6 @@ debug = 0
 #]
 
 [profile.dev.package.tuwunel_core]
-inherits = "dev"
 incremental = false
 #rustflags = [
 #	'--cfg', 'tuwunel_mods',
@@ -760,7 +760,6 @@ incremental = false
 #]
 
 [profile.dev.package.tuwunel]
-inherits = "dev"
 #rustflags = [
 #	'--cfg', 'tuwunel_mods',
 #	'-Ztime-passes',
@@ -778,11 +777,10 @@ inherits = "dev"
 #]
 
 [profile.dev.package.'*']
-inherits = "dev"
 debug = 0
-incremental = false
-codegen-units = 1
+strip = "symbols"
 opt-level = 'z'
+incremental = false
 #rustflags = [
 #	'--cfg', 'tuwunel_mods',
 #	'-Ztls-model=global-dynamic',
@@ -800,19 +798,21 @@ opt-level = 'z'
 [profile.dbg]
 inherits = "dev"
 debug = "full"
+incremental = false
 
 [profile.dbg.package.'*']
-inherits = "dbg"
 debug = "limited"
+codegen-units = 1
+opt-level = 'z'
 
 # primarily used for CI
 [profile.test]
 debug = "limited"
+incremental = false
 
 [profile.test.package.'*']
-inherits = "test"
-incremental = false
-codegen-units = 1
+debug = 0
+strip = "symbols"
 opt-level = 'z'
 
 ###############################################################################
