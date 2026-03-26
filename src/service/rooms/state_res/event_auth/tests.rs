@@ -667,7 +667,7 @@ async fn auth_event_in_different_room() {
 		origin_server_ts: uint!(3),
 		state_key: Some(StateKey::new()),
 		kind: TimelineEventType::RoomPowerLevels,
-		content: to_raw_json_value(&json!({ "users": { alice(): 100 } })).unwrap(),
+		content: json!({ "users": { alice(): 100 } }).into(),
 		redacts: None,
 		unsigned: None,
 		auth_events: vec![event_id("CREATE"), event_id("IMA")].into(),
@@ -806,7 +806,7 @@ async fn rejected_auth_event() {
 		origin_server_ts: uint!(3),
 		state_key: Some(StateKey::new()),
 		kind: TimelineEventType::RoomPowerLevels,
-		content: to_raw_json_value(&json!({ "users": { alice(): 100 } })).unwrap(),
+		content: json!({ "users": { alice(): 100 } }).into(),
 		redacts: None,
 		unsigned: None,
 		auth_events: vec![event_id("CREATE"), event_id("IMA")].into(),
@@ -892,7 +892,9 @@ async fn event_without_room_id() {
 		origin_server_ts: uint!(3),
 		state_key: None,
 		kind: TimelineEventType::RoomMessage,
-		content: to_raw_json_value(&RoomMessageEventContent::text_plain("Hi!")).unwrap(),
+		content: to_raw_json_value(&RoomMessageEventContent::text_plain("Hi!"))
+			.unwrap()
+			.into(),
 		redacts: None,
 		unsigned: None,
 		auth_events: [

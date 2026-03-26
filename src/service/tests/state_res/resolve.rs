@@ -170,7 +170,7 @@ fn snapshot_test_prelude(
 			"the first PDU in the first file should be an m.room.create event",
 		);
 
-		from_json_str::<ExtractRoomVersion>(first_pdu.content.get())
+		from_json_str::<ExtractRoomVersion>(first_pdu.content.json().get())
 			.expect("the m.room.create PDU's content should be valid")
 			.room_version
 	};
