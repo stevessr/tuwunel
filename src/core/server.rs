@@ -44,12 +44,17 @@ pub struct Server {
 	pub log: Logging,
 
 	/// Metrics subsystem state
-	pub metrics: Metrics,
+	pub metrics: Arc<Metrics>,
 }
 
 impl Server {
 	#[must_use]
-	pub fn new(config: Config, runtime: Option<&runtime::Handle>, log: Logging) -> Self {
+	pub fn new(
+		config: Config,
+		runtime: Option<&runtime::Handle>,
+		log: Logging,
+		metrics: Arc<Metrics>,
+	) -> Self {
 		Self {
 			name: config.server_name.clone(),
 			config: config::Manager::new(config),
@@ -60,7 +65,7 @@ impl Server {
 			runtime: runtime.cloned(),
 			signal: broadcast::channel::<&'static str>(1).0,
 			log,
-			metrics: Metrics::new(runtime),
+			metrics,
 		}
 	}
 

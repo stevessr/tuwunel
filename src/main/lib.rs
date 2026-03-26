@@ -15,11 +15,7 @@ use log as _;
 use tuwunel_core::{Result, debug_info, error, mod_ctor, mod_dtor, rustc_flags_capture};
 use tuwunel_service::Services;
 
-pub use self::{
-	args::Args,
-	runtime::{Runtime, shutdown},
-	server::Server,
-};
+pub use self::{args::Args, runtime::Runtime, server::Server};
 
 mod_ctor! {}
 mod_dtor! {}
@@ -27,7 +23,9 @@ rustc_flags_capture! {}
 
 pub fn exec(server: &Arc<Server>, runtime: Runtime) -> Result {
 	run(server, &runtime)?;
-	shutdown(server, runtime)
+	drop(runtime);
+
+	Ok(())
 }
 
 pub fn run(server: &Arc<Server>, runtime: &Runtime) -> Result {

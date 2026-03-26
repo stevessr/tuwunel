@@ -6,7 +6,7 @@ use tokio::{
 	select,
 	time::{Duration, sleep},
 };
-use tuwunel::{Args, Server, runtime};
+use tuwunel::{Args, Runtime, Server};
 use tuwunel_core::{Err, Result};
 
 #[test]
@@ -17,8 +17,8 @@ fn listener_init_ok() -> Result {
 	}, {
 		let args = Args::default_test(&["fresh", "cleanup"]);
 
-		let runtime = runtime::new(Some(&args))?;
-		let server = Server::new(Some(&args), Some(runtime.handle()))?;
+		let runtime = Runtime::new(Some(&args))?;
+		let server = Server::new(Some(&args), Some(&runtime))?;
 		let result = runtime.block_on(async {
 			select! {
 				() = sleep(Duration::from_secs(5)) => Ok(()),
