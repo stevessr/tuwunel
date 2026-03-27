@@ -81,7 +81,6 @@ impl crate::Service for Service {
 					self.process_presence_timer(&user_id, count).await.log_err().ok();
 				},
 				event = receiver.recv_async() => match event {
-					Err(_) => break,
 					Ok((user_id, timeout, count)) => {
 						debug!(
 							"Adding timer {}: {user_id} timeout:{timeout:?} count:{count}",
@@ -98,6 +97,7 @@ impl crate::Service for Service {
 						));
 						timer_handles.insert(user_id, (count, handle));
 					},
+					_ => break,
 				},
 			}
 		}
