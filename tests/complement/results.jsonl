@@ -28,13 +28,6 @@
 {"Action":"pass","Test":"TestCannotSendKnockViaSendKnockInMSC3787Room/leave_event"}
 {"Action":"pass","Test":"TestCannotSendKnockViaSendKnockInMSC3787Room/non-state_membership_event"}
 {"Action":"pass","Test":"TestCannotSendKnockViaSendKnockInMSC3787Room/regular_event"}
-{"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV1"}
-{"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV1/event_with_mismatched_state_key"}
-{"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV1/invite_event"}
-{"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV1/knock_event"}
-{"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV1/leave_event"}
-{"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV1/non-state_membership_event"}
-{"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV1/regular_event"}
 {"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV2"}
 {"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV2/event_with_mismatched_state_key"}
 {"Action":"pass","Test":"TestCannotSendNonJoinViaSendJoinV2/invite_event"}
@@ -49,13 +42,6 @@
 {"Action":"pass","Test":"TestCannotSendNonKnockViaSendKnock/leave_event"}
 {"Action":"pass","Test":"TestCannotSendNonKnockViaSendKnock/non-state_membership_event"}
 {"Action":"pass","Test":"TestCannotSendNonKnockViaSendKnock/regular_event"}
-{"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV1"}
-{"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV1/event_with_mismatched_state_key"}
-{"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV1/invite_event"}
-{"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV1/join_event"}
-{"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV1/knock_event"}
-{"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV1/non-state_membership_event"}
-{"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV1/regular_event"}
 {"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV2"}
 {"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV2/event_with_mismatched_state_key"}
 {"Action":"pass","Test":"TestCannotSendNonLeaveViaSendLeaveV2/invite_event"}

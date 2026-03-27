@@ -1,5 +1,3 @@
-#![expect(deprecated)]
-
 use std::borrow::Borrow;
 
 use axum::extract::State;
@@ -28,39 +26,6 @@ use tuwunel_core::{
 use tuwunel_service::Services;
 
 use crate::{Ruma, client::sync::calculate_heroes};
-
-/// # `PUT /_matrix/federation/v1/send_join/{roomId}/{eventId}`
-///
-/// Submits a signed join event.
-pub(crate) async fn create_join_event_v1_route(
-	State(services): State<crate::State>,
-	body: Ruma<create_join_event::v1::Request>,
-) -> Result<create_join_event::v1::Response> {
-	let room_id = &body.room_id;
-	let origin = body.origin();
-
-	if let Some(server) = room_id.server_name()
-		&& services
-			.config
-			.forbidden_remote_server_names
-			.is_match(server.host())
-	{
-		warn!(
-			"Server {origin} tried joining room ID {room_id} through us which has a server name \
-			 that is globally forbidden. Rejecting."
-		);
-
-		return Err!(Request(Forbidden(warn!(
-			"Room ID server name {server} is banned on this homeserver."
-		))));
-	}
-
-	Ok(create_join_event::v1::Response {
-		room_state: create_join_event(&services, origin, room_id, &body.pdu, false)
-			.boxed()
-			.await?,
-	})
-}
 
 /// # `PUT /_matrix/federation/v2/send_join/{roomId}/{eventId}`
 ///
