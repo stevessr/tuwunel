@@ -2518,14 +2518,6 @@ pub struct LdapConfig {
 	#[serde(default = "default_ldap_uid_attribute")]
 	pub uid_attribute: String,
 
-	/// Attribute containing the mail of the user.
-	///
-	/// example: "mail"
-	///
-	/// default: "mail"
-	#[serde(default = "default_ldap_mail_attribute")]
-	pub mail_attribute: String,
-
 	/// Attribute containing the distinguished name of the user.
 	///
 	/// example: "givenName" or "sn"
@@ -3527,8 +3519,6 @@ fn default_blurhash_y_component() -> u32 { 3 }
 fn default_ldap_search_filter() -> String { "(objectClass=*)".to_owned() }
 
 fn default_ldap_uid_attribute() -> String { String::from("uid") }
-
-fn default_ldap_mail_attribute() -> String { String::from("mail") }
 
 fn default_ldap_name_attribute() -> String { String::from("givenName") }
 

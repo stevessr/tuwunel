@@ -2143,12 +2143,6 @@
 #
 #uid_attribute = "uid"
 
-# Attribute containing the mail of the user.
-#
-# example: "mail"
-#
-#mail_attribute = "mail"
-
 # Attribute containing the distinguished name of the user.
 #
 # example: "givenName" or "sn"
