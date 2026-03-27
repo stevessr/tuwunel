@@ -4,7 +4,6 @@ use ruma::{
 	EventId, RoomId, UserId,
 	api::client::room::{report_content, report_room},
 	events::room::message,
-	int,
 };
 use tuwunel_core::{Err, Result, debug_info, info, matrix::pdu::PduEvent, utils::ReadyExt};
 use tuwunel_service::Services;
@@ -22,7 +21,6 @@ pub(crate) async fn report_room_route(
 	InsecureClientIp(client): InsecureClientIp,
 	body: Ruma<report_room::v3::Request>,
 ) -> Result<report_room::v3::Response> {
-	// user authentication
 	let sender_user = body.sender_user();
 
 	info!(
@@ -51,10 +49,8 @@ pub(crate) async fn report_room_route(
 	services
 		.admin
 		.send_message(message::RoomMessageEventContent::text_markdown(format!(
-			"@room Room report received from {} -\n\nRoom ID: {}\n\nReport Reason: {}",
-			sender_user.to_owned(),
-			body.room_id,
-			body.reason,
+			"@room Room report received from {}\nReport Reason: {}\n\nRoom ID: {}",
+			sender_user, body.reason, body.room_id,
 		)))
 		.await
 		.ok();
@@ -71,15 +67,13 @@ pub(crate) async fn report_event_route(
 	InsecureClientIp(client): InsecureClientIp,
 	body: Ruma<report_content::v3::Request>,
 ) -> Result<report_content::v3::Response> {
-	// user authentication
 	let sender_user = body.sender_user();
+	let reason = body.reason.as_deref().unwrap_or("");
 
 	info!(
 		"Received event report by user {sender_user} for room {} and event ID {}, with reason: \
 		 \"{}\"",
-		body.room_id,
-		body.event_id,
-		body.reason.as_deref().unwrap_or("")
+		body.room_id, body.event_id, reason,
 	);
 
 	// check if we know about the reported event ID or if it's invalid
@@ -93,7 +87,6 @@ pub(crate) async fn report_event_route(
 		&body.room_id,
 		sender_user,
 		body.reason.as_ref(),
-		body.score,
 		&pdu,
 	)
 	.await?;
@@ -103,14 +96,9 @@ pub(crate) async fn report_event_route(
 	services
 		.admin
 		.send_message(message::RoomMessageEventContent::text_markdown(format!(
-			"@room Event report received from {} -\n\nEvent ID: {}\nRoom ID: {}\nSent By: \
-			 {}\n\nReport Score: {}\nReport Reason: {}",
-			sender_user.to_owned(),
-			pdu.event_id,
-			pdu.room_id,
-			pdu.sender,
-			body.score.unwrap_or_else(|| ruma::Int::from(0)),
-			body.reason.as_deref().unwrap_or("")
+			"@room Event report received from {}\nReport Reason: {}\n\nEvent ID: {}\nRoom ID: \
+			 {}\nSent By: {}",
+			sender_user, reason, pdu.event_id, pdu.room_id, pdu.sender,
 		)))
 		.await
 		.ok();
@@ -121,7 +109,6 @@ pub(crate) async fn report_event_route(
 /// in the following order:
 ///
 /// check if the room ID from the URI matches the PDU's room ID
-/// check if score is in valid range
 /// check if report reasoning is less than or equal to 750 characters
 /// check if reporting user is in the reporting room
 async fn is_event_report_valid(
@@ -130,7 +117,6 @@ async fn is_event_report_valid(
 	room_id: &RoomId,
 	sender_user: &UserId,
 	reason: Option<&String>,
-	score: Option<ruma::Int>,
 	pdu: &PduEvent,
 ) -> Result {
 	debug_info!(
@@ -140,10 +126,6 @@ async fn is_event_report_valid(
 
 	if room_id != pdu.room_id {
 		return Err!(Request(NotFound("Event ID does not belong to the reported room",)));
-	}
-
-	if score.is_some_and(|s| s > int!(0) || s < int!(-100)) {
-		return Err!(Request(InvalidParam("Invalid score, must be within 0 to -100",)));
 	}
 
 	if reason.as_ref().is_some_and(|s| s.len() > 750) {
