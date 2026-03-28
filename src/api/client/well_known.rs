@@ -1,4 +1,4 @@
-use axum::{Json, extract::State, response::IntoResponse};
+use axum::extract::State;
 use ruma::api::client::discovery::{
 	discover_homeserver::{self, HomeserverInfo},
 	discover_support::{self, Contact},
@@ -91,25 +91,4 @@ pub(crate) async fn well_known_support(
 	}
 
 	Ok(discover_support::Response { contacts, support_page })
-}
-
-/// # `GET /client/server.json`
-///
-/// Endpoint provided by sliding sync proxy used by some clients such as Element
-/// Web as a non-standard health check.
-pub(crate) async fn syncv3_client_server_json(
-	State(services): State<crate::State>,
-) -> Result<impl IntoResponse> {
-	let server_url = match services.server.config.well_known.client.as_ref() {
-		| Some(url) => url.to_string(),
-		| None => match services.server.config.well_known.server.as_ref() {
-			| Some(url) => url.to_string(),
-			| None => return Err!(Request(NotFound("Not found."))),
-		},
-	};
-
-	Ok(Json(serde_json::json!({
-		"server": server_url,
-		"version": tuwunel_core::version(),
-	})))
 }
