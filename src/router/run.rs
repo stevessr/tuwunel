@@ -3,7 +3,7 @@ use std::{
 	time::Duration,
 };
 
-use futures::{FutureExt, pin_mut};
+use futures::{FutureExt, future::join, pin_mut};
 use tuwunel_core::{
 	Error, Result, Server, debug, debug_error, debug_info, error, info, utils::BoolExt,
 };
@@ -29,6 +29,12 @@ pub(crate) async fn run(services: Arc<Services>) -> Result {
 		.runtime()
 		.spawn(signal(server.clone(), handle.clone()));
 
+	let non_listener = services
+		.config
+		.listening
+		.is_false()
+		.then_async(|| server.until_shutdown().map(Ok));
+
 	let listener = services.config.listening.then_async(|| {
 		server
 			.runtime()
@@ -38,9 +44,11 @@ pub(crate) async fn run(services: Arc<Services>) -> Result {
 
 	// Focal point
 	debug!("Running");
-	pin_mut!(listener);
+	pin_mut!(listener, non_listener);
 	let res = tokio::select! {
-		res = &mut listener => res.unwrap_or(Ok(())),
+		res = join(&mut listener, &mut non_listener) => {
+			res.0.unwrap_or(res.1.unwrap_or(Ok(())))
+		},
 		res = services.poll() => {
 			server.until_shutdown().await;
 			handle_services_finish(server, res, listener.await)
