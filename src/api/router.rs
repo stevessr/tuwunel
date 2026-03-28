@@ -198,8 +198,7 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::well_known_support)
 		.ruma_route(&client::well_known_client)
 		.route("/_tuwunel/server_version", get(client::tuwunel_server_version))
-		.ruma_route(&client::room_initial_sync_route)
-		.route("/client/server.json", get(client::syncv3_client_server_json));
+		.ruma_route(&client::room_initial_sync_route);
 
 	// SS endpoints not related to federation
 	router = router
