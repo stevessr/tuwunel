@@ -58,7 +58,7 @@ use crate::{
 ### https://tuwunel.chat/configuration.html
 "#,
 	ignore = "catchall well_known tls blurhashing allow_invalid_tls_certificates ldap jwt \
-	          appservice identity_provider s3_provider"
+	          appservice identity_provider storage_provider"
 )]
 pub struct Config {
 	/// The server_name is the pretty name of this server. It is used as a
@@ -2318,7 +2318,7 @@ pub struct Config {
 
 	// external structure; separate section
 	#[serde(default)]
-	pub s3_provider: Option<S3Provider>,
+	pub storage_provider: BTreeMap<String, StorageProvider>,
 
 	// external structure; separate section
 	#[serde(default)]
@@ -2912,32 +2912,108 @@ impl IdentityProvider {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
+pub enum StorageProvider {
+	#[expect(non_camel_case_types)]
+	local(StorageProviderLocal),
+	S3(StorageProviderS3),
+	#[default]
+	None,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
 #[config_example_generator(
 	filename = "tuwunel-example.toml",
-	section = "global.s3_provider"
+	section = "global.storage_provider.<ID>.local"
 )]
-pub struct S3Provider {
-	/// The endpoint of the S3 provider, including the scheme. You should only
-	/// use http when testing and not in production.
-	///
-	/// example: "https://s3.us-east-1.amazonaws.com"
-	#[allow(rustdoc::bare_urls)] // The URL is not meant to be clickable
-	pub endpoint: Option<String>,
+pub struct StorageProviderLocal {
+	/// Absolute path to this local filesystem storage provider. Technically
+	/// this is a prefix prepended to all objects addressed in the store.
+	pub path: String,
 
-	/// The region of the S3 bucket.
+	/// Toggles the preservation of a directory after its last file contents are
+	/// removed.
+	#[serde(default = "true_fn")]
+	pub delete_empty_directories: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "global.storage_provider.<ID>.S3"
+)]
+pub struct StorageProviderS3 {
+	/// Supply an s3 URL e.g. "s3://<bucket>/<path>". These URLs may contain one
+	/// or all of `bucket`, `region`, and `path` . When not supplied, such
+	/// additional items can be supplied below individually.
+	pub url: Option<String>,
+
+	/// (required) The name of the S3 bucket. e.g.
+	/// "bucketname-123456789-us-west-2-an".
+	pub bucket: Option<String>,
+
+	/// (required) The region of the S3 bucket. e.g. "us-west-2".
+	///
+	/// default: "us-east-1"
 	pub region: Option<String>,
 
-	/// The name of the S3 bucket.
-	pub bucket: String,
+	/// (required) Your amazon IAM Key ID with access granted to this bucket.
+	/// e.g. "ABCDEFG1X1ZZYYXXWWVV"
+	pub key: Option<String>,
 
-	/// The path in the S3 bucket to place media assets in.
+	/// (required) The secret key component which is approx 40 characters of
+	/// base64.
+	///
+	/// default:
+	/// display: sensitive
+	#[serde(skip_serializing)]
+	pub secret: Option<String>,
+
+	/// Optional path prefix within the bucket where all our operations will
+	/// take place.
 	pub path: Option<String>,
 
-	/// The access key for the S3 bucket.
-	pub key: String,
+	/// (expert use) Override the location of s3 applied after components of the
+	/// parsed `url` (or when none set).
+	pub endpoint: Option<String>,
 
-	/// The secret access key for the S3 bucket.
-	pub secret: String,
+	/// (expert use) Override this property useful for some self-hosted
+	/// environments. By default it is derived when parsing the primary `url`.
+	#[serde(default)]
+	pub use_vhost_request: Option<bool>,
+
+	/// (expert use) Alternative session-token authentication method.
+	///
+	/// display: sensitive
+	/// default:
+	#[serde(skip_serializing)]
+	pub token: Option<String>,
+
+	/// (expert use) Associated SSE-KMS key material.
+	///
+	/// display: sensitive
+	pub kms: Option<String>,
+
+	/// (expert use) When configured for the bucket it should be reflected here.
+	pub use_bucket_key: Option<bool>,
+
+	/// (developer use) Allows relaxing default requirement forcing HTTPS.
+	///
+	/// default: true
+	#[serde(default = "some_true_fn")]
+	pub use_https: Option<bool>,
+
+	/// (developer_use) Allows skipping request header signatures (will be
+	/// reejected by AWS).
+	///
+	/// default: true
+	#[serde(default = "some_true_fn")]
+	pub use_signatures: Option<bool>,
+
+	/// (developer_use) Allows disabling request payload signatures.
+	///
+	/// default: true
+	#[serde(default = "some_true_fn")]
+	pub use_payload_signatures: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -3211,6 +3287,8 @@ impl TlsConfig {
 
 fn true_fn() -> bool { true }
 
+fn some_true_fn() -> Option<bool> { Some(true) }
+
 #[cfg(test)]
 fn default_server_name() -> OwnedServerName { ruma::owned_server_name!("localhost") }
 
@@ -3275,9 +3353,13 @@ fn default_dns_timeout() -> u64 { 10 }
 fn default_ip_lookup_strategy() -> u8 { 5 }
 
 fn default_max_request_size() -> usize { 24 * 1024 * 1024 }
+
 fn default_max_pending_media_uploads() -> usize { 5 }
+
 fn default_media_create_unused_expiration_time() -> u64 { 86400 }
+
 fn default_media_rc_create_per_second() -> u32 { 10 }
+
 fn default_media_rc_create_burst_count() -> u32 { 50 }
 
 fn default_request_conn_timeout() -> u64 { 10 }

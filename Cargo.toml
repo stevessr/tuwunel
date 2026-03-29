@@ -160,6 +160,9 @@ version = "0.5"
 [workspace.dependencies.cyborgtime]
 version = "2.1"
 
+[workspace.dependencies.derivative]
+version = "2.2"
+
 [workspace.dependencies.either]
 version = "1.15"
 default-features = false
@@ -173,7 +176,10 @@ features = ["env", "toml"]
 [workspace.dependencies.futures]
 version = "0.3"
 default-features = false
-features = ["std", "async-await"]
+features = [
+	"async-await",
+	"std",
+]
 
 [workspace.dependencies.hickory-resolver]
 version = "0.25"
@@ -286,9 +292,11 @@ features = [
 version = "0.2"
 
 [workspace.dependencies.object_store]
-version = "0.13.1"
+version = "0.13.2"
+default-features = false
 features = [
-	"aws"
+	"aws",
+	"fs",
 ]
 
 [workspace.dependencies.opentelemetry]
