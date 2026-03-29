@@ -67,6 +67,7 @@ const-str.workspace = true
 core_affinity.workspace = true
 ctor.workspace = true
 cyborgtime.workspace = true
+derivative.workspace = true
 either.workspace = true
 figment.workspace = true
 futures.workspace = true

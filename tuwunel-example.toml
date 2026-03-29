@@ -2475,34 +2475,86 @@
 
 
 
-#[global.s3_provider]
+#[global.storage_provider.<ID>.local]
 
-# The endpoint of the S3 provider, including the scheme. You should only
-# use http when testing and not in production.
-#
-# example: "https://s3.us-east-1.amazonaws.com"
-#
-#endpoint =
-
-# The region of the S3 bucket.
-#
-#region =
-
-# The name of the S3 bucket.
-#
-#bucket =
-
-# The path in the S3 bucket to place media assets in.
+# Absolute path to this local filesystem storage provider. Technically
+# this is a prefix prepended to all objects addressed in the store.
 #
 #path =
 
-# The access key for the S3 bucket.
+# Toggles the preservation of a directory after its last file contents are
+# removed.
+#
+#delete_empty_directories = true
+
+
+
+#[global.storage_provider.<ID>.S3]
+
+# Supply an s3 URL e.g. "s3://<bucket>/<path>". These URLs may contain one
+# or all of `bucket`, `region`, and `path` . When not supplied, such
+# additional items can be supplied below individually.
+#
+#url =
+
+# (required) The name of the S3 bucket. e.g.
+# "bucketname-123456789-us-west-2-an".
+#
+#bucket =
+
+# (required) The region of the S3 bucket. e.g. "us-west-2".
+#
+#region = "us-east-1"
+
+# (required) Your amazon IAM Key ID with access granted to this bucket.
+# e.g. "ABCDEFG1X1ZZYYXXWWVV"
 #
 #key =
 
-# The secret access key for the S3 bucket.
+# (required) The secret key component which is approx 40 characters of
+# base64.
 #
 #secret =
+
+# Optional path prefix within the bucket where all our operations will
+# take place.
+#
+#path =
+
+# (expert use) Override the location of s3 applied after components of the
+# parsed `url` (or when none set).
+#
+#endpoint =
+
+# (expert use) Override this property useful for some self-hosted
+# environments. By default it is derived when parsing the primary `url`.
+#
+#use_vhost_request = false
+
+# (expert use) Alternative session-token authentication method.
+#
+#token =
+
+# (expert use) Associated SSE-KMS key material.
+#
+#kms =
+
+# (expert use) When configured for the bucket it should be reflected here.
+#
+#use_bucket_key =
+
+# (developer use) Allows relaxing default requirement forcing HTTPS.
+#
+#use_https = true
+
+# (developer_use) Allows skipping request header signatures (will be
+# reejected by AWS).
+#
+#use_signatures = true
+
+# (developer_use) Allows disabling request payload signatures.
+#
+#use_payload_signatures = true
 
 
 

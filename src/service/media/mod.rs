@@ -15,11 +15,7 @@ use std::{
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
 use http::StatusCode;
-use object_store::{
-	ObjectStoreExt, PutPayload,
-	aws::{AmazonS3, AmazonS3Builder},
-	path::Path,
-};
+use object_store::{ObjectStoreExt, PutPayload, path::Path};
 use ruma::{
 	Mxc, OwnedMxcUri, OwnedUserId, UserId,
 	api::client::error::{ErrorKind, RetryAfter},
@@ -32,7 +28,11 @@ use tokio::{
 };
 use tuwunel_core::{
 	Err, Error, Result, debug, debug_error, debug_info, debug_warn, err, error, trace,
-	utils::{self, MutexMap, time::now_millis},
+	utils::{
+		self, MutexMap,
+		result::{LogDebugErr, LogErr},
+		time::now_millis,
+	},
 	warn,
 };
 
@@ -59,7 +59,6 @@ pub struct Service {
 	services: Arc<crate::services::OnceServices>,
 	url_preview_mutex: MutexMap<String, ()>,
 	mxc_state: MXCState,
-	s3: Option<AmazonS3>,
 }
 
 /// generated MXC ID (`media-id`) length
@@ -74,25 +73,6 @@ pub const CORP_CROSS_ORIGIN: &str = "cross-origin";
 #[async_trait]
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
-		let s3 = match &args.server.config.s3_provider {
-			| Some(b) => {
-				let mut builder = AmazonS3Builder::new()
-					.with_allow_http(true)
-					.with_bucket_name(b.bucket.clone())
-					.with_access_key_id(b.key.clone())
-					.with_secret_access_key(b.secret.clone());
-				if let Some(endpoint) = &b.endpoint {
-					builder = builder.with_endpoint(endpoint.clone());
-				}
-				if let Some(region) = &b.region {
-					builder = builder.with_region(region.clone());
-				}
-				let result = builder.build()?;
-				Some(result)
-			},
-			| _ => None,
-		};
-
 		Ok(Arc::new(Self {
 			db: Data::new(args.db),
 			services: args.services.clone(),
@@ -101,7 +81,6 @@ impl crate::Service for Service {
 				notifiers: Mutex::new(HashMap::new()),
 				ratelimiter: Mutex::new(HashMap::new()),
 			},
-			s3,
 		}))
 	}
 
@@ -310,10 +289,10 @@ impl Service {
 			return Ok(None);
 		};
 
-		if let Some(s3) = &self.s3 {
+		if let Ok(s3) = self.services.storage.provider("media") {
 			let path = self.get_s3_path_sha256(&key);
-			let result = s3.get(&path).await?;
-			let bytes = result.bytes().await?;
+			let result = s3.provider.get(&path).await.log_debug_err()?;
+			let bytes = result.bytes().await.log_debug_err()?;
 			Ok(Some(Media {
 				content: bytes.to_vec(),
 				content_type,
@@ -485,10 +464,10 @@ impl Service {
 				continue;
 			}
 
-			let file_created_at = if let Some(s3) = &self.s3 {
+			let file_created_at = if let Ok(s3) = self.services.storage.provider("media") {
 				let path = self.get_s3_path_sha256(&key);
 
-				let file_metadata = match s3.head(&path).await {
+				let file_metadata = match s3.provider.head(&path).await {
 					| Ok(file_metadata) => file_metadata,
 					| Err(e) => {
 						error!(
@@ -582,11 +561,11 @@ impl Service {
 	}
 
 	async fn remove_media_file(&self, key: &[u8]) -> Result {
-		if let Some(s3) = &self.s3 {
+		if let Ok(s3) = self.services.storage.provider("media") {
 			let path = self.get_s3_path_sha256(key);
 			debug!(?key, ?path, "Deleting media file in s3");
 
-			s3.delete(&path).await?;
+			s3.provider.delete(&path).await.log_debug_err()?;
 			Ok(())
 		} else {
 			let path = self.get_media_path_sha256(key);
@@ -607,12 +586,14 @@ impl Service {
 	}
 
 	async fn create_media_file(&self, key: &[u8], file: &[u8]) -> Result {
-		if let Some(s3) = &self.s3 {
+		if let Ok(s3) = self.services.storage.provider("media") {
 			let path = self.get_s3_path_sha256(key);
 			debug!(?key, ?path, "Creating media file in s3");
 
-			s3.put(&path, PutPayload::from(file.to_vec()))
-				.await?;
+			s3.provider
+				.put(&path, PutPayload::from(file.to_vec()))
+				.await
+				.log_err()?;
 		} else {
 			let path = self.get_media_path_sha256(key);
 			debug!(?key, ?path, "Creating local media file");
@@ -646,8 +627,15 @@ impl Service {
 	#[must_use]
 	pub fn get_s3_path_sha256(&self, key: &[u8]) -> Path {
 		let file_name = self.get_media_name_sha256(key);
-		let s3 = self.services.config.s3_provider.as_ref();
-		if let Some(path) = s3.and_then(|b| b.path.clone()) {
+
+		if let Some(path) = self
+			.services
+			.storage
+			.provider("s3")
+			.map(|provider| provider.path.clone())
+			.ok()
+			.flatten()
+		{
 			Path::from_iter([path, file_name])
 		} else {
 			Path::from(file_name)
