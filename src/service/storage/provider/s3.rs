@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 pub use object_store::{GetResult, GetResultPayload, PutPayload, PutResult};
 use object_store::{aws::AmazonS3Builder, client::ClientOptions};
@@ -16,7 +16,7 @@ pub(in super::super) fn new(
 	args: &crate::Args<'_>,
 	name: &str,
 	config: &StorageProviderS3,
-) -> Result<Option<(String, Provider)>> {
+) -> Result<Option<(String, Arc<Provider>)>> {
 	// Fail successfully if this provider is disabled by the configuration..
 	if config.url.is_none() && config.bucket.is_none() {
 		debug!(?name, "s3_provider.bucket not set. This configuration will be skipped");
@@ -102,5 +102,5 @@ pub(in super::super) fn new(
 		provider,
 	};
 
-	Ok(Some((name.to_owned(), provider)))
+	Ok(Some((name.to_owned(), Arc::new(provider))))
 }

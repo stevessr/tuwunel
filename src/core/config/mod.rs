@@ -2928,6 +2928,7 @@ pub enum StorageProvider {
 pub struct StorageProviderLocal {
 	/// Absolute path to this local filesystem storage provider. Technically
 	/// this is a prefix prepended to all objects addressed in the store.
+	#[serde(alias = "path")]
 	pub base_path: String,
 
 	/// Toggles the preservation of a directory after its last file contents are
@@ -2970,6 +2971,7 @@ pub struct StorageProviderS3 {
 
 	/// Optional path prefix within the bucket where all our operations will
 	/// take place.
+	#[serde(alias = "path")]
 	pub base_path: Option<String>,
 
 	/// (expert use) Override the location of s3 applied after components of the

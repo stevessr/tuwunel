@@ -21,7 +21,7 @@ pub struct Service {
 	services: Arc<crate::services::OnceServices>,
 }
 
-type Providers = BTreeMap<String, Provider>;
+type Providers = BTreeMap<String, Arc<Provider>>;
 
 #[async_trait]
 impl crate::Service for Service {
@@ -69,7 +69,7 @@ async fn start_providers(&self) -> Result {
 /// Get the specific storage provider's instance by ID or the default provider
 /// when an empty string supplied.
 #[implement(Service)]
-pub fn provider<'a>(&'a self, id: &'a str) -> Result<&'a Provider> {
+pub fn provider<'a>(&'a self, id: &'a str) -> Result<&'a Arc<Provider>> {
 	self.providers
 		.get(id)
 		.ok_or_else(|| err!(Request(NotFound("No instance of provider"))))
@@ -86,14 +86,16 @@ pub fn config<'a>(&'a self, id: &'a str) -> Result<&'a StorageProvider> {
 
 /// Iterate the storage provider configurations.
 #[implement(Service)]
-pub fn providers(&self) -> impl Iterator<Item = &Provider> + '_ { self.providers.values() }
+pub fn providers(&self) -> impl Iterator<Item = &Arc<Provider>> + Send + '_ {
+	self.providers.values()
+}
 
 /// Iterate the storage provider configurations.
 #[implement(Service)]
 pub fn configs<'a, Id>(
 	&'a self,
 	id: Id,
-) -> impl Iterator<Item = (&'a String, &'a StorageProvider)> + 'a
+) -> impl Iterator<Item = (&'a String, &'a StorageProvider)> + Send + 'a
 where
 	Id: Into<Option<&'a str>>,
 {

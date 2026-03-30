@@ -1,5 +1,8 @@
-use futures::{FutureExt, TryStreamExt};
-use tuwunel_core::{Result, utils::stream::IterStream};
+use futures::{FutureExt, StreamExt, TryStreamExt};
+use tuwunel_core::{
+	Result,
+	utils::{result::LogErr, stream::IterStream},
+};
 use tuwunel_service::storage::CopyMode;
 
 use crate::{admin_command, admin_command_dispatch};
@@ -64,6 +67,18 @@ pub(crate) enum StorageCommand {
 
 		/// Path to the destination.
 		destination: String,
+	},
+
+	/// Delete an object at the specified location.
+	Delete {
+		#[arg(short, long)]
+		provider: Option<String>,
+
+		/// Path to the location to delete. Multiple arguments allowed.
+		location: Vec<String>,
+
+		#[arg(short, long)]
+		verbose: bool,
 	},
 }
 
@@ -156,4 +171,37 @@ async fn query_storage_move(
 		.await;
 
 	self.write_string(format!("{result:?}")).await
+}
+
+#[admin_command]
+async fn query_storage_delete(
+	&self,
+	provider: Option<String>,
+	location: Vec<String>,
+	verbose: bool,
+) -> Result {
+	let id = provider.as_deref().unwrap_or_default();
+	let provider = self.services.storage.provider(id)?;
+
+	provider
+		.delete(location.into_iter().stream())
+		.for_each(async |result| {
+			match result {
+				| Ok(_) if !verbose => None,
+
+				| Ok(path) => self
+					.write_string(format!("deleted: {path:?}\n"))
+					.await
+					.log_err()
+					.ok(),
+
+				| Err(e) => self
+					.write_string(format!("failed: {e:?}"))
+					.await
+					.log_err()
+					.ok(),
+			};
+		})
+		.map(Ok)
+		.await
 }
