@@ -2480,7 +2480,7 @@
 # Absolute path to this local filesystem storage provider. Technically
 # this is a prefix prepended to all objects addressed in the store.
 #
-#path =
+#base_path =
 
 # Toggles the preservation of a directory after its last file contents are
 # removed.
@@ -2519,7 +2519,7 @@
 # Optional path prefix within the bucket where all our operations will
 # take place.
 #
-#path =
+#base_path =
 
 # (expert use) Override the location of s3 applied after components of the
 # parsed `url` (or when none set).

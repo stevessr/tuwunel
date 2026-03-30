@@ -16,6 +16,7 @@ pub use self::provider::Provider;
 #[derivative(Debug)]
 pub struct Service {
 	providers: Providers,
+
 	#[derivative(Debug = "ignore")]
 	services: Arc<crate::services::OnceServices>,
 }

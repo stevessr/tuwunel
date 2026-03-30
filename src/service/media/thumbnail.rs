@@ -7,7 +7,6 @@
 
 use std::{cmp, num::Saturating as Sat};
 
-use object_store::ObjectStoreExt;
 use ruma::{Mxc, UInt, UserId, http_headers::ContentDisposition, media::Method};
 use tokio::{fs, io::AsyncReadExt};
 use tuwunel_core::{Result, checked, err, implement, utils::result::LogDebugErr};
@@ -81,8 +80,8 @@ impl super::Service {
 #[tracing::instrument(name = "saved", level = "debug", skip(self, data))]
 async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<Media>> {
 	if let Ok(s3) = self.services.storage.provider("media") {
-		let path = self.get_s3_path_sha256(&data.key);
-		let result = s3.provider.get(&path).await.log_debug_err()?;
+		let path = self.get_media_name_sha256(&data.key);
+		let result = s3.get(&path).await.log_debug_err()?;
 		let bytes = result.bytes().await.log_debug_err()?;
 		Ok(Some(into_media(data, bytes.to_vec())))
 	} else {

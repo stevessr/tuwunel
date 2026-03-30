@@ -15,7 +15,7 @@ use std::{
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
 use http::StatusCode;
-use object_store::{ObjectStoreExt, PutPayload, path::Path};
+use object_store::PutPayload;
 use ruma::{
 	Mxc, OwnedMxcUri, OwnedUserId, UserId,
 	api::client::error::{ErrorKind, RetryAfter},
@@ -290,8 +290,8 @@ impl Service {
 		};
 
 		if let Ok(s3) = self.services.storage.provider("media") {
-			let path = self.get_s3_path_sha256(&key);
-			let result = s3.provider.get(&path).await.log_debug_err()?;
+			let path = self.get_media_name_sha256(&key);
+			let result = s3.get(path.as_str()).await.log_debug_err()?;
 			let bytes = result.bytes().await.log_debug_err()?;
 			Ok(Some(Media {
 				content: bytes.to_vec(),
@@ -465,9 +465,9 @@ impl Service {
 			}
 
 			let file_created_at = if let Ok(s3) = self.services.storage.provider("media") {
-				let path = self.get_s3_path_sha256(&key);
+				let path = self.get_media_name_sha256(&key);
 
-				let file_metadata = match s3.provider.head(&path).await {
+				let file_metadata = match s3.head(&path).await {
 					| Ok(file_metadata) => file_metadata,
 					| Err(e) => {
 						error!(
@@ -562,10 +562,10 @@ impl Service {
 
 	async fn remove_media_file(&self, key: &[u8]) -> Result {
 		if let Ok(s3) = self.services.storage.provider("media") {
-			let path = self.get_s3_path_sha256(key);
+			let path = self.get_media_name_sha256(key);
 			debug!(?key, ?path, "Deleting media file in s3");
 
-			s3.provider.delete(&path).await.log_debug_err()?;
+			s3.delete(&path).await.log_debug_err()?;
 			Ok(())
 		} else {
 			let path = self.get_media_path_sha256(key);
@@ -587,11 +587,10 @@ impl Service {
 
 	async fn create_media_file(&self, key: &[u8], file: &[u8]) -> Result {
 		if let Ok(s3) = self.services.storage.provider("media") {
-			let path = self.get_s3_path_sha256(key);
+			let path = self.get_media_name_sha256(key);
 			debug!(?key, ?path, "Creating media file in s3");
 
-			s3.provider
-				.put(&path, PutPayload::from(file.to_vec()))
+			s3.put(path.as_str(), PutPayload::from(file.to_vec()))
 				.await
 				.log_err()?;
 		} else {
@@ -621,25 +620,6 @@ impl Service {
 			.search_file_metadata(mxc, &Dim::default())
 			.await
 			.ok()
-	}
-
-	#[inline]
-	#[must_use]
-	pub fn get_s3_path_sha256(&self, key: &[u8]) -> Path {
-		let file_name = self.get_media_name_sha256(key);
-
-		if let Some(path) = self
-			.services
-			.storage
-			.provider("s3")
-			.map(|provider| provider.path.clone())
-			.ok()
-			.flatten()
-		{
-			Path::from_iter([path, file_name])
-		} else {
-			Path::from(file_name)
-		}
 	}
 
 	#[inline]
