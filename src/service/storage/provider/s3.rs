@@ -96,7 +96,7 @@ pub(in super::super) fn new(
 
 	let provider = Provider {
 		name: name.to_owned(),
-		path: config.path.clone(),
+		base_path: config.base_path.clone().map(Into::into),
 		config: StorageProvider::S3(config.clone()),
 		services: args.services.clone(),
 		provider,

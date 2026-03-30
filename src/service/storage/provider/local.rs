@@ -14,26 +14,26 @@ pub(in super::super) fn new(
 	config: &StorageProviderLocal,
 ) -> Result<Option<(String, Provider)>> {
 	// Fail successfully if this provider is disabled by the configuration..
-	if config.path.is_empty() {
+	if config.base_path.is_empty() {
 		debug!(?name, "s3_provider.bucket not set. This configuration will be skipped");
 		return Ok(None);
 	}
 
 	trace!(?name, ?config, "Initializing LocalFS...");
 
-	let provider = LocalFileSystem::new_with_prefix(config.path.clone())
+	let provider = LocalFileSystem::new_with_prefix(config.base_path.clone())
 		.inspect_err(|e| error!("Failed to configure S3 storage client: {e}"))?
 		.with_automatic_cleanup(config.delete_empty_directories);
 
 	debug_info!(
 		name = %name,
-		path = ?config.path,
+		path = ?config.base_path,
 		"Started Local FS storage client.",
 	);
 
 	let provider = Provider {
 		name: name.to_owned(),
-		path: Some(config.path.clone()),
+		base_path: Some(config.base_path.clone().into()),
 		config: StorageProvider::local(config.clone()),
 		services: args.services.clone(),
 		provider: Box::new(provider),

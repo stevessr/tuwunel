@@ -6,8 +6,7 @@ use std::sync::Arc;
 use futures::{FutureExt, Stream, TryFutureExt, TryStreamExt};
 use object_store::{
 	CopyMode, DynObjectStore, GetResult, ObjectMeta, ObjectStore, ObjectStoreExt, PutPayload,
-	PutResult,
-	path::{Path, PathPart},
+	PutResult, path::Path,
 };
 use tuwunel_core::{
 	Error, Result, config::StorageProvider, debug, derivative::Derivative, err, error, implement,
@@ -18,9 +17,13 @@ use tuwunel_core::{
 #[derivative(Debug)]
 pub struct Provider {
 	pub name: String,
+
 	pub config: StorageProvider,
-	pub provider: Box<DynObjectStore>,
-	pub(crate) path: Option<String>,
+
+	pub(crate) provider: Box<DynObjectStore>,
+
+	pub(crate) base_path: Option<Path>,
+
 	#[expect(unused)]
 	#[derivative(Debug = "ignore")]
 	services: Arc<crate::services::OnceServices>,
@@ -46,7 +49,7 @@ pub(super) async fn start(&self) -> Result {
 
 #[implement(Provider)]
 pub async fn put(&self, path: &str, payload: PutPayload) -> Result<PutResult> {
-	let path = self.path(path)?;
+	let path = self.to_abs_path(path)?;
 
 	self.provider
 		.put(&path, payload)
@@ -56,7 +59,7 @@ pub async fn put(&self, path: &str, payload: PutPayload) -> Result<PutResult> {
 
 #[implement(Provider)]
 pub async fn get(&self, path: &str) -> Result<GetResult> {
-	let path = self.path(path)?;
+	let path = self.to_abs_path(path)?;
 
 	self.provider
 		.get(&path)
@@ -67,15 +70,15 @@ pub async fn get(&self, path: &str) -> Result<GetResult> {
 #[implement(Provider)]
 pub async fn delete(&self, path: &str) -> Result {
 	self.provider
-		.delete(&self.path(path)?)
+		.delete(&self.to_abs_path(path)?)
 		.map_err(Error::from)
 		.await
 }
 
 #[implement(Provider)]
 pub async fn rename(&self, src: &str, dst: &str, overwrite: CopyMode) -> Result {
-	let src = self.path(src)?;
-	let dst = self.path(dst)?;
+	let src = self.to_abs_path(src)?;
+	let dst = self.to_abs_path(dst)?;
 
 	match overwrite {
 		| CopyMode::Overwrite => self.provider.rename(&src, &dst).left_future(),
@@ -90,8 +93,8 @@ pub async fn rename(&self, src: &str, dst: &str, overwrite: CopyMode) -> Result 
 
 #[implement(Provider)]
 pub async fn copy(&self, src: &str, dst: &str, overwrite: CopyMode) -> Result {
-	let src = self.path(src)?;
-	let dst = self.path(dst)?;
+	let src = self.to_abs_path(src)?;
+	let dst = self.to_abs_path(dst)?;
 
 	match overwrite {
 		| CopyMode::Overwrite => self.provider.copy(&src, &dst).left_future(),
@@ -114,7 +117,7 @@ pub fn list(&self, prefix: Option<&str>) -> impl Stream<Item = Result<ObjectMeta
 #[implement(Provider)]
 pub async fn head(&self, path: &str) -> Result<ObjectMeta> {
 	self.provider
-		.head(&self.path(path)?)
+		.head(&self.to_abs_path(path)?)
 		.map_err(Error::from)
 		.await
 }
@@ -130,20 +133,20 @@ pub async fn ping(&self) -> Result {
 }
 
 #[implement(Provider)]
-#[expect(clippy::iter_on_single_items)]
-pub fn path<'a>(&'a self, location: &'a str) -> Result<Path> {
-	let location = PathPart::parse(location)
+fn to_abs_path(&self, location: &str) -> Result<Path> {
+	let path_root = Path::ROOT;
+
+	let location = Path::parse(location)
 		.map_err(|e| err!("Failed to parse location into canonical PathPart: {e}"))?;
 
-	let base: Option<PathPart<'a>> = self
-		.path
-		.as_deref()
-		.map(TryInto::try_into)
-		.transpose()
-		.map_err(Error::from)?;
+	let base_path = self.base_path.as_ref().unwrap_or(&path_root);
 
-	Ok([base.into_iter(), Some(location).into_iter()]
+	let remaining = location.prefix_match(base_path);
+
+	let path = base_path
 		.into_iter()
-		.flatten()
-		.collect())
+		.chain(remaining.into_iter().flatten())
+		.collect();
+
+	Ok(path)
 }
