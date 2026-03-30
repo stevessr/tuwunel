@@ -1,16 +1,20 @@
 pub mod local;
 pub mod s3;
 
-use std::sync::Arc;
+use std::{iter::once, sync::Arc};
 
-use futures::{FutureExt, Stream, TryFutureExt, TryStreamExt};
+use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use object_store::{
 	CopyMode, DynObjectStore, GetResult, ObjectMeta, ObjectStore, ObjectStoreExt, PutPayload,
 	PutResult, path::Path,
 };
 use tuwunel_core::{
-	Error, Result, config::StorageProvider, debug, derivative::Derivative, err, error, implement,
-	info,
+	Error, Result,
+	config::StorageProvider,
+	debug,
+	derivative::Derivative,
+	err, error, implement, info,
+	utils::stream::{IterStream, TryReadyExt},
 };
 
 #[derive(Derivative)]
@@ -31,7 +35,7 @@ pub struct Provider {
 
 #[implement(Provider)]
 #[tracing::instrument(skip_all, err)]
-pub(super) async fn start(&self) -> Result {
+pub(super) async fn start(self: &Arc<Self>) -> Result {
 	debug!(
 		name = ?self.name,
 		"Checking storage provider client connection..."
@@ -68,11 +72,34 @@ pub async fn get(&self, path: &str) -> Result<GetResult> {
 }
 
 #[implement(Provider)]
-pub async fn delete(&self, path: &str) -> Result {
-	self.provider
-		.delete(&self.to_abs_path(path)?)
-		.map_err(Error::from)
+pub async fn delete_one(self: &Arc<Self>, location: &str) -> Result {
+	self.delete(once(location.to_owned()).stream())
+		.map_ok(|_| ())
+		.try_collect()
 		.await
+}
+
+#[implement(Provider)]
+pub fn delete<S>(self: &Arc<Self>, paths: S) -> impl Stream<Item = Result<Path>> + Send
+where
+	S: Stream<Item = String> + Send + 'static,
+{
+	let this = self.clone();
+	let paths = paths
+		.map(Ok)
+		.ready_and_then(move |path| {
+			use object_store::{Error, path};
+
+			this.to_abs_path(&path)
+				.map_err(|_| Error::InvalidPath {
+					source: path::Error::InvalidPath { path: path.into() },
+				})
+		})
+		.boxed();
+
+	self.provider
+		.delete_stream(paths)
+		.map_err(Error::from)
 }
 
 #[implement(Provider)]

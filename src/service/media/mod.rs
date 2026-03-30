@@ -565,7 +565,7 @@ impl Service {
 			let path = self.get_media_name_sha256(key);
 			debug!(?key, ?path, "Deleting media file in s3");
 
-			s3.delete(&path).await.log_debug_err()?;
+			s3.delete_one(&path).await.log_debug_err()?;
 			Ok(())
 		} else {
 			let path = self.get_media_path_sha256(key);

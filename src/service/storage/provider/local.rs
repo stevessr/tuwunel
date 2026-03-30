@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use object_store::local::LocalFileSystem;
 use tuwunel_core::{
 	Result,
@@ -12,7 +14,7 @@ pub(in super::super) fn new(
 	args: &crate::Args<'_>,
 	name: &str,
 	config: &StorageProviderLocal,
-) -> Result<Option<(String, Provider)>> {
+) -> Result<Option<(String, Arc<Provider>)>> {
 	// Fail successfully if this provider is disabled by the configuration..
 	if config.base_path.is_empty() {
 		debug!(?name, "s3_provider.bucket not set. This configuration will be skipped");
@@ -39,5 +41,5 @@ pub(in super::super) fn new(
 		provider: Box::new(provider),
 	};
 
-	Ok(Some((name.to_owned(), provider)))
+	Ok(Some((name.to_owned(), Arc::new(provider))))
 }
