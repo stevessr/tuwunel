@@ -8,7 +8,6 @@ pub use object_store::{CopyMode, GetResult, GetResultPayload, PutPayload, PutRes
 use tuwunel_core::{
 	Result, at,
 	config::{StorageProvider, StorageProviderLocal},
-	debug::INFO_SPAN_LEVEL,
 	derivative::Derivative,
 	err, implement,
 	utils::{BoolExt, stream::IterStream},
@@ -92,11 +91,6 @@ fn build_providers(args: &crate::Args<'_>) -> Result<Providers> {
 }
 
 #[implement(Service)]
-#[tracing::instrument(
-	level = INFO_SPAN_LEVEL,
-	err(level = "error")
-	skip_all,
-)]
 async fn start_providers(&self) -> Result {
 	self.providers
 		.iter()

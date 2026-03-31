@@ -3013,6 +3013,13 @@ pub struct StorageProviderLocal {
 	/// removed.
 	#[serde(default = "true_fn")]
 	pub delete_empty_directories: bool,
+
+	/// Enables checks performed at startup determining the usability of the
+	/// local directory. Failures will abort the server's startup.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub startup_check: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -3026,21 +3033,19 @@ pub struct StorageProviderS3 {
 	/// additional items can be supplied below individually.
 	pub url: Option<String>,
 
-	/// (required) The name of the S3 bucket. e.g.
-	/// "bucketname-123456789-us-west-2-an".
+	/// The name of the S3 bucket. e.g. "bucketname-123456789-us-west-2-an".
 	pub bucket: Option<String>,
 
-	/// (required) The region of the S3 bucket. e.g. "us-west-2".
+	/// The region of the S3 bucket. e.g. "us-west-2".
 	///
 	/// default: "us-east-1"
 	pub region: Option<String>,
 
-	/// (required) Your amazon IAM Key ID with access granted to this bucket.
+	/// Your amazon IAM Key ID with access granted to this bucket.
 	/// e.g. "ABCDEFG1X1ZZYYXXWWVV"
 	pub key: Option<String>,
 
-	/// (required) The secret key component which is approx 40 characters of
-	/// base64.
+	/// The secret key component which is approx 40 characters of base64.
 	///
 	/// default:
 	/// display: sensitive
@@ -3094,6 +3099,19 @@ pub struct StorageProviderS3 {
 	/// default: true
 	#[serde(default = "some_true_fn")]
 	pub use_payload_signatures: Option<bool>,
+
+	/// (developer use) Enables checks performed at startup such as pinging the
+	/// provider. Failures are considered critical startup errors which abort
+	/// startup. When set to false, faulty providers are only discovered with
+	/// first use and will not be fatal errors.
+	///
+	/// Only set this to false if you expect a provider to be down at startup or
+	/// for development/testing purposes; checks are disabled when the server
+	/// is started in '--maintenance' mode.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub startup_check: bool,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
