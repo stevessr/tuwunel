@@ -4,9 +4,10 @@ use either::{
 	Either,
 	Either::{Left, Right},
 };
+use ruma::ServerName;
 use serde::Deserialize;
 
-use crate::{Result, err, implement};
+use crate::{Result, err, implement, utils::BoolExt};
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(transparent)]
@@ -68,4 +69,36 @@ fn get_bind_ports(&self) -> Vec<u16> {
 		| Left(port) => vec![*port],
 		| Right(ports) => ports.clone(),
 	}
+}
+
+#[implement(super::Config)]
+#[must_use]
+pub fn is_forbidden_remote_server_name(&self, server_name: &ServerName) -> bool {
+	let deny_list_active = self
+		.forbidden_remote_server_names
+		.is_empty()
+		.is_false();
+
+	let allow_list_active = self
+		.allowed_remote_server_names
+		.is_empty()
+		.is_false();
+
+	if deny_list_active
+		&& self
+			.forbidden_remote_server_names
+			.is_match(server_name.host())
+	{
+		return true;
+	}
+
+	if allow_list_active
+		&& !self
+			.allowed_remote_server_names
+			.is_match(server_name.host())
+	{
+		return true;
+	}
+
+	false
 }

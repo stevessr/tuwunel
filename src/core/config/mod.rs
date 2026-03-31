@@ -1721,6 +1721,23 @@ pub struct Config {
 	#[serde(default, with = "serde_regex")]
 	pub forbidden_remote_server_names: RegexSet,
 
+	/// List of allowed server names via regex patterns. This is an allow-list
+	/// rather than a deny-list with all the same details as its counterpart in
+	/// `forbidden_remote_server_names`.
+	///
+	/// This feature becomes active when this list has one or more entries;
+	/// everything not matching is denied. By default it is empty and inactive.
+	///
+	/// Entries in `forbidden_remote_server_names` are still applied after
+	/// this is applied. This allows you to match e.g. "*\.example\.com" here
+	/// while still singling out "bad\.example\.com" for exclusion.
+	///
+	/// example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
+	///
+	/// default: []
+	#[serde(default, with = "serde_regex")]
+	pub allowed_remote_server_names: RegexSet,
+
 	/// List of forbidden server names via regex patterns that we will block all
 	/// outgoing federated room directory requests for. Useful for preventing
 	/// our users from wandering into bad servers or spaces.
