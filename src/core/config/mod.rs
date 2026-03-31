@@ -2972,6 +2972,12 @@ pub struct StorageProviderLocal {
 	#[serde(alias = "path")]
 	pub base_path: String,
 
+	/// Creates the directory on the local filesystem if missing. This is not
+	/// recommended to prevent misconfigured environments and missing mounts
+	/// from silently succeeding.
+	#[serde(default)]
+	pub create_if_missing: bool,
+
 	/// Toggles the preservation of a directory after its last file contents are
 	/// removed.
 	#[serde(default = "true_fn")]

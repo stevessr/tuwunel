@@ -61,6 +61,7 @@ fn build_providers(args: &crate::Args<'_>) -> Result<Providers> {
 		.then(|| {
 			let db_path = args.server.config.database_path.clone();
 			let provider = StorageProviderLocal {
+				create_if_missing: true,
 				base_path: [db_path, "media".into()]
 					.into_iter()
 					.collect::<PathBuf>()
