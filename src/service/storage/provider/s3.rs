@@ -11,7 +11,7 @@ use tuwunel_core::{
 
 use super::Provider;
 
-#[tracing::instrument(name = "new", level = "debug", skip_all, err)]
+#[tracing::instrument(name = "new", level = "info", skip_all, err)]
 pub(in super::super) fn new(
 	args: &crate::Args<'_>,
 	name: &str,

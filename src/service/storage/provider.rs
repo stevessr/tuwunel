@@ -13,7 +13,7 @@ use tuwunel_core::{
 	config::StorageProvider,
 	debug,
 	derivative::Derivative,
-	err, error, implement, info,
+	err, error, implement, info, trace,
 	utils::stream::{IterStream, TryReadyExt},
 };
 
@@ -52,6 +52,16 @@ pub(super) async fn start(self: &Arc<Self>) -> Result {
 }
 
 #[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	err(level = "debug"),
+	skip_all,
+	fields(
+		provider = %self.name,
+		length = ?payload.content_length(),
+		?path,
+	)
+)]
 pub async fn put(&self, path: &str, payload: PutPayload) -> Result<PutResult> {
 	let path = self.to_abs_path(path)?;
 
@@ -62,6 +72,15 @@ pub async fn put(&self, path: &str, payload: PutPayload) -> Result<PutResult> {
 }
 
 #[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	err(level = "debug"),
+	skip_all,
+	fields(
+		provider = %self.name,
+		?path,
+	)
+)]
 pub async fn get(&self, path: &str) -> Result<GetResult> {
 	let path = self.to_abs_path(path)?;
 
@@ -72,14 +91,30 @@ pub async fn get(&self, path: &str) -> Result<GetResult> {
 }
 
 #[implement(Provider)]
-pub async fn delete_one(self: &Arc<Self>, location: &str) -> Result {
-	self.delete(once(location.to_owned()).stream())
+#[tracing::instrument(
+	level = "debug",
+	err(level = "debug"),
+	skip_all,
+	fields(
+		provider = %self.name,
+		?path,
+	)
+)]
+pub async fn delete_one(self: &Arc<Self>, path: &str) -> Result {
+	self.delete(once(path.to_owned()).stream())
 		.map_ok(|_| ())
 		.try_collect()
 		.await
 }
 
 #[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	skip_all,
+	fields(
+		provider = %self.name,
+	)
+)]
 pub fn delete<S>(self: &Arc<Self>, paths: S) -> impl Stream<Item = Result<Path>> + Send
 where
 	S: Stream<Item = String> + Send + 'static,
@@ -103,6 +138,17 @@ where
 }
 
 #[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	err(level = "debug"),
+	skip_all,
+	fields(
+		provider = %self.name,
+		?src,
+		?dst,
+		?overwrite,
+	)
+)]
 pub async fn rename(&self, src: &str, dst: &str, overwrite: CopyMode) -> Result {
 	let src = self.to_abs_path(src)?;
 	let dst = self.to_abs_path(dst)?;
@@ -119,6 +165,17 @@ pub async fn rename(&self, src: &str, dst: &str, overwrite: CopyMode) -> Result 
 }
 
 #[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	err(level = "debug"),
+	skip_all,
+	fields(
+		provider = %self.name,
+		?src,
+		?dst,
+		?overwrite,
+	)
+)]
 pub async fn copy(&self, src: &str, dst: &str, overwrite: CopyMode) -> Result {
 	let src = self.to_abs_path(src)?;
 	let dst = self.to_abs_path(dst)?;
@@ -135,6 +192,14 @@ pub async fn copy(&self, src: &str, dst: &str, overwrite: CopyMode) -> Result {
 }
 
 #[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	skip_all,
+	fields(
+		provider = %self.name,
+		?prefix,
+	)
+)]
 pub fn list(&self, prefix: Option<&str>) -> impl Stream<Item = Result<ObjectMeta>> + Send {
 	self.provider
 		.list(prefix.map(Into::into).as_ref())
@@ -142,6 +207,15 @@ pub fn list(&self, prefix: Option<&str>) -> impl Stream<Item = Result<ObjectMeta
 }
 
 #[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	err(level = "debug"),
+	skip_all,
+	fields(
+		provider = %self.name,
+		?path,
+	)
+)]
 pub async fn head(&self, path: &str) -> Result<ObjectMeta> {
 	self.provider
 		.head(&self.to_abs_path(path)?)
@@ -150,6 +224,14 @@ pub async fn head(&self, path: &str) -> Result<ObjectMeta> {
 }
 
 #[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	err(level = "debug"),
+	skip_all,
+	fields(
+		provider = %self.name,
+	)
+)]
 pub async fn ping(&self) -> Result {
 	self.list(None)
 		.try_next()
@@ -163,10 +245,10 @@ pub async fn ping(&self) -> Result {
 fn to_abs_path(&self, location: &str) -> Result<Path> {
 	let path_root = Path::ROOT;
 
+	let base_path = self.base_path.as_ref().unwrap_or(&path_root);
+
 	let location = Path::parse(location)
 		.map_err(|e| err!("Failed to parse location into canonical PathPart: {e}"))?;
-
-	let base_path = self.base_path.as_ref().unwrap_or(&path_root);
 
 	let remaining = location.prefix_match(base_path);
 
@@ -174,6 +256,14 @@ fn to_abs_path(&self, location: &str) -> Result<Path> {
 		.into_iter()
 		.chain(remaining.into_iter().flatten())
 		.collect();
+
+	trace!(
+		provider = ?self.name,
+		?base_path,
+		?location,
+		?path,
+		"Computed absolute path for object on provider.",
+	);
 
 	Ok(path)
 }

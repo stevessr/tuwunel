@@ -6,8 +6,8 @@ use async_trait::async_trait;
 use futures::TryStreamExt;
 pub use object_store::{CopyMode, GetResult, GetResultPayload, PutPayload, PutResult};
 use tuwunel_core::{
-	Result, at, config::StorageProvider, derivative::Derivative, err, implement,
-	utils::stream::IterStream,
+	Result, at, config::StorageProvider, debug::INFO_SPAN_LEVEL, derivative::Derivative, err,
+	implement, utils::stream::IterStream,
 };
 
 pub use self::provider::Provider;
@@ -42,6 +42,11 @@ impl crate::Service for Service {
 }
 
 #[implement(Service)]
+#[tracing::instrument(
+	level = "info",
+	err(level = "error")
+	skip_all,
+)]
 fn build_providers(args: &crate::Args<'_>) -> Result<Providers> {
 	args.server
 		.config
@@ -56,6 +61,11 @@ fn build_providers(args: &crate::Args<'_>) -> Result<Providers> {
 }
 
 #[implement(Service)]
+#[tracing::instrument(
+	level = INFO_SPAN_LEVEL,
+	err(level = "error")
+	skip_all,
+)]
 async fn start_providers(&self) -> Result {
 	self.providers
 		.iter()

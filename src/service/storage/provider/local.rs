@@ -9,7 +9,7 @@ use tuwunel_core::{
 
 use super::Provider;
 
-#[tracing::instrument(name = "new", level = "debug", skip_all, err)]
+#[tracing::instrument(name = "new", level = "info", skip_all, err)]
 pub(in super::super) fn new(
 	args: &crate::Args<'_>,
 	name: &str,
@@ -35,7 +35,7 @@ pub(in super::super) fn new(
 
 	let provider = Provider {
 		name: name.to_owned(),
-		base_path: Some(config.base_path.clone().into()),
+		base_path: None, // LocalFileSystem computes base_path internally
 		config: StorageProvider::local(config.clone()),
 		services: args.services.clone(),
 		provider: Box::new(provider),
