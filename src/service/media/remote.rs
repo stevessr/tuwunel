@@ -454,8 +454,7 @@ fn check_fetch_authorized(&self, mxc: &Mxc<'_>) -> Result {
 			.services
 			.server
 			.config
-			.forbidden_remote_server_names
-			.is_match(mxc.server_name.host())
+			.is_forbidden_remote_server_name(mxc.server_name)
 	{
 		// we'll lie to the client and say the blocked server's media was not found and
 		// log. the client has no way of telling anyways so this is a security bonus.
