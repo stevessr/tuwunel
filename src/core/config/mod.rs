@@ -1,19 +1,17 @@
 pub mod check;
 mod identity_provider_serde;
 pub mod manager;
+mod net;
 pub mod proxy;
 pub mod room_version;
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
-	net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+	net::IpAddr,
 	path::{Path, PathBuf},
 };
 
-use either::{
-	Either,
-	Either::{Left, Right},
-};
+use either::{Either, Either::Left};
 use figment::providers::{Data, Env, Format, Toml};
 pub use figment::{Figment, value::Value as FigmentValue};
 use itertools::Itertools;
@@ -26,8 +24,11 @@ use serde::{Deserialize, de::IgnoredAny};
 use tuwunel_macros::config_example_generator;
 use url::Url;
 
-use self::proxy::ProxyConfig;
 pub use self::{check::check, manager::Manager};
+use self::{
+	net::{ListeningAddr, ListeningPort},
+	proxy::ProxyConfig,
+};
 use crate::{
 	Err, Result, err,
 	utils::{self, sys},
@@ -3187,20 +3188,6 @@ impl From<AppServiceNamespace> for ruma::api::appservice::Namespace {
 	}
 }
 
-#[derive(Deserialize, Clone, Debug)]
-#[serde(transparent)]
-struct ListeningPort {
-	#[serde(with = "either::serde_untagged")]
-	ports: Either<u16, Vec<u16>>,
-}
-
-#[derive(Deserialize, Clone, Debug)]
-#[serde(transparent)]
-struct ListeningAddr {
-	#[serde(with = "either::serde_untagged")]
-	addrs: Either<IpAddr, Vec<IpAddr>>,
-}
-
 const DEPRECATED_KEYS: &[&str; 9] = &[
 	"cache_capacity",
 	"conduit_cache_capacity_modifier",
@@ -3269,51 +3256,6 @@ impl Config {
 			.map_err(|e| err!("There was a problem with your configuration file: {e}"))?;
 
 		Ok(config)
-	}
-
-	pub fn get_unix_socket_perms(&self) -> Result<u32> {
-		let octal_perms = self.unix_socket_perms.to_string();
-		let socket_perms = u32::from_str_radix(&octal_perms, 8).map_err(|_| {
-			err!(Config("unix_socket_perms", "failed to convert octal permissions"))
-		})?;
-
-		Ok(socket_perms)
-	}
-
-	#[must_use]
-	pub fn get_bind_addrs(&self) -> Vec<SocketAddr> {
-		let mut addrs = Vec::with_capacity(
-			self.get_bind_hosts()
-				.len()
-				.saturating_mul(self.get_bind_ports().len()),
-		);
-		for host in &self.get_bind_hosts() {
-			for port in &self.get_bind_ports() {
-				addrs.push(SocketAddr::new(*host, *port));
-			}
-		}
-
-		addrs
-	}
-
-	fn get_bind_hosts(&self) -> Vec<IpAddr> {
-		if let Some(address) = &self.address {
-			match &address.addrs {
-				| Left(addr) => vec![*addr],
-				| Right(addrs) => addrs.clone(),
-			}
-		} else if self.unix_socket_path.is_some() {
-			vec![]
-		} else {
-			vec![Ipv4Addr::LOCALHOST.into(), Ipv6Addr::LOCALHOST.into()]
-		}
-	}
-
-	fn get_bind_ports(&self) -> Vec<u16> {
-		match &self.port.ports {
-			| Left(port) => vec![*port],
-			| Right(ports) => ports.clone(),
-		}
 	}
 
 	pub fn check(&self) -> Result { check(self) }
