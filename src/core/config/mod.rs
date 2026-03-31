@@ -1655,6 +1655,21 @@ pub struct Config {
 	#[serde(default)]
 	pub prune_missing_media: bool,
 
+	/// List of configured storage providers to use for media storage. Providers
+	/// can beconfigured below in respective sections designated by
+	/// `global.storage_provider.<NAME>.<brand>` where `NAME` can be listed
+	/// here.
+	///
+	/// For advanced features and future extensions involving multiple providers
+	/// the list is used. Please take note of other configuration items when
+	/// listing multiple providers as the meaning of the list may change.
+	///
+	/// The list defaults to `["media"]`.
+	///
+	/// default: ["media"]
+	#[serde(default = "default_media_storage_providers")]
+	pub media_storage_providers: BTreeSet<String>,
+
 	/// Vector list of regex patterns of server names that tuwunel will refuse
 	/// to download remote media from.
 	///
@@ -3627,3 +3642,5 @@ fn default_max_join_attempts_per_join_request() -> usize { 3 }
 fn default_sso_grant_session_duration() -> Option<u64> { Some(300) }
 
 fn default_redaction_retention_seconds() -> u64 { 5_184_000 }
+
+fn default_media_storage_providers() -> BTreeSet<String> { ["media".to_owned()].into() }
