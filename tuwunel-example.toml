@@ -2519,6 +2519,12 @@
 #
 #base_path =
 
+# Creates the directory on the local filesystem if missing. This is not
+# recommended to prevent misconfigured environments and missing mounts
+# from silently succeeding.
+#
+#create_if_missing = false
+
 # Toggles the preservation of a directory after its last file contents are
 # removed.
 #

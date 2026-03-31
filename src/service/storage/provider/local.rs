@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fs, sync::Arc};
 
 use object_store::local::LocalFileSystem;
 use tuwunel_core::{
@@ -19,6 +19,16 @@ pub(in super::super) fn new(
 	if config.base_path.is_empty() {
 		debug!(?name, "s3_provider.bucket not set. This configuration will be skipped");
 		return Ok(None);
+	}
+
+	if config.create_if_missing {
+		trace!(
+			%name,
+			path = ?config.base_path,
+			"Creating directory on local filesystem if missing...",
+		);
+
+		fs::create_dir_all(&config.base_path)?;
 	}
 
 	trace!(?name, ?config, "Initializing LocalFS...");

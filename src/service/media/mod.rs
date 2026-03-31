@@ -83,12 +83,6 @@ impl crate::Service for Service {
 		}))
 	}
 
-	async fn worker(self: Arc<Self>) -> Result {
-		self.create_media_dir().await?;
-
-		Ok(())
-	}
-
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
 
