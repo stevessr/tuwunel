@@ -14,7 +14,7 @@ use std::{
 
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
-use futures::{FutureExt, StreamExt, TryStreamExt, future::join3, pin_mut};
+use futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt, pin_mut};
 use http::StatusCode;
 use object_store::PutPayload;
 use ruma::{
@@ -22,13 +22,9 @@ use ruma::{
 	api::client::error::{ErrorKind, RetryAfter},
 	http_headers::ContentDisposition,
 };
-use tokio::{
-	fs,
-	io::{AsyncReadExt, AsyncWriteExt, BufReader},
-	sync::Notify,
-};
+use tokio::{fs, sync::Notify};
 use tuwunel_core::{
-	Err, Error, Result, debug, debug_error, debug_info, debug_warn, err, error, trace,
+	Err, Error, Result, debug, debug_error, debug_info, debug_warn, err, trace,
 	utils::{
 		self, BoolExt, MutexMap,
 		result::{LogDebugErr, LogErr},
@@ -293,7 +289,7 @@ impl Service {
 		};
 
 		let path = self.get_media_name_sha256(&key);
-		let get_via_provider = self
+		let fetch = self
 			.storage_providers()
 			.stream()
 			.filter_map(async |provider| {
@@ -307,23 +303,13 @@ impl Service {
 					.ok()
 			});
 
-		pin_mut!(get_via_provider);
-		if let Some(bytes) = get_via_provider.next().await {
-			return Ok(Some(Media {
-				content: bytes.to_vec(),
-				content_type,
-				content_disposition,
-			}));
-		}
-
-		let path = self.get_media_path_sha256(&key);
-		let mut content = Vec::with_capacity(8192);
-		BufReader::new(fs::File::open(path).await?)
-			.read_to_end(&mut content)
-			.await?;
+		pin_mut!(fetch);
+		let Some(bytes) = fetch.next().await else {
+			return Err!(Request(NotFound("Media not found.")));
+		};
 
 		Ok(Some(Media {
-			content,
+			content: bytes.to_vec(),
 			content_type,
 			content_disposition,
 		}))
@@ -491,7 +477,7 @@ impl Service {
 							Some(file_metadata)
 						},
 						| Err(e) => {
-							warn!(
+							debug_warn!(
 								"Failed to obtain {:?} file metadata for MXC {mxc} at file path \
 								 {path:?}\", skipping: {e}",
 								provider.name,
@@ -506,31 +492,7 @@ impl Service {
 			{
 				SystemTime::from(file_metadata.last_modified)
 			} else {
-				let path = self.get_media_path_sha256(&key);
-
-				let file_metadata = match fs::metadata(path.clone()).await {
-					| Ok(file_metadata) => file_metadata,
-					| Err(e) => {
-						error!(
-							"Failed to obtain local file metadata for MXC {mxc} at file path \
-							 \"{path:?}\", skipping: {e}"
-						);
-						continue;
-					},
-				};
-
-				trace!(%mxc, ?path, "Local file metadata: {file_metadata:?}");
-
-				match file_metadata.modified() {
-					| Ok(value) => value,
-					| Err(err) => {
-						error!(
-							"Failed to obtain last modification time for MXC {mxc} at file path \
-							 \"{path:?}\" {err:?}. Skipping..."
-						);
-						continue;
-					},
-				}
+				continue;
 			};
 
 			debug!("File created at: {file_created_at:?}");
@@ -586,11 +548,10 @@ impl Service {
 	}
 
 	async fn remove_media_file(&self, key: &[u8]) -> Result {
-		let provider_rm = self
-			.storage_providers()
+		let path = self.get_media_name_sha256(key);
+		self.storage_providers()
 			.stream()
 			.filter_map(async |provider| {
-				let path = self.get_media_name_sha256(key);
 				debug!(
 					?key, ?path, provider = ?provider.name,
 					"Deleting media file from provider",
@@ -607,35 +568,19 @@ impl Service {
 				count
 					.ge(&0)
 					.ok_or_else(|| err!(Request(NotFound("Failed to remove on any provider."))))
-			});
-
-		let path = self.get_media_path_sha256(key);
-		let legacy = self.get_media_path_b64(key);
-		debug!(?key, ?path, ?legacy, "Removing local media file");
-
-		let file_rm = fs::remove_file(&path);
-		let legacy_rm = fs::remove_file(&legacy);
-		let (provider_rm, file_rm, legacy_rm) = join3(provider_rm, file_rm, legacy_rm)
-			.boxed()
-			.await;
-
-		if self.storage_providers().count() > 0 {
-			return provider_rm;
-		}
-
-		if let Err(e) = legacy_rm
-			&& self.services.server.config.media_compat_file_link
-		{
-			debug_error!(?key, ?legacy, "Failed to remove legacy media symlink: {e}");
-		}
-
-		Ok(file_rm?)
+			})
+			.await
 	}
 
 	async fn create_media_file(&self, key: &[u8], file: &[u8]) -> Result {
-		let uploads = self
-			.storage_providers()
+		self.storage_providers()
 			.try_stream()
+			.ready_try_filter(|provider| {
+				let store_media_on_providers = &self.services.config.store_media_on_providers;
+
+				store_media_on_providers.is_empty()
+					|| store_media_on_providers.contains(&provider.name)
+			})
 			.and_then(async |provider| {
 				let path = self.get_media_name_sha256(key);
 				debug!(
@@ -651,29 +596,9 @@ impl Service {
 				Ok(1)
 			})
 			.ready_try_fold(0_usize, |a, c| Ok(a.saturating_add(c)))
-			.await?;
-
-		if uploads > 0 {
-			return Ok(());
-		}
-
-		let path = self.get_media_path_sha256(key);
-		debug!(?key, ?path, "Creating local media file");
-
-		let mut f = fs::File::create(&path).await?;
-		if self.services.server.config.media_compat_file_link {
-			let legacy = self.get_media_path_b64(key);
-			if let Err(e) = fs::symlink(&path, &legacy).await {
-				debug_error!(
-					key = ?encode_key(key), ?path, ?legacy,
-					"Failed to create legacy media symlink: {e}"
-				);
-			}
-		}
-
-		f.write_all(file).await?;
-
-		Ok(())
+			.inspect_ok(|&uploads| assert!(uploads > 0, "Successfully saved to nowhere."))
+			.map_ok(|_| ())
+			.await
 	}
 
 	fn storage_providers(&self) -> impl Iterator<Item = &Arc<Provider>> + Send + '_ {
