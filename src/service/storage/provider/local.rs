@@ -17,7 +17,7 @@ pub(in super::super) fn new(
 ) -> Result<Option<(String, Arc<Provider>)>> {
 	// Fail successfully if this provider is disabled by the configuration..
 	if config.base_path.is_empty() {
-		debug!(?name, "s3_provider.bucket not set. This configuration will be skipped");
+		debug!(?name, "'base_path' is not set. This configuration will be skipped");
 		return Ok(None);
 	}
 
@@ -34,7 +34,7 @@ pub(in super::super) fn new(
 	trace!(?name, ?config, "Initializing LocalFS...");
 
 	let provider = LocalFileSystem::new_with_prefix(config.base_path.clone())
-		.inspect_err(|e| error!("Failed to configure S3 storage client: {e}"))?
+		.inspect_err(|e| error!("Failed to configure LocalFS storage client: {e}"))?
 		.with_automatic_cleanup(config.delete_empty_directories);
 
 	debug_info!(

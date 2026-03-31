@@ -17,12 +17,14 @@ pub(crate) enum StorageCommand {
 	ShowProviders,
 
 	Debug {
+		/// Use configured provider by name.
 		#[arg(short, long)]
 		provider: Option<String>,
 	},
 
 	/// List metadata for all objects.
 	List {
+		/// Use configured provider by name.
 		#[arg(short, long)]
 		provider: Option<String>,
 
@@ -32,6 +34,7 @@ pub(crate) enum StorageCommand {
 
 	/// Show metadata for an object.
 	Show {
+		/// Use configured provider by name.
 		#[arg(short, long)]
 		provider: Option<String>,
 
@@ -41,9 +44,11 @@ pub(crate) enum StorageCommand {
 
 	/// Copy an object from a source to a destination.
 	Copy {
+		/// Use configured provider by name.
 		#[arg(short, long)]
 		provider: Option<String>,
 
+		/// Overwrite existing destination.
 		#[arg(short, long)]
 		force: bool,
 
@@ -56,9 +61,11 @@ pub(crate) enum StorageCommand {
 
 	/// Move an object from a source to a destination.
 	Move {
+		/// Use configured provider by name.
 		#[arg(short, long)]
 		provider: Option<String>,
 
+		/// Overwrite existing destination.
 		#[arg(short, long)]
 		force: bool,
 
@@ -71,12 +78,14 @@ pub(crate) enum StorageCommand {
 
 	/// Delete an object at the specified location.
 	Delete {
+		/// Use configured provider by name.
 		#[arg(short, long)]
 		provider: Option<String>,
 
 		/// Path to the location to delete. Multiple arguments allowed.
 		location: Vec<String>,
 
+		/// Report successful results in addition to failures.
 		#[arg(short, long)]
 		verbose: bool,
 	},
