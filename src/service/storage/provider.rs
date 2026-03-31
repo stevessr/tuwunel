@@ -28,6 +28,8 @@ pub struct Provider {
 
 	pub(crate) base_path: Option<Path>,
 
+	startup_check: bool,
+
 	#[expect(unused)]
 	#[derivative(Debug = "ignore")]
 	services: Arc<crate::services::OnceServices>,
@@ -36,19 +38,28 @@ pub struct Provider {
 #[implement(Provider)]
 #[tracing::instrument(skip_all, err)]
 pub(super) async fn start(self: &Arc<Self>) -> Result {
-	debug!(
-		name = ?self.name,
-		"Checking storage provider client connection..."
-	);
-
-	self.ping().await?;
-
-	info!(
-		name = %self.name,
-		"Connected to storage provider"
-	);
+	if self.startup_check {
+		self.startup_check().await?;
+	}
 
 	Ok(())
+}
+
+#[implement(Provider)]
+#[tracing::instrument(name = "check", skip_all, err)]
+async fn startup_check(self: &Arc<Self>) -> Result {
+	debug!(
+		name = ?self.name,
+		"Checking storage provider client connection...",
+	);
+	self.ping()
+		.inspect_ok(|()| {
+			info!(
+				name = %self.name,
+				"Connected to storage provider"
+			);
+		})
+		.await
 }
 
 #[implement(Provider)]

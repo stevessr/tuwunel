@@ -47,6 +47,7 @@ pub(in super::super) fn new(
 		name: name.to_owned(),
 		base_path: None, // LocalFileSystem computes base_path internally
 		config: StorageProvider::local(config.clone()),
+		startup_check: config.startup_check,
 		services: args.services.clone(),
 		provider: Box::new(provider),
 	};
