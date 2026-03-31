@@ -1,13 +1,17 @@
 pub mod provider;
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
 use futures::TryStreamExt;
 pub use object_store::{CopyMode, GetResult, GetResultPayload, PutPayload, PutResult};
 use tuwunel_core::{
-	Result, at, config::StorageProvider, debug::INFO_SPAN_LEVEL, derivative::Derivative, err,
-	implement, utils::stream::IterStream,
+	Result, at,
+	config::{StorageProvider, StorageProviderLocal},
+	debug::INFO_SPAN_LEVEL,
+	derivative::Derivative,
+	err, implement,
+	utils::{BoolExt, stream::IterStream},
 };
 
 pub use self::provider::Provider;
@@ -48,10 +52,36 @@ impl crate::Service for Service {
 	skip_all,
 )]
 fn build_providers(args: &crate::Args<'_>) -> Result<Providers> {
+	let default_media_provider = args
+		.server
+		.config
+		.storage_provider
+		.contains_key("media")
+		.is_false()
+		.then(|| {
+			let db_path = args.server.config.database_path.clone();
+			let provider = StorageProviderLocal {
+				base_path: [db_path, "media".into()]
+					.into_iter()
+					.collect::<PathBuf>()
+					.to_string_lossy()
+					.into(),
+
+				..Default::default()
+			};
+
+			("media".into(), StorageProvider::local(provider))
+		});
+
 	args.server
 		.config
 		.storage_provider
 		.iter()
+		.chain(
+			default_media_provider
+				.iter()
+				.map(|(name, conf)| (name, conf)),
+		)
 		.filter_map(|(name, conf)| match conf {
 			| StorageProvider::local(conf) => provider::local::new(args, name, conf).transpose(),
 			| StorageProvider::S3(conf) => provider::s3::new(args, name, conf).transpose(),

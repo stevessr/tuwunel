@@ -9,9 +9,8 @@ use std::{cmp, num::Saturating as Sat};
 
 use futures::{StreamExt, pin_mut};
 use ruma::{Mxc, UInt, UserId, http_headers::ContentDisposition, media::Method};
-use tokio::{fs, io::AsyncReadExt};
 use tuwunel_core::{
-	Result, checked, err, implement,
+	Err, Result, checked, err, implement,
 	utils::{result::LogErr, stream::IterStream},
 };
 
@@ -84,7 +83,7 @@ impl super::Service {
 #[tracing::instrument(name = "saved", level = "debug", skip_all)]
 async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<Media>> {
 	let path = self.get_media_name_sha256(&data.key);
-	let get_via_provider = self
+	let fetch = self
 		.storage_providers()
 		.stream()
 		.filter_map(async |provider| {
@@ -98,19 +97,12 @@ async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<Media>> {
 				.ok()
 		});
 
-	pin_mut!(get_via_provider);
-	if let Some(bytes) = get_via_provider.next().await {
-		return Ok(Some(into_media(data, bytes.to_vec())));
-	}
+	pin_mut!(fetch);
+	let Some(bytes) = fetch.next().await else {
+		return Err!(Request(NotFound("Media thumbnail not found.")));
+	};
 
-	let mut content = Vec::new();
-	let path = self.get_media_path_sha256(&data.key);
-	fs::File::open(path)
-		.await?
-		.read_to_end(&mut content)
-		.await?;
-
-	Ok(Some(into_media(data, content)))
+	Ok(Some(into_media(data, bytes.to_vec())))
 }
 
 /// Generate a thumbnail

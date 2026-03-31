@@ -1420,18 +1420,41 @@
 #
 #prune_missing_media = false
 
-# List of configured storage providers to use for media storage. Providers
-# can beconfigured below in respective sections designated by
+# List of storage providers to use for media. Providers can be configured
+# below in respective sections designated by
 # `global.storage_provider.<NAME>.<brand>` where `NAME` can be listed
 # here.
 #
 # For advanced features and future extensions involving multiple providers
-# the list is used. Please take note of other configuration items when
-# listing multiple providers as the meaning of the list may change.
+# the list may contain multiple entries. You MUST take note of other
+# configuration options when listing multiple providers or resource
+# duplication costs and poor performance can result.
 #
-# The list defaults to `["media"]`.
+# The list defaults to `["media"]` which is an implicit storage provider
+# representing the media directory on the local filesystem. It can be
+# altered by configuring `global.storage_provider.media.local` explicitly
+# or disabled by omitting it from this list entirely. Users with existing
+# deployments are advised to continue listing "media" as a fallback along
+# with their new provider.
 #
 #media_storage_providers = ["media"]
+
+# List of configured storage providers where new media will be sent. When
+# this list is not explicitly configured all entries in
+# `media_storage_providers` are used as default.
+#
+# This list is important for users passively migrating to a new media
+# storage provider by only writing to one while querying the other as a
+# fallback.
+#
+# For example:
+#
+# `media_storage_providers = ["media", "media_on_s3"]`
+# `store_media_on_providers = ["media_on_s3"]`
+#
+# Entries in this list must also be listed in `media_storage_providers`.
+#
+#store_media_on_providers = []
 
 # Vector list of regex patterns of server names that tuwunel will refuse
 # to download remote media from.
@@ -2490,8 +2513,9 @@
 
 #[global.storage_provider.<ID>.local]
 
-# Absolute path to this local filesystem storage provider. Technically
-# this is a prefix prepended to all objects addressed in the store.
+# Absolute path to this local filesystem storage provider. Technically the
+# provider exists at the filesystem root, and the base_path is prefixed to
+# all objects.
 #
 #base_path =
 
