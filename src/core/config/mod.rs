@@ -2103,9 +2103,22 @@ pub struct Config {
 	/// - "smoke" performs a shutdown after startup admin commands rather than
 	///   hanging on client handling.
 	///
-	/// default: []
+	/// display: hidden
 	#[serde(default)]
 	pub test: BTreeSet<String>,
+
+	/// Indicates the server has started in maintenance mode. Historically
+	/// maintenance mode has been enabled by the command line argument
+	/// `--maintenance` which then sets various configuration items such as
+	/// `listening=false` among others. That is still the case. This option was
+	/// only added as a single source of truth that `--maintenance` mode is
+	/// active.
+	///
+	/// This option must never be set manually.
+	///
+	/// display: hidden
+	#[serde(default)]
+	pub maintenance: bool,
 
 	/// Controls whether admin room notices like account registrations, password
 	/// changes, account deactivations, room directory publications, etc will be
