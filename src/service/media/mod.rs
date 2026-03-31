@@ -14,6 +14,7 @@ use std::{
 
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose};
+use futures::{FutureExt, StreamExt, TryStreamExt, future::join3, pin_mut};
 use http::StatusCode;
 use object_store::PutPayload;
 use ruma::{
@@ -29,8 +30,9 @@ use tokio::{
 use tuwunel_core::{
 	Err, Error, Result, debug, debug_error, debug_info, debug_warn, err, error, trace,
 	utils::{
-		self, MutexMap,
+		self, BoolExt, MutexMap,
 		result::{LogDebugErr, LogErr},
+		stream::{IterStream, TryReadyExt},
 		time::now_millis,
 	},
 	warn,
@@ -38,6 +40,7 @@ use tuwunel_core::{
 
 use self::data::{Data, Metadata};
 pub use self::thumbnail::Dim;
+use crate::storage::Provider;
 
 #[derive(Debug)]
 pub struct Media {
@@ -289,28 +292,41 @@ impl Service {
 			return Ok(None);
 		};
 
-		if let Ok(s3) = self.services.storage.provider("media") {
-			let path = self.get_media_name_sha256(&key);
-			let result = s3.get(path.as_str()).await.log_debug_err()?;
-			let bytes = result.bytes().await.log_debug_err()?;
-			Ok(Some(Media {
+		let path = self.get_media_name_sha256(&key);
+		let get_via_provider = self
+			.storage_providers()
+			.stream()
+			.filter_map(async |provider| {
+				provider
+					.get(path.as_str())
+					.await
+					.ok()?
+					.bytes()
+					.await
+					.log_err()
+					.ok()
+			});
+
+		pin_mut!(get_via_provider);
+		if let Some(bytes) = get_via_provider.next().await {
+			return Ok(Some(Media {
 				content: bytes.to_vec(),
 				content_type,
 				content_disposition,
-			}))
-		} else {
-			let mut content = Vec::with_capacity(8192);
-			let path = self.get_media_path_sha256(&key);
-			BufReader::new(fs::File::open(path).await?)
-				.read_to_end(&mut content)
-				.await?;
-
-			Ok(Some(Media {
-				content,
-				content_type,
-				content_disposition,
-			}))
+			}));
 		}
+
+		let path = self.get_media_path_sha256(&key);
+		let mut content = Vec::with_capacity(8192);
+		BufReader::new(fs::File::open(path).await?)
+			.read_to_end(&mut content)
+			.await?;
+
+		Ok(Some(Media {
+			content,
+			content_type,
+			content_disposition,
+		}))
 	}
 
 	/// Download a file and wait up to a timeout_ms if it is pending.
@@ -464,21 +480,30 @@ impl Service {
 				continue;
 			}
 
-			let file_created_at = if let Ok(s3) = self.services.storage.provider("media") {
-				let path = self.get_media_name_sha256(&key);
-
-				let file_metadata = match s3.head(&path).await {
-					| Ok(file_metadata) => file_metadata,
-					| Err(e) => {
-						error!(
-							"Failed to obtain S3 file metadata for MXC {mxc} at file path \
-							 \"{path:?}\", skipping: {e}"
-						);
-						continue;
-					},
-				};
-
-				trace!(%mxc, ?path, "S3 file metadata: {file_metadata:?}");
+			let file_created_at = if let Some(file_metadata) = self
+				.storage_providers()
+				.stream()
+				.filter_map(async |provider| {
+					let path = self.get_media_name_sha256(&key);
+					match provider.head(&path).await {
+						| Ok(file_metadata) => {
+							trace!(%mxc, ?path, "Provider file metadata: {file_metadata:?}");
+							Some(file_metadata)
+						},
+						| Err(e) => {
+							warn!(
+								"Failed to obtain {:?} file metadata for MXC {mxc} at file path \
+								 {path:?}\", skipping: {e}",
+								provider.name,
+							);
+							None
+						},
+					}
+				})
+				.boxed()
+				.next()
+				.await
+			{
 				SystemTime::from(file_metadata.last_modified)
 			} else {
 				let path = self.get_media_path_sha256(&key);
@@ -561,57 +586,102 @@ impl Service {
 	}
 
 	async fn remove_media_file(&self, key: &[u8]) -> Result {
-		if let Ok(s3) = self.services.storage.provider("media") {
-			let path = self.get_media_name_sha256(key);
-			debug!(?key, ?path, "Deleting media file in s3");
+		let provider_rm = self
+			.storage_providers()
+			.stream()
+			.filter_map(async |provider| {
+				let path = self.get_media_name_sha256(key);
+				debug!(
+					?key, ?path, provider = ?provider.name,
+					"Deleting media file from provider",
+				);
 
-			s3.delete_one(&path).await.log_debug_err()?;
-			Ok(())
-		} else {
-			let path = self.get_media_path_sha256(key);
-			let legacy = self.get_media_path_b64(key);
-			debug!(?key, ?path, ?legacy, "Removing local media file");
+				provider
+					.delete_one(&path)
+					.await
+					.log_debug_err()
+					.ok()
+			})
+			.count()
+			.map(|count| {
+				count
+					.ge(&0)
+					.ok_or_else(|| err!(Request(NotFound("Failed to remove on any provider."))))
+			});
 
-			let file_rm = fs::remove_file(&path);
-			let legacy_rm = fs::remove_file(&legacy);
-			let (file_rm, legacy_rm) = tokio::join!(file_rm, legacy_rm);
-			if let Err(e) = legacy_rm
-				&& self.services.server.config.media_compat_file_link
-			{
-				debug_error!(?key, ?legacy, "Failed to remove legacy media symlink: {e}");
-			}
+		let path = self.get_media_path_sha256(key);
+		let legacy = self.get_media_path_b64(key);
+		debug!(?key, ?path, ?legacy, "Removing local media file");
 
-			Ok(file_rm?)
+		let file_rm = fs::remove_file(&path);
+		let legacy_rm = fs::remove_file(&legacy);
+		let (provider_rm, file_rm, legacy_rm) = join3(provider_rm, file_rm, legacy_rm)
+			.boxed()
+			.await;
+
+		if self.storage_providers().count() > 0 {
+			return provider_rm;
 		}
+
+		if let Err(e) = legacy_rm
+			&& self.services.server.config.media_compat_file_link
+		{
+			debug_error!(?key, ?legacy, "Failed to remove legacy media symlink: {e}");
+		}
+
+		Ok(file_rm?)
 	}
 
 	async fn create_media_file(&self, key: &[u8], file: &[u8]) -> Result {
-		if let Ok(s3) = self.services.storage.provider("media") {
-			let path = self.get_media_name_sha256(key);
-			debug!(?key, ?path, "Creating media file in s3");
+		let uploads = self
+			.storage_providers()
+			.try_stream()
+			.and_then(async |provider| {
+				let path = self.get_media_name_sha256(key);
+				debug!(
+					?key, ?path, provider = ?provider.name,
+					"Creating media file on storage provider."
+				);
 
-			s3.put(path.as_str(), PutPayload::from(file.to_vec()))
-				.await
-				.log_err()?;
-		} else {
-			let path = self.get_media_path_sha256(key);
-			debug!(?key, ?path, "Creating local media file");
+				provider
+					.put(path.as_str(), PutPayload::from(file.to_vec()))
+					.await
+					.log_err()?;
 
-			let mut f = fs::File::create(&path).await?;
-			if self.services.server.config.media_compat_file_link {
-				let legacy = self.get_media_path_b64(key);
-				if let Err(e) = fs::symlink(&path, &legacy).await {
-					debug_error!(
-						key = ?encode_key(key), ?path, ?legacy,
-						"Failed to create legacy media symlink: {e}"
-					);
-				}
-			}
+				Ok(1)
+			})
+			.ready_try_fold(0_usize, |a, c| Ok(a.saturating_add(c)))
+			.await?;
 
-			f.write_all(file).await?;
+		if uploads > 0 {
+			return Ok(());
 		}
 
+		let path = self.get_media_path_sha256(key);
+		debug!(?key, ?path, "Creating local media file");
+
+		let mut f = fs::File::create(&path).await?;
+		if self.services.server.config.media_compat_file_link {
+			let legacy = self.get_media_path_b64(key);
+			if let Err(e) = fs::symlink(&path, &legacy).await {
+				debug_error!(
+					key = ?encode_key(key), ?path, ?legacy,
+					"Failed to create legacy media symlink: {e}"
+				);
+			}
+		}
+
+		f.write_all(file).await?;
+
 		Ok(())
+	}
+
+	fn storage_providers(&self) -> impl Iterator<Item = &Arc<Provider>> + Send + '_ {
+		self.services
+			.config
+			.media_storage_providers
+			.iter()
+			.filter_map(|id| self.services.storage.provider(id).ok())
 	}
 
 	#[inline]

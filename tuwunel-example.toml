@@ -1420,6 +1420,19 @@
 #
 #prune_missing_media = false
 
+# List of configured storage providers to use for media storage. Providers
+# can beconfigured below in respective sections designated by
+# `global.storage_provider.<NAME>.<brand>` where `NAME` can be listed
+# here.
+#
+# For advanced features and future extensions involving multiple providers
+# the list is used. Please take note of other configuration items when
+# listing multiple providers as the meaning of the list may change.
+#
+# The list defaults to `["media"]`.
+#
+#media_storage_providers = ["media"]
+
 # Vector list of regex patterns of server names that tuwunel will refuse
 # to download remote media from.
 #

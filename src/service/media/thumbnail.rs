@@ -7,9 +7,13 @@
 
 use std::{cmp, num::Saturating as Sat};
 
+use futures::{StreamExt, pin_mut};
 use ruma::{Mxc, UInt, UserId, http_headers::ContentDisposition, media::Method};
 use tokio::{fs, io::AsyncReadExt};
-use tuwunel_core::{Result, checked, err, implement, utils::result::LogDebugErr};
+use tuwunel_core::{
+	Result, checked, err, implement,
+	utils::{result::LogErr, stream::IterStream},
+};
 
 use super::{Media, data::Metadata};
 
@@ -77,23 +81,36 @@ impl super::Service {
 
 /// Using saved thumbnail
 #[implement(super::Service)]
-#[tracing::instrument(name = "saved", level = "debug", skip(self, data))]
+#[tracing::instrument(name = "saved", level = "debug", skip_all)]
 async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<Media>> {
-	if let Ok(s3) = self.services.storage.provider("media") {
-		let path = self.get_media_name_sha256(&data.key);
-		let result = s3.get(&path).await.log_debug_err()?;
-		let bytes = result.bytes().await.log_debug_err()?;
-		Ok(Some(into_media(data, bytes.to_vec())))
-	} else {
-		let mut content = Vec::new();
-		let path = self.get_media_path_sha256(&data.key);
-		fs::File::open(path)
-			.await?
-			.read_to_end(&mut content)
-			.await?;
+	let path = self.get_media_name_sha256(&data.key);
+	let get_via_provider = self
+		.storage_providers()
+		.stream()
+		.filter_map(async |provider| {
+			provider
+				.get(path.as_str())
+				.await
+				.ok()?
+				.bytes()
+				.await
+				.log_err()
+				.ok()
+		});
 
-		Ok(Some(into_media(data, content)))
+	pin_mut!(get_via_provider);
+	if let Some(bytes) = get_via_provider.next().await {
+		return Ok(Some(into_media(data, bytes.to_vec())));
 	}
+
+	let mut content = Vec::new();
+	let path = self.get_media_path_sha256(&data.key);
+	fs::File::open(path)
+		.await?
+		.read_to_end(&mut content)
+		.await?;
+
+	Ok(Some(into_media(data, content)))
 }
 
 /// Generate a thumbnail
