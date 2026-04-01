@@ -1,12 +1,13 @@
 pub mod local;
 pub mod s3;
 
-use std::{iter::once, sync::Arc};
+use std::{iter::once, ops::Range, sync::Arc};
 
+use bytes::Bytes;
 use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use object_store::{
-	CopyMode, DynObjectStore, GetResult, ObjectMeta, ObjectStore, ObjectStoreExt, PutPayload,
-	PutResult, path::Path,
+	Attributes, CopyMode, DynObjectStore, GetResult, MultipartUpload, ObjectMeta, ObjectStore,
+	ObjectStoreExt, PutPayload, PutResult, path::Path,
 };
 use tuwunel_core::{
 	Error, Result,
@@ -34,6 +35,9 @@ pub struct Provider {
 	#[derivative(Debug = "ignore")]
 	services: Arc<crate::services::OnceServices>,
 }
+
+pub type FetchItem = (Bytes, (Range<u64>, u64));
+pub type FetchMetaItem = (Bytes, Arc<(Range<u64>, ObjectMeta, Attributes)>);
 
 #[implement(Provider)]
 #[tracing::instrument(skip_all, err)]
@@ -69,15 +73,112 @@ async fn startup_check(self: &Arc<Self>) -> Result {
 	skip_all,
 	fields(
 		provider = %self.name,
-		length = ?payload.content_length(),
 		?path,
 	)
 )]
-pub async fn put(&self, path: &str, payload: PutPayload) -> Result<PutResult> {
+pub async fn store<S, T>(&self, path: &str, input: S) -> Result<PutResult>
+where
+	S: Stream<Item = Result<T>> + Send,
+	PutPayload: From<T>,
+{
+	let path = self.to_abs_path(path)?;
+	let mut handle = self
+		.provider
+		.put_multipart(&path)
+		.map_err(Error::from)
+		.await?;
+
+	match input
+		.try_for_each(|t| handle.put_part(t.into()).map_err(Error::from))
+		.inspect_err(|e| error!(?path, "Failed to store object: {e:?}"))
+		.await
+	{
+		| Ok(()) =>
+			handle
+				.complete()
+				.map_err(Error::from)
+				.inspect_err(|e| {
+					error!(?path, "Failed to store object during completion: {e:?}");
+				})
+				.await,
+
+		| Err(e) =>
+			handle
+				.abort()
+				.map_ok(|()| Err(e))
+				.map_err(Error::from)
+				.inspect_err(|e| {
+					error!(?path, "Additional errors during error handling: {e:?}");
+				})
+				.await?,
+	}
+}
+
+#[implement(Provider)]
+#[tracing::instrument(
+	level = "debug",
+	err(level = "debug"),
+	skip_all,
+	fields(
+		provider = %self.name,
+		?path,
+	)
+)]
+pub async fn put<T>(&self, path: &str, input: T) -> Result<PutResult>
+where
+	PutPayload: From<T>,
+{
 	let path = self.to_abs_path(path)?;
 
 	self.provider
-		.put(&path, payload)
+		.put(&path, input.into())
+		.map_err(Error::from)
+		.await
+}
+
+#[implement(Provider)]
+#[tracing::instrument(level = "debug", skip_all)]
+pub fn fetch_with_metadata(
+	&self,
+	path: &str,
+) -> impl Stream<Item = Result<FetchMetaItem>> + Send {
+	self.load(path)
+		.map_ok(|result| {
+			let meta = (result.range.clone(), result.meta.clone(), result.attributes.clone());
+			let data = Arc::new(meta);
+
+			result
+				.into_stream()
+				.map_err(Error::from)
+				.map_ok(move |bytes| (bytes, data.clone()))
+		})
+		.map_err(Error::from)
+		.try_flatten_stream()
+}
+
+#[implement(Provider)]
+#[tracing::instrument(level = "debug", skip_all)]
+pub fn fetch(&self, path: &str) -> impl Stream<Item = Result<FetchItem>> + Send {
+	self.load(path)
+		.map_ok(|result| {
+			let size = result.meta.size;
+			let range = result.range.clone();
+
+			result
+				.into_stream()
+				.map_err(Error::from)
+				.map_ok(move |bytes| (bytes, (range.clone(), size)))
+		})
+		.map_err(Error::from)
+		.try_flatten_stream()
+}
+
+#[implement(Provider)]
+#[tracing::instrument(level = "debug", err(level = "debug"), skip_all)]
+pub async fn get(&self, path: &str) -> Result<Bytes> {
+	self.load(path)
+		.map_ok(GetResult::bytes)
+		.await?
 		.map_err(Error::from)
 		.await
 }
@@ -92,7 +193,7 @@ pub async fn put(&self, path: &str, payload: PutPayload) -> Result<PutResult> {
 		?path,
 	)
 )]
-pub async fn get(&self, path: &str) -> Result<GetResult> {
+pub async fn load(&self, path: &str) -> Result<GetResult> {
 	let path = self.to_abs_path(path)?;
 
 	self.provider
