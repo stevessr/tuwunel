@@ -11,7 +11,7 @@ use futures::{StreamExt, pin_mut};
 use ruma::{Mxc, UInt, UserId, http_headers::ContentDisposition, media::Method};
 use tuwunel_core::{
 	Err, Result, checked, err, implement,
-	utils::{result::LogErr, stream::IterStream},
+	utils::{result::LogDebugErr, stream::IterStream},
 };
 
 use super::{Media, data::Metadata};
@@ -90,10 +90,7 @@ async fn get_thumbnail_saved(&self, data: Metadata) -> Result<Option<Media>> {
 			provider
 				.get(path.as_str())
 				.await
-				.ok()?
-				.bytes()
-				.await
-				.log_err()
+				.log_debug_err()
 				.ok()
 		});
 

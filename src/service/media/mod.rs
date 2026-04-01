@@ -290,10 +290,7 @@ impl Service {
 				provider
 					.get(path.as_str())
 					.await
-					.ok()?
-					.bytes()
-					.await
-					.log_err()
+					.log_debug_err()
 					.ok()
 			});
 
