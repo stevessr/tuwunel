@@ -148,9 +148,9 @@ pub(crate) async fn get_content_legacy_route(
 	match services
 		.media
 		.get_with_timeout(&mxc, body.timeout_ms)
-		.await?
+		.await
 	{
-		| Some(Media {
+		| Ok(Media {
 			content,
 			content_type,
 			content_disposition,
@@ -243,9 +243,9 @@ pub(crate) async fn get_content_as_filename_legacy_route(
 	match services
 		.media
 		.get_with_timeout(&mxc, body.timeout_ms)
-		.await?
+		.await
 	{
-		| Some(Media {
+		| Ok(Media {
 			content,
 			content_type,
 			content_disposition,
@@ -338,9 +338,9 @@ pub(crate) async fn get_content_thumbnail_legacy_route(
 	match services
 		.media
 		.get_thumbnail_with_timeout(&mxc, &dim, body.timeout_ms)
-		.await?
+		.await
 	{
-		| Some(Media {
+		| Ok(Media {
 			content,
 			content_type,
 			content_disposition,
