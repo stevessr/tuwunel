@@ -371,10 +371,10 @@ async fn fetch_thumbnail_meta(
 	timeout_ms: Duration,
 	dim: &Dim,
 ) -> Result<Media> {
-	if let Some(media) = services
+	if let Ok(media) = services
 		.media
 		.get_thumbnail_with_timeout(mxc, dim, timeout_ms)
-		.await?
+		.await
 	{
 		return Ok(media);
 	}
@@ -395,10 +395,10 @@ async fn fetch_media(
 	user: &UserId,
 	timeout_ms: Duration,
 ) -> Result<Media> {
-	if let Some(media) = services
+	if let Ok(media) = services
 		.media
 		.get_with_timeout(mxc, timeout_ms)
-		.await?
+		.await
 	{
 		return Ok(media);
 	}

@@ -30,11 +30,11 @@ pub(crate) async fn get_content_route(
 		media_id: &body.media_id,
 	};
 
-	let Some(Media {
+	let Ok(Media {
 		content,
 		content_type,
 		content_disposition,
-	}) = services.media.get(&mxc).await?
+	}) = services.media.get(&mxc).await
 	else {
 		return Err!(Request(NotFound("Media not found.")));
 	};
@@ -73,11 +73,11 @@ pub(crate) async fn get_content_thumbnail_route(
 		media_id: &body.media_id,
 	};
 
-	let Some(Media {
+	let Ok(Media {
 		content,
 		content_type,
 		content_disposition,
-	}) = services.media.get_thumbnail(&mxc, &dim).await?
+	}) = services.media.get_thumbnail(&mxc, &dim).await
 	else {
 		return Err!(Request(NotFound("Media not found.")));
 	};

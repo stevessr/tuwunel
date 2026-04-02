@@ -256,13 +256,19 @@ impl Service {
 				continue;
 			};
 
-			debug_info!(%deletion_count, "Deleting MXC {mxc} by user {user} from database and filesystem");
+			debug_info!(
+				%deletion_count,
+				"Deleting MXC {mxc} by user {user} from database and filesystem",
+			);
 			match self.delete(&mxc).await {
 				| Ok(()) => {
 					deletion_count = deletion_count.saturating_add(1);
 				},
 				| Err(e) => {
-					debug_error!(%deletion_count, "Failed to delete {mxc} from user {user}, ignoring error: {e}");
+					debug_error!(
+						%deletion_count,
+						"Failed to delete {mxc} from user {user}, ignoring error: {e}"
+					);
 				},
 			}
 		}
@@ -271,15 +277,14 @@ impl Service {
 	}
 
 	/// Downloads a media file.
-	pub async fn get(&self, mxc: &Mxc<'_>) -> Result<Option<Media>> {
+	pub async fn get(&self, mxc: &Mxc<'_>) -> Result<Media> {
 		let meta = self
 			.db
 			.search_file_metadata(mxc, &Dim::default())
-			.await
-			.ok();
+			.await;
 
-		let Some(Metadata { content_type, content_disposition, key }) = meta else {
-			return Ok(None);
+		let Ok(Metadata { content_type, content_disposition, key }) = meta else {
+			return Err!(Request(NotFound("Media not found.")));
 		};
 
 		let path = self.get_media_name_sha256(&key);
@@ -299,11 +304,11 @@ impl Service {
 			return Err!(Request(NotFound("Media not found.")));
 		};
 
-		Ok(Some(Media {
+		Ok(Media {
 			content: bytes.to_vec(),
 			content_type,
 			content_disposition,
-		}))
+		})
 	}
 
 	/// Download a file and wait up to a timeout_ms if it is pending.
@@ -311,13 +316,13 @@ impl Service {
 		&self,
 		mxc: &Mxc<'_>,
 		timeout_duration: Duration,
-	) -> Result<Option<Media>> {
-		if let Some(meta) = self.get(mxc).await? {
-			return Ok(Some(meta));
+	) -> Result<Media> {
+		if let Ok(meta) = self.get(mxc).await {
+			return Ok(meta);
 		}
 
 		let Ok(_pending) = self.db.search_pending_mxc(mxc).await else {
-			return Ok(None);
+			return Err!(Request(NotFound("Media not found.")));
 		};
 
 		let notifier = self
@@ -336,39 +341,6 @@ impl Service {
 		}
 
 		self.get(mxc).await
-	}
-
-	/// Download a thumbnail and wait up to a timeout_ms if it is pending.
-	pub async fn get_thumbnail_with_timeout(
-		&self,
-		mxc: &Mxc<'_>,
-		dim: &Dim,
-		timeout_duration: Duration,
-	) -> Result<Option<Media>> {
-		if let Some(meta) = self.get_thumbnail(mxc, dim).await? {
-			return Ok(Some(meta));
-		}
-
-		let Ok(_pending) = self.db.search_pending_mxc(mxc).await else {
-			return Ok(None);
-		};
-
-		let notifier = self
-			.mxc_state
-			.notifiers
-			.lock()?
-			.entry(mxc.to_string().into())
-			.or_insert_with(|| Arc::new(Notify::new()))
-			.clone();
-
-		if tokio::time::timeout(timeout_duration, notifier.notified())
-			.await
-			.is_err()
-		{
-			return Err!(Request(NotYetUploaded("Media has not been uploaded yet")));
-		}
-
-		self.get_thumbnail(mxc, dim).await
 	}
 
 	/// Gets all the MXC URIs in our media database
