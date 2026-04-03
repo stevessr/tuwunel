@@ -276,8 +276,62 @@ impl Service {
 		Ok(deletion_count)
 	}
 
+	pub async fn get_or_fetch(
+		&self,
+		mxc: &Mxc<'_>,
+		timeout_ms: Duration,
+		user: &UserId,
+	) -> Result<Media> {
+		if let Ok(media) = self.get(mxc, Some(timeout_ms)).await {
+			return Ok(media);
+		}
+
+		if self
+			.services
+			.globals
+			.server_is_ours(mxc.server_name)
+		{
+			return Err!(Request(NotFound("Local media not found.")));
+		}
+
+		self.fetch_remote_content(mxc, Some(user), None, timeout_ms)
+			.await
+	}
+
+	/// Download a file and wait up to a timeout_ms if it is pending.
+	pub async fn get(&self, mxc: &Mxc<'_>, timeout_duration: Option<Duration>) -> Result<Media> {
+		if let Ok(meta) = self.get_stored(mxc).await {
+			return Ok(meta);
+		}
+
+		let Some(timeout_duration) = timeout_duration else {
+			return Err!(Request(NotFound("Media not found.")));
+		};
+
+		let Ok(_pending) = self.db.search_pending_mxc(mxc).await else {
+			return Err!(Request(NotFound("Media not found.")));
+		};
+
+		let notifier = self
+			.mxc_state
+			.notifiers
+			.lock()?
+			.entry(mxc.to_string().into())
+			.or_insert_with(|| Arc::new(Notify::new()))
+			.clone();
+
+		if tokio::time::timeout(timeout_duration, notifier.notified())
+			.await
+			.is_err()
+		{
+			return Err!(Request(NotYetUploaded("Media has not been uploaded yet")));
+		}
+
+		self.get_stored(mxc).await
+	}
+
 	/// Downloads a media file.
-	pub async fn get(&self, mxc: &Mxc<'_>) -> Result<Media> {
+	pub async fn get_stored(&self, mxc: &Mxc<'_>) -> Result<Media> {
 		let meta = self
 			.db
 			.search_file_metadata(mxc, &Dim::default())
@@ -309,38 +363,6 @@ impl Service {
 			content_type,
 			content_disposition,
 		})
-	}
-
-	/// Download a file and wait up to a timeout_ms if it is pending.
-	pub async fn get_with_timeout(
-		&self,
-		mxc: &Mxc<'_>,
-		timeout_duration: Duration,
-	) -> Result<Media> {
-		if let Ok(meta) = self.get(mxc).await {
-			return Ok(meta);
-		}
-
-		let Ok(_pending) = self.db.search_pending_mxc(mxc).await else {
-			return Err!(Request(NotFound("Media not found.")));
-		};
-
-		let notifier = self
-			.mxc_state
-			.notifiers
-			.lock()?
-			.entry(mxc.to_string().into())
-			.or_insert_with(|| Arc::new(Notify::new()))
-			.clone();
-
-		if tokio::time::timeout(timeout_duration, notifier.notified())
-			.await
-			.is_err()
-		{
-			return Err!(Request(NotYetUploaded("Media has not been uploaded yet")));
-		}
-
-		self.get(mxc).await
 	}
 
 	/// Gets all the MXC URIs in our media database

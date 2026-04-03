@@ -147,7 +147,7 @@ pub(crate) async fn get_content_legacy_route(
 
 	match services
 		.media
-		.get_with_timeout(&mxc, body.timeout_ms)
+		.get(&mxc, Some(body.timeout_ms))
 		.await
 	{
 		| Ok(Media {
@@ -242,7 +242,7 @@ pub(crate) async fn get_content_as_filename_legacy_route(
 
 	match services
 		.media
-		.get_with_timeout(&mxc, body.timeout_ms)
+		.get(&mxc, Some(body.timeout_ms))
 		.await
 	{
 		| Ok(Media {
@@ -337,7 +337,7 @@ pub(crate) async fn get_content_thumbnail_legacy_route(
 	let dim = Dim::from_ruma(body.width, body.height, body.method.clone())?;
 	match services
 		.media
-		.get_thumbnail_with_timeout(&mxc, &dim, body.timeout_ms)
+		.get_thumbnail(&mxc, &dim, Some(body.timeout_ms))
 		.await
 	{
 		| Ok(Media {
