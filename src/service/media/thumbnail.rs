@@ -45,16 +45,46 @@ impl super::Service {
 		Ok(())
 	}
 
-	/// Download a thumbnail and wait up to a timeout_ms if it is pending.
-	pub async fn get_thumbnail_with_timeout(
+	pub async fn get_or_fetch_thumbnail(
 		&self,
 		mxc: &Mxc<'_>,
 		dim: &Dim,
-		timeout_duration: Duration,
+		timeout_ms: Duration,
+		user: &UserId,
 	) -> Result<Media> {
-		if let Ok(meta) = self.get_thumbnail(mxc, dim).await {
+		if let Ok(media) = self
+			.get_thumbnail(mxc, dim, Some(timeout_ms))
+			.await
+		{
+			return Ok(media);
+		}
+
+		if self
+			.services
+			.globals
+			.server_is_ours(mxc.server_name)
+		{
+			return Err!(Request(NotFound("Local thumbnail not found.")));
+		}
+
+		self.fetch_remote_thumbnail(mxc, Some(user), None, timeout_ms, dim)
+			.await
+	}
+
+	/// Download a thumbnail and wait up to a timeout_ms if it is pending.
+	pub async fn get_thumbnail(
+		&self,
+		mxc: &Mxc<'_>,
+		dim: &Dim,
+		timeout_duration: Option<Duration>,
+	) -> Result<Media> {
+		if let Ok(meta) = self.get_stored_thumbnail(mxc, dim).await {
 			return Ok(meta);
 		}
+
+		let Some(timeout_duration) = timeout_duration else {
+			return Err!(Request(NotFound("Media thumbnail not found.")));
+		};
 
 		let Ok(_pending) = self.db.search_pending_mxc(mxc).await else {
 			return Err!(Request(NotFound("Media thumbnail not found.")));
@@ -75,7 +105,7 @@ impl super::Service {
 			return Err!(Request(NotYetUploaded("Media has not been uploaded yet")));
 		}
 
-		self.get_thumbnail(mxc, dim).await
+		self.get_stored_thumbnail(mxc, dim).await
 	}
 
 	/// Downloads a file's thumbnail.
@@ -92,7 +122,7 @@ impl super::Service {
 	/// For width,height <= 96 the server uses another thumbnailing algorithm
 	/// which crops the image afterwards.
 	#[tracing::instrument(skip(self), name = "thumbnail", level = "debug")]
-	pub async fn get_thumbnail(&self, mxc: &Mxc<'_>, dim: &Dim) -> Result<Media> {
+	pub async fn get_stored_thumbnail(&self, mxc: &Mxc<'_>, dim: &Dim) -> Result<Media> {
 		// 0, 0 because that's the original file
 		let dim = dim.normalized();
 
@@ -144,7 +174,7 @@ async fn get_thumbnail_generate(
 	dim: &Dim,
 	data: Metadata,
 ) -> Result<Media> {
-	let Ok(media) = self.get(mxc).await else {
+	let Ok(media) = self.get_stored(mxc).await else {
 		return Err!("Could not find original media.");
 	};
 
