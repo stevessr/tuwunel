@@ -106,8 +106,15 @@ pub(crate) fn build(services: &Arc<Services>) -> Result<(Router, Guard)> {
 		.layer(SetResponseHeaderLayer::if_not_present(
 			header::CONTENT_SECURITY_POLICY,
 			|res: &http::Response<_>| {
-				let is_html = res.headers().get(header::CONTENT_TYPE).map_or(false, |v| v.to_str().unwrap_or_default().contains("text/html"));
-				let csp = if is_html { TUWUNEL_HTML_CSP.join(";") } else { TUWUNEL_CSP.join(";") };
+				let csp = res
+					.headers()
+					.get(header::CONTENT_TYPE)
+					.map(HeaderValue::to_str)
+					.and_then(Result::ok)
+					.is_some_and(|val| val.contains("text/html"))
+					.then(|| TUWUNEL_HTML_CSP.join(";"))
+					.unwrap_or_else(|| TUWUNEL_CSP.join(";"));
+
 				HeaderValue::from_str(&csp).ok()
 			},
 		))

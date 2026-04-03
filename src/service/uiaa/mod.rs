@@ -3,6 +3,7 @@ use std::{
 	sync::{Arc, RwLock},
 };
 
+use futures::{TryStreamExt, pin_mut};
 use ruma::{
 	CanonicalJsonValue, DeviceId, OwnedDeviceId, OwnedUserId, UserId,
 	api::client::{
@@ -182,7 +183,8 @@ pub async fn try_auth(
 		},
 		| AuthData::FallbackAcknowledgement(_session) => {
 			// FallbackAcknowledgement is used for SSO and other fallback flows.
-			// The SSO callback route marks the session as completed by adding AuthType::Sso.
+			// The SSO callback route marks the session as completed by adding
+			// AuthType::Sso.
 			if !uiaainfo.completed.contains(&AuthType::Sso) {
 				uiaainfo.auth_error = Some(StandardErrorBody {
 					kind: ErrorKind::forbidden(),
@@ -301,16 +303,20 @@ pub async fn get_uiaa_session_by_session_id(
 	&self,
 	session_id: &str,
 ) -> Option<(OwnedUserId, OwnedDeviceId, UiaaInfo)> {
-	use futures::{TryStreamExt, pin_mut};
-
 	// Iterate over keys only (fastest way without a secondary index)
-	let stream = self.db.userdevicesessionid_uiaainfo.keys::<(OwnedUserId, OwnedDeviceId, String)>();
-	pin_mut!(stream);
+	let stream = self
+		.db
+		.userdevicesessionid_uiaainfo
+		.keys::<(OwnedUserId, OwnedDeviceId, String)>();
 
+	pin_mut!(stream);
 	while let Ok(Some((user_id, device_id, session))) = stream.try_next().await {
 		if session == session_id {
 			// Found the key, now fetch the actual UiaaInfo
-			if let Ok(uiaainfo) = self.get_uiaa_session(&user_id, &device_id, session_id).await {
+			if let Ok(uiaainfo) = self
+				.get_uiaa_session(&user_id, &device_id, session_id)
+				.await
+			{
 				return Some((user_id, device_id, uiaainfo));
 			}
 		}
