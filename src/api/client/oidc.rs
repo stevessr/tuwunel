@@ -452,11 +452,24 @@ pub(crate) async fn userinfo_route(
 	})))
 }
 
-pub(crate) async fn account_route() -> impl IntoResponse {
-	axum::response::Html(
-		"<html><body><h1>Account Management</h1><p>Account management is not yet implemented. \
-		 Please use your identity provider to manage your account.</p></body></html>",
-	)
+pub(crate) async fn account_route(
+	State(services): State<crate::State>,
+) -> Result<impl IntoResponse> {
+	// Redirect to the identity provider's panel where users can manage
+	// their account, sessions, devices, and profile.
+	let idp = services
+		.config
+		.identity_provider
+		.values()
+		.find(|idp| idp.default)
+		.or_else(|| services.config.identity_provider.values().next())
+		.ok_or_else(|| err!(Config("identity_provider", "No identity provider configured")))?;
+
+	let panel_url = idp.issuer_url.as_ref().ok_or_else(|| {
+		err!(Config("issuer_url", "issuer_url is required for account management redirect"))
+	})?;
+
+	Ok(Redirect::temporary(panel_url.as_str()))
 }
 
 fn oauth_error(
