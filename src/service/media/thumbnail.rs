@@ -67,6 +67,17 @@ impl super::Service {
 			return Err!(Request(NotFound("Local thumbnail not found.")));
 		}
 
+		let lock = self.federation_mutex.lock(&mxc.to_string()).await;
+
+		if self
+			.db
+			.file_metadata_exists(mxc, &dim.normalized())
+			.await
+		{
+			drop(lock);
+			return self.get_thumbnail(mxc, dim, None).await;
+		}
+
 		self.fetch_remote_thumbnail(mxc, Some(user), None, timeout_ms, dim)
 			.await
 	}

@@ -57,6 +57,7 @@ pub struct Service {
 	pub(super) db: Data,
 	services: Arc<crate::services::OnceServices>,
 	url_preview_mutex: MutexMap<String, ()>,
+	federation_mutex: MutexMap<String, ()>,
 	mxc_state: MXCState,
 }
 
@@ -76,6 +77,7 @@ impl crate::Service for Service {
 			db: Data::new(args.db),
 			services: args.services.clone(),
 			url_preview_mutex: MutexMap::new(),
+			federation_mutex: MutexMap::new(),
 			mxc_state: MXCState {
 				notifiers: Mutex::new(HashMap::new()),
 				ratelimiter: Mutex::new(HashMap::new()),
@@ -292,6 +294,17 @@ impl Service {
 			.server_is_ours(mxc.server_name)
 		{
 			return Err!(Request(NotFound("Local media not found.")));
+		}
+
+		let lock = self.federation_mutex.lock(&mxc.to_string()).await;
+
+		if self
+			.db
+			.file_metadata_exists(mxc, &Dim::default())
+			.await
+		{
+			drop(lock);
+			return self.get(mxc, None).await;
 		}
 
 		self.fetch_remote_content(mxc, Some(user), None, timeout_ms)
