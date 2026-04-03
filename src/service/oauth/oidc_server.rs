@@ -16,8 +16,8 @@ use tuwunel_database::{Cbor, Deserialized, Map};
 
 const AUTH_CODE_LENGTH: usize = 64;
 const OIDC_CLIENT_ID_LENGTH: usize = 32;
-const AUTH_CODE_LIFETIME: Duration = Duration::from_secs(600);
-const AUTH_REQUEST_LIFETIME: Duration = Duration::from_secs(600);
+const AUTH_CODE_LIFETIME: Duration = Duration::from_mins(10);
+const AUTH_REQUEST_LIFETIME: Duration = Duration::from_mins(10);
 const SIGNING_KEY_DB_KEY: &str = "oidc_signing_key";
 
 pub struct OidcServer {
