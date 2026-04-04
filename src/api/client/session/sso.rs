@@ -87,17 +87,12 @@ pub(crate) async fn sso_login_route(
 		)));
 	}
 
-	let default_idp_id = services
-		.config
-		.identity_provider
-		.values()
-		.find(|idp| idp.default)
-		.or_else(|| services.config.identity_provider.values().next())
-		.map(IdentityProvider::id)
-		.map(ToOwned::to_owned)
-		.unwrap_or_default();
-
 	let redirect_url = body.body.redirect_url;
+	let default_idp_id = services
+		.oauth
+		.providers
+		.get_default_id()
+		.unwrap_or_default();
 
 	handle_sso_login(&services, &client, default_idp_id, redirect_url, None)
 		.map_ok(|response| sso_login::v3::Response {

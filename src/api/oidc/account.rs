@@ -2,20 +2,16 @@ use axum::{
 	extract::State,
 	response::{IntoResponse, Redirect},
 };
-use tuwunel_core::{Result, config::IdentityProvider, err};
+use tuwunel_core::{Result, err};
 
 pub(crate) async fn account_route(
 	State(services): State<crate::State>,
 ) -> Result<impl IntoResponse> {
 	let default_idp_id = services
-		.config
-		.identity_provider
-		.values()
-		.find(|idp| idp.default)
-		.or_else(|| services.config.identity_provider.values().next())
-		.map(IdentityProvider::id)
-		.map(ToOwned::to_owned)
-		.unwrap_or_default();
+		.oauth
+		.providers
+		.get_default_id()
+		.ok_or_else(|| err!(Config("identity_provider", "No identity provider configured")))?;
 
 	// Redirect to the identity provider's panel where users can manage
 	// their account, sessions, devices, and profile.
