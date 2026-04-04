@@ -19,7 +19,7 @@ use self::handler::RouterExt;
 pub(super) use self::{
 	args::Args as Ruma, auth::auth_uiaa, response::RumaResponse, state::State,
 };
-use crate::{client, server};
+use crate::{client, oidc, server};
 
 pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 	let config = &server.config;
@@ -195,24 +195,24 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 			"/_matrix/client/unstable/im.nheko.summary/rooms/{room_id_or_alias}/summary",
 			get(client::get_room_summary_legacy)
 		)
-		.ruma_route(&client::well_known_support)
-		.ruma_route(&client::well_known_client)
+		.ruma_route(&client::room_initial_sync_route)
 		.route("/_tuwunel/server_version", get(client::tuwunel_server_version))
 		// OIDC server endpoints (next-gen auth, MSC2965/2964/2966/2967)
-		.route("/_matrix/client/unstable/org.matrix.msc2965/auth_issuer", get(client::auth_issuer_route))
-		.route("/_matrix/client/v1/auth_issuer", get(client::auth_issuer_route))
-		.route("/_matrix/client/unstable/org.matrix.msc2965/auth_metadata", get(client::openid_configuration_route))
-		.route("/_matrix/client/v1/auth_metadata", get(client::openid_configuration_route))
-		.route("/.well-known/openid-configuration", get(client::openid_configuration_route))
-		.route("/_tuwunel/oidc/registration", post(client::registration_route))
-		.route("/_tuwunel/oidc/authorize", get(client::authorize_route))
-		.route("/_tuwunel/oidc/_complete", get(client::complete_route))
-		.route("/_tuwunel/oidc/token", post(client::token_route))
-		.route("/_tuwunel/oidc/revoke", post(client::revoke_route))
-		.route("/_tuwunel/oidc/jwks", get(client::jwks_route))
-		.route("/_tuwunel/oidc/userinfo", get(client::userinfo_route))
-		.route("/_tuwunel/oidc/account", get(client::account_route))
-		.ruma_route(&client::room_initial_sync_route);
+		.route("/_tuwunel/oidc/registration", post(oidc::registration_route))
+		.route("/_tuwunel/oidc/authorize", get(oidc::authorize_route))
+		.route("/_tuwunel/oidc/_complete", get(oidc::complete_route))
+		.route("/_tuwunel/oidc/token", post(oidc::token_route))
+		.route("/_tuwunel/oidc/revoke", post(oidc::revoke_route))
+		.route("/_tuwunel/oidc/jwks", get(oidc::jwks_route))
+		.route("/_tuwunel/oidc/userinfo", get(oidc::userinfo_route))
+		.route("/_tuwunel/oidc/account", get(oidc::account_route))
+		.route("/_matrix/client/v1/auth_issuer", get(oidc::auth_issuer_route))
+		.route("/_matrix/client/v1/auth_metadata", get(oidc::openid_configuration_route))
+		.route("/_matrix/client/unstable/org.matrix.msc2965/auth_issuer", get(oidc::auth_issuer_route))
+		.route("/_matrix/client/unstable/org.matrix.msc2965/auth_metadata", get(oidc::openid_configuration_route))
+		.route("/.well-known/openid-configuration", get(oidc::openid_configuration_route))
+		.ruma_route(&client::well_known_support)
+		.ruma_route(&client::well_known_client);
 
 	// SS endpoints not related to federation
 	router = router

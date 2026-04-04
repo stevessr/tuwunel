@@ -1,5 +1,5 @@
-pub mod oidc_server;
 pub mod providers;
+pub mod server;
 pub mod sessions;
 pub mod user_info;
 
@@ -15,16 +15,16 @@ use ruma::UserId;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use tuwunel_core::{
-	Err, Result, err, implement, info,
+	Err, Result, err, implement,
 	utils::{hash::sha256, result::LogErr, stream::ReadyExt},
 	warn,
 };
 use url::Url;
 
-use self::{oidc_server::OidcServer, providers::Providers, sessions::Sessions};
+use self::{providers::Providers, sessions::Sessions};
 pub use self::{
-	oidc_server::ProviderMetadata,
 	providers::{Provider, ProviderId},
+	server::Server,
 	sessions::{CODE_VERIFIER_LENGTH, SESSION_ID_LENGTH, Session, SessionId},
 	user_info::UserInfo,
 };
@@ -34,40 +34,32 @@ pub struct Service {
 	services: SelfServices,
 	pub providers: Arc<Providers>,
 	pub sessions: Arc<Sessions>,
-	/// OIDC server (authorization server) for next-gen Matrix auth.
-	/// Only initialized when identity providers are configured.
-	pub oidc_server: Option<Arc<OidcServer>>,
+	pub server: Option<Arc<Server>>,
 }
 
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		let providers = Arc::new(Providers::build(args));
 		let sessions = Arc::new(Sessions::build(args, providers.clone()));
-
-		let oidc_server = if !args.server.config.identity_provider.is_empty()
-			|| args.server.config.well_known.client.is_some()
-		{
-			if args.server.config.identity_provider.is_empty() {
-				warn!(
-					"OIDC server enabled (well_known.client is set) but no identity_provider \
-					 configured; authorization flow will not work"
-				);
-			}
-			info!("Initializing OIDC server for next-gen auth (MSC2965)");
-			Some(Arc::new(OidcServer::build(args)?))
-		} else {
-			None
-		};
+		let server = Server::build(args)?.map(Arc::new);
 
 		Ok(Arc::new(Self {
 			services: args.services.clone(),
 			sessions,
 			providers,
-			oidc_server,
+			server,
 		}))
 	}
 
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
+}
+
+#[implement(Service)]
+#[inline]
+pub fn get_server(&self) -> Result<&Server> {
+	self.server
+		.as_deref()
+		.ok_or_else(|| err!(Request(NotFound("OIDC server not configured"))))
 }
 
 /// Remove all session state for a user. For debug and developer use only;
