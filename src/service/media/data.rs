@@ -203,10 +203,11 @@ impl Data {
 			.filter(|bytes| !bytes.is_empty())
 			.map(string_from_bytes)
 			.transpose()
-			.map_err(|e| err!(Database(error!(?mxc, "Content-type is invalid: {e}"))))?
+			.map_err(|e| err!(Database(error!(?mxc, "Content-disposition is invalid: {e}"))))?
 			.as_deref()
 			.map(str::parse)
-			.transpose()?;
+			.transpose()
+			.map_err(|e| err!(Database(error!(?mxc, "Content-disposition is invalid: {e}"))))?;
 
 		Ok(Metadata { content_disposition, content_type, key })
 	}
