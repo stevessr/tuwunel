@@ -1,3 +1,4 @@
+pub mod oidc_server;
 pub mod providers;
 pub mod sessions;
 pub mod user_info;
@@ -14,13 +15,15 @@ use ruma::UserId;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use tuwunel_core::{
-	Err, Result, err, implement,
+	Err, Result, err, implement, info,
 	utils::{hash::sha256, result::LogErr, stream::ReadyExt},
+	warn,
 };
 use url::Url;
 
-use self::{providers::Providers, sessions::Sessions};
+use self::{oidc_server::OidcServer, providers::Providers, sessions::Sessions};
 pub use self::{
+	oidc_server::ProviderMetadata,
 	providers::{Provider, ProviderId},
 	sessions::{CODE_VERIFIER_LENGTH, SESSION_ID_LENGTH, Session, SessionId},
 	user_info::UserInfo,
@@ -31,16 +34,36 @@ pub struct Service {
 	services: SelfServices,
 	pub providers: Arc<Providers>,
 	pub sessions: Arc<Sessions>,
+	/// OIDC server (authorization server) for next-gen Matrix auth.
+	/// Only initialized when identity providers are configured.
+	pub oidc_server: Option<Arc<OidcServer>>,
 }
 
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
 		let providers = Arc::new(Providers::build(args));
 		let sessions = Arc::new(Sessions::build(args, providers.clone()));
+
+		let oidc_server = if !args.server.config.identity_provider.is_empty()
+			|| args.server.config.well_known.client.is_some()
+		{
+			if args.server.config.identity_provider.is_empty() {
+				warn!(
+					"OIDC server enabled (well_known.client is set) but no identity_provider \
+					 configured; authorization flow will not work"
+				);
+			}
+			info!("Initializing OIDC server for next-gen auth (MSC2965)");
+			Some(Arc::new(OidcServer::build(args)?))
+		} else {
+			None
+		};
+
 		Ok(Arc::new(Self {
 			services: args.services.clone(),
 			sessions,
 			providers,
+			oidc_server,
 		}))
 	}
 

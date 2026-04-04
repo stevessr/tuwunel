@@ -198,6 +198,20 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::well_known_support)
 		.ruma_route(&client::well_known_client)
 		.route("/_tuwunel/server_version", get(client::tuwunel_server_version))
+		// OIDC server endpoints (next-gen auth, MSC2965/2964/2966/2967)
+		.route("/_matrix/client/unstable/org.matrix.msc2965/auth_issuer", get(client::auth_issuer_route))
+		.route("/_matrix/client/v1/auth_issuer", get(client::auth_issuer_route))
+		.route("/_matrix/client/unstable/org.matrix.msc2965/auth_metadata", get(client::openid_configuration_route))
+		.route("/_matrix/client/v1/auth_metadata", get(client::openid_configuration_route))
+		.route("/.well-known/openid-configuration", get(client::openid_configuration_route))
+		.route("/_tuwunel/oidc/registration", post(client::registration_route))
+		.route("/_tuwunel/oidc/authorize", get(client::authorize_route))
+		.route("/_tuwunel/oidc/_complete", get(client::complete_route))
+		.route("/_tuwunel/oidc/token", post(client::token_route))
+		.route("/_tuwunel/oidc/revoke", post(client::revoke_route))
+		.route("/_tuwunel/oidc/jwks", get(client::jwks_route))
+		.route("/_tuwunel/oidc/userinfo", get(client::userinfo_route))
+		.route("/_tuwunel/oidc/account", get(client::account_route))
 		.ruma_route(&client::room_initial_sync_route);
 
 	// SS endpoints not related to federation

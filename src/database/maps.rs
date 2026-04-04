@@ -146,6 +146,22 @@ pub(super) static MAPS: &[Descriptor] = &[
 		..descriptor::RANDOM_SMALL
 	},
 	Descriptor {
+		name: "oidc_signingkey",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
+		name: "oidcclientid_registration",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
+		name: "oidccode_authsession",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
+		name: "oidcreqid_authrequest",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
 		name: "onetimekeyid_onetimekeys",
 		..descriptor::RANDOM_SMALL
 	},
