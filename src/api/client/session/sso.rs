@@ -9,6 +9,7 @@ use reqwest::header::{CONTENT_TYPE, HeaderValue};
 use ruma::{
 	Mxc, OwnedMxcUri, OwnedRoomId, OwnedUserId, ServerName, UserId,
 	api::client::session::{sso_callback, sso_login, sso_login_with_provider},
+	api::client::uiaa::{AuthType, get_uiaa_fallback_page},
 };
 use serde::{Deserialize, Serialize};
 use tuwunel_core::{
@@ -418,6 +419,46 @@ pub(crate) async fn sso_callback_route(
 		.to_string()
 		.into();
 
+	if let Some(ref redirect_url) = session.redirect_url {
+		if redirect_url.scheme() == "uiaa" {
+			let uiaa_session_id = redirect_url.path();
+
+			// Find the UIAA session by its ID
+			let (db_user_id, device_id, mut uiaainfo) = services
+				.uiaa
+				.get_uiaa_session_by_session_id(uiaa_session_id)
+				.await
+				.ok_or_else(|| err!(Request(Forbidden("UIAA session not found."))))?;
+
+			// SECURITY: Ensure the user authenticating via SSO is the owner of the UIAA session
+			if db_user_id != user_id {
+				return Err!(Request(Forbidden("UIAA session belongs to a different user.")));
+			}
+
+			// Mark the SSO step as completed
+			if !uiaainfo.completed.contains(&AuthType::Sso) {
+				uiaainfo.completed.push(AuthType::Sso);
+				services.uiaa.update_uiaa_session(
+					&user_id,
+					&device_id,
+					uiaa_session_id,
+					Some(&uiaainfo),
+				);
+			}
+
+			// Redirect back to the fallback page to render the success HTML
+			let location = format!(
+				"/_matrix/client/v3/auth/m.login.sso/fallback/web?session={}",
+				uiaa_session_id
+			);
+
+			return Ok(sso_callback::unstable::Response {
+				location,
+				cookie: Some(cookie),
+			});
+		}
+	}
+
 	// Determine the next provider to chain after this one.
 	let next_idp_url = services
 		.config
@@ -721,4 +762,39 @@ fn parse_user_id(server_name: &ServerName, username: &str) -> Result<OwnedUserId
 			)))),
 		},
 	}
+}
+
+/// # `GET /_matrix/client/v3/auth/m.login.sso/fallback/web?session={session_id}`
+///
+/// Get UIAA fallback web page for SSO authentication.
+#[tracing::instrument(
+	name = "sso_fallback",
+	level = "debug",
+	skip_all,
+	fields(session = body.body.session),
+)]
+pub(crate) async fn sso_fallback_route(
+	State(services): State<crate::State>,
+	body: Ruma<get_uiaa_fallback_page::v3::Request>,
+) -> Result<get_uiaa_fallback_page::v3::Response> {
+	let session = &body.body.session;
+
+	// Check if this UIAA session has already been completed via SSO
+	if let Some((_, _, uiaainfo)) = services.uiaa.get_uiaa_session_by_session_id(session).await {
+		if uiaainfo.completed.contains(&AuthType::Sso) {
+			let html = r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authentication Complete</title><style>body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#f4f6f8;color:#2e3648}@media(prefers-color-scheme:dark){body{background:#151924;color:#f4f6f8}}.card{text-align:center;background:#fff;padding:2.5rem;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);max-width:320px;width:90%}@media(prefers-color-scheme:dark){.card{background:#222632;box-shadow:0 4px 20px rgba(0,0,0,.3)}}.icon{background:#0dbd8b;color:#fff;width:64px;height:64px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 1.5rem}h1{font-size:1.25rem;margin:0 0 .5rem}p{color:#6b7280;margin:0;font-size:.95rem}@media(prefers-color-scheme:dark){p{color:#9ca3af}}</style></head><body><div class="card"><div class="icon">✓</div><h1>Authentication Successful</h1><p>You can safely close this window.</p></div><script>if(window.onAuthDone){window.onAuthDone()}else if(window.opener&&window.opener.postMessage){window.opener.postMessage("authDone","*")}</script></body></html>"#;
+
+			return Ok(get_uiaa_fallback_page::v3::Response::html(html.as_bytes().to_vec()));
+		}
+	}
+
+	// Session is not completed yet, show the prompt to continue
+	let url_str = format!("/_matrix/client/v3/login/sso/redirect?redirectUrl=uiaa:{}", session);
+
+	let html = format!(
+		r#"<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Authentication Required</title><style>body{{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f4f6f8;color:#2e3648}}@media(prefers-color-scheme:dark){{body{{background:#151924;color:#f4f6f8}}}}.card{{text-align:center;background:#fff;padding:2.5rem 2rem;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,.08);max-width:360px;width:90%}}@media(prefers-color-scheme:dark){{.card{{background:#222632;box-shadow:0 4px 20px rgba(0,0,0,.3)}}}}.icon{{font-size:48px;margin-bottom:1rem}}h1{{font-size:1.25rem;margin:0 0 1rem}}p{{color:#6b7280;margin:0 0 1.5rem;font-size:.95rem;line-height:1.5}}@media(prefers-color-scheme:dark){{p{{color:#9ca3af}}}}.btn{{display:inline-block;background:#0dbd8b;color:#fff;text-decoration:none;padding:12px 24px;border-radius:8px;font-weight:600;font-size:1rem;transition:opacity .2s;width:calc(100% - 48px)}}.btn:hover{{opacity:.9}}.warning{{margin-top:1.5rem;font-size:.85rem;color:#d97706;background:#fef3c7;padding:12px;border-radius:8px}}@media(prefers-color-scheme:dark){{.warning{{background:#422006;color:#fcd34d}}}}</style></head><body><div class="card"><div class="icon">🛡️</div><h1>Single Sign-On Required</h1><p>To confirm this action, please re-authenticate with your Single Sign-On provider.</p><a href="{}" class="btn">Continue with SSO</a><div class="warning"><strong>Security Notice:</strong> If you did not trigger this action, your account may be compromised.</div></div></body></html>"#,
+		url_str,
+	);
+
+	Ok(get_uiaa_fallback_page::v3::Response::html(html.into_bytes()))
 }
