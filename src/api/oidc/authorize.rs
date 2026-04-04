@@ -50,6 +50,12 @@ pub(crate) async fn authorize_route(
 
 	let now = SystemTime::now();
 	let req_id = utils::random_string(OIDC_REQ_ID_LENGTH);
+	let idp_id = services
+		.oauth
+		.providers
+		.get_default_id()
+		.ok_or_else(|| err!(Config("identity_provider", "No identity provider configured")))?;
+
 	let auth_req = AuthRequest {
 		client_id: params.client_id,
 		redirect_uri: params.redirect_uri,
@@ -64,32 +70,24 @@ pub(crate) async fn authorize_route(
 			.unwrap_or(now),
 	};
 
-	let default_idp = services
-		.config
-		.identity_provider
-		.values()
-		.find(|idp| idp.default)
-		.or_else(|| services.config.identity_provider.values().next())
-		.ok_or_else(|| err!(Config("identity_provider", "No identity provider configured")))?;
-
-	let idp_id = default_idp.id();
 	let base = oidc_issuer_url(&services)?;
 	let base = base.trim_end_matches('/');
 
-	let mut complete_url = Url::parse(&format!("{base}/_tuwunel/oidc/_complete"))
-		.map_err(|_| err!(error!("Failed to build complete URL")))?;
+	let complete_url = Url::parse(&format!("{base}/_tuwunel/oidc/_complete"))
+		.map_err(|_| err!(error!("Failed to build complete URL")))
+		.map(|mut url| {
+			url.query_pairs_mut()
+				.append_pair("oidc_req_id", &req_id);
+			url
+		})?;
 
-	complete_url
-		.query_pairs_mut()
-		.append_pair("oidc_req_id", &req_id);
-
-	let mut sso_url =
-		Url::parse(&format!("{base}/_matrix/client/v3/login/sso/redirect/{idp_id}"))
-			.map_err(|_| err!(error!("Failed to build SSO URL")))?;
-
-	sso_url
-		.query_pairs_mut()
-		.append_pair("redirectUrl", complete_url.as_str());
+	let sso_url = Url::parse(&format!("{base}/_matrix/client/v3/login/sso/redirect/{idp_id}"))
+		.map_err(|_| err!(error!("Failed to build SSO URL")))
+		.map(|mut url| {
+			url.query_pairs_mut()
+				.append_pair("redirectUrl", complete_url.as_str());
+			url
+		})?;
 
 	oidc.store_auth_request(&req_id, &auth_req);
 
