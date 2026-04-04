@@ -27,6 +27,11 @@ pub struct Dim {
 
 impl super::Service {
 	/// Uploads or replaces a file thumbnail.
+	#[tracing::instrument(
+		level = "debug",
+		ret(level = "debug")
+		skip(self),
+	)]
 	pub async fn upload_thumbnail(
 		&self,
 		mxc: &Mxc<'_>,
@@ -45,6 +50,11 @@ impl super::Service {
 		Ok(())
 	}
 
+	#[tracing::instrument(
+		level = "debug",
+		err(level = "debug")
+		skip(self),
+	)]
 	pub async fn get_or_fetch_thumbnail(
 		&self,
 		mxc: &Mxc<'_>,
@@ -83,6 +93,11 @@ impl super::Service {
 	}
 
 	/// Download a thumbnail and wait up to a timeout_ms if it is pending.
+	#[tracing::instrument(
+		level = "debug",
+		err(level = "debug")
+		skip(self),
+	)]
 	pub async fn get_thumbnail(
 		&self,
 		mxc: &Mxc<'_>,
@@ -132,7 +147,12 @@ impl super::Service {
 	///
 	/// For width,height <= 96 the server uses another thumbnailing algorithm
 	/// which crops the image afterwards.
-	#[tracing::instrument(skip(self), name = "thumbnail", level = "debug")]
+	#[tracing::instrument(
+		name = "thumbnail",
+		level = "debug",
+		err(level = "trace")
+		skip(self),
+	)]
 	pub async fn get_stored_thumbnail(&self, mxc: &Mxc<'_>, dim: &Dim) -> Result<Media> {
 		// 0, 0 because that's the original file
 		let dim = dim.normalized();
