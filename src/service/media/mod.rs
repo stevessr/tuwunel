@@ -219,6 +219,7 @@ impl Service {
 	}
 
 	/// Deletes a file in the database and from the media directory via an MXC
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub async fn delete(&self, mxc: &Mxc<'_>) -> Result {
 		match self.db.search_mxc_metadata_prefix(mxc).await {
 			| Ok(keys) => {
@@ -247,6 +248,7 @@ impl Service {
 	/// Deletes all media by the specified user
 	///
 	/// currently, this is only practical for local users
+	#[tracing::instrument(level = "trace", skip(self))]
 	pub async fn delete_from_user(&self, user: &UserId) -> Result<usize> {
 		let mxcs = self.db.get_all_user_mxcs(user).await;
 		let mut deletion_count: usize = 0;
@@ -278,6 +280,13 @@ impl Service {
 		Ok(deletion_count)
 	}
 
+	/// Get file from local storage or make a federation request if it
+	/// originates remotely.
+	#[tracing::instrument(
+		level = "debug",
+		err(level = "debug")
+		skip(self),
+	)]
 	pub async fn get_or_fetch(
 		&self,
 		mxc: &Mxc<'_>,
@@ -311,13 +320,19 @@ impl Service {
 			.await
 	}
 
-	/// Download a file and wait up to a timeout_ms if it is pending.
-	pub async fn get(&self, mxc: &Mxc<'_>, timeout_duration: Option<Duration>) -> Result<Media> {
+	/// Get file from local storage while waiting up to a timeout_ms if it is
+	/// pending.
+	#[tracing::instrument(
+		level = "debug",
+		err(level = "trace")
+		skip(self),
+	)]
+	pub async fn get(&self, mxc: &Mxc<'_>, timeout: Option<Duration>) -> Result<Media> {
 		if let Ok(meta) = self.get_stored(mxc).await {
 			return Ok(meta);
 		}
 
-		let Some(timeout_duration) = timeout_duration else {
+		let Some(timeout) = timeout else {
 			return Err!(Request(NotFound("Media not found.")));
 		};
 
@@ -333,7 +348,7 @@ impl Service {
 			.or_insert_with(|| Arc::new(Notify::new()))
 			.clone();
 
-		if tokio::time::timeout(timeout_duration, notifier.notified())
+		if tokio::time::timeout(timeout, notifier.notified())
 			.await
 			.is_err()
 		{
@@ -343,7 +358,8 @@ impl Service {
 		self.get_stored(mxc).await
 	}
 
-	/// Downloads a media file.
+	/// Get file from local storage.
+	#[tracing::instrument(level = "debug", skip(self))]
 	pub async fn get_stored(&self, mxc: &Mxc<'_>) -> Result<Media> {
 		let meta = self
 			.db
