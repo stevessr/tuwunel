@@ -103,6 +103,7 @@ pub async fn remove_device(&self, user_id: &UserId, device_id: &DeviceId) {
 
 	let userdeviceid = (user_id, device_id);
 	self.db.userdeviceid_metadata.del(userdeviceid);
+	self.db.oidcdevice_userdeviceid.del(userdeviceid);
 
 	self.mark_device_key_update(user_id).await;
 	increment(&self.db.userid_devicelistversion, user_id.as_bytes());
@@ -424,6 +425,56 @@ pub async fn device_exists(&self, user_id: &UserId, device_id: &DeviceId) -> boo
 		.userdeviceid_metadata
 		.contains(&(user_id, device_id))
 		.await
+}
+
+#[implement(super::Service)]
+pub async fn is_oidc_device(&self, user_id: &UserId, device_id: &DeviceId) -> bool {
+	self.db
+		.oidcdevice_userdeviceid
+		.contains(&(user_id, device_id))
+		.await
+}
+
+#[implement(super::Service)]
+pub fn mark_oidc_device(&self, user_id: &UserId, device_id: &DeviceId) {
+	self.db
+		.oidcdevice_userdeviceid
+		.put((user_id, device_id), Json(&()));
+}
+
+/// Allow cross-signing key replacement without UIAA for the next 10 minutes.
+/// Returns the expiry timestamp in milliseconds.
+#[allow(clippy::must_use_candidate)]
+#[implement(super::Service)]
+pub fn allow_cross_signing_replacement(&self, user_id: &UserId) -> u64 {
+	use std::num::Saturating as Sat;
+
+	use tuwunel_core::utils;
+
+	let now = Sat(utils::millis_since_unix_epoch());
+	let expires = now + Sat(10 * 60 * 1000); // 10 minutes
+	self.db
+		.oidccskeybypass_userid
+		.put(user_id, Json(&expires.0));
+	expires.0
+}
+
+/// Check if the user is allowed to replace cross-signing keys without UIAA.
+#[implement(super::Service)]
+pub async fn can_replace_cross_signing_keys(&self, user_id: &UserId) -> bool {
+	use tuwunel_core::utils;
+
+	let Ok(bytes) = self.db.oidccskeybypass_userid.get(user_id).await else {
+		return false;
+	};
+	let Ok(expires) = serde_json::from_slice::<u64>(&bytes) else {
+		return false;
+	};
+	if expires < utils::millis_since_unix_epoch() {
+		self.db.oidccskeybypass_userid.del(user_id);
+		return false;
+	}
+	true
 }
 
 #[implement(super::Service)]

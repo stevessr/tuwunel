@@ -11,6 +11,7 @@ use ruma::{
 			upload_signatures::{self},
 			upload_signing_keys,
 		},
+		client::uiaa::{AuthFlow, AuthType, UiaaInfo},
 		federation,
 	},
 	encryption::CrossSigningKey,
@@ -18,7 +19,7 @@ use ruma::{
 };
 use serde_json::json;
 use tuwunel_core::{
-	Err, Result, debug, debug_error, debug_warn, err, result::NotFound, utils::json,
+	Err, Error, Result, debug, debug_error, debug_warn, err, result::NotFound, utils, utils::json,
 };
 use tuwunel_service::{Services, users::parse_master_key};
 
@@ -145,6 +146,7 @@ pub(crate) async fn claim_keys_route(
 /// Uploads end-to-end key information for the sender user.
 ///
 /// - Requires UIAA to verify password
+/// - For OIDC devices, requires OAuth re-authentication via SSO (MSC4312)
 pub(crate) async fn upload_signing_keys_route(
 	State(services): State<crate::State>,
 	body: Ruma<upload_signing_keys::v3::Request>,
@@ -172,13 +174,74 @@ pub(crate) async fn upload_signing_keys_route(
 			debug!("Skipping UIA in accordance with MSC3967, user had no existing keys");
 		},
 		| _ => {
-			let authed_user = auth_uiaa(&services, &body).await?;
-			assert_eq!(
-				body.sender_user(),
-				authed_user,
-				"Expected UIAA of {0} and not {authed_user}",
-				body.sender_user(),
-			);
+			let sender_user = body.sender_user();
+			let sender_device = body.sender_device()?;
+
+			// MSC4312: OIDC devices require OAuth re-authentication for cross-signing reset.
+			// If a bypass was granted via SSO re-auth, skip UIAA entirely.
+			let is_oidc = services
+				.users
+				.is_oidc_device(sender_user, sender_device)
+				.await;
+			let has_bypass = is_oidc
+				&& services
+					.users
+					.can_replace_cross_signing_keys(sender_user)
+					.await;
+
+			if has_bypass {
+				// Bypass granted, proceed without UIAA.
+			} else if is_oidc && body.json_body.as_ref()
+				.and_then(CanonicalJsonValue::as_object)
+				.and_then(|body| body.get("auth"))
+				.is_none()
+			{
+				// First attempt from OIDC device — issue m.oauth flow.
+				let session = utils::random_string(tuwunel_service::uiaa::SESSION_ID_LENGTH);
+				let base = services
+					.config
+					.well_known
+					.client
+					.as_ref()
+					.map(|url| url.to_string().trim_end_matches('/').to_owned())
+					.ok_or_else(|| {
+						err!(Config(
+							"well_known.client",
+							"well_known.client must be set for cross-signing reset"
+						))
+					})?;
+				let fallback_url = format!(
+					"{base}/_matrix/client/v3/auth/m.login.sso/fallback/web?session={session}"
+				);
+
+				let uiaainfo = UiaaInfo {
+					flows: vec![AuthFlow { stages: vec![AuthType::OAuth] }],
+					params: Some(serde_json::value::to_raw_value(&json!({
+						"m.oauth": { "url": fallback_url }
+					}))?),
+					session: Some(session),
+					..Default::default()
+				};
+
+				services.uiaa.create(
+					sender_user,
+					sender_device,
+					&uiaainfo,
+					body.json_body
+						.as_ref()
+						.ok_or_else(|| err!(Request(NotJson("JSON body is not valid"))))?,
+				);
+
+				return Err(Error::Uiaa(uiaainfo));
+			} else {
+				let authed_user = auth_uiaa(&services, &body).await?;
+				assert_eq!(
+					body.sender_user(),
+					authed_user,
+					"Expected UIAA of {0} and not {authed_user}",
+					body.sender_user(),
+				);
+			}
 		},
 	}
 

@@ -442,16 +442,27 @@ pub(crate) async fn sso_callback_route(
 			return Err!(Request(Forbidden("UIAA session belongs to a different user.")));
 		}
 
-		// Mark the SSO step as completed
-		if !uiaainfo.completed.contains(&AuthType::Sso) {
+		// Mark the completed step based on the UIAA session's flow.
+		// MSC4312 m.oauth flow → mark OAuth.
+		// Legacy m.login.sso flow → mark Sso.
+		let has_oauth_flow = uiaainfo
+			.flows
+			.iter()
+			.any(|f| f.stages.contains(&AuthType::OAuth));
+
+		if has_oauth_flow && !uiaainfo.completed.contains(&AuthType::OAuth) {
+			uiaainfo.completed.push(AuthType::OAuth);
+			// Grant 10-minute bypass for cross-signing key replacement (like Synapse).
+			services.users.allow_cross_signing_replacement(&user_id);
+		} else if !uiaainfo.completed.contains(&AuthType::Sso) {
 			uiaainfo.completed.push(AuthType::Sso);
-			services.uiaa.update_uiaa_session(
-				&user_id,
-				&device_id,
-				uiaa_session_id,
-				Some(&uiaainfo),
-			);
 		}
+		services.uiaa.update_uiaa_session(
+			&user_id,
+			&device_id,
+			uiaa_session_id,
+			Some(&uiaainfo),
+		);
 
 		// Redirect back to the fallback page to render the success HTML
 		let location =

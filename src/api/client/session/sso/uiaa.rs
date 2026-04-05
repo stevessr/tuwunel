@@ -19,11 +19,13 @@ pub(crate) async fn sso_fallback_route(
 ) -> Result<get_uiaa_fallback_page::v3::Response> {
 	let session = &body.body.session;
 
-	// Check if this UIAA session has already been completed via SSO
+	// Check if this UIAA session has already been completed via SSO or OAuth
 	if let Some((_, _, uiaainfo)) = services
 		.uiaa
 		.get_uiaa_session_by_session_id(session)
-		.await && uiaainfo.completed.contains(&AuthType::Sso)
+		.await
+		&& (uiaainfo.completed.contains(&AuthType::Sso)
+			|| uiaainfo.completed.contains(&AuthType::OAuth))
 	{
 		let html = include_str!("complete.html");
 

@@ -197,6 +197,28 @@ pub async fn try_auth(
 		| AuthData::Dummy(_) => {
 			uiaainfo.completed.push(AuthType::Dummy);
 		},
+		| AuthData::OAuth(_) => {
+			// MSC4312: OAuth cross-signing reset uses SSO re-authentication.
+			// If a bypass was granted via SSO re-auth, mark OAuth as completed.
+			if !uiaainfo.completed.contains(&AuthType::OAuth) {
+				if self
+					.services
+					.users
+					.can_replace_cross_signing_keys(user_id)
+					.await
+				{
+					uiaainfo.completed.push(AuthType::OAuth);
+				} else {
+					uiaainfo.auth_error = Some(StandardErrorBody {
+						kind: ErrorKind::forbidden(),
+						message: "OAuth cross-signing reset not approved for this session."
+							.to_owned(),
+					});
+
+					return Ok((false, uiaainfo));
+				}
+			}
+		},
 		| auth => error!("AuthData type not supported: {auth:?}"),
 	}
 
