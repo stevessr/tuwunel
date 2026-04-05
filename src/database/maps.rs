@@ -158,6 +158,14 @@ pub(super) static MAPS: &[Descriptor] = &[
 		..descriptor::RANDOM_SMALL
 	},
 	Descriptor {
+		name: "oidcdevice_userdeviceid",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
+		name: "oidccskeybypass_userid",
+		..descriptor::RANDOM_SMALL
+	},
+	Descriptor {
 		name: "oidcreqid_authrequest",
 		..descriptor::RANDOM_SMALL
 	},

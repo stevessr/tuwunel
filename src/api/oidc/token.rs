@@ -128,6 +128,10 @@ async fn token_authorization_code(
 		)
 		.await?;
 
+	services
+		.users
+		.mark_oidc_device(user_id, &device_id);
+
 	info!("{user_id} logged in via OIDC on {device_id} ({device_display_name})");
 
 	let mut response = json!({
