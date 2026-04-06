@@ -194,9 +194,6 @@ pub async fn try_auth(
 				return Ok((false, uiaainfo));
 			}
 		},
-		| AuthData::Dummy(_) => {
-			uiaainfo.completed.push(AuthType::Dummy);
-		},
 		| AuthData::OAuth(_) => {
 			// MSC4312: OAuth cross-signing reset uses SSO re-authentication.
 			// If a bypass was granted via SSO re-auth, mark OAuth as completed.
@@ -218,6 +215,9 @@ pub async fn try_auth(
 					return Ok((false, uiaainfo));
 				}
 			}
+		},
+		| AuthData::Dummy(_) => {
+			uiaainfo.completed.push(AuthType::Dummy);
 		},
 		| auth => error!("AuthData type not supported: {auth:?}"),
 	}
