@@ -17,10 +17,7 @@ use ruma::{
 	int,
 	room_version_rules::{RoomIdFormatVersion, RoomVersionRules},
 };
-use serde_json::{
-	Value as JsonValue, json,
-	value::{to_raw_value, to_value},
-};
+use serde_json::{Value as JsonValue, json, value::to_raw_value};
 use tuwunel_core::{
 	Err, Result, debug_info, err, error, implement, info, is_equal_to, is_less_than,
 	matrix::{Event, StateKey, pdu::PduBuilder, room_version},
@@ -422,7 +419,7 @@ fn rebuild_state_event<Pdu: Event>(&self, event: &Pdu) -> Result<PduBuilder> {
 				.as_i64()
 				.is_none_or(is_less_than!(150))
 			{
-				content["events"]["m.room.tombstone"] = to_value(150)?;
+				content["events"]["m.room.tombstone"] = json!(150);
 			}
 
 			to_raw_value(&content)?
