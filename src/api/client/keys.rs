@@ -6,12 +6,14 @@ use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, OneTimeKeyAlgorithm, OwnedDeviceId, OwnedUserId,
 	UserId,
 	api::{
-		client::keys::{
-			claim_keys, get_key_changes, get_keys, upload_keys,
-			upload_signatures::{self},
-			upload_signing_keys,
+		client::{
+			keys::{
+				claim_keys, get_key_changes, get_keys, upload_keys,
+				upload_signatures::{self},
+				upload_signing_keys,
+			},
+			uiaa::{AuthFlow, AuthType, UiaaInfo},
 		},
-		client::uiaa::{AuthFlow, AuthType, UiaaInfo},
 		federation,
 	},
 	encryption::CrossSigningKey,
@@ -177,8 +179,8 @@ pub(crate) async fn upload_signing_keys_route(
 			let sender_user = body.sender_user();
 			let sender_device = body.sender_device()?;
 
-			// MSC4312: OIDC devices require OAuth re-authentication for cross-signing reset.
-			// If a bypass was granted via SSO re-auth, skip UIAA entirely.
+			// MSC4312: OIDC devices require OAuth re-authentication for cross-signing
+			// reset. If a bypass was granted via SSO re-auth, skip UIAA entirely.
 			let is_oidc = services
 				.users
 				.is_oidc_device(sender_user, sender_device)
@@ -191,10 +193,13 @@ pub(crate) async fn upload_signing_keys_route(
 
 			if has_bypass {
 				// Bypass granted, proceed without UIAA.
-			} else if is_oidc && body.json_body.as_ref()
-				.and_then(CanonicalJsonValue::as_object)
-				.and_then(|body| body.get("auth"))
-				.is_none()
+			} else if is_oidc
+				&& body
+					.json_body
+					.as_ref()
+					.and_then(CanonicalJsonValue::as_object)
+					.and_then(|body| body.get("auth"))
+					.is_none()
 			{
 				// First attempt from OIDC device — issue m.oauth flow.
 				let session = utils::random_string(tuwunel_service::uiaa::SESSION_ID_LENGTH);
