@@ -10,14 +10,16 @@ use ruma::{
 };
 use serde_json::json;
 use tuwunel_core::{
-	Err, Result, implement,
+	Err, Result, at, implement,
 	utils::{
 		self, ReadyExt,
 		stream::{IterStream, TryIgnore},
-		time::{duration_since_epoch, timepoint_from_epoch, timepoint_from_now},
+		time::{
+			duration_since_epoch, timepoint_from_epoch, timepoint_from_now, timepoint_has_passed,
+		},
 	},
 };
-use tuwunel_database::{Deserialized, Ignore, Interfix, Json, Map};
+use tuwunel_database::{Cbor, Deserialized, Ignore, Interfix, Json, Map};
 
 /// generated device ID length
 const DEVICE_ID_LENGTH: usize = 10;
@@ -446,35 +448,37 @@ pub fn mark_oidc_device(&self, user_id: &UserId, device_id: &DeviceId) {
 /// Returns the expiry timestamp in milliseconds.
 #[allow(clippy::must_use_candidate)]
 #[implement(super::Service)]
-pub fn allow_cross_signing_replacement(&self, user_id: &UserId) -> u64 {
-	use std::num::Saturating as Sat;
+pub fn allow_cross_signing_replacement(&self, user_id: &UserId) -> SystemTime {
+	let duration = Duration::from_mins(10);
+	let expires = timepoint_from_now(duration).expect("failed to create timepoint from now");
 
-	use tuwunel_core::utils;
-
-	let now = Sat(utils::millis_since_unix_epoch());
-	let expires = now + Sat(10 * 60 * 1000); // 10 minutes
 	self.db
 		.oidccskeybypass_userid
-		.put(user_id, Json(&expires.0));
-	expires.0
+		.raw_put(user_id, Cbor(expires));
+
+	expires
 }
 
 /// Check if the user is allowed to replace cross-signing keys without UIAA.
 #[implement(super::Service)]
 pub async fn can_replace_cross_signing_keys(&self, user_id: &UserId) -> bool {
-	use tuwunel_core::utils;
+	let Ok(expires): Result<SystemTime, _> = self
+		.db
+		.oidccskeybypass_userid
+		.get(user_id)
+		.await
+		.deserialized::<Cbor<_>>()
+		.map(at!(0))
+	else {
+		return false;
+	};
 
-	let Ok(bytes) = self.db.oidccskeybypass_userid.get(user_id).await else {
-		return false;
-	};
-	let Ok(expires) = serde_json::from_slice::<u64>(&bytes) else {
-		return false;
-	};
-	if expires < utils::millis_since_unix_epoch() {
-		self.db.oidccskeybypass_userid.del(user_id);
-		return false;
+	if !timepoint_has_passed(expires) {
+		return true;
 	}
-	true
+
+	self.db.oidccskeybypass_userid.remove(user_id);
+	false
 }
 
 #[implement(super::Service)]
