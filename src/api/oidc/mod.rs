@@ -11,7 +11,6 @@ pub(super) mod userinfo;
 
 use axum::{Json, response::IntoResponse};
 use http::StatusCode;
-use tuwunel_core::{Result, err};
 
 pub(super) use self::{
 	account::*, auth_issuer::*, auth_metadata::*, authorize::*, complete::*, jwks::*,
@@ -33,26 +32,4 @@ fn oauth_error(
 		})),
 	)
 		.into_response()
-}
-
-fn oidc_issuer_url(services: &tuwunel_service::Services) -> Result<String> {
-	services
-		.config
-		.well_known
-		.client
-		.as_ref()
-		.map(|url| {
-			let s = url.to_string();
-			if s.ends_with('/') { s } else { s + "/" }
-		})
-		.ok_or_else(|| {
-			err!(Config("well_known.client", "well_known.client must be set for OIDC server"))
-		})
-}
-
-fn extract_device_id(scope: &str) -> Option<String> {
-	scope
-		.split_whitespace()
-		.find_map(|s| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"))
-		.map(ToOwned::to_owned)
 }

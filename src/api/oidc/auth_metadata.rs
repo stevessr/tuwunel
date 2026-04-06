@@ -2,8 +2,6 @@ use axum::{Json, extract::State, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 use tuwunel_core::Result;
 
-use super::oidc_issuer_url;
-
 #[derive(Debug, Serialize, Deserialize)]
 struct ProviderMetadata {
 	issuer: String,
@@ -31,7 +29,7 @@ struct ProviderMetadata {
 pub(crate) async fn openid_configuration_route(
 	State(services): State<crate::State>,
 ) -> Result<impl IntoResponse> {
-	let issuer = oidc_issuer_url(&services)?;
+	let issuer = services.oauth.get_server()?.issuer_url()?;
 	let base = issuer.trim_end_matches('/').to_owned();
 
 	Ok(Json(ProviderMetadata {
