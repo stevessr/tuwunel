@@ -20,7 +20,7 @@ use tuwunel_core::{
 	Err, Result, at,
 	config::IdentityProvider,
 	debug::INFO_SPAN_LEVEL,
-	debug_info, debug_warn, err, info,
+	debug_info, debug_warn, err, info, is_not_equal_to,
 	itertools::Itertools,
 	utils,
 	utils::{
@@ -409,9 +409,10 @@ pub(crate) async fn sso_callback_route(
 
 	// Delete any old session.
 	if let Some(old_sess_id) = old_sess_id
-		&& sess_id != old_sess_id
+		.as_deref()
+		.filter(is_not_equal_to!(&sess_id))
 	{
-		services.oauth.sessions.delete(&old_sess_id).await;
+		services.oauth.sessions.delete(old_sess_id).await;
 	}
 
 	if !services.users.is_active_local(&user_id).await {
@@ -424,53 +425,16 @@ pub(crate) async fn sso_callback_route(
 		.to_string()
 		.into();
 
-	if let Some(ref redirect_url) = session.redirect_url
-		&& redirect_url.scheme() == "uiaa"
+	// Decide if this is a UIAA authentication and take the UIAA branch if so.
+	if let Some(redirect_url) = session
+		.redirect_url
+		.as_ref()
+		.filter(|url| url.scheme() == "uiaa")
 	{
-		let uiaa_session_id = redirect_url.path();
-
-		// Find the UIAA session by its ID
-		let (db_user_id, device_id, mut uiaainfo) = services
-			.uiaa
-			.get_uiaa_session_by_session_id(uiaa_session_id)
-			.await
-			.ok_or_else(|| err!(Request(Forbidden("UIAA session not found."))))?;
-
-		// SECURITY: Ensure the user authenticating via SSO is the owner of the UIAA
-		// session
-		if db_user_id != user_id {
-			return Err!(Request(Forbidden("UIAA session belongs to a different user.")));
-		}
-
-		// Mark the completed step based on the UIAA session's flow.
-		// MSC4312 m.oauth flow → mark OAuth.
-		// Legacy m.login.sso flow → mark Sso.
-		let has_oauth_flow = uiaainfo
-			.flows
-			.iter()
-			.any(|f| f.stages.contains(&AuthType::OAuth));
-
-		if has_oauth_flow && !uiaainfo.completed.contains(&AuthType::OAuth) {
-			uiaainfo.completed.push(AuthType::OAuth);
-			// Grant 10-minute bypass for cross-signing key replacement (like Synapse).
-			services
-				.users
-				.allow_cross_signing_replacement(&user_id);
-		} else if !uiaainfo.completed.contains(&AuthType::Sso) {
-			uiaainfo.completed.push(AuthType::Sso);
-		}
-		services
-			.uiaa
-			.update_uiaa_session(&user_id, &device_id, uiaa_session_id, Some(&uiaainfo));
-
-		// Redirect back to the fallback page to render the success HTML
-		let location =
-			format!("/_matrix/client/v3/auth/m.login.sso/fallback/web?session={uiaa_session_id}");
-
-		return Ok(sso_callback::unstable::Response { location, cookie: Some(cookie) });
+		return handle_uiaa(&services, &user_id, cookie, redirect_url).await;
 	}
 
-	// Determine the next provider to chain after this one.
+	// Decide the next provider to chain after this one.
 	let next_idp_url = services
 		.config
 		.identity_provider
@@ -508,6 +472,60 @@ pub(crate) async fn sso_callback_route(
 		.append_pair("loginToken", &login_token)
 		.finish()
 		.to_string();
+
+	Ok(sso_callback::unstable::Response { location, cookie: Some(cookie) })
+}
+
+async fn handle_uiaa(
+	services: &Services,
+	user_id: &UserId,
+	cookie: Cow<'static, str>,
+	redirect_url: &Url,
+) -> Result<sso_callback::unstable::Response> {
+	let uiaa_session_id = redirect_url.path();
+
+	// Find the UIAA session by its ID. SECURITY: Ensure the user authenticating via
+	// SSO is the owner of the UIAA session
+	let (user_id, device_id, mut uiaainfo) = services
+		.uiaa
+		.get_uiaa_session_by_session_id(uiaa_session_id)
+		.await
+		.filter(|(db_user_id, ..)| user_id.eq(db_user_id))
+		.ok_or_else(|| err!(Request(Forbidden("UIAA session not found."))))?;
+
+	// MSC4312 m.oauth flow → mark OAuth.
+	let has_oauth_flow = uiaainfo
+		.flows
+		.iter()
+		.any(|f| f.stages.contains(&AuthType::OAuth));
+
+	// Mark the completed step based on the UIAA session's flow.
+	if has_oauth_flow && !uiaainfo.completed.contains(&AuthType::OAuth) {
+		// Grant 10-minute bypass for cross-signing key replacement (like Synapse).
+		services
+			.users
+			.allow_cross_signing_replacement(&user_id);
+
+		uiaainfo.completed.push(AuthType::OAuth);
+	}
+
+	// Legacy m.login.sso flow → mark Sso.
+	let has_sso_flow = uiaainfo
+		.flows
+		.iter()
+		.any(|f| f.stages.contains(&AuthType::Sso));
+
+	if has_sso_flow && !uiaainfo.completed.contains(&AuthType::Sso) {
+		uiaainfo.completed.push(AuthType::Sso);
+	}
+
+	services
+		.uiaa
+		.update_uiaa_session(&user_id, &device_id, uiaa_session_id, Some(&uiaainfo));
+
+	// Redirect back to the fallback page to render the success HTML
+	let location =
+		format!("/_matrix/client/v3/auth/m.login.sso/fallback/web?session={uiaa_session_id}");
 
 	Ok(sso_callback::unstable::Response { location, cookie: Some(cookie) })
 }
