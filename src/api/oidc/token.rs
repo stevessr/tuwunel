@@ -11,11 +11,11 @@ use serde_json::json;
 use tuwunel_core::{Result, err, info, utils::time::now};
 use tuwunel_service::{
 	Services,
-	oauth::server::{IdTokenClaims, Server},
+	oauth::server::{IdTokenClaims, Server, extract_device_id},
 	users::device::generate_refresh_token,
 };
 
-use super::{extract_device_id, oauth_error, oidc_issuer_url};
+use super::oauth_error;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct TokenRequest {
@@ -94,13 +94,14 @@ async fn token_authorization_code(
 	let device_id: Option<OwnedDeviceId> =
 		extract_device_id(&session.scope).map(OwnedDeviceId::from);
 
+	let iss = services.oauth.get_server()?.issuer_url()?;
 	let id_token = session
 		.scope
 		.contains("openid")
 		.then(|| {
 			let now = now().as_secs();
 			let claims = IdTokenClaims {
-				iss: oidc_issuer_url(services)?,
+				iss,
 				sub: user_id.to_string(),
 				aud: client_id.to_owned(),
 				exp: now.saturating_add(3600),

@@ -15,7 +15,7 @@ use tuwunel_service::{
 };
 use url::Url;
 
-use super::{OIDC_REQ_ID_LENGTH, oidc_issuer_url};
+use super::OIDC_REQ_ID_LENGTH;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct AuthorizeParams {
@@ -70,7 +70,7 @@ pub(crate) async fn authorize_route(
 			.unwrap_or(now),
 	};
 
-	let base = oidc_issuer_url(&services)?;
+	let base = oidc.issuer_url()?;
 	let base = base.trim_end_matches('/');
 
 	let complete_url = Url::parse(&format!("{base}/_tuwunel/oidc/_complete"))
