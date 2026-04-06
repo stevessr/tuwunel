@@ -453,16 +453,15 @@ pub(crate) async fn sso_callback_route(
 		if has_oauth_flow && !uiaainfo.completed.contains(&AuthType::OAuth) {
 			uiaainfo.completed.push(AuthType::OAuth);
 			// Grant 10-minute bypass for cross-signing key replacement (like Synapse).
-			services.users.allow_cross_signing_replacement(&user_id);
+			services
+				.users
+				.allow_cross_signing_replacement(&user_id);
 		} else if !uiaainfo.completed.contains(&AuthType::Sso) {
 			uiaainfo.completed.push(AuthType::Sso);
 		}
-		services.uiaa.update_uiaa_session(
-			&user_id,
-			&device_id,
-			uiaa_session_id,
-			Some(&uiaainfo),
-		);
+		services
+			.uiaa
+			.update_uiaa_session(&user_id, &device_id, uiaa_session_id, Some(&uiaainfo));
 
 		// Redirect back to the fallback page to render the success HTML
 		let location =
