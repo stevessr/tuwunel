@@ -2825,18 +2825,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases",
  "libc",
-]
-
-[[package]]
-name = "nix"
-version = "0.31.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d6d0705320c1e6ba1d912b5e37cf18071b6c2e9b7fa8215a1e8a7651966f5d3"
-dependencies = [
- "bitflags",
- "cfg-if",
- "cfg_aliases",
- "libc",
  "memoffset",
 ]
 
@@ -3256,7 +3244,7 @@ checksum = "e4022a17595a00d6a369236fdae483f0de7f0a339960a53118b818238e132224"
 dependencies = [
  "android_system_properties",
  "log",
- "nix 0.30.1",
+ "nix",
  "objc2",
  "objc2-foundation",
  "objc2-ui-kit",
@@ -5449,7 +5437,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tuwunel"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "clap",
  "const-str",
@@ -5482,7 +5470,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_admin"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "base64",
  "bytes",
@@ -5506,7 +5494,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_api"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "axum",
  "axum-client-ip",
@@ -5538,7 +5526,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_core"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "argon2",
  "arrayvec",
@@ -5571,7 +5559,7 @@ dependencies = [
  "libloading",
  "log",
  "maplit",
- "nix 0.31.2",
+ "nix",
  "num-traits",
  "object_store",
  "rand 0.8.5",
@@ -5602,7 +5590,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_database"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "async-channel",
  "const-str",
@@ -5622,7 +5610,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_macros"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "itertools 0.14.0",
  "proc-macro2",
@@ -5632,7 +5620,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_router"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "axum",
  "axum-client-ip",
@@ -5665,7 +5653,7 @@ dependencies = [
 
 [[package]]
 name = "tuwunel_service"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "async-trait",
  "base64",
