@@ -80,7 +80,7 @@ pub fn is_forbidden_remote_server_name(&self, server_name: &ServerName) -> bool 
 		.is_false();
 
 	let allow_list_active = self
-		.allowed_remote_server_names
+		.allowed_remote_server_names_experimental
 		.is_empty()
 		.is_false();
 
@@ -94,7 +94,7 @@ pub fn is_forbidden_remote_server_name(&self, server_name: &ServerName) -> bool 
 
 	if allow_list_active
 		&& !self
-			.allowed_remote_server_names
+			.allowed_remote_server_names_experimental
 			.is_match(server_name.host())
 	{
 		return true;

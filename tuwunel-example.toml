@@ -1477,6 +1477,10 @@
 #
 #forbidden_remote_server_names = []
 
+# (EXPERIMENTAL) The behavior of this option will change; the
+# _experimental suffix will be removed for that change in an upcoming
+# release.
+#
 # List of allowed server names via regex patterns. This is an allow-list
 # rather than a deny-list with all the same details as its counterpart in
 # `forbidden_remote_server_names`.
@@ -1490,7 +1494,7 @@
 #
 # example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 #
-#allowed_remote_server_names = []
+#allowed_remote_server_names_experimental = []
 
 # List of forbidden server names via regex patterns that we will block all
 # outgoing federated room directory requests for. Useful for preventing
