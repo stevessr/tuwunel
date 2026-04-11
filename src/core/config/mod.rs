@@ -1721,6 +1721,10 @@ pub struct Config {
 	#[serde(default, with = "serde_regex")]
 	pub forbidden_remote_server_names: RegexSet,
 
+	/// (EXPERIMENTAL) The behavior of this option will change; the
+	/// _experimental suffix will be removed for that change in an upcoming
+	/// release.
+	///
 	/// List of allowed server names via regex patterns. This is an allow-list
 	/// rather than a deny-list with all the same details as its counterpart in
 	/// `forbidden_remote_server_names`.
@@ -1736,7 +1740,7 @@ pub struct Config {
 	///
 	/// default: []
 	#[serde(default, with = "serde_regex")]
-	pub allowed_remote_server_names: RegexSet,
+	pub allowed_remote_server_names_experimental: RegexSet,
 
 	/// List of forbidden server names via regex patterns that we will block all
 	/// outgoing federated room directory requests for. Useful for preventing
