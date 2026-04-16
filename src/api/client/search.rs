@@ -18,7 +18,7 @@ use tuwunel_core::{
 	result::FlatOk,
 	utils::{IterStream, option::OptionExt, stream::ReadyExt},
 };
-use tuwunel_service::{Services, rooms::search::RoomQuery};
+use tuwunel_service::{Services, rooms::search::{RoomQuery, tokenize}};
 
 use crate::Ruma;
 
@@ -157,11 +157,8 @@ async fn category_room_events(
 		.collect()
 		.await;
 
-	let highlights = criteria
-		.search_term
-		.split_terminator(|c: char| !c.is_alphanumeric())
-		.map(str::to_lowercase)
-		.collect();
+	// Generate highlights from search terms using the same tokenization as indexing
+	let highlights = tokenize(&criteria.search_term).collect();
 
 	let next_batch = (results.len() >= limit)
 		.then_some(next_batch.saturating_add(results.len()))
