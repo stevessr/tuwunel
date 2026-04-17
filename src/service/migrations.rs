@@ -1,7 +1,7 @@
 use std::cmp;
 
 use futures::{FutureExt, StreamExt};
-use ruma::{OwnedUserId, RoomId, UserId, events::room::member::MembershipState};
+use ruma::{MxcUri, OwnedUserId, RoomId, UserId, events::room::member::MembershipState};
 use tuwunel_core::{
 	Err, Result, debug, debug_info, debug_warn, err, info,
 	itertools::Itertools,
@@ -104,6 +104,7 @@ async fn fresh(services: &Services) -> Result {
 	db["global"].insert(b"fix_referencedevents_missing_sep", []);
 	db["global"].insert(b"fix_readreceiptid_readreceipt_duplicates", []);
 	db["global"].insert(b"fix_hashed_sentinel_passwords", []);
+	db["global"].insert(b"remove_remote_media_userid", []);
 
 	// Create the admin room and server user on first run
 	if services.config.create_admin_room {
@@ -180,6 +181,14 @@ async fn migrate(services: &Services) -> Result {
 		.is_not_found()
 	{
 		fix_hashed_sentinel_passwords(services).await?;
+	}
+
+	if db["global"]
+		.get(b"remove_remote_media_userid")
+		.await
+		.is_not_found()
+	{
+		remove_remote_media_userid(services).await?;
 	}
 
 	if discovered_version().await < target_version {
@@ -549,5 +558,56 @@ async fn fix_hashed_sentinel_passwords(services: &Services) -> Result {
 	info!(?checked, ?good, ?bad, "Fixed any occurrences of hashed sentinel passwords");
 
 	db["global"].insert(b"fix_hashed_sentinel_passwords", []);
+	db.engine.sort()
+}
+
+async fn remove_remote_media_userid(services: &Services) -> Result {
+	let db = &services.db;
+	let cork = db.cork_and_sync();
+	let mediaid_user = db["mediaid_user"].clone();
+
+	warn!("Removing stored user id for remote media");
+
+	let (checked, removed_remote, removed_invalid) = mediaid_user
+		.keys()
+		.expect_ok()
+		.ready_fold(
+			(0, 0, 0),
+			|(mut checked, mut removed_remote, mut removed_invalid): (usize, usize, usize),
+			 (mxc_uri, user_id): (&MxcUri, &UserId)| {
+				checked = checked.saturating_add(1);
+
+				let Ok(mxc) = mxc_uri.parts() else {
+					warn!(?mxc_uri, "Invalid MXC URL, removing it");
+
+					mediaid_user.del((mxc_uri, user_id));
+
+					removed_invalid = removed_invalid.saturating_add(1);
+
+					return (checked, removed_remote, removed_invalid);
+				};
+
+				if !services.globals.server_is_ours(mxc.server_name) {
+					mediaid_user.del((mxc_uri, user_id));
+
+					removed_remote = removed_remote.saturating_add(1);
+
+					return (checked, removed_remote, removed_invalid);
+				}
+
+				(checked, removed_remote, removed_invalid)
+			},
+		)
+		.await;
+
+	drop(cork);
+	info!(
+		%checked,
+		%removed_remote,
+		%removed_invalid,
+		"Removed stored user id for remote media"
+	);
+
+	db["global"].insert(b"remove_remote_media_userid", []);
 	db.engine.sort()
 }

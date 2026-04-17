@@ -35,7 +35,6 @@ impl super::Service {
 	pub async fn upload_thumbnail(
 		&self,
 		mxc: &Mxc<'_>,
-		user: Option<&UserId>,
 		content_disposition: Option<&ContentDisposition>,
 		content_type: Option<&str>,
 		dim: &Dim,
@@ -43,7 +42,7 @@ impl super::Service {
 	) -> Result {
 		let key =
 			self.db
-				.create_file_metadata(mxc, user, dim, content_disposition, content_type)?;
+				.create_file_metadata(mxc, None, dim, content_disposition, content_type)?;
 
 		//TODO: Dangling metadata in database if creation fails
 		self.create_media_file(&key, file).await?;
@@ -88,7 +87,7 @@ impl super::Service {
 			return self.get_thumbnail(mxc, dim, None).await;
 		}
 
-		self.fetch_remote_thumbnail(mxc, Some(user), None, timeout_ms, dim)
+		self.fetch_remote_thumbnail(mxc, None, timeout_ms, dim)
 			.await
 	}
 
