@@ -1,3 +1,19 @@
+//! Database column descriptors
+//!
+//! Templates classifying column families along three axes:
+//!
+//! - Write pattern: `RANDOM` (writes scatter across the keyspace) vs
+//!   `SEQUENTIAL` (writes append to the end). Drives compaction priority
+//!   (`OldestSmallestSeqFirst` vs `OldestLargestSeqFirst`) and write-buffer
+//!   sizing.
+//! - Dataset size: plain (level compaction, MB-scale files) vs `_SMALL`
+//!   (universal compaction, KB-scale files and blocks).
+//! - Retention: plain (unbounded) vs `_CACHE` (FIFO eviction bounded by
+//!   `limit_size` and `ttl`).
+//!
+//! Each CF in `maps::MAPS` picks one template and overrides individual
+//! knobs as needed.
+
 #![allow(unused)]
 
 use rocksdb::{
@@ -96,7 +112,7 @@ pub(crate) static IGNORED: Descriptor = Descriptor { ignored: true, ..BASE };
 /// taken when using this as it inhibits downgrading and other migrations.
 pub(crate) static DROPPED: Descriptor = Descriptor { dropped: true, ..IGNORED };
 
-/// Descriptor for large datasets with random updates across the keyspace.
+/// Descriptor for large datasets where writes scatter across the keyspace.
 pub(crate) static RANDOM: Descriptor = Descriptor {
 	compaction_pri: CompactionPri::OldestSmallestSeqFirst,
 	write_size: 1024 * 1024 * 32,
@@ -107,7 +123,8 @@ pub(crate) static RANDOM: Descriptor = Descriptor {
 	..BASE
 };
 
-/// Descriptor for large datasets with updates to the end of the keyspace.
+/// Descriptor for large datasets where writes append to the end of the
+/// keyspace.
 pub(crate) static SEQUENTIAL: Descriptor = Descriptor {
 	compaction_pri: CompactionPri::OldestLargestSeqFirst,
 	write_size: 1024 * 1024 * 64,
@@ -121,7 +138,7 @@ pub(crate) static SEQUENTIAL: Descriptor = Descriptor {
 	..BASE
 };
 
-/// Descriptor for small datasets with random updates across the keyspace.
+/// Descriptor for small datasets where writes scatter across the keyspace.
 pub(crate) static RANDOM_SMALL: Descriptor = Descriptor {
 	compaction: CompactionStyle::Universal,
 	write_size: 1024 * 1024 * 16,
@@ -138,7 +155,8 @@ pub(crate) static RANDOM_SMALL: Descriptor = Descriptor {
 	..RANDOM
 };
 
-/// Descriptor for small datasets with updates to the end of the keyspace.
+/// Descriptor for small datasets where writes append to the end of the
+/// keyspace.
 pub(crate) static SEQUENTIAL_SMALL: Descriptor = Descriptor {
 	compaction: CompactionStyle::Universal,
 	write_size: 1024 * 1024 * 16,
@@ -155,8 +173,9 @@ pub(crate) static SEQUENTIAL_SMALL: Descriptor = Descriptor {
 	..SEQUENTIAL
 };
 
-/// Descriptor for large persistent caches with random updates. Oldest entries
-/// are deleted after limit_size reached.
+/// Descriptor for large persistent caches where writes scatter across the
+/// keyspace. Oldest entries are evicted by FIFO compaction once `limit_size`
+/// is reached.
 pub(crate) static RANDOM_CACHE: Descriptor = Descriptor {
 	compaction: CompactionStyle::Fifo,
 	cache_disp: CacheDisp::Unique,
@@ -165,9 +184,9 @@ pub(crate) static RANDOM_CACHE: Descriptor = Descriptor {
 	..RANDOM
 };
 
-/// Descriptor for large persistent ring/circular queue. Writes occur at the end
-/// of the keyspace; the lowest values are then evicted off the front when size
-/// limit reached.
+/// Descriptor for large persistent ring/queue caches where writes append to
+/// the end of the keyspace. Lowest keys are evicted off the front once
+/// `limit_size` is reached.
 pub(crate) static SEQUENTIAL_CACHE: Descriptor = Descriptor {
 	compaction: CompactionStyle::Fifo,
 	cache_disp: CacheDisp::Unique,
@@ -176,8 +195,9 @@ pub(crate) static SEQUENTIAL_CACHE: Descriptor = Descriptor {
 	..SEQUENTIAL
 };
 
-/// Descriptor for small persistent caches with random updates. Oldest entries
-/// are deleted after limit_size reached.
+/// Descriptor for small persistent caches where writes scatter across the
+/// keyspace. Oldest entries are evicted by FIFO compaction once `limit_size`
+/// is reached.
 pub(crate) static RANDOM_SMALL_CACHE: Descriptor = Descriptor {
 	compaction: CompactionStyle::Fifo,
 	cache_disp: CacheDisp::Unique,
@@ -188,9 +208,9 @@ pub(crate) static RANDOM_SMALL_CACHE: Descriptor = Descriptor {
 	..RANDOM_SMALL
 };
 
-/// Descriptor for small persistent ring/circular queue. Writes occur at the end
-/// of the keyspace; the lowest values are then evicted off the front when size
-/// limit reached.
+/// Descriptor for small persistent ring/queue caches where writes append to
+/// the end of the keyspace. Lowest keys are evicted off the front once
+/// `limit_size` is reached.
 pub(crate) static SEQUENTIAL_SMALL_CACHE: Descriptor = Descriptor {
 	compaction: CompactionStyle::Fifo,
 	cache_disp: CacheDisp::Unique,
