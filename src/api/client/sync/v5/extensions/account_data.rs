@@ -7,6 +7,7 @@ use tuwunel_core::{
 use tuwunel_service::sync::Room;
 
 use super::{Connection, SyncInfo, Window, selector};
+use crate::client::is_empty_account_data_event;
 
 #[tracing::instrument(name = "account_data", level = "trace", skip_all)]
 pub(super) async fn collect(
@@ -38,6 +39,7 @@ pub(super) async fn collect(
 				.account_data
 				.changes_since(Some(room_id), sender_user, roomsince, Some(conn.next_batch))
 				.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Room))
+				.ready_filter(move |e| roomsince != 0 || !is_empty_account_data_event(e))
 				.collect()
 				.await;
 
@@ -48,10 +50,12 @@ pub(super) async fn collect(
 		})
 		.collect();
 
+	let globalsince = conn.globalsince;
 	let global = services
 		.account_data
-		.changes_since(None, sender_user, conn.globalsince, Some(conn.next_batch))
+		.changes_since(None, sender_user, globalsince, Some(conn.next_batch))
 		.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Global))
+		.ready_filter(move |e| globalsince != 0 || !is_empty_account_data_event(e))
 		.collect();
 
 	let (global, rooms) = join(global, rooms).await;

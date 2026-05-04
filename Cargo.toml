@@ -349,7 +349,7 @@ default-features = false
 
 [workspace.dependencies.ruma]
 git = "https://github.com/matrix-construct/ruma"
-rev = "39b537153063506a6653940a42bc8612d71a6a75"
+rev = "4d03d01c3a31ab9f54b81a3d7d1afa5909b6becc"
 features = [
     "__compat",
     "appservice-api-c",
@@ -369,6 +369,7 @@ features = [
     "unstable-msc2870",
     "unstable-msc3026",
     "unstable-msc3061",
+    "unstable-msc3391",
     "unstable-msc3814",
     "unstable-msc3824",
     "unstable-msc3245",

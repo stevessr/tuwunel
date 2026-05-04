@@ -13,6 +13,7 @@ use ruma::{
 	serde::Raw,
 };
 use serde::Deserialize;
+use serde_json::json;
 use tuwunel_core::{
 	Err, Result, at, err, implement,
 	utils::{ReadyExt, result::LogErr, stream::TryIgnore},
@@ -80,6 +81,25 @@ pub async fn update(
 	}
 
 	Ok(())
+}
+
+/// MSC3391: replace the stored event with a tombstone whose content is
+/// `{}`. Delta sync surfaces the empty content so clients can apply the
+/// deletion; initial sync and GET treat the tombstone as not-present.
+#[implement(Service)]
+pub async fn delete(
+	&self,
+	room_id: Option<&RoomId>,
+	user_id: &UserId,
+	event_type: RoomAccountDataEventType,
+) -> Result {
+	let tombstone = json!({
+		"type": event_type.to_string(),
+		"content": {},
+	});
+
+	self.update(room_id, user_id, event_type, &tombstone)
+		.await
 }
 
 /// Searches the room account data for a specific kind.

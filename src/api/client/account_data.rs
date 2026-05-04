@@ -2,8 +2,8 @@ use axum::extract::State;
 use ruma::{
 	RoomId, UserId,
 	api::client::config::{
-		get_global_account_data, get_room_account_data, set_global_account_data,
-		set_room_account_data,
+		delete_global_account_data, delete_room_account_data, get_global_account_data,
+		get_room_account_data, set_global_account_data, set_room_account_data,
 	},
 	events::{
 		AnyGlobalAccountDataEventContent, AnyRoomAccountDataEventContent,
@@ -12,7 +12,7 @@ use ruma::{
 	serde::Raw,
 };
 use serde::Deserialize;
-use serde_json::{json, value::RawValue as RawJsonValue};
+use serde_json::{Value as JsonValue, json, value::RawValue as RawJsonValue};
 use tuwunel_core::{Err, Result, err};
 use tuwunel_service::Services;
 
@@ -87,6 +87,10 @@ pub(crate) async fn get_global_account_data_route(
 		.await
 		.map_err(|_| err!(Request(NotFound("Data not found."))))?;
 
+	if is_empty_content(&account_data.content) {
+		return Err!(Request(NotFound("Data not found.")));
+	}
+
 	Ok(get_global_account_data::v3::Response { account_data: account_data.content })
 }
 
@@ -109,7 +113,53 @@ pub(crate) async fn get_room_account_data_route(
 		.await
 		.map_err(|_| err!(Request(NotFound("Data not found."))))?;
 
+	if is_empty_content(&account_data.content) {
+		return Err!(Request(NotFound("Data not found.")));
+	}
+
 	Ok(get_room_account_data::v3::Response { account_data: account_data.content })
+}
+
+/// # `DELETE /_matrix/client/unstable/org.matrix.msc3391/user/{userId}/account_data/{type}`
+///
+/// MSC3391: erase the named global account data type for the user.
+pub(crate) async fn delete_global_account_data_route(
+	State(services): State<crate::State>,
+	body: Ruma<delete_global_account_data::unstable::Request>,
+) -> Result<delete_global_account_data::unstable::Response> {
+	let sender_user = body.sender_user();
+
+	if sender_user != body.user_id && body.appservice_info.is_none() {
+		return Err!(Request(Forbidden("You cannot delete account data for other users.")));
+	}
+
+	services
+		.account_data
+		.delete(None, &body.user_id, body.event_type.to_string().into())
+		.await?;
+
+	Ok(delete_global_account_data::unstable::Response {})
+}
+
+/// # `DELETE /_matrix/client/unstable/org.matrix.msc3391/user/{userId}/rooms/{roomId}/account_data/{type}`
+///
+/// MSC3391: erase the named room account data type for the user.
+pub(crate) async fn delete_room_account_data_route(
+	State(services): State<crate::State>,
+	body: Ruma<delete_room_account_data::unstable::Request>,
+) -> Result<delete_room_account_data::unstable::Response> {
+	let sender_user = body.sender_user();
+
+	if sender_user != body.user_id && body.appservice_info.is_none() {
+		return Err!(Request(Forbidden("You cannot delete account data for other users.")));
+	}
+
+	services
+		.account_data
+		.delete(Some(&body.room_id), &body.user_id, body.event_type.clone())
+		.await?;
+
+	Ok(delete_room_account_data::unstable::Response {})
 }
 
 async fn set_account_data(
@@ -147,6 +197,32 @@ async fn set_account_data(
 			}),
 		)
 		.await
+}
+
+/// MSC3391: tombstoned account data carries `content: {}`. Sync delta
+/// surfaces the empty event so clients can apply the deletion; everywhere
+/// else (GET, initial sync) treats it as not-present.
+fn is_empty_content<T>(content: &Raw<T>) -> bool { is_empty_object_json(content.json()) }
+
+/// Equivalent test against a stored account-data event (`{type, content}`)
+/// rather than the bare `content` payload. Used by sync filters.
+pub(crate) fn is_empty_account_data_event<T>(event: &Raw<T>) -> bool {
+	#[derive(Deserialize)]
+	struct ContentOnly<'a> {
+		#[serde(borrow)]
+		content: &'a RawJsonValue,
+	}
+
+	serde_json::from_str::<ContentOnly<'_>>(event.json().get())
+		.ok()
+		.is_some_and(|c| is_empty_object_json(c.content))
+}
+
+fn is_empty_object_json(s: &RawJsonValue) -> bool {
+	serde_json::from_str::<JsonValue>(s.get())
+		.ok()
+		.and_then(|v| v.as_object().map(serde_json::Map::is_empty))
+		.unwrap_or(false)
 }
 
 #[derive(Deserialize)]

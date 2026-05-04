@@ -67,7 +67,10 @@ use tuwunel_service::{
 };
 
 use super::{load_timeline, share_encrypted_room};
-use crate::{ClientIp, Ruma, client::ignored_filter};
+use crate::{
+	ClientIp, Ruma,
+	client::{ignored_filter, is_empty_account_data_event},
+};
 
 #[derive(Default)]
 struct StateChanges {
@@ -406,6 +409,7 @@ async fn build_sync_events(
 		.account_data
 		.changes_since(None, sender_user, since, Some(next_batch))
 		.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Global))
+		.ready_filter(move |e| since != 0 || !is_empty_account_data_event(e))
 		.collect();
 
 	// Look for device list updates of this account
@@ -744,6 +748,7 @@ async fn load_left_room(
 		.account_data
 		.changes_since(Some(room_id), sender_user, since, None)
 		.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Room))
+		.ready_filter(move |e| since != 0 || !is_empty_account_data_event(e))
 		.collect();
 
 	let (account_data_events, timeline_events) = join(account_data_events, timeline_events)
@@ -1107,6 +1112,7 @@ async fn load_joined_room(
 		.account_data
 		.changes_since(Some(room_id), sender_user, since, None)
 		.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Room))
+		.ready_filter(move |e| since != 0 || !is_empty_account_data_event(e))
 		.collect();
 
 	let (
