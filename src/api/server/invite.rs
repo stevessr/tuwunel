@@ -98,6 +98,14 @@ pub(crate) async fn create_invite_route(
 		return Err!(Request(InvalidParam("User does not belong to this homeserver.")));
 	}
 
+	if services
+		.users
+		.invites_blocked(&invited_user)
+		.await
+	{
+		return Err!(Request(InviteBlocked("{invited_user} has blocked invites.")));
+	}
+
 	let content: RoomMemberEventContent = signed_event
 		.get("content")
 		.cloned()

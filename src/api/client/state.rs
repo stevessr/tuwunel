@@ -366,11 +366,20 @@ async fn allowed_to_send_state_event(
 		| StateEventType::RoomMember => {
 			match json.deserialize_as_unchecked::<RoomMemberEventContent>() {
 				| Ok(membership_content) => {
-					let Ok(_state_key) = UserId::parse(state_key) else {
+					let Ok(target_user) = UserId::parse(state_key) else {
 						return Err!(Request(BadJson(
 							"Membership event has invalid or non-existent state key"
 						)));
 					};
+
+					if membership_content.membership == MembershipState::Invite
+						&& services.globals.user_is_local(&target_user)
+						&& services.users.invites_blocked(&target_user).await
+					{
+						return Err!(Request(InviteBlocked(
+							"{target_user} has blocked invites."
+						)));
+					}
 
 					if let Some(authorising_user) =
 						membership_content.join_authorized_via_users_server

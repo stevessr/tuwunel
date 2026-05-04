@@ -18,15 +18,15 @@
 ## Counts
 
 - 🟢 `yes`: 203
-- 🟡 `partial`: 86
-- ⭕️ `no`: 435
+- 🟡 `partial`: 87
+- ⭕️ `no`: 434
 - ⚫ `n/a`: 289
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 142 | 33 | 24 | 57 | 256 |
+| merged | 142 | 34 | 23 | 57 | 256 |
 | open | 54 | 51 | 375 | 172 | 652 |
 | closed | 7 | 2 | 36 | 52 | 97 |
 | unknown | 0 | 0 | 0 | 8 | 8 |
@@ -38,7 +38,7 @@ Sorted by MSC number, highest first.
 | MSC | Status | Correct/Impl | Conf | Title | Note |
 |---|---|---|---|---|---|
 | MSC4381 | ⚫ | ?/? | M | Remove plaintext sender key | Removal of plaintext sender_key is client-side; server is opaque |
-| MSC4380 | ⭕️ | 0/0 | H | Invite blocking | No m.invite_permission_config or M_INVITE_BLOCKED handling |
+| MSC4380 | 🟡 | 70/70 | H | Invite blocking | phase A enforcement (src/service/membership/invite.rs:167); /sync suppression... |
 | MSC4376 | 🟢 | 100/100 | H | Remove /v1/send_join and /v1/send_leave | v1 send_join and v1 send_leave routes are not registered |
 | MSC4356 | ⚫ | ?/? | H | Recently used emoji | Pure client-side account data convention; no server work |
 | MSC4341 | ⭕️ | 0/0 | H | Support for RFC 8628 Device Authorization Grant | OAuth Device Authorization Grant (RFC 8628) not advertised |
@@ -304,6 +304,7 @@ for spec compliance.
 |---|---|---|---|---|---|
 | MSC4291 | 🟡 | 80/90 | H | Room IDs as hashes of the create event | hydra.11 room id format and auth rules in event_auth, pdu format checks |
 | MSC2409 | 🟡 | 70/70 | H | Proposal to send typing, presence and receipts to appservices | typing+receipt EDUs sent to AS; presence not forwarded |
+| MSC4380 | 🟡 | 70/70 | H | Invite blocking | phase A enforcement (src/service/membership/invite.rs:167); /sync suppression... |
 | MSC3787 | 🟡 | 67/? | H | Allowing knocks to restricted rooms | complement: 32p/16f |
 | MSC1866 | 🟡 | 60/70 | L | MSC 1866 - Unsupported Room Version Error Code for Invites | federation invite errors propagated; not explicitly mapped |
 | MSC1929 | 🟡 | 60/80 | H | MSC1929 Homeserver Admin Contact and Support page | /.well-known/matrix/support implemented; only single contact via config (no a... |
@@ -358,7 +359,6 @@ for spec compliance.
 | MSC4323 | ⭕️ | 0/0 | H | User suspension &amp; locking endpoints | client admin suspend/lock endpoints not implemented |
 | MSC4335 | ⭕️ | 0/0 | H | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
 | MSC4341 | ⭕️ | 0/0 | H | Support for RFC 8628 Device Authorization Grant | OAuth Device Authorization Grant (RFC 8628) not advertised |
-| MSC4380 | ⭕️ | 0/0 | H | Invite blocking | No m.invite_permission_config or M_INVITE_BLOCKED handling |
 
 ## Open
 

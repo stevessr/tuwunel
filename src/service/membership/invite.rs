@@ -164,6 +164,10 @@ async fn local_invite(
 	reason: Option<&String>,
 	is_direct: bool,
 ) -> Result {
+	if self.services.users.invites_blocked(user_id).await {
+		return Err!(Request(InviteBlocked("{user_id} has blocked invites.")));
+	}
+
 	if !self
 		.services
 		.state_cache

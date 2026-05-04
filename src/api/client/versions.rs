@@ -51,7 +51,7 @@ static VERSIONS: [&str; 17] = [
 	"v1.15",  /* custom profile fields */
 ];
 
-static UNSTABLE_FEATURES: [&str; 27] = [
+static UNSTABLE_FEATURES: [&str; 29] = [
 	"org.matrix.e2e_cross_signing",
 	// private read receipts (https://github.com/matrix-org/matrix-spec-proposals/pull/2285)
 	"org.matrix.msc2285.stable",
@@ -103,4 +103,7 @@ static UNSTABLE_FEATURES: [&str; 27] = [
 	"org.matrix.msc3824",
 	// Backwards-compatible redaction sending via /send (https://github.com/matrix-org/matrix-spec-proposals/pull/4169)
 	"com.beeper.msc4169",
+	// Invite blocking via m.invite_permission_config (https://github.com/matrix-org/matrix-spec-proposals/pull/4380)
+	"org.matrix.msc4380",
+	"org.matrix.msc4380.stable",
 ];

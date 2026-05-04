@@ -11,7 +11,11 @@ use futures::{Stream, StreamExt, TryFutureExt};
 use ruma::{
 	OwnedRoomId, OwnedUserId, UserId,
 	api::client::filter::FilterDefinition,
-	events::{GlobalAccountDataEventType, ignored_user_list::IgnoredUserListEvent},
+	events::{
+		GlobalAccountDataEventType,
+		ignored_user_list::IgnoredUserListEvent,
+		invite_permission_config::{InvitePermissionAction, InvitePermissionConfigEvent},
+	},
 };
 use tuwunel_core::{
 	Err, Result, debug_warn, err, is_equal_to,
@@ -111,6 +115,17 @@ impl Service {
 					.ignored_users
 					.keys()
 					.any(|blocked_user| blocked_user == sender_user)
+			})
+	}
+
+	/// MSC4380: `m.invite_permission_config.default_action == "block"`.
+	pub async fn invites_blocked(&self, user_id: &UserId) -> bool {
+		self.services
+			.account_data
+			.get_global(user_id, GlobalAccountDataEventType::InvitePermissionConfig)
+			.await
+			.is_ok_and(|event: InvitePermissionConfigEvent| {
+				matches!(event.content.default_action, Some(InvitePermissionAction::Block))
 			})
 	}
 
