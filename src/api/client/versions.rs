@@ -28,6 +28,14 @@ pub(crate) async fn get_supported_versions_route(
 			.map(Into::into)
 			.zip(once(true).cycle())
 			.collect(),
+
+		// MSC4383: client-side parity with /_matrix/federation/v1/version.
+		server: Some(get_supported_versions::Server {
+			name: Some(tuwunel_core::version::name().into()),
+			version: Some(tuwunel_core::version::version().into()),
+			compiler: tuwunel_core::info::rustc::version().map(Into::into),
+			..Default::default()
+		}),
 	})
 }
 
@@ -51,7 +59,7 @@ static VERSIONS: [&str; 17] = [
 	"v1.15",  /* custom profile fields */
 ];
 
-static UNSTABLE_FEATURES: [&str; 29] = [
+static UNSTABLE_FEATURES: [&str; 30] = [
 	"org.matrix.e2e_cross_signing",
 	// private read receipts (https://github.com/matrix-org/matrix-spec-proposals/pull/2285)
 	"org.matrix.msc2285.stable",
@@ -106,4 +114,6 @@ static UNSTABLE_FEATURES: [&str; 29] = [
 	// Invite blocking via m.invite_permission_config (https://github.com/matrix-org/matrix-spec-proposals/pull/4380)
 	"org.matrix.msc4380",
 	"org.matrix.msc4380.stable",
+	// Client-server discovery of server version (https://github.com/matrix-org/matrix-spec-proposals/pull/4383)
+	"net.zemos.msc4383",
 ];

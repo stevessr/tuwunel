@@ -17,9 +17,9 @@
 
 ## Counts
 
-- 🟢 `yes`: 205
+- 🟢 `yes`: 206
 - 🟡 `partial`: 87
-- ⭕️ `no`: 432
+- ⭕️ `no`: 431
 - ⚫ `n/a`: 289
 
 ### Status by inventory bucket
@@ -27,7 +27,7 @@
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
 | merged | 143 | 34 | 22 | 57 | 256 |
-| open | 55 | 51 | 374 | 172 | 652 |
+| open | 56 | 51 | 373 | 172 | 652 |
 | closed | 7 | 2 | 36 | 52 | 97 |
 | unknown | 0 | 0 | 0 | 8 | 8 |
 
@@ -426,7 +426,7 @@ Sorted by MSC number, highest first.
 | MSC4386 | ⚫ | 0/0 | H | Automatically sharing secrets after device verification | client-to-client to-device verification protocol; server forwards opaque events. |
 | MSC4385 | ⚫ | ?/? | H | Pushing secrets to other devices | Client-side to-device event convention |
 | MSC4384 | 🟡 | ?/50 | M | Supporting alternative room directory sorting | Largest-first sort is hardcoded; no alt-sort hook |
-| MSC4383 | ⭕️ | 0/0 | H | Client-Server Discovery of Server Version | No server object on /_matrix/client/versions response |
+| MSC4383 | 🟢 | 100/100 | H | Client-Server Discovery of Server Version | client /versions exposes the server object under net.zemos.msc4383.server |
 | MSC4382 | ⭕️ | 0/0 | H | Peppered hash verification for E2EE content moderation | No verification_hash check on report endpoint |
 | MSC4377 | ⚫ | ?/? | H | Clarify Image Pack Ordering | Image pack ordering is client-side account/state data convention |
 | MSC4375 | ⭕️ | 0/0 | H | Admin Room Management | No /_matrix/client/v1/admin/rooms/* endpoints |
