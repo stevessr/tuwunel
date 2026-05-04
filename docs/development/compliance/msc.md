@@ -17,16 +17,16 @@
 
 ## Counts
 
-- 🟢 `yes`: 203
+- 🟢 `yes`: 204
 - 🟡 `partial`: 87
-- ⭕️ `no`: 434
+- ⭕️ `no`: 433
 - ⚫ `n/a`: 289
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 142 | 34 | 23 | 57 | 256 |
+| merged | 143 | 34 | 22 | 57 | 256 |
 | open | 54 | 51 | 375 | 172 | 652 |
 | closed | 7 | 2 | 36 | 52 | 97 |
 | unknown | 0 | 0 | 0 | 8 | 8 |
@@ -186,7 +186,7 @@ Sorted by MSC number, highest first.
 | MSC2765 | ⚫ | ?/? | H | Widget avatars | client-side widget definition field |
 | MSC2758 | ⚫ | ?/? | H | Common grammar for textual identifiers | meta grammar guideline for future identifiers; not directly implementable |
 | MSC2746 | 🟡 | 40/40 | L | Improved Signalling for 1:1 VoIP | Events relayed; no specific server hooks |
-| MSC2732 | ⭕️ | 0/0 | H | Olm fallback keys | No fallback_keys; sync field returned as None |
+| MSC2732 | 🟢 | 100/100 | H | Olm fallback keys | all three spec touchpoints implemented (upload, claim, sync) |
 | MSC2713 | ⚫ | 0/0 | H | Remove deprecated Identity Service endpoints | Identity Service endpoints; not a homeserver feature |
 | MSC2705 | 🟡 | 30/40 | M | Animated thumbnails | animated param accepted; thumbnails always PNG static |
 | MSC2702 | 🟢 | 100/100 | H | `Content-Disposition` usage in the media repo | Content-Disposition and inline allowlist enforced for media downloads, thumbn... |
@@ -341,7 +341,6 @@ for spec compliance.
 | MSC2078 | ⭕️ | 0/0 | H | Sending Third-Party Request Tokens via the Homeserver | 3PID requestToken handlers return ThreepidDenied; submit_url not added |
 | MSC2244 | ⭕️ | 0/0 | H | Mass redactions | Single-target redactions only; no array redacts handling |
 | MSC2290 | ⭕️ | 0/0 | H | Separate Endpoints for Binding Threepids | No /account/3pid/add or /bind handlers; 3PID generally not impl |
-| MSC2732 | ⭕️ | 0/0 | H | Olm fallback keys | No fallback_keys; sync field returned as None |
 | MSC3288 | ⭕️ | 0/0 | H | Add room type to `/_matrix/identity/v2/store-invite` API | no /_matrix/identity/v2/store-invite call site; no room_type forwarded |
 | MSC3419 | ⭕️ | 0/0 | M | Guest State Events | guests still cannot send arbitrary state events |
 | MSC3666 | ⭕️ | 0/0 | H | Bundled aggregations for server side search | search results do not include bundled aggregations |

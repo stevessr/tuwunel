@@ -252,16 +252,25 @@ async fn build_empty_response(
 	sender_device: Option<&DeviceId>,
 	next_batch: u64,
 ) -> sync_events::v3::Response {
-	sync_events::v3::Response {
-		device_one_time_keys_count: sender_device
-			.map_async(|sender_device| {
-				services
-					.users
-					.count_one_time_keys(sender_user, sender_device)
-			})
-			.await
-			.unwrap_or_default(),
+	let device_one_time_keys_count = sender_device.map_async(|sender_device| {
+		services
+			.users
+			.count_one_time_keys(sender_user, sender_device)
+	});
 
+	let device_unused_fallback_key_types = sender_device.map_async(|sender_device| {
+		services
+			.users
+			.unused_fallback_key_algorithms(sender_user, sender_device)
+			.collect::<Vec<_>>()
+	});
+
+	let (device_one_time_keys_count, device_unused_fallback_key_types) =
+		join(device_one_time_keys_count, device_unused_fallback_key_types).await;
+
+	sync_events::v3::Response {
+		device_one_time_keys_count: device_one_time_keys_count.unwrap_or_default(),
+		device_unused_fallback_key_types,
 		..sync_events::v3::Response::new(next_batch.to_string())
 	}
 }
@@ -420,6 +429,13 @@ async fn build_sync_events(
 			.count_one_time_keys(sender_user, sender_device)
 	});
 
+	let device_unused_fallback_key_types = sender_device.map_async(|sender_device| {
+		services
+			.users
+			.unused_fallback_key_algorithms(sender_user, sender_device)
+			.collect::<Vec<_>>()
+	});
+
 	// Remove all to-device events the device received *last time*
 	let remove_to_device_events = sender_device.map_async(|sender_device| {
 		services
@@ -431,7 +447,7 @@ async fn build_sync_events(
 		account_data,
 		keys_changed,
 		presence_updates,
-		(_, to_device_events, device_one_time_keys_count),
+		(_, to_device_events, device_one_time_keys_count, device_unused_fallback_key_types),
 		(
 			(joined_rooms, mut device_list_updates, left_encrypted_users),
 			left_rooms,
@@ -442,7 +458,12 @@ async fn build_sync_events(
 		account_data,
 		keys_changed,
 		presence_updates,
-		join3(remove_to_device_events, to_device_events, device_one_time_keys_count),
+		join4(
+			remove_to_device_events,
+			to_device_events,
+			device_one_time_keys_count,
+			device_unused_fallback_key_types,
+		),
 		join4(joined_rooms, left_rooms, invited_rooms, knocked_rooms),
 	)
 	.boxed()
@@ -479,8 +500,7 @@ async fn build_sync_events(
 			changed: device_list_updates.into_iter().collect(),
 		},
 		device_one_time_keys_count: device_one_time_keys_count.unwrap_or_default(),
-		// Fallback keys are not yet supported
-		device_unused_fallback_key_types: None,
+		device_unused_fallback_key_types,
 		next_batch: next_batch.to_string(),
 		presence: Presence { events: presence_events },
 		rooms: Rooms {

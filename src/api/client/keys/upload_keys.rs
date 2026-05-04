@@ -32,6 +32,16 @@ pub(crate) async fn upload_keys_route(
 		.add_one_time_keys(sender_user, sender_device, one_time_keys)
 		.await?;
 
+	let fallback_keys = body
+		.fallback_keys
+		.iter()
+		.map(|(id, val)| (id.as_ref(), val));
+
+	services
+		.users
+		.add_fallback_keys(sender_user, sender_device, fallback_keys)
+		.await?;
+
 	if let Some(device_keys) = body.device_keys.as_ref() {
 		store_device_keys(&services, sender_user, sender_device, device_keys).await?;
 	}

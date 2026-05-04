@@ -105,6 +105,15 @@ pub async fn remove_device(&self, user_id: &UserId, device_id: &DeviceId) {
 
 	// TODO: Remove onetimekeys
 
+	// MSC2732: drop fallback keys for this device.
+	let prefix = (user_id, device_id, Interfix);
+	self.db
+		.userdeviceidalgorithm_fallback
+		.keys_prefix_raw(&prefix)
+		.ignore_err()
+		.ready_for_each(|key| self.db.userdeviceidalgorithm_fallback.remove(key))
+		.await;
+
 	let userdeviceid = (user_id, device_id);
 	self.db.userdeviceid_metadata.del(userdeviceid);
 	self.db.oidcdevice_userdeviceid.del(userdeviceid);

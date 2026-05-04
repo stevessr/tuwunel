@@ -77,12 +77,23 @@ pub(crate) async fn claim_keys_helper(
 
 async fn collect_local_one_time_keys(services: &Services, users: &[LocalClaim<'_>]) -> Claims {
 	let take_one_time_key = async |(user_id, device_id, algorithm)| {
-		services
+		let key = services
 			.users
 			.take_one_time_key(user_id, device_id, algorithm)
 			.await
-			.ok()
-			.map(|key| (device_id.to_owned(), [key].into()))
+			.ok();
+
+		// MSC2732: serve the fallback key when the one-time pool is empty.
+		let key = match key {
+			| Some(key) => Some(key),
+			| None => services
+				.users
+				.take_fallback_key(user_id, device_id, algorithm)
+				.await
+				.ok(),
+		};
+
+		key.map(|key| (device_id.to_owned(), [key].into()))
 	};
 
 	let one_time_keys = users

@@ -2,20 +2,31 @@ use std::{collections::BTreeMap, mem};
 
 use futures::{Stream, StreamExt, TryFutureExt, pin_mut};
 use ruma::{
-	DeviceId, KeyId, OneTimeKeyAlgorithm, OneTimeKeyId, OneTimeKeyName, OwnedKeyId, RoomId, UInt,
-	UserId,
+	DeviceId, KeyId, OneTimeKeyAlgorithm, OneTimeKeyId, OneTimeKeyName, OwnedKeyId,
+	OwnedOneTimeKeyId, RoomId, UInt, UserId,
 	encryption::{CrossSigningKey, DeviceKeys, OneTimeKey},
 	serde::Raw,
 };
+use serde::{Deserialize, Serialize};
 use tuwunel_core::{
 	Err, Result, debug_error, err, implement,
 	utils::{
-		ReadyExt,
+		BoolExt, ReadyExt,
 		stream::{TryExpect, TryIgnore, TryReadyExt},
 		string::Unquoted,
 	},
 };
 use tuwunel_database::{Deserialized, Ignore, Json};
+
+/// MSC2732: row stored under `(user, device, algorithm)` in
+/// `userdeviceidalgorithm_fallback`. Fallback keys are not deleted on
+/// claim; the row is rewritten with `used = true`.
+#[derive(Debug, Deserialize, Serialize)]
+struct FallbackEntry {
+	key_id: OwnedOneTimeKeyId,
+	key: Raw<OneTimeKey>,
+	used: bool,
+}
 
 #[implement(super::Service)]
 pub async fn add_one_time_keys<'a, Keys>(
@@ -84,6 +95,120 @@ pub async fn add_one_time_key(
 		.raw_put(user_id, *count);
 
 	Ok(())
+}
+
+#[implement(super::Service)]
+pub async fn add_fallback_keys<'a, Keys>(
+	&self,
+	user_id: &UserId,
+	device_id: &DeviceId,
+	keys: Keys,
+) -> Result
+where
+	Keys: Iterator<Item = (&'a OneTimeKeyId, &'a Raw<OneTimeKey>)> + Send + 'a,
+{
+	for (id, key) in keys {
+		self.add_fallback_key(user_id, device_id, id, key)
+			.await
+			.ok();
+	}
+
+	Ok(())
+}
+
+#[implement(super::Service)]
+pub async fn add_fallback_key(
+	&self,
+	user_id: &UserId,
+	device_id: &DeviceId,
+	one_time_key_key: &KeyId<OneTimeKeyAlgorithm, OneTimeKeyName>,
+	one_time_key_value: &Raw<OneTimeKey>,
+) -> Result {
+	if !self.device_exists(user_id, device_id).await {
+		return Err!(Database(error!(
+			?user_id,
+			?device_id,
+			"User does not exist or device has no metadata."
+		)));
+	}
+
+	if let Err(e) = one_time_key_value
+		.deserialize()
+		.map_err(Into::into)
+	{
+		debug_error!(
+			?one_time_key_key,
+			?one_time_key_value,
+			"Invalid fallback key JSON submitted by client, skipping: {e}"
+		);
+
+		return Err(e);
+	}
+
+	let entry = FallbackEntry {
+		key_id: one_time_key_key.to_owned(),
+		key: one_time_key_value.clone(),
+		used: false,
+	};
+
+	let key = (user_id, device_id, one_time_key_key.algorithm());
+	self.db
+		.userdeviceidalgorithm_fallback
+		.put(key, Json(&entry));
+
+	let count = self.services.globals.next_count();
+	self.db
+		.userid_lastonetimekeyupdate
+		.raw_put(user_id, *count);
+
+	Ok(())
+}
+
+#[implement(super::Service)]
+pub async fn take_fallback_key(
+	&self,
+	user_id: &UserId,
+	device_id: &DeviceId,
+	algorithm: &OneTimeKeyAlgorithm,
+) -> Result<(OwnedKeyId<OneTimeKeyAlgorithm, OneTimeKeyName>, Raw<OneTimeKey>)> {
+	let key = (user_id, device_id, algorithm);
+	let entry: FallbackEntry = self
+		.db
+		.userdeviceidalgorithm_fallback
+		.qry(&key)
+		.await
+		.deserialized::<Json<_>>()
+		.map(|Json(entry)| entry)
+		.map_err(|_| err!(Request(NotFound("No fallback key found"))))?;
+
+	if entry.used {
+		return Err!(Request(NotFound("No unused fallback key found")));
+	}
+
+	let updated = FallbackEntry { used: true, ..entry };
+	self.db
+		.userdeviceidalgorithm_fallback
+		.put(key, Json(&updated));
+
+	Ok((updated.key_id, updated.key))
+}
+
+#[implement(super::Service)]
+pub fn unused_fallback_key_algorithms<'a>(
+	&'a self,
+	user_id: &'a UserId,
+	device_id: &'a DeviceId,
+) -> impl Stream<Item = OneTimeKeyAlgorithm> + Send + 'a {
+	type KeyVal = ((Ignore, Ignore, OneTimeKeyAlgorithm), Json<FallbackEntry>);
+
+	let prefix = (user_id, device_id);
+	self.db
+		.userdeviceidalgorithm_fallback
+		.stream_prefix(&prefix)
+		.ignore_err()
+		.ready_filter_map(|((_, _, algorithm), Json(entry)): KeyVal| {
+			entry.used.is_false().then_some(algorithm)
+		})
 }
 
 #[implement(super::Service)]

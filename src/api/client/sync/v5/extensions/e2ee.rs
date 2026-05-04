@@ -80,13 +80,20 @@ pub(super) async fn collect(
 		})
 		.map(Option::unwrap_or_default);
 
-	let (left, device_one_time_keys_count) = join(left, device_one_time_keys_count)
-		.boxed()
-		.await;
+	let device_unused_fallback_key_types = services
+		.users
+		.unused_fallback_key_algorithms(sender_user, sender_device)
+		.collect::<Vec<_>>()
+		.map(Some);
+
+	let (left, device_one_time_keys_count, device_unused_fallback_key_types) =
+		join3(left, device_one_time_keys_count, device_unused_fallback_key_types)
+			.boxed()
+			.await;
 
 	Ok(response::E2EE {
 		device_one_time_keys_count,
-		device_unused_fallback_key_types: None,
+		device_unused_fallback_key_types,
 		device_lists: DeviceLists {
 			changed: changed.into_iter().collect(),
 			left,
