@@ -3,7 +3,7 @@
 
 use std::fmt::Debug;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tuwunel_core::{
 	arrayvec::ArrayVec,
 	ruma::{EventId, RoomId, UserId, serde::Raw},
@@ -250,6 +250,64 @@ fn ser_cbor_ruma_raw() {
 
 	assert_eq!(foo.a, deserialized.a);
 	assert_eq!(foo.a.get(), deserialized.b.get());
+}
+
+/// `Raw<T>` does NOT round-trip through `Cbor`: serialization succeeds but
+/// the value is encoded as a CBOR newtype struct that the JSON-flavored
+/// `RawValue` deserializer cannot consume. Use `Json(...)` (see
+/// `ser_json_raw_field_roundtrip` below) when a value contains a `Raw<T>`
+/// field.
+#[test]
+#[should_panic(expected = "expected any valid JSON value")]
+fn ser_cbor_raw_field_roundtrip() {
+	#[derive(Debug, Serialize, Deserialize)]
+	struct Entry {
+		key: Raw<serde_json::Value>,
+		used: bool,
+	}
+
+	let entry = Entry {
+		key: Raw::from_json_string(r#"{"hello":"world","n":42}"#.to_owned())
+			.expect("construct Raw"),
+		used: false,
+	};
+
+	let serialized = serialize_to_vec(Cbor(&entry)).expect("serialize cbor");
+
+	let _: Entry = de::from_slice::<Cbor<_>>(&serialized)
+		.expect("deserialize cbor")
+		.0;
+}
+
+/// Round-trip the same `Raw<T>`-bearing struct through `Json`. This is the
+/// supported path: `RawValue`'s special-case in `serde_json` preserves the
+/// inner JSON bytes verbatim across both directions.
+#[test]
+fn ser_json_raw_field_roundtrip() {
+	#[derive(Debug, Serialize, Deserialize)]
+	struct Entry {
+		key: Raw<serde_json::Value>,
+		used: bool,
+	}
+
+	let original_json = r#"{"hello":"world","n":42}"#;
+	let entry = Entry {
+		key: Raw::from_json_string(original_json.to_owned()).expect("construct Raw"),
+		used: false,
+	};
+
+	let serialized = serialize_to_vec(Json(&entry)).expect("serialize json");
+
+	let deserialized: Entry = de::from_slice::<Json<_>>(&serialized)
+		.expect("deserialize json")
+		.0;
+
+	assert_eq!(entry.used, deserialized.used);
+	assert_eq!(
+		entry.key.json().get(),
+		deserialized.key.json().get(),
+		"Raw<T> JSON did not round-trip through Json"
+	);
 }
 
 #[test]
