@@ -890,14 +890,22 @@ pub(super) async fn get_servers_for_room(
 	let mut servers = Vec::from(via);
 	shuffle(&mut servers);
 
-	if let Some(server_name) = room_id.server_name() {
-		servers.insert(0, server_name.to_owned());
-	}
+	// Strict via: an explicit remote server in via must not be padded with
+	// the room owner, otherwise failover-probe semantics break.
+	let has_remote_via = via
+		.iter()
+		.any(|s| !services.globals.server_is_ours(s));
 
-	if let Some(orig_room_id) = orig_room_id
-		&& let Some(orig_server_name) = orig_room_id.server_name()
-	{
-		servers.insert(0, orig_server_name.to_owned());
+	if !has_remote_via {
+		if let Some(server_name) = room_id.server_name() {
+			servers.insert(0, server_name.to_owned());
+		}
+
+		if let Some(orig_room_id) = orig_room_id
+			&& let Some(orig_server_name) = orig_room_id.server_name()
+		{
+			servers.insert(0, orig_server_name.to_owned());
+		}
 	}
 
 	shuffle(&mut additional_servers);
