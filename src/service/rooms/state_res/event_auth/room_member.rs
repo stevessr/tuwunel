@@ -53,6 +53,18 @@ where
 	let target_user = <&UserId>::try_from(state_key)
 		.map_err(|e| err!("invalid `state_key` field in `m.room.member` event: {e}"))?;
 
+	// MSC4361: in a non-federating room, reject members whose state_key
+	// belongs to a remote server. The existing `m.federate` check at the
+	// top of `auth_check` only covers the sender's domain.
+	if !room_create_event.federate()?
+		&& target_user.server_name() != room_create_event.sender().server_name()
+	{
+		return Err!(
+			"MSC4361: room is not federated and target user domain does not match \
+			 `m.room.create` event's sender domain"
+		);
+	}
+
 	let target_membership = room_member_event.membership()?;
 
 	// These checks are done `in ruma_signatures::verify_event()`:

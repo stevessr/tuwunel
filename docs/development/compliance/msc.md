@@ -17,9 +17,9 @@
 
 ## Counts
 
-- 🟢 `yes`: 204
+- 🟢 `yes`: 205
 - 🟡 `partial`: 87
-- ⭕️ `no`: 433
+- ⭕️ `no`: 432
 - ⚫ `n/a`: 289
 
 ### Status by inventory bucket
@@ -27,7 +27,7 @@
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
 | merged | 143 | 34 | 22 | 57 | 256 |
-| open | 54 | 51 | 375 | 172 | 652 |
+| open | 55 | 51 | 374 | 172 | 652 |
 | closed | 7 | 2 | 36 | 52 | 97 |
 | unknown | 0 | 0 | 0 | 8 | 8 |
 
@@ -440,7 +440,7 @@ Sorted by MSC number, highest first.
 | MSC4365 | ⭕️ | 0/0 | H | Canonical ignore list rooms | No ignored_user_list_rooms server-side filtering |
 | MSC4363 | ⭕️ | 0/0 | H | OAuth step up authentication | No M_INSUFFICIENT_USER_AUTHENTICATION error or acr_values |
 | MSC4362 | ⭕️ | 0/0 | H | Simplified Encrypted State Events | No encrypt_state_events handling in m.room.encryption |
-| MSC4361 | ⭕️ | 0/0 | H | Non-federating Membership Authorization Rule Amendments | MSC4361 lives only on `msc4361` feature branch; member auth has no state_key ... |
+| MSC4361 | 🟢 | 100/100 | H | Non-federating Membership Authorization Rule Amendments | auth-rule prepend in check_room_member; applied to all room versions per the MSC |
 | MSC4360 | ⭕️ | 0/0 | H | Threads extension to Sliding Sync | No /thread_updates endpoint or threads sliding sync extension |
 | MSC4359 | ⚫ | ?/? | H | "Do not Disturb" notification settings | Client-side account data event; no server behavior required |
 | MSC4358 | ⭕️ | 0/0 | H | Out of room server discovery | No /discover_common_rooms federation endpoint |
