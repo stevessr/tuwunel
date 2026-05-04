@@ -1,4 +1,4 @@
-# tuwunel for Docker
+# Tuwunel for Docker
 
 ## Docker
 
@@ -9,16 +9,19 @@ from a registry.
 
 OCI images for tuwunel are available in the registries listed below.
 
-| Registry        | Image                                                           | Size                          | Notes                  |
-| --------------- | --------------------------------------------------------------- | ----------------------------- | ---------------------- |
-| GitHub Registry | [ghcr.io/matrix-construct/tuwunel:latest][gh] | ![Image Size][shield-latest]  | Stable latest tagged image.          |
-| Docker Hub      | [docker.io/jevolk/tuwunel:latest][dh]             | ![Image Size][shield-latest]  | Stable latest tagged image.          |
-| GitHub Registry | [ghcr.io/matrix-construct/tuwunel:main][gh]   | ![Image Size][shield-main]    | Stable main branch.   |
-| Docker Hub      | [docker.io/jevolk/tuwunel:main][dh]               | ![Image Size][shield-main]    | Stable main branch.   |
+| Registry        | Image                                            | Size                            | Notes                                                                  |
+| --------------- | ------------------------------------------------ | ------------------------------- | ---------------------------------------------------------------------- |
+| GitHub Registry | [ghcr.io/matrix-construct/tuwunel:latest][gh]    | ![Image Size][shield-latest]    | Most recent tagged release. Recommended for automated updates (~monthly). |
+| Docker Hub      | [docker.io/jevolk/tuwunel:latest][dh]            | ![Image Size][shield-latest]    | Most recent tagged release. Recommended for automated updates (~monthly). |
+| GitHub Registry | [ghcr.io/matrix-construct/tuwunel:preview][gh]   | ![Image Size][shield-preview]   | Selected higher-confidence updates between releases (~weekly).         |
+| Docker Hub      | [docker.io/jevolk/tuwunel:preview][dh]           | ![Image Size][shield-preview]   | Selected higher-confidence updates between releases (~weekly).         |
+| GitHub Registry | [ghcr.io/matrix-construct/tuwunel:main][gh]      | ![Image Size][shield-main]      | Every reviewed merge to the main branch (~daily).                      |
+| Docker Hub      | [docker.io/jevolk/tuwunel:main][dh]              | ![Image Size][shield-main]      | Every reviewed merge to the main branch (~daily).                      |
 
 [dh]: https://hub.docker.com/r/jevolk/tuwunel
 [gh]: https://github.com/matrix-construct/tuwunel/pkgs/container/tuwunel
 [shield-latest]: https://img.shields.io/docker/image-size/jevolk/tuwunel/latest
+[shield-preview]: https://img.shields.io/docker/image-size/jevolk/tuwunel/preview
 [shield-main]: https://img.shields.io/docker/image-size/jevolk/tuwunel/main
 
 ### Run
