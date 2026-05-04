@@ -14,7 +14,7 @@ use url::Url;
 
 use super::Service;
 
-#[derive(Serialize, Default)]
+#[derive(Default, Serialize)]
 pub struct UrlPreviewData {
 	#[serde(
 		skip_serializing_if = "Option::is_none",
@@ -46,6 +46,46 @@ pub struct UrlPreviewData {
 		rename(serialize = "og:image:height")
 	)]
 	pub image_height: Option<u32>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		rename(serialize = "og:video")
+	)]
+	pub video: Option<String>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		rename(serialize = "matrix:video:size")
+	)]
+	pub video_size: Option<usize>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		rename(serialize = "og:video:width")
+	)]
+	pub video_width: Option<u32>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		rename(serialize = "og:video:height")
+	)]
+	pub video_height: Option<u32>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		rename(serialize = "og:audio")
+	)]
+	pub audio: Option<String>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		rename(serialize = "matrix:audio:size")
+	)]
+	pub audio_size: Option<usize>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		rename(serialize = "og:type")
+	)]
+	pub og_type: Option<String>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		rename(serialize = "og:url")
+	)]
+	pub og_url: Option<String>,
 }
 
 #[implement(Service)]
@@ -86,7 +126,7 @@ async fn request_url_preview(&self, url: &Url) -> Result<UrlPreviewData> {
 	}
 
 	let client = &self.services.client.url_preview;
-	let response = client.head(url.as_str()).send().await?;
+	let response = client.get(url.as_str()).send().await?;
 
 	debug!(?url, "URL preview response headers: {:?}", response.headers());
 
@@ -100,20 +140,17 @@ async fn request_url_preview(&self, url: &Url) -> Result<UrlPreviewData> {
 		}
 	}
 
-	let Some(content_type) = response
+	let content_type = response
 		.headers()
 		.get(reqwest::header::CONTENT_TYPE)
-	else {
-		return Err!(Request(Unknown("Unknown or invalid Content-Type header")));
-	};
-
-	let content_type = content_type
+		.ok_or_else(|| err!(Request(Unknown("Missing Content-Type header"))))?
 		.to_str()
-		.map_err(|e| err!(Request(Unknown("Unknown or invalid Content-Type header: {e}"))))?;
+		.map_err(|e| err!(Request(Unknown("Invalid Content-Type header: {e}"))))?
+		.to_owned();
 
-	let data = match content_type {
-		| html if html.starts_with("text/html") => self.download_html(url.as_str()).await?,
-		| img if img.starts_with("image/") => self.download_image(url.as_str()).await?,
+	let data = match content_type.as_str() {
+		| html if html.starts_with("text/html") => self.download_html(url, response).await?,
+		| img if img.starts_with("image/") => self.download_image(response).await?,
 		| _ => return Err!(Request(Unknown("Unsupported Content-Type"))),
 	};
 
@@ -124,19 +161,12 @@ async fn request_url_preview(&self, url: &Url) -> Result<UrlPreviewData> {
 
 #[cfg(feature = "url_preview")]
 #[implement(Service)]
-pub async fn download_image(&self, url: &str) -> Result<UrlPreviewData> {
+pub async fn download_image(&self, response: reqwest::Response) -> Result<UrlPreviewData> {
 	use image::ImageReader;
 	use ruma::Mxc;
 	use tuwunel_core::utils::random_string;
 
-	let image = self
-		.services
-		.client
-		.url_preview
-		.get(url)
-		.send()
-		.await?;
-	let image = image.bytes().await?;
+	let image = response.bytes().await?;
 	let mxc = Mxc {
 		server_name: self.services.globals.server_name(),
 		media_id: &random_string(super::MXC_LENGTH),
@@ -166,17 +196,18 @@ pub async fn download_image(&self, url: &str) -> Result<UrlPreviewData> {
 #[cfg(not(feature = "url_preview"))]
 #[implement(Service)]
 #[expect(clippy::unused_async)]
-pub async fn download_image(&self, _url: &str) -> Result<UrlPreviewData> {
+pub async fn download_image(&self, _response: reqwest::Response) -> Result<UrlPreviewData> {
 	Err!(FeatureDisabled("url_preview"))
 }
 
 #[cfg(feature = "url_preview")]
 #[implement(Service)]
-async fn download_html(&self, url: &str) -> Result<UrlPreviewData> {
+async fn download_html(
+	&self,
+	url: &Url,
+	mut response: reqwest::Response,
+) -> Result<UrlPreviewData> {
 	use webpage::HTML;
-
-	let client = &self.services.client.url_preview;
-	let mut response = client.get(url).send().await?;
 
 	let mut bytes: Vec<u8> = Vec::new();
 	while let Some(chunk) = response.chunk().await? {
@@ -192,13 +223,22 @@ async fn download_html(&self, url: &str) -> Result<UrlPreviewData> {
 		}
 	}
 	let body = String::from_utf8_lossy(&bytes);
-	let Ok(html) = HTML::from_string(body.to_string(), Some(url.to_owned())) else {
+	let Ok(html) = HTML::from_string(body.to_string(), Some(url.to_string())) else {
 		return Err!(Request(Unknown("Failed to parse HTML")));
 	};
 
+	// `webpage` does not resolve relative URLs in `og:` meta tags; resolve
+	// against the page URL so e.g. `og:image=test.png` becomes absolute.
+	let client = &self.services.client.url_preview;
 	let mut data = match html.opengraph.images.first() {
 		| None => UrlPreviewData::default(),
-		| Some(obj) => self.download_image(&obj.url).await?,
+		| Some(obj) => {
+			let image_url = url
+				.join(&obj.url)
+				.map_err(|e| err!(Request(Unknown("Invalid og:image URL: {e}"))))?;
+			let image_response = client.get(image_url.as_str()).send().await?;
+			self.download_image(image_response).await?
+		},
 	};
 
 	let props = html.opengraph.properties;
@@ -209,6 +249,8 @@ async fn download_html(&self, url: &str) -> Result<UrlPreviewData> {
 		.get("description")
 		.cloned()
 		.or(html.description);
+	data.og_type = Some(html.opengraph.og_type);
+	data.og_url = props.get("url").cloned();
 
 	Ok(data)
 }
@@ -216,7 +258,11 @@ async fn download_html(&self, url: &str) -> Result<UrlPreviewData> {
 #[cfg(not(feature = "url_preview"))]
 #[implement(Service)]
 #[expect(clippy::unused_async)]
-async fn download_html(&self, _url: &str) -> Result<UrlPreviewData> {
+async fn download_html(
+	&self,
+	_url: &Url,
+	_response: reqwest::Response,
+) -> Result<UrlPreviewData> {
 	Err!(FeatureDisabled("url_preview"))
 }
 
