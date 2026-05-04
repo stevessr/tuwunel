@@ -178,7 +178,7 @@ pub(crate) async fn create_room_route(
 	let power_levels_content = default_power_levels_content(
 		&version_rules,
 		body.power_level_content_override.as_ref(),
-		&body.visibility,
+		&preset,
 		users,
 	)?;
 
@@ -645,7 +645,7 @@ async fn create_create_event_legacy(
 fn default_power_levels_content(
 	version_rules: &RoomVersionRules,
 	power_level_content_override: Option<&Raw<RoomPowerLevelsContentOverride>>,
-	visibility: &room::Visibility,
+	preset: &RoomPreset,
 	users: BTreeMap<OwnedUserId, Int>,
 ) -> Result<serde_json::Value> {
 	use serde_json::to_value;
@@ -676,9 +676,12 @@ fn default_power_levels_content(
 	power_levels_content["events"]["org.matrix.msc3381.poll.response"] = json!(0);
 	power_levels_content["events"]["m.poll.response"] = json!(0);
 
-	// synapse does this too. clients do not expose these permissions. it prevents
-	// default users from calling public rooms, for obvious reasons.
-	if *visibility == room::Visibility::Public {
+	// Match Synapse: lock invites and call setup behind power level 50 for the
+	// public_chat preset. Gating on preset (not body.visibility) is what Synapse
+	// does and what the ecosystem expects; visibility=Public alone defaults to
+	// public_chat via the fallback above, so this still covers that case.
+	if *preset == RoomPreset::PublicChat {
+		power_levels_content["invite"] = json!(50);
 		power_levels_content["events"]["m.call.invite"] = json!(50);
 		power_levels_content["events"]["m.call"] = json!(50);
 		power_levels_content["events"]["m.call.member"] = json!(50);
