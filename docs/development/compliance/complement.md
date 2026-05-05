@@ -4,16 +4,16 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 203. Passing: **65.0%**
-  - 🟢 `pass`: 132
-  - 🟡 `some`:  28
-  - ⭕️ `fail`: 41
-  - ⚫ `skip`:  2
+- Test groups: 201. Passing: **67.7%**
+  - 🟢 `pass`: 136
+  - 🟡 `some`: 27
+  - ⭕️ `fail`: 36
+  - ⚫ `skip`: 2
 
-- Subtests: 582. Passing: **65.5%**
-	- 🟢 `pass`: 381
-	- ⭕️ `fail`: 188
-	- ⚫ `skip`: 13 
+- Subtests: 589. Passing: **67.1%**
+  - 🟢 `pass`: 395
+  - ⭕️ `fail`: 181
+  - ⚫ `skip`: 13
 
 ## All Top-Level Tests
 
@@ -89,9 +89,9 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestJoinFederatedRoomFromApplicationServiceBridgeUser` | ⭕️ | 0/1/0 |
 | `TestJoinFederatedRoomWithUnverifiableEvents` | 🟢 | 4/0/0 |
 | `TestJoinViaRoomIDAndServerName` | 🟢 | – |
-| `TestJson` | 🟡 | 1/2/0 |
-| `TestJumpToDateEndpoint` | 🟡 | 6/8/0 |
-| `TestKeyChangesLocal` | ⭕️ | 0/1/0 |
+| `TestJson` | 🟢 | 3/0/0 |
+| `TestJumpToDateEndpoint` | 🟡 | 4/8/0 |
+| `TestKeyChangesLocal` | 🟢 | 1/0/0 |
 | `TestKeyClaimOrdering` | ⭕️ | – |
 | `TestKeysQueryWithDeviceIDAsObjectFails` | 🟢 | – |
 | `TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11` | 🟢 | – |
@@ -105,7 +105,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestLeaveEventVisibility` | ⭕️ | – |
 | `TestLeftRoomFixture` | 🟡 | 2/3/0 |
 | `TestLocalPngThumbnail` | 🟢 | 2/0/0 |
-| `TestLogin` | 🟢 | 3/0/0 |
+| `TestLogin` | 🟢 | 8/0/0 |
 | `TestLogout` | 🟢 | 4/0/0 |
 | `TestMSC3757OwnedState` | ⭕️ | – |
 | `TestMSC3967` | 🟢 | – |
@@ -158,15 +158,13 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestRemotePngThumbnail` | 🟢 | 2/0/0 |
 | `TestRemotePresence` | ⭕️ | 0/2/0 |
 | `TestRemoteTyping` | 🟢 | – |
-| `TestRemovingAccountData` | ⭕️ | 0/4/0 |
+| `TestRemovingAccountData` | 🟢 | 4/0/0 |
 | `TestRequestEncodingFails` | ⭕️ | 0/1/0 |
 | `TestRestrictedRoomsLocalJoin` | 🟡 | 4/1/0 |
 | `TestRestrictedRoomsLocalJoinInMSC3787Room` | 🟡 | 4/1/0 |
 | `TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11` | 🟢 | – |
 | `TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12` | 🟢 | – |
 | `TestRestrictedRoomsRemoteJoin` | 🟡 | 4/1/0 |
-| `TestRestrictedRoomsRemoteJoinFailOver` | ⭕️ | – |
-| `TestRestrictedRoomsRemoteJoinFailOverInMSC3787Room` | ⭕️ | – |
 | `TestRestrictedRoomsRemoteJoinInMSC3787Room` | 🟡 | 4/1/0 |
 | `TestRestrictedRoomsRemoteJoinLocalUser` | ⭕️ | – |
 | `TestRestrictedRoomsRemoteJoinLocalUserInMSC3787Room` | ⭕️ | – |
@@ -174,7 +172,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestRestrictedRoomsSpacesSummaryLocal` | 🟢 | – |
 | `TestRoomAlias` | 🟢 | 5/0/0 |
 | `TestRoomCanonicalAlias` | 🟢 | 10/0/0 |
-| `TestRoomCreate` | 🟢 | 13/0/0 |
+| `TestRoomCreate` | 🟢 | 15/0/0 |
 | `TestRoomCreationReportsEventsToMyself` | 🟡 | 3/3/0 |
 | `TestRoomDeleteAlias` | 🟡 | 7/2/0 |
 | `TestRoomForget` | 🟡 | 5/3/0 |
@@ -186,7 +184,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestRoomReceipts` | 🟢 | 1/0/0 |
 | `TestRoomSpecificUsernameAtJoin` | 🟢 | 5/0/0 |
 | `TestRoomSpecificUsernameChange` | 🟢 | 5/0/0 |
-| `TestRoomState` | 🟢 | 14/0/0 |
+| `TestRoomState` | 🟢 | 15/0/0 |
 | `TestRoomSummary` | 🟢 | – |
 | `TestRoomsInvite` | 🟢 | 9/0/0 |
 | `TestSearch` | 🟡 | 4/3/0 |
@@ -205,7 +203,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestThreadedReceipts` | ⭕️ | – |
 | `TestThreadsEndpoint` | ⭕️ | – |
 | `TestToDeviceMessages` | 🟢 | – |
-| `TestToDeviceMessagesOverFederation` | 🟢 | 1/0/0 |
+| `TestToDeviceMessagesOverFederation` | 🟢 | 2/0/0 |
 | `TestTxnIdWithRefreshToken` | 🟢 | – |
 | `TestTxnIdempotency` | ⭕️ | – |
 | `TestTxnIdempotencyScopedToDevice` | 🟢 | – |
@@ -217,7 +215,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestUploadKey` | 🟡 | 6/2/0 |
 | `TestUploadKeyIdempotency` | 🟢 | – |
 | `TestUploadKeyIdempotencyOverlap` | 🟢 | – |
-| `TestUrlPreview` | ⭕️ | – |
+| `TestUrlPreview` | 🟢 | – |
 | `TestUserAppearsInChangedDeviceListOnJoinOverFederation` | 🟢 | – |
 | `TestVersionStructure` | 🟢 | 1/0/0 |
 | `TestWithoutOwnedState` | 🟢 | 7/0/0 |
