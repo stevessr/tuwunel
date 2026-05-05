@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use axum::extract::State;
-use futures::{StreamExt, future::join};
+use futures::{FutureExt, StreamExt, future::join};
 use ruma::api::client::keys::get_key_changes;
-use tuwunel_core::{Result, at, err, utils::stream::BroadbandExt};
+use tuwunel_core::{Result, at, err};
 
 use crate::Ruma;
 
@@ -38,15 +38,15 @@ pub(crate) async fn get_key_changes_route(
 	let room_changes = services
 		.state_cache
 		.rooms_joined(sender_user)
-		.broad_flat_map(|room_id| {
+		.flat_map(|room_id| {
 			services
 				.users
 				.room_keys_changed(room_id, from, Some(to))
 				.map(at!(0))
 				.map(ToOwned::to_owned)
-				.boxed()
 		})
-		.collect::<HashSet<_>>();
+		.collect::<HashSet<_>>()
+		.boxed();
 
 	let (user_changes, room_changes) = join(user_changes, room_changes).await;
 
