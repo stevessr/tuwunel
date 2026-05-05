@@ -93,6 +93,15 @@ pub(super) enum UserCommand {
 		room_id: OwnedRoomOrAliasId,
 	},
 
+	/// - Reject all pending invites for a local user.
+	RejectInvites {
+		user_id: String,
+
+		/// Optional reason attached to each rejection.
+		#[arg(long)]
+		reason: Option<String>,
+	},
+
 	/// - Forces the specified user to drop their power levels to the room
 	///   default, if their permissions allow and the auth check permits
 	ForceDemote {
