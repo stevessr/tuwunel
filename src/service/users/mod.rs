@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use futures::{Stream, StreamExt, TryFutureExt};
 use ruma::{
-	OwnedRoomId, OwnedUserId, UserId,
+	MilliSecondsSinceUnixEpoch, OwnedRoomId, OwnedUserId, UserId,
 	api::client::filter::FilterDefinition,
 	events::{
 		GlobalAccountDataEventType,
@@ -17,6 +17,7 @@ use ruma::{
 		invite_permission_config::{InvitePermissionAction, InvitePermissionConfigEvent},
 	},
 };
+use serde::{Deserialize, Serialize};
 use tuwunel_core::{
 	Err, Result, debug_warn, err, is_equal_to,
 	pdu::PduBuilder,
@@ -30,6 +31,15 @@ pub use self::{keys::parse_master_key, register::Register};
 
 pub const PASSWORD_SENTINEL: &str = "*";
 pub const PASSWORD_DISABLED: &str = "";
+
+/// Forensic record for a moderation action (MSC3823 suspend, MSC3939 lock).
+/// Presence of the row is the load-bearing fact; this body is written but
+/// never read on the hot path.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Moderation {
+	pub when: MilliSecondsSinceUnixEpoch,
+	pub by: OwnedUserId,
+}
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
@@ -57,10 +67,12 @@ struct Data {
 	userid_devicelistversion: Arc<Map>,
 	userid_displayname: Arc<Map>,
 	userid_lastonetimekeyupdate: Arc<Map>,
+	userid_locked: Arc<Map>,
 	userid_masterkeyid: Arc<Map>,
 	userid_password: Arc<Map>,
 	userid_origin: Arc<Map>,
 	userid_selfsigningkeyid: Arc<Map>,
+	userid_suspended: Arc<Map>,
 	userid_usersigningkeyid: Arc<Map>,
 	useridprofilekey_value: Arc<Map>,
 }
@@ -90,10 +102,12 @@ impl crate::Service for Service {
 				userid_devicelistversion: args.db["userid_devicelistversion"].clone(),
 				userid_displayname: args.db["userid_displayname"].clone(),
 				userid_lastonetimekeyupdate: args.db["userid_lastonetimekeyupdate"].clone(),
+				userid_locked: args.db["userid_locked"].clone(),
 				userid_masterkeyid: args.db["userid_masterkeyid"].clone(),
 				userid_password: args.db["userid_password"].clone(),
 				userid_origin: args.db["userid_origin"].clone(),
 				userid_selfsigningkeyid: args.db["userid_selfsigningkeyid"].clone(),
+				userid_suspended: args.db["userid_suspended"].clone(),
 				userid_usersigningkeyid: args.db["userid_usersigningkeyid"].clone(),
 				useridprofilekey_value: args.db["useridprofilekey_value"].clone(),
 			},
@@ -196,6 +210,68 @@ impl Service {
 	pub async fn is_active_local(&self, user_id: &UserId) -> bool {
 		self.services.globals.user_is_local(user_id) && self.is_active(user_id).await
 	}
+
+	/// MSC3823: account is suspended (read-mostly mode, sessions retained).
+	pub async fn is_suspended(&self, user_id: &UserId) -> bool {
+		self.db
+			.userid_suspended
+			.get(user_id)
+			.await
+			.is_ok()
+	}
+
+	/// MSC3939: account is locked (401 + soft_logout, sessions retained).
+	pub async fn is_locked(&self, user_id: &UserId) -> bool {
+		self.db.userid_locked.get(user_id).await.is_ok()
+	}
+
+	/// MSC3823: forensic record for the active suspension, if any.
+	pub async fn get_suspension(&self, user_id: &UserId) -> Option<Moderation> {
+		self.db
+			.userid_suspended
+			.get(user_id)
+			.await
+			.deserialized::<Json<_>>()
+			.map(|Json(m)| m)
+			.ok()
+	}
+
+	/// MSC3939: forensic record for the active lock, if any.
+	pub async fn get_lock(&self, user_id: &UserId) -> Option<Moderation> {
+		self.db
+			.userid_locked
+			.get(user_id)
+			.await
+			.deserialized::<Json<_>>()
+			.map(|Json(m)| m)
+			.ok()
+	}
+
+	pub fn set_suspended(&self, user_id: &UserId, by: &UserId) {
+		let entry = Moderation {
+			when: MilliSecondsSinceUnixEpoch::now(),
+			by: by.to_owned(),
+		};
+
+		self.db
+			.userid_suspended
+			.raw_put(user_id, Json(entry));
+	}
+
+	pub fn clear_suspended(&self, user_id: &UserId) { self.db.userid_suspended.remove(user_id); }
+
+	pub fn set_locked(&self, user_id: &UserId, by: &UserId) {
+		let entry = Moderation {
+			when: MilliSecondsSinceUnixEpoch::now(),
+			by: by.to_owned(),
+		};
+
+		self.db
+			.userid_locked
+			.raw_put(user_id, Json(entry));
+	}
+
+	pub fn clear_locked(&self, user_id: &UserId) { self.db.userid_locked.remove(user_id); }
 
 	/// Returns the number of users registered on this server.
 	#[inline]

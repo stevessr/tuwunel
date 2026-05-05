@@ -6,9 +6,9 @@ use ruma::{
 	api::client::discovery::{
 		get_capabilities,
 		get_capabilities::v3::{
-			Capabilities, ChangePasswordCapability, GetLoginTokenCapability,
-			ProfileFieldsCapability, RoomVersionStability, RoomVersionsCapability,
-			ThirdPartyIdChangesCapability,
+			AccountModerationCapability, Capabilities, ChangePasswordCapability,
+			GetLoginTokenCapability, ProfileFieldsCapability, RoomVersionStability,
+			RoomVersionsCapability, ThirdPartyIdChangesCapability,
 		},
 	},
 };
@@ -23,7 +23,7 @@ use crate::Ruma;
 /// of this server.
 pub(crate) async fn get_capabilities_route(
 	State(services): State<crate::State>,
-	_body: Ruma<get_capabilities::v3::Request>,
+	body: Ruma<get_capabilities::v3::Request>,
 ) -> Result<get_capabilities::v3::Response> {
 	let available: BTreeMap<RoomVersionId, RoomVersionStability> = services
 		.config
@@ -57,6 +57,16 @@ pub(crate) async fn get_capabilities_route(
 		"org.matrix.msc4267.forget_forced_upon_leave",
 		json!({"enabled": services.config.forget_forced_upon_leave}),
 	)?;
+
+	// MSC4323: advertise admin moderation only to admins; absence implies
+	// neither suspend nor lock is available to the caller.
+	if services
+		.admin
+		.user_is_admin(body.sender_user())
+		.await
+	{
+		capabilities.account_moderation = AccountModerationCapability::new(true, true);
+	}
 
 	Ok(get_capabilities::v3::Response { capabilities })
 }

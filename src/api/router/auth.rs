@@ -28,6 +28,7 @@ use ruma::{
 		client::{
 			directory::get_public_rooms,
 			profile::{get_avatar_url, get_display_name, get_profile, get_profile_field},
+			session::{logout, logout_all},
 			voip::get_turn_server_info,
 		},
 		error::{ErrorKind, UnknownTokenErrorData},
@@ -93,7 +94,34 @@ where
 		check_auth_still_required::<T>(services, &token)?;
 	}
 
-	T::Authentication::dispatch::<T>(services, request, json_body, token).await
+	let auth = T::Authentication::dispatch::<T>(services, request, json_body, token).await?;
+
+	locked_account_gate::<T>(services, &auth).await?;
+
+	Ok(auth)
+}
+
+/// MSC3939: 401 `M_USER_LOCKED` (with `soft_logout: true`) when an
+/// authenticated request is bound to a locked account, except for the two
+/// logout endpoints. Suspension (MSC3823) is a per-action 403 enforced at the
+/// handler, so it does not belong here.
+async fn locked_account_gate<T>(services: &Services, auth: &Auth) -> Result
+where
+	T: IncomingRequest + 'static,
+{
+	let Some(user_id) = auth.sender_user.as_deref() else {
+		return Ok(());
+	};
+
+	let id = TypeId::of::<T>();
+	let is_logout = id == TypeId::of::<logout::v3::Request>()
+		|| id == TypeId::of::<logout_all::v3::Request>();
+
+	if is_logout || !services.users.is_locked(user_id).await {
+		return Ok(());
+	}
+
+	Err!(Request(UserLocked("This account has been locked.")))
 }
 
 /// Tag identifying an [`AuthScheme`] for tuwunel's purposes.
