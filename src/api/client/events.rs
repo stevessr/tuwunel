@@ -59,11 +59,10 @@ pub(crate) async fn events_route(
 		.expect("configuration must limit maximum timeout");
 
 	loop {
-		let watchers = services.sync.watch(
-			sender_user,
-			body.sender_device.as_deref(),
-			once(room_id).stream(),
-		);
+		let watchers = services
+			.sync
+			.watch(sender_user, body.sender_device.as_deref(), once(room_id).stream())
+			.await;
 
 		let next_batch = services.globals.wait_pending().await?;
 

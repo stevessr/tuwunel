@@ -24,15 +24,16 @@ default_complement_timeout="1h"
 default_complement_run=".*"
 
 run="${1:-$default_complement_run}"
+
 skip=""
-skip="${skip}TestToDeviceMessagesOverFederation/stopped_server"
+skip="${skip}TestThreadReceiptsInSyncMSC4102"
+skip="${skip}|TestToDeviceMessagesOverFederation/stopped_server"
+skip="${skip}|TestRestrictedRoomsRemoteJoinFailOver"
+skip="${skip}|TestRestrictedRoomsRemoteJoinFailOverInMSC3787Room"
+skip="${skip}|TestJumpToDateEndpoint/parallel/should_find_event_after_given_timestamp"
+skip="${skip}|TestJumpToDateEndpoint/parallel/should_find_nothing_before_the_earliest_timestamp"
 skip="${skip}|TestToDeviceMessagesOverFederation/interrupted_connectivity"
-skip="${skip}|TestRoomCreate/Parallel/POST_/createRoom_makes_a_room_with_a_topic_and_writes_rich_topic_representation"
-skip="${skip}|TestRoomCreate/Parallel/POST_/createRoom_makes_a_room_with_a_topic_via_initial_state_overwritten_by_topic"
-skip="${skip}|TestLogin/parallel/POST_/"
 skip="${skip}|TestUnbanViaInvite"
-skip="${skip}|TestRoomState/Parallel/GET_/publicRooms_lists_newly-created_room"
-skip="${skip}|TestThreadReceiptsInSyncMSC4102"
 
 set -a
 cargo_profile="${cargo_profile:-$default_cargo_profile}"

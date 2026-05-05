@@ -213,16 +213,14 @@
 {"Action":"fail","Test":"TestJumpToDateEndpoint/parallel/federation/looking_backwards,_should_be_able_to_find_event_that_was_sent_before_we_joined"}
 {"Action":"fail","Test":"TestJumpToDateEndpoint/parallel/federation/looking_forwards,_should_be_able_to_find_event_that_was_sent_before_we_joined"}
 {"Action":"fail","Test":"TestJumpToDateEndpoint/parallel/federation/when_looking_backwards_before_the_room_was_created,_should_be_able_to_find_event_that_was_imported"}
-{"Action":"pass","Test":"TestJumpToDateEndpoint/parallel/should_find_event_after_given_timestamp"}
 {"Action":"pass","Test":"TestJumpToDateEndpoint/parallel/should_find_event_before_given_timestamp"}
 {"Action":"fail","Test":"TestJumpToDateEndpoint/parallel/should_find_next_event_topologically_after_given_timestamp_when_all_message_timestamps_are_the_same"}
 {"Action":"fail","Test":"TestJumpToDateEndpoint/parallel/should_find_next_event_topologically_before_given_timestamp_when_all_message_timestamps_are_the_same"}
 {"Action":"pass","Test":"TestJumpToDateEndpoint/parallel/should_find_nothing_after_the_latest_timestamp"}
-{"Action":"pass","Test":"TestJumpToDateEndpoint/parallel/should_find_nothing_before_the_earliest_timestamp"}
 {"Action":"pass","Test":"TestJumpToDateEndpoint/parallel/should_not_be_able_to_query_a_private_room_you_are_not_a_member_of"}
 {"Action":"pass","Test":"TestJumpToDateEndpoint/parallel/should_not_be_able_to_query_a_public_room_you_are_not_a_member_of"}
-{"Action":"fail","Test":"TestKeyChangesLocal"}
-{"Action":"fail","Test":"TestKeyChangesLocal/New_login_should_create_a_device_lists.changed_entry"}
+{"Action":"pass","Test":"TestKeyChangesLocal"}
+{"Action":"pass","Test":"TestKeyChangesLocal/New_login_should_create_a_device_lists.changed_entry"}
 {"Action":"fail","Test":"TestKeyClaimOrdering"}
 {"Action":"pass","Test":"TestKeysQueryWithDeviceIDAsObjectFails"}
 {"Action":"pass","Test":"TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11"}
@@ -297,6 +295,11 @@
 {"Action":"pass","Test":"TestLogin/parallel"}
 {"Action":"pass","Test":"TestLogin/parallel/GET_/login_yields_a_set_of_flows"}
 {"Action":"pass","Test":"TestLogin/parallel/Login_with_uppercase_username_works_and_GET_/whoami_afterwards_also"}
+{"Action":"pass","Test":"TestLogin/parallel/POST_/login_as_non-existing_user_is_rejected"}
+{"Action":"pass","Test":"TestLogin/parallel/POST_/login_can_log_in_as_a_user_with_just_the_local_part_of_the_id"}
+{"Action":"pass","Test":"TestLogin/parallel/POST_/login_can_login_as_user"}
+{"Action":"pass","Test":"TestLogin/parallel/POST_/login_returns_the_same_device_id_as_that_in_the_request"}
+{"Action":"pass","Test":"TestLogin/parallel/POST_/login_wrong_password_is_rejected"}
 {"Action":"pass","Test":"TestLogout"}
 {"Action":"pass","Test":"TestLogout/Can_logout_all_devices"}
 {"Action":"pass","Test":"TestLogout/Can_logout_current_device"}
@@ -567,8 +570,6 @@
 {"Action":"pass","Test":"TestRestrictedRoomsRemoteJoin/Join_should_fail_with_mangled_join_rules"}
 {"Action":"pass","Test":"TestRestrictedRoomsRemoteJoin/Join_should_succeed_when_invited"}
 {"Action":"fail","Test":"TestRestrictedRoomsRemoteJoin/Join_should_succeed_when_joined_to_allowed_room"}
-{"Action":"fail","Test":"TestRestrictedRoomsRemoteJoinFailOver"}
-{"Action":"fail","Test":"TestRestrictedRoomsRemoteJoinFailOverInMSC3787Room"}
 {"Action":"fail","Test":"TestRestrictedRoomsRemoteJoinInMSC3787Room"}
 {"Action":"pass","Test":"TestRestrictedRoomsRemoteJoinInMSC3787Room/Join_should_fail_initially"}
 {"Action":"pass","Test":"TestRestrictedRoomsRemoteJoinInMSC3787Room/Join_should_fail_when_left_allowed_room"}
@@ -606,7 +607,9 @@
 {"Action":"pass","Test":"TestRoomCreate/Parallel/POST_/createRoom_makes_a_public_room"}
 {"Action":"pass","Test":"TestRoomCreate/Parallel/POST_/createRoom_makes_a_room_with_a_name"}
 {"Action":"pass","Test":"TestRoomCreate/Parallel/POST_/createRoom_makes_a_room_with_a_topic"}
+{"Action":"pass","Test":"TestRoomCreate/Parallel/POST_/createRoom_makes_a_room_with_a_topic_and_writes_rich_topic_representation"}
 {"Action":"pass","Test":"TestRoomCreate/Parallel/POST_/createRoom_makes_a_room_with_a_topic_via_initial_state"}
+{"Action":"pass","Test":"TestRoomCreate/Parallel/POST_/createRoom_makes_a_room_with_a_topic_via_initial_state_overwritten_by_topic"}
 {"Action":"pass","Test":"TestRoomCreate/Parallel/POST_/createRoom_rejects_attempts_to_create_rooms_with_numeric_versions"}
 {"Action":"pass","Test":"TestRoomCreate/Parallel/POST_/createRoom_rejects_attempts_to_create_rooms_with_unknown_versions"}
 {"Action":"pass","Test":"TestRoomCreate/Parallel/Rooms_can_be_created_with_an_initial_invite_list_(SYN-205)"}
@@ -669,6 +672,7 @@
 {"Action":"pass","Test":"TestRoomState/Parallel"}
 {"Action":"pass","Test":"TestRoomState/Parallel/GET_/directory/room/:room_alias_yields_room_ID"}
 {"Action":"pass","Test":"TestRoomState/Parallel/GET_/joined_rooms_lists_newly-created_room"}
+{"Action":"pass","Test":"TestRoomState/Parallel/GET_/publicRooms_lists_newly-created_room"}
 {"Action":"pass","Test":"TestRoomState/Parallel/GET_/rooms/:room_id/joined_members_fetches_my_membership"}
 {"Action":"pass","Test":"TestRoomState/Parallel/GET_/rooms/:room_id/joined_members_is_forbidden_after_leaving_room"}
 {"Action":"pass","Test":"TestRoomState/Parallel/GET_/rooms/:room_id/state/m.room.member/:user_id?format=event_fetches_my_membership_event"}

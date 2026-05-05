@@ -165,11 +165,10 @@ pub(crate) async fn sync_events_v5_route(
 		);
 
 		let window;
-		let watchers = services.sync.watch(
-			sender_user,
-			sender_device,
-			services.state_cache.rooms_joined(sender_user),
-		);
+		let watchers = services
+			.sync
+			.watch(sender_user, sender_device, services.state_cache.rooms_joined(sender_user))
+			.await;
 
 		conn.next_batch = services.globals.wait_pending().await?;
 		(window, response.lists) = selector::selector(&mut conn, sync_info)

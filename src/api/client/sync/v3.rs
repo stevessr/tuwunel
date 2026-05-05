@@ -197,7 +197,8 @@ pub(crate) async fn sync_events_route(
 
 		let watchers = services
 			.sync
-			.watch(sender_user, sender_device, watch_rooms);
+			.watch(sender_user, sender_device, watch_rooms)
+			.await;
 
 		let next_batch = services.globals.wait_pending().await?;
 		if since > next_batch {
