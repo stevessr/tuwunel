@@ -46,6 +46,13 @@ pub fn str_truncated(s: &str, max_len: usize) -> tracing::field::DebugValue<Trun
 	tracing::field::debug(TruncatedStr { inner: s, max_len })
 }
 
+#[macro_export]
+macro_rules! redacted_debug {
+	($f:ident) => {
+		if $f.is_some() { "Some(<redacted>)" } else { "None" }
+	};
+}
+
 impl<T: fmt::Debug> fmt::Debug for TruncatedSlice<'_, T> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		if self.inner.len() <= self.max_len {

@@ -4,17 +4,17 @@ use std::{
 };
 
 use arrayvec::ArrayString;
-use rand::{Rng, seq::SliceRandom, thread_rng};
+use rand::{RngExt, rng, seq::SliceRandom};
 use ruma::OwnedEventId;
 
 pub fn shuffle<T>(vec: &mut [T]) {
-	let mut rng = thread_rng();
+	let mut rng = rng();
 	vec.shuffle(&mut rng);
 }
 
 pub fn string(length: usize) -> String {
-	thread_rng()
-		.sample_iter(&rand::distributions::Alphanumeric)
+	rng()
+		.sample_iter(&rand::distr::Alphanumeric)
 		.take(length)
 		.map(char::from)
 		.collect()
@@ -23,8 +23,8 @@ pub fn string(length: usize) -> String {
 #[inline]
 pub fn string_array<const LENGTH: usize>() -> ArrayString<LENGTH> {
 	let mut ret = ArrayString::<LENGTH>::new();
-	thread_rng()
-		.sample_iter(&rand::distributions::Alphanumeric)
+	rng()
+		.sample_iter(&rand::distr::Alphanumeric)
 		.take(LENGTH)
 		.map(char::from)
 		.for_each(|c| ret.push(c));
@@ -41,7 +41,7 @@ pub fn event_id() -> OwnedEventId {
 	};
 
 	let mut binary: [u8; 32] = [0; _];
-	thread_rng().fill(&mut binary);
+	rand::fill(&mut binary);
 
 	let mut encoded: [u8; 43] = [0; _];
 	GeneralPurpose::new(&URL_SAFE, NO_PAD)
@@ -57,8 +57,8 @@ pub fn event_id() -> OwnedEventId {
 
 #[must_use]
 pub fn truncate_string(mut str: String, range: Range<u64>) -> String {
-	let len = thread_rng()
-		.gen_range(range)
+	let len = rng()
+		.random_range(range)
 		.try_into()
 		.unwrap_or(usize::MAX);
 
@@ -72,8 +72,8 @@ pub fn truncate_string(mut str: String, range: Range<u64>) -> String {
 #[inline]
 #[must_use]
 pub fn truncate_str(str: &str, range: Range<u64>) -> &str {
-	let len = thread_rng()
-		.gen_range(range)
+	let len = rng()
+		.random_range(range)
 		.try_into()
 		.unwrap_or(usize::MAX);
 
@@ -93,6 +93,6 @@ pub fn time_from_now_secs(range: Range<u64>) -> SystemTime {
 
 #[must_use]
 pub fn secs(range: Range<u64>) -> Duration {
-	let mut rng = thread_rng();
-	Duration::from_secs(rng.gen_range(range))
+	let mut rng = rng();
+	Duration::from_secs(rng.random_range(range))
 }

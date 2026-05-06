@@ -70,7 +70,7 @@ impl crate::Service for Service {
 			channel: StdRwLock::new(None),
 			handle: RwLock::new(None),
 			complete: StdRwLock::new(None),
-			admin_alias: OwnedRoomAliasId::try_from(format!("#admins:{}", &args.server.name))
+			admin_alias: OwnedRoomAliasId::try_from(format!("#admins:{}", args.server.name))
 				.expect("#admins:server_name is valid alias name"),
 			#[cfg(feature = "console")]
 			console: console::Console::new(args),

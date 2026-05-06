@@ -117,7 +117,7 @@ async fn room_available_servers(
 	servers.dedup();
 
 	// shuffle list of servers randomly after sort and dedupe
-	servers.shuffle(&mut rand::thread_rng());
+	servers.shuffle(&mut rand::rng());
 
 	// insert our server as the very first choice if in list, else check if we can
 	// prefer the room alias server first

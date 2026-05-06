@@ -11,6 +11,7 @@ use std::{
 };
 
 use bytes::Bytes;
+use derive_more::Debug;
 use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt};
 use object_store::{
 	Attributes, CopyMode, DynObjectStore, GetResult, MultipartUpload, ObjectMeta, ObjectStore,
@@ -19,9 +20,7 @@ use object_store::{
 use tuwunel_core::{
 	Error, Result,
 	config::StorageProvider,
-	debug,
-	derivative::Derivative,
-	err, error, extract_variant, implement, info, trace,
+	debug, err, error, extract_variant, implement, info, trace,
 	utils::{
 		BoolExt,
 		result::FlatOk,
@@ -29,8 +28,7 @@ use tuwunel_core::{
 	},
 };
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct Provider {
 	pub name: String,
 
@@ -43,7 +41,7 @@ pub struct Provider {
 	startup_check: bool,
 
 	#[expect(unused)]
-	#[derivative(Debug = "ignore")]
+	#[debug(skip)]
 	services: Arc<crate::services::OnceServices>,
 }
 

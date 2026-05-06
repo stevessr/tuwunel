@@ -3,24 +3,23 @@ pub mod provider;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 use async_trait::async_trait;
+use derive_more::Debug;
 use futures::TryStreamExt;
 pub use object_store::{CopyMode, GetResult, GetResultPayload, PutPayload, PutResult};
 use tuwunel_core::{
 	Result, at,
 	config::{StorageProvider, StorageProviderLocal},
-	derivative::Derivative,
 	err, implement,
 	utils::{BoolExt, stream::IterStream},
 };
 
 pub use self::provider::Provider;
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct Service {
 	providers: Providers,
 
-	#[derivative(Debug = "ignore")]
+	#[debug(skip)]
 	services: Arc<crate::services::OnceServices>,
 }
 

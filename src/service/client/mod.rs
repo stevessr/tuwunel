@@ -160,7 +160,6 @@ fn base(config: &Config, name: Option<&str>) -> Result<ClientBuilder> {
 		.unwrap_or_else(|| user_agent.try_into())?;
 
 	let mut builder = Client::builder()
-		.hickory_dns(true)
 		.connect_timeout(Duration::from_secs(config.request_conn_timeout))
 		.read_timeout(Duration::from_secs(config.request_timeout))
 		.timeout(Duration::from_secs(config.request_total_timeout))

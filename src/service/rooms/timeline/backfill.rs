@@ -103,7 +103,7 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 			.map(ToOwned::to_owned)
 			.collect();
 
-		vec.shuffle(&mut rand::thread_rng());
+		vec.shuffle(&mut rand::rng());
 		vec.into_iter().stream()
 	};
 

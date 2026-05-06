@@ -11,7 +11,6 @@ pub mod server;
 pub mod utils;
 
 pub use ::arrayvec;
-pub use ::derivative;
 pub use ::either;
 pub use ::http;
 pub use ::itertools;

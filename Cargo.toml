@@ -163,8 +163,10 @@ version = "0.10"
 [workspace.dependencies.cyborgtime]
 version = "2.1"
 
-[workspace.dependencies.derivative]
-version = "2.2"
+[workspace.dependencies.derive_more]
+version = "2.1"
+default-features = false
+features = ["debug"]
 
 [workspace.dependencies.either]
 version = "1.15"
@@ -298,7 +300,7 @@ version = "1"
 version = "0.2"
 
 [workspace.dependencies.object_store]
-version = "0.13.2"
+version = "0.13"
 default-features = false
 features = [
 	"aws",
@@ -325,7 +327,7 @@ version = "1.0"
 version = "1.0"
 
 [workspace.dependencies.rand]
-version = "0.8"
+version = "0.10"
 
 [workspace.dependencies.regex]
 version = "1.12"
@@ -335,11 +337,9 @@ version = "0.13"
 default-features = false
 features = [
 	"charset",
-	"hickory-dns",
 	"http2",
 	"json",
 	"rustls",
-	"rustls-native-certs",
 	"socks",
 ]
 
@@ -453,7 +453,7 @@ version = "1.0"
 default-features = false
 
 [workspace.dependencies.serde_html_form]
-version = "0.2"
+version = "0.4"
 
 [workspace.dependencies.serde_json]
 version = "1.0"
