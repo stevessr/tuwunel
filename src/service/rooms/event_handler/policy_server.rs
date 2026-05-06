@@ -6,11 +6,12 @@ use ruma::{
 	api::{error::ErrorKind, federation::policy::sign_event::v1 as sign_event},
 	events::{StateEventType, room::policy::RoomPolicyEventContent},
 	serde::Base64,
+	signatures::{to_canonical_json_string_for_signing, verify_canonical_json_bytes},
 };
 use serde_json::value::to_raw_value;
 use tuwunel_core::{
 	Err, Result, debug, err, implement,
-	matrix::{Event, pdu::into_outgoing_federation},
+	matrix::{Event, pdu::into_outgoing_federation, room_version},
 	trace, warn,
 };
 
@@ -150,8 +151,119 @@ async fn fetch_policy_signature(
 		})
 }
 
+/// Outcome of an inbound policy-server signature check.
+#[derive(Debug)]
+pub enum PolicyCheck {
+	/// No policy server is configured for this room (or feature is off, or
+	/// the event is the policy state event itself). The caller should not
+	/// modify its soft-fail decision based on policy considerations.
+	NotApplicable,
+
+	/// Policy server signature is present and verifies cleanly.
+	Pass,
+
+	/// Policy server signature is absent. Per MSC4284, the homeserver SHOULD
+	/// either fetch one from the policy server (Phase C) or soft-fail.
+	Missing,
+
+	/// Policy server signature is present but failed cryptographic
+	/// verification. Soft-fail.
+	Invalid,
+}
+
+/// MSC4284: verify the policy server signature on an inbound PDU. Returns
+/// `NotApplicable` for rooms without a configured policy server (the gate is
+/// skipped); `Pass` when the signature verifies; `Missing` when no signature
+/// is present for the configured server; `Invalid` when the signature is
+/// present but cryptographic verification fails.
+#[implement(super::Service)]
+#[tracing::instrument(name = "policy_verify", level = "debug", skip_all)]
+pub async fn check_inbound_policy_signature<E>(
+	&self,
+	pdu_json: &CanonicalJsonObject,
+	pdu: &E,
+) -> PolicyCheck
+where
+	E: Event,
+{
+	if !self.services.server.config.enable_policy_servers {
+		return PolicyCheck::NotApplicable;
+	}
+
+	if is_policy_state_event(pdu) {
+		return PolicyCheck::NotApplicable;
+	}
+
+	let Some(policy) = self.lookup_policy_server(pdu.room_id()).await else {
+		return PolicyCheck::NotApplicable;
+	};
+
+	let Ok(room_version) = self
+		.services
+		.state
+		.get_room_version(pdu.room_id())
+		.await
+	else {
+		return PolicyCheck::NotApplicable;
+	};
+
+	let Ok(rules) = room_version::rules(&room_version) else {
+		return PolicyCheck::NotApplicable;
+	};
+
+	let Some(signature_b64) = extract_policy_signature(pdu_json, &policy.via) else {
+		return PolicyCheck::Missing;
+	};
+
+	let Ok(signature) = Base64::<ruma::serde::base64::Standard>::parse(signature_b64) else {
+		return PolicyCheck::Invalid;
+	};
+
+	let Ok(redacted) = ruma::canonical_json::redact(pdu_json.clone(), &rules.redaction, None)
+	else {
+		return PolicyCheck::Invalid;
+	};
+
+	let Ok(canonical) = to_canonical_json_string_for_signing(&redacted) else {
+		return PolicyCheck::Invalid;
+	};
+
+	verify_canonical_json_bytes(
+		&SigningKeyAlgorithm::Ed25519,
+		policy.ed25519_public_key.as_bytes(),
+		signature.as_bytes(),
+		canonical.as_bytes(),
+	)
+	.map(|()| PolicyCheck::Pass)
+	.unwrap_or_else(|error| {
+		debug!(via = %policy.via, %error, "policy server signature failed verification");
+		PolicyCheck::Invalid
+	})
+}
+
 fn is_policy_state_event<E: Event>(pdu: &E) -> bool {
 	pdu.kind().to_cow_str() == "m.room.policy" && pdu.state_key() == Some("")
+}
+
+fn extract_policy_signature<'a>(
+	pdu_json: &'a CanonicalJsonObject,
+	via: &ServerName,
+) -> Option<&'a str> {
+	let CanonicalJsonValue::Object(server_map) = pdu_json.get("signatures")? else {
+		return None;
+	};
+
+	let CanonicalJsonValue::Object(key_map) = server_map.get(via.as_str())? else {
+		return None;
+	};
+
+	let CanonicalJsonValue::String(signature) =
+		key_map.get(sign_event::Response::POLICY_SERVER_ED25519_SIGNING_KEY_ID)?
+	else {
+		return None;
+	};
+
+	Some(signature.as_str())
 }
 
 fn insert_policy_signature(

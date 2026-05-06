@@ -13,6 +13,7 @@ use tuwunel_core::{
 	warn,
 };
 
+use super::policy_server::PolicyCheck;
 use crate::rooms::{
 	state_compressor::{CompressedState, HashSetCompressStateEvent},
 	state_res,
@@ -149,7 +150,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 
 	// Soft fail check before doing state res
 	trace!("Performing soft-fail check");
-	let soft_fail = match incoming_pdu.redacts_id(&room_rules) {
+	let soft_fail_redact = match incoming_pdu.redacts_id(&room_rules) {
 		| None => false,
 		| Some(redact_id) =>
 			!self
@@ -158,6 +159,16 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 				.user_can_redact(&redact_id, incoming_pdu.sender(), incoming_pdu.room_id(), true)
 				.await?,
 	};
+
+	// MSC4284: soft-fail when the room's policy server signature is missing
+	// or invalid. The OR short-circuits, so the policy check is skipped when
+	// redaction-soft-fail already fired.
+	let soft_fail = soft_fail_redact
+		|| matches!(
+			self.check_inbound_policy_signature(&pdu_json, &incoming_pdu)
+				.await,
+			PolicyCheck::Missing | PolicyCheck::Invalid,
+		);
 
 	// 13. Use state resolution to find new room state
 	// We start looking at current room state now, so lets lock the room
