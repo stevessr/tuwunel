@@ -569,9 +569,10 @@ where
 	// Since v10, if the join_rule is anything other than knock or knock_restricted,
 	// reject.
 	let join_rule = join_rule?;
-	if join_rule != JoinRule::Knock
-		&& (rules.knock_restricted_join_rule && !matches!(join_rule, JoinRule::KnockRestricted))
-	{
+	let supports_knock = matches!(join_rule, JoinRule::Knock)
+		|| (rules.knock_restricted_join_rule && matches!(join_rule, JoinRule::KnockRestricted));
+
+	if !supports_knock {
 		return Err!(
 			"join rule is not set to knock or knock_restricted, knocking is not allowed"
 		);

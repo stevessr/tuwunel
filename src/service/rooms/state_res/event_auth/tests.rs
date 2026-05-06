@@ -1,7 +1,12 @@
 use ruma::{
 	events::{
 		TimelineEventType,
-		room::{message::RoomMessageEventContent, redaction::RoomRedactionEventContent},
+		room::{
+			join_rules::{JoinRule, Restricted, RoomJoinRulesEventContent},
+			member::{MembershipState, RoomMemberEventContent},
+			message::RoomMessageEventContent,
+			redaction::RoomRedactionEventContent,
+		},
 	},
 	int, owned_event_id, owned_room_id,
 	room_version_rules::{AuthorizationRules, RoomVersionRules},
@@ -22,7 +27,7 @@ use super::{
 		INITIAL_EVENTS, INITIAL_HYDRA_EVENTS, TestStateMap, alice, charlie, ella, event_id,
 		init_subscriber, member_content_join, not_found, room_create_hydra_pdu_event, room_id,
 		room_redaction_pdu_event, room_third_party_invite, to_hydra_pdu_event, to_init_pdu_event,
-		to_pdu_event,
+		to_pdu_event, zara,
 	},
 };
 
@@ -958,4 +963,134 @@ async fn rejected_room_create_in_fetch_event() {
 	)
 	.await
 	.unwrap_err();
+}
+
+// `m.room.member` knock predicate. v7-v9: only `knock` join_rule accepts.
+// v10+: `knock` or `knock_restricted` accepts.
+
+fn member_content_knock() -> Box<serde_json::value::RawValue> {
+	to_raw_json_value(&RoomMemberEventContent::new(MembershipState::Knock)).unwrap()
+}
+
+fn knock_test_events(
+	join_rule: JoinRule,
+) -> std::collections::HashMap<ruma::OwnedEventId, PduEvent> {
+	let mut init_events = INITIAL_EVENTS();
+
+	*init_events.get_mut(&event_id("IJR")).unwrap() = to_pdu_event(
+		"IJR",
+		alice(),
+		TimelineEventType::RoomJoinRules,
+		Some(""),
+		to_raw_json_value(&RoomJoinRulesEventContent::new(join_rule)).unwrap(),
+		&["CREATE", "IMA", "IPOWER"],
+		&["IPOWER"],
+	);
+
+	init_events.insert(
+		event_id("ZARA_LEAVE"),
+		to_pdu_event(
+			"ZARA_LEAVE",
+			zara(),
+			TimelineEventType::RoomMember,
+			Some(zara().as_str()),
+			to_raw_json_value(&RoomMemberEventContent::new(MembershipState::Leave)).unwrap(),
+			&["CREATE", "IJR", "IPOWER"],
+			&["IJR"],
+		),
+	);
+
+	init_events
+}
+
+fn zara_knock_event() -> PduEvent {
+	to_pdu_event(
+		"ZARA_KNOCK",
+		zara(),
+		TimelineEventType::RoomMember,
+		Some(zara().as_str()),
+		member_content_knock(),
+		&["CREATE", "IJR", "IPOWER"],
+		&["ZARA_LEAVE"],
+	)
+}
+
+#[tokio::test]
+async fn knock_with_public_join_rule_rejected_v7() {
+	let _guard = init_subscriber();
+
+	let init_events = knock_test_events(JoinRule::Public);
+	let auth_events = TestStateMap::new(&init_events);
+	let fetch_state = auth_events.fetch_state_fn();
+
+	check_state_dependent_auth_rules(&RoomVersionRules::V7, &zara_knock_event(), &fetch_state)
+		.await
+		.unwrap_err();
+}
+
+#[tokio::test]
+async fn knock_with_invite_join_rule_rejected_v8() {
+	let _guard = init_subscriber();
+
+	let init_events = knock_test_events(JoinRule::Invite);
+	let auth_events = TestStateMap::new(&init_events);
+	let fetch_state = auth_events.fetch_state_fn();
+
+	check_state_dependent_auth_rules(&RoomVersionRules::V8, &zara_knock_event(), &fetch_state)
+		.await
+		.unwrap_err();
+}
+
+#[tokio::test]
+async fn knock_with_knock_join_rule_accepted_v7() {
+	let _guard = init_subscriber();
+
+	let init_events = knock_test_events(JoinRule::Knock);
+	let auth_events = TestStateMap::new(&init_events);
+	let fetch_state = auth_events.fetch_state_fn();
+
+	check_state_dependent_auth_rules(&RoomVersionRules::V7, &zara_knock_event(), &fetch_state)
+		.await
+		.unwrap();
+}
+
+#[tokio::test]
+async fn knock_with_public_join_rule_rejected_v10() {
+	let _guard = init_subscriber();
+
+	let init_events = knock_test_events(JoinRule::Public);
+	let auth_events = TestStateMap::new(&init_events);
+	let fetch_state = auth_events.fetch_state_fn();
+
+	check_state_dependent_auth_rules(&RoomVersionRules::V10, &zara_knock_event(), &fetch_state)
+		.await
+		.unwrap_err();
+}
+
+#[tokio::test]
+async fn knock_with_knock_restricted_join_rule_accepted_v10() {
+	let _guard = init_subscriber();
+
+	let init_events = knock_test_events(JoinRule::KnockRestricted(Restricted::new(vec![])));
+	let auth_events = TestStateMap::new(&init_events);
+	let fetch_state = auth_events.fetch_state_fn();
+
+	check_state_dependent_auth_rules(&RoomVersionRules::V10, &zara_knock_event(), &fetch_state)
+		.await
+		.unwrap();
+}
+
+#[tokio::test]
+async fn knock_with_knock_restricted_join_rule_rejected_v8() {
+	let _guard = init_subscriber();
+
+	// knock_restricted does not exist before v10; in v8 the only accepted
+	// value is `knock`.
+	let init_events = knock_test_events(JoinRule::KnockRestricted(Restricted::new(vec![])));
+	let auth_events = TestStateMap::new(&init_events);
+	let fetch_state = auth_events.fetch_state_fn();
+
+	check_state_dependent_auth_rules(&RoomVersionRules::V8, &zara_knock_event(), &fetch_state)
+		.await
+		.unwrap_err();
 }
