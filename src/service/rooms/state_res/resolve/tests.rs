@@ -900,3 +900,111 @@ async fn auth_difference_single_set() {
 
 	assert!(result.is_empty());
 }
+
+// `mainline_sort`: events with no power-levels ancestor in their auth chain
+// must sort before events whose deepest power-levels ancestor is the oldest
+// in the mainline. Pre-fix the two classes shared sort key 0 and tiebroke on
+// origin_server_ts.
+
+#[tokio::test]
+async fn mainline_sort_no_pl_ancestor_sorts_first() {
+	let _guard = tracing::subscriber::set_default(
+		tracing_subscriber::fmt()
+			.with_test_writer()
+			.finish(),
+	);
+
+	let create = to_init_pdu_event(
+		"CREATE",
+		alice(),
+		TimelineEventType::RoomCreate,
+		Some(""),
+		to_raw_json_value(&json!({ "creator": alice() })).unwrap(),
+	);
+
+	let pl1 = to_pdu_event(
+		"PL1",
+		alice(),
+		TimelineEventType::RoomPowerLevels,
+		Some(""),
+		to_raw_json_value(&json!({ "users": { alice(): 100 } })).unwrap(),
+		&["CREATE"],
+		&["CREATE"],
+	);
+
+	let pl2 = to_pdu_event(
+		"PL2",
+		alice(),
+		TimelineEventType::RoomPowerLevels,
+		Some(""),
+		to_raw_json_value(&json!({ "users": { alice(): 100 } })).unwrap(),
+		&["CREATE", "PL1"],
+		&["PL1"],
+	);
+
+	let pl3 = to_pdu_event(
+		"PL3",
+		alice(),
+		TimelineEventType::RoomPowerLevels,
+		Some(""),
+		to_raw_json_value(&json!({ "users": { alice(): 100 } })).unwrap(),
+		&["CREATE", "PL2"],
+		&["PL2"],
+	);
+
+	// Event whose deepest PL ancestor is the oldest mainline PL.
+	let oldest_rooted = to_pdu_event(
+		"OLDEST_ROOTED",
+		alice(),
+		TimelineEventType::RoomMessage,
+		None,
+		to_raw_json_value(&json!({})).unwrap(),
+		&["CREATE", "PL1"],
+		&["PL1"],
+	);
+
+	// Event whose deepest PL ancestor is the current mainline PL.
+	let current_rooted = to_pdu_event(
+		"CURRENT_ROOTED",
+		alice(),
+		TimelineEventType::RoomMessage,
+		None,
+		to_raw_json_value(&json!({})).unwrap(),
+		&["CREATE", "PL3"],
+		&["PL3"],
+	);
+
+	// Event with no PL in its auth chain.
+	let no_pl = to_pdu_event(
+		"NO_PL",
+		alice(),
+		TimelineEventType::RoomMessage,
+		None,
+		to_raw_json_value(&json!({})).unwrap(),
+		&["CREATE"],
+		&["CREATE"],
+	);
+
+	let events: HashMap<OwnedEventId, PduEvent> =
+		[&create, &pl1, &pl2, &pl3, &oldest_rooted, &current_rooted, &no_pl]
+			.into_iter()
+			.cloned()
+			.map(|e| (e.event_id().to_owned(), e))
+			.collect();
+
+	let to_sort = [event_id("OLDEST_ROOTED"), event_id("CURRENT_ROOTED"), event_id("NO_PL")];
+
+	let sorted = super::mainline_sort(
+		Some(event_id("PL3")),
+		to_sort.iter().map(AsRef::as_ref).stream(),
+		&async |id| events.get(&id).cloned().ok_or_else(not_found),
+	)
+	.await
+	.unwrap();
+
+	assert_eq!(sorted, vec![
+		event_id("NO_PL"),
+		event_id("OLDEST_ROOTED"),
+		event_id("CURRENT_ROOTED"),
+	]);
+}

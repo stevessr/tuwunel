@@ -151,19 +151,22 @@ where
 			"mainline position search",
 		);
 
-		// If the current event is in the mainline map, return its position.
+		// Real positions are 1..N (i + 1) so that 0 is free to mark
+		// "no power-levels in the auth chain". Without that, no-PL events
+		// would tie with events rooted at the oldest mainline PL.
 		if let Some(position) = mainline
 			.clone()
 			.position(is_equal_to!(event.event_id()))
 		{
-			return Ok(position);
+			return Ok(position.saturating_add(1));
 		}
 
 		// Look for the power levels event in the auth events.
 		current_event = get_power_levels_auth_event(&event, fetch).await?;
 	}
 
-	// Did not find a power level event so we default to zero.
+	// No power-levels ancestor in the auth chain; sort before all
+	// chain-rooted events.
 	Ok(0)
 }
 
