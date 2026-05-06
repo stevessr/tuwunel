@@ -59,7 +59,7 @@ static VERSIONS: [&str; 17] = [
 	"v1.15",  /* custom profile fields */
 ];
 
-static UNSTABLE_FEATURES: [&str; 30] = [
+static UNSTABLE_FEATURES: [&str; 31] = [
 	"org.matrix.e2e_cross_signing",
 	// private read receipts (https://github.com/matrix-org/matrix-spec-proposals/pull/2285)
 	"org.matrix.msc2285.stable",
@@ -116,4 +116,6 @@ static UNSTABLE_FEATURES: [&str; 30] = [
 	"org.matrix.msc4380.stable",
 	// Client-server discovery of server version (https://github.com/matrix-org/matrix-spec-proposals/pull/4383)
 	"net.zemos.msc4383",
+	// Policy servers (https://github.com/matrix-org/matrix-spec-proposals/pull/4284)
+	"org.matrix.msc4284",
 ];

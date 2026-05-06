@@ -844,6 +844,24 @@ pub struct Config {
 	#[serde(default)]
 	pub allow_experimental_room_versions: bool,
 
+	/// MSC4284: ask the room's policy server to sign outgoing events. When a
+	/// room has a valid `m.room.policy` state event, the homeserver requests a
+	/// signature from that policy server's federation `/sign` endpoint before
+	/// federating each event. Refusal aborts the local request; network or
+	/// timeout failures fail open with a warn log so a transient policy-server
+	/// outage does not silently take the room offline.
+	///
+	/// default: false
+	#[serde(default)]
+	pub enable_policy_servers: bool,
+
+	/// MSC4284: timeout (seconds) for requests to a room's policy server.
+	/// Applies to both outbound `/sign` calls and inbound signature-fetches.
+	///
+	/// default: 5
+	#[serde(default = "default_policy_server_request_timeout")]
+	pub policy_server_request_timeout: u64,
+
 	/// Default room version tuwunel will create rooms with.
 	///
 	/// The default is prescribed by the spec, but may be selected by developer
@@ -3459,6 +3477,8 @@ impl TlsConfig {
 }
 
 fn true_fn() -> bool { true }
+
+fn default_policy_server_request_timeout() -> u64 { 5 }
 
 fn some_true_fn() -> Option<bool> { Some(true) }
 

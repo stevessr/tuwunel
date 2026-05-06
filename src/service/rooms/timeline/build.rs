@@ -33,7 +33,7 @@ pub async fn build_and_append_pdu(
 	room_id: &RoomId,
 	state_lock: &RoomMutexGuard,
 ) -> Result<OwnedEventId> {
-	let (pdu, pdu_json) = self
+	let (pdu, mut pdu_json) = self
 		.create_hash_and_sign_event(pdu_builder, sender, room_id, state_lock)
 		.await?;
 
@@ -109,6 +109,14 @@ pub async fn build_and_append_pdu(
 			)));
 		}
 	}
+
+	// MSC4284: ask the room's policy server (if any) to sign this event before
+	// federating it. Refusal aborts; fail-open on transport errors.
+	self.services
+		.event_handler
+		.sign_outgoing_pdu(&mut pdu_json, &pdu)
+		.boxed()
+		.await?;
 
 	// We append to state before appending the pdu, so we don't have a moment in
 	// time with the pdu without it's state. This is okay because append_pdu can't
