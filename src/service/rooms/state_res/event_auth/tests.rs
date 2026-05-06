@@ -16,7 +16,7 @@ use serde_json::{json, value::to_raw_value as to_raw_json_value};
 
 mod room_power_levels;
 
-use tuwunel_core::matrix::{EventHash, PduEvent, StateKey};
+use tuwunel_core::matrix::{Event, EventHash, PduEvent, StateKey};
 
 use self::room_power_levels::default_room_power_levels;
 use super::{
@@ -927,6 +927,81 @@ async fn missing_room_create_in_fetch_event() {
 	)
 	.await
 	.unwrap_err();
+}
+
+#[tokio::test]
+async fn v12_additional_creator_cannot_bootstrap_join() {
+	let _guard = init_subscriber();
+
+	let create_content = json!({
+		"room_version": "12",
+		"additional_creators": ["@charlie:foo"],
+	});
+
+	let create = room_create_hydra_pdu_event(
+		"CREATE",
+		alice(),
+		to_raw_json_value(&create_content).unwrap(),
+	);
+
+	let charlie_join = to_hydra_pdu_event::<&str>(
+		"CHARLIE_JOIN",
+		charlie(),
+		TimelineEventType::RoomMember,
+		Some(charlie().as_str()),
+		member_content_join(),
+		&[],
+		&["CREATE"],
+	);
+
+	let mut init_events: std::collections::HashMap<ruma::OwnedEventId, PduEvent> =
+		std::collections::HashMap::new();
+	init_events.insert(create.event_id().to_owned(), create);
+	init_events.insert(charlie_join.event_id().to_owned(), charlie_join.clone());
+
+	let auth_events = TestStateMap::new(&init_events);
+	let fetch_state = auth_events.fetch_state_fn();
+
+	check_state_dependent_auth_rules(&RoomVersionRules::V12, &charlie_join, &fetch_state)
+		.await
+		.unwrap_err();
+}
+
+#[tokio::test]
+async fn v12_create_sender_can_bootstrap_join() {
+	let _guard = init_subscriber();
+
+	let create_content = json!({
+		"room_version": "12",
+	});
+
+	let create = room_create_hydra_pdu_event(
+		"CREATE",
+		alice(),
+		to_raw_json_value(&create_content).unwrap(),
+	);
+
+	let alice_join = to_hydra_pdu_event::<&str>(
+		"ALICE_JOIN",
+		alice(),
+		TimelineEventType::RoomMember,
+		Some(alice().as_str()),
+		member_content_join(),
+		&[],
+		&["CREATE"],
+	);
+
+	let mut init_events: std::collections::HashMap<ruma::OwnedEventId, PduEvent> =
+		std::collections::HashMap::new();
+	init_events.insert(create.event_id().to_owned(), create);
+	init_events.insert(alice_join.event_id().to_owned(), alice_join.clone());
+
+	let auth_events = TestStateMap::new(&init_events);
+	let fetch_state = auth_events.fetch_state_fn();
+
+	check_state_dependent_auth_rules(&RoomVersionRules::V12, &alice_join, &fetch_state)
+		.await
+		.unwrap();
 }
 
 #[tokio::test]

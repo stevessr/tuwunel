@@ -9,7 +9,7 @@ use ruma::{
 	signatures::verify_canonical_json_bytes,
 };
 use tuwunel_core::{
-	Err, Result, err, is_equal_to,
+	Err, Result, err,
 	matrix::{Event, StateKey},
 };
 
@@ -143,7 +143,8 @@ where
 	Fut: Future<Output = Result<Pdu>> + Send,
 	Pdu: Event,
 {
-	let mut creators = room_create_event.creators(rules)?;
+	let creator = room_create_event.creator(rules)?;
+	let creators = room_create_event.creators(rules)?;
 
 	let mut prev_events = room_member_event.prev_events();
 
@@ -157,8 +158,9 @@ where
 	// v1-v10, if the only previous event is an m.room.create and the state_key is
 	// the creator, allow.
 	// Since v11, if the only previous event is an m.room.create and the state_key
-	// is the sender of the m.room.create, allow.
-	if prev_event_is_only_room_create_event && creators.any(is_equal_to!(*target_user)) {
+	// is the sender of the m.room.create, allow. additional_creators do not
+	// satisfy this rule; the spec names the create sender singular.
+	if prev_event_is_only_room_create_event && *target_user == *creator {
 		return Ok(());
 	}
 
