@@ -139,8 +139,6 @@ pub async fn full_register(
 				continue;
 			}
 
-			let state_lock = self.services.state.mutex.lock(&room_id).await;
-
 			match self
 				.services
 				.membership
@@ -151,7 +149,6 @@ pub async fn full_register(
 					Some("Automatically joining this room upon registration".to_owned()),
 					&[],
 					false,
-					&state_lock,
 				)
 				.boxed()
 				.await
@@ -164,8 +161,6 @@ pub async fn full_register(
 					info!("Automatically joined room {room} for user {user_id}");
 				},
 			}
-
-			drop(state_lock);
 		}
 	}
 

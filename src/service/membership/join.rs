@@ -51,7 +51,6 @@ use crate::{
 	skip_all,
 	fields(%sender_user, %room_id)
 )]
-#[expect(clippy::too_many_arguments)]
 pub async fn join(
 	&self,
 	sender_user: &UserId,
@@ -60,8 +59,9 @@ pub async fn join(
 	reason: Option<String>,
 	servers: &[OwnedServerName],
 	is_appservice: bool,
-	state_lock: &RoomMutexGuard,
 ) -> Result {
+	let state_lock = self.services.state.mutex.lock(room_id).await;
+
 	let servers =
 		get_servers_for_room(&self.services, sender_user, room_id, orig_room_id, servers).await?;
 
@@ -140,7 +140,7 @@ pub async fn join_remote(
 	room_id: &RoomId,
 	reason: Option<String>,
 	servers: &[OwnedServerName],
-	state_lock: &RoomMutexGuard,
+	state_lock: RoomMutexGuard,
 ) -> Result {
 	info!("Joining {room_id} over federation.");
 
@@ -448,7 +448,7 @@ pub async fn join_remote(
 	);
 	self.services
 		.state
-		.force_state(room_id, statehash_before_join, added, removed, state_lock)
+		.force_state(room_id, statehash_before_join, added, removed, &state_lock)
 		.await?;
 
 	self.services
@@ -476,7 +476,7 @@ pub async fn join_remote(
 			&parsed_join_pdu,
 			join_event,
 			once(parsed_join_pdu.event_id.borrow()),
-			state_lock,
+			&state_lock,
 		)
 		.await?;
 
@@ -484,7 +484,7 @@ pub async fn join_remote(
 	// in time where events in the current room state do not exist
 	self.services
 		.state
-		.set_room_state(room_id, statehash_after_join, state_lock);
+		.set_room_state(room_id, statehash_after_join, &state_lock);
 
 	info!(
 		statehash = %statehash_after_join,
@@ -502,7 +502,7 @@ pub async fn join_local(
 	room_id: &RoomId,
 	reason: Option<String>,
 	servers: &[OwnedServerName],
-	state_lock: &RoomMutexGuard,
+	state_lock: RoomMutexGuard,
 ) -> Result {
 	debug_info!("We can join locally");
 
@@ -549,7 +549,7 @@ pub async fn join_local(
 					room_id,
 					user,
 					sender_user,
-					state_lock,
+					&state_lock,
 				)
 			})
 			.map(ToOwned::to_owned)
@@ -589,7 +589,7 @@ pub async fn join_local(
 			PduBuilder::state(sender_user.to_string(), &content),
 			sender_user,
 			room_id,
-			state_lock,
+			&state_lock,
 		)
 		.await
 	else {
@@ -607,6 +607,11 @@ pub async fn join_local(
 		"We couldn't do the join locally, maybe federation can help to satisfy the restricted \
 		 join requirements"
 	);
+
+	// Drop before the federation fallback: handle_incoming_pdu re-acquires
+	// the same per-room state mutex while ingesting prev_events; deadlock.
+	drop(state_lock);
+
 	let Ok((make_join_response, remote_server)) = self
 		.make_join_request(sender_user, room_id, servers)
 		.await

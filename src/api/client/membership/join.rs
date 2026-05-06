@@ -29,8 +29,6 @@ pub(crate) async fn join_room_by_id_route(
 
 	banned_room_check(&services, sender_user, room_id, None, client).await?;
 
-	let state_lock = services.state.mutex.lock(room_id).await;
-
 	let mut errors = 0_usize;
 	while let Err(e) = services
 		.membership
@@ -41,7 +39,6 @@ pub(crate) async fn join_room_by_id_route(
 			body.reason.clone(),
 			&[],
 			body.appservice_info.is_some(),
-			&state_lock,
 		)
 		.boxed()
 		.await
@@ -55,8 +52,6 @@ pub(crate) async fn join_room_by_id_route(
 			return Err(e);
 		}
 	}
-
-	drop(state_lock);
 
 	Ok(join_room_by_id::v3::Response { room_id: room_id.to_owned() })
 }
@@ -87,8 +82,6 @@ pub(crate) async fn join_room_by_id_or_alias_route(
 	banned_room_check(&services, sender_user, &room_id, Some(&body.room_id_or_alias), client)
 		.await?;
 
-	let state_lock = services.state.mutex.lock(&room_id).await;
-
 	let mut errors = 0_usize;
 	while let Err(e) = services
 		.membership
@@ -99,7 +92,6 @@ pub(crate) async fn join_room_by_id_or_alias_route(
 			body.reason.clone(),
 			&servers,
 			appservice_info.is_some(),
-			&state_lock,
 		)
 		.boxed()
 		.await
@@ -113,8 +105,6 @@ pub(crate) async fn join_room_by_id_or_alias_route(
 			return Err(e);
 		}
 	}
-
-	drop(state_lock);
 
 	Ok(join_room_by_id_or_alias::v3::Response { room_id: room_id.clone() })
 }

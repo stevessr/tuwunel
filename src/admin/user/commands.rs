@@ -361,8 +361,6 @@ pub(super) async fn force_join_list_of_local_users(
 	let mut failed_joins: usize = 0;
 	let mut successful_joins: usize = 0;
 
-	let state_lock = self.services.state.mutex.lock(&room_id).await;
-
 	for user_id in user_ids {
 		match self
 			.services
@@ -374,7 +372,6 @@ pub(super) async fn force_join_list_of_local_users(
 				Some(String::from(BULK_JOIN_REASON)),
 				&servers,
 				false,
-				&state_lock,
 			)
 			.await
 		{
@@ -387,8 +384,6 @@ pub(super) async fn force_join_list_of_local_users(
 			},
 		}
 	}
-
-	drop(state_lock);
 
 	self.write_str(&format!(
 		"{successful_joins} local users have been joined to {room_id}. {failed_joins} joins \
@@ -428,8 +423,6 @@ pub(super) async fn force_join_all_local_users(
 	let mut failed_joins: usize = 0;
 	let mut successful_joins: usize = 0;
 
-	let state_lock = self.services.state.mutex.lock(&room_id).await;
-
 	for user_id in &self
 		.services
 		.users
@@ -452,7 +445,6 @@ pub(super) async fn force_join_all_local_users(
 				Some(String::from(BULK_JOIN_REASON)),
 				&servers,
 				false,
-				&state_lock,
 			)
 			.await
 		{
@@ -465,8 +457,6 @@ pub(super) async fn force_join_all_local_users(
 			},
 		}
 	}
-
-	drop(state_lock);
 
 	self.write_str(&format!(
 		"{successful_joins} local users have been joined to {room_id}. {failed_joins} joins \
@@ -489,14 +479,10 @@ pub(super) async fn force_join_room(&self, user_id: String, room: OwnedRoomOrAli
 		"Parsed user_id must be a local user"
 	);
 
-	let state_lock = self.services.state.mutex.lock(&room_id).await;
-
 	self.services
 		.membership
-		.join(&user_id, &room_id, Some(&room), None, &servers, false, &state_lock)
+		.join(&user_id, &room_id, Some(&room), None, &servers, false)
 		.await?;
-
-	drop(state_lock);
 
 	self.write_str(&format!("{user_id} has been joined to {room_id}."))
 		.await

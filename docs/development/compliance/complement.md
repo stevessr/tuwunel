@@ -4,14 +4,14 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 201. Passing: **67.7%**
-  - ✅ `pass`: 136
+- Test groups: 201. Passing: **68.7%**
+  - ✅ `pass`: 138
   - 🟨 `some`: 27
-  - ❌ `fail`: 36
+  - ❌ `fail`: 34
   - ⬛ `skip`: 2
 
-- Subtests: 588. Passing: **67.7%**
-  - ✅ `pass`: 398
+- Subtests: 590. Passing: **67.8%**
+  - ✅ `pass`: 400
   - ❌ `fail`: 177
   - ⬛ `skip`: 13
 
@@ -90,7 +90,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestJoinFederatedRoomWithUnverifiableEvents` | ✅ | 4/0/0 |
 | `TestJoinViaRoomIDAndServerName` | ✅ | – |
 | `TestJson` | ✅ | 3/0/0 |
-| `TestJumpToDateEndpoint` | 🟨 | 4/8/0 |
+| `TestJumpToDateEndpoint` | 🟨 | 6/8/0 |
 | `TestKeyChangesLocal` | ✅ | 1/0/0 |
 | `TestKeyClaimOrdering` | ❌ | – |
 | `TestKeysQueryWithDeviceIDAsObjectFails` | ✅ | – |
@@ -166,8 +166,8 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12` | ✅ | – |
 | `TestRestrictedRoomsRemoteJoin` | 🟨 | 4/1/0 |
 | `TestRestrictedRoomsRemoteJoinInMSC3787Room` | 🟨 | 4/1/0 |
-| `TestRestrictedRoomsRemoteJoinLocalUser` | ❌ | – |
-| `TestRestrictedRoomsRemoteJoinLocalUserInMSC3787Room` | ❌ | – |
+| `TestRestrictedRoomsRemoteJoinLocalUser` | ✅ | – |
+| `TestRestrictedRoomsRemoteJoinLocalUserInMSC3787Room` | ✅ | – |
 | `TestRestrictedRoomsSpacesSummaryFederation` | ✅ | – |
 | `TestRestrictedRoomsSpacesSummaryLocal` | ✅ | – |
 | `TestRoomAlias` | ✅ | 5/0/0 |
