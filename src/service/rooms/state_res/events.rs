@@ -25,6 +25,9 @@ pub use self::{
 /// > `sender` does not match the `state_key`. The idea behind this is that
 /// > power events are events
 /// > that might remove someone’s ability to do something in the room.
+///
+/// `m.room.create` is included in the match below, extending the spec
+/// definition to match Synapse and Ruma.
 pub(super) fn is_power_event<Pdu>(event: &Pdu) -> bool
 where
 	Pdu: tuwunel_core::matrix::Event,
