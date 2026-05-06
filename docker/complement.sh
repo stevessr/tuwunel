@@ -30,8 +30,6 @@ skip="${skip}TestThreadReceiptsInSyncMSC4102"
 skip="${skip}|TestToDeviceMessagesOverFederation/stopped_server"
 skip="${skip}|TestRestrictedRoomsRemoteJoinFailOver"
 skip="${skip}|TestRestrictedRoomsRemoteJoinFailOverInMSC3787Room"
-skip="${skip}|TestJumpToDateEndpoint/parallel/should_find_event_after_given_timestamp"
-skip="${skip}|TestJumpToDateEndpoint/parallel/should_find_nothing_before_the_earliest_timestamp"
 skip="${skip}|TestToDeviceMessagesOverFederation/interrupted_connectivity"
 skip="${skip}|TestUnbanViaInvite"
 
