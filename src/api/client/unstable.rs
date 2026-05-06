@@ -71,6 +71,14 @@ pub(crate) async fn set_profile_field_route(
 		return Err!(Request(Forbidden("You cannot update the profile of another user")));
 	}
 
+	// MSC3823: displayname/avatar are forbidden during suspension; custom
+	// MSC4133 fields fall through.
+	if matches!(body.value, ProfileFieldValue::DisplayName(_) | ProfileFieldValue::AvatarUrl(_))
+		&& services.users.is_suspended(sender_user).await
+	{
+		return Err!(Request(UserSuspended("Account is suspended.")));
+	}
+
 	if body.value.field_name().as_str().len() > 128 {
 		return Err!(Request(BadJson("Key names cannot be longer than 128 bytes")));
 	}
@@ -139,6 +147,14 @@ pub(crate) async fn delete_profile_field_route(
 
 	if *sender_user != body.user_id && body.appservice_info.is_none() {
 		return Err!(Request(Forbidden("You cannot update the profile of another user")));
+	}
+
+	// MSC3823: displayname/avatar are forbidden during suspension; custom
+	// MSC4133 fields fall through.
+	if matches!(body.field, ProfileFieldName::DisplayName | ProfileFieldName::AvatarUrl)
+		&& services.users.is_suspended(sender_user).await
+	{
+		return Err!(Request(UserSuspended("Account is suspended.")));
 	}
 
 	match body.field {

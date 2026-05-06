@@ -18,17 +18,17 @@
 
 ## Counts
 
-- ✅ `yes`: 209
+- ✅ `yes`: 212
 - 🟨 `partial`: 87
-- ❌ `no`: 427
-- ⬛ `n/a`: 290
+- ❌ `no`: 425
+- ⬛ `n/a`: 289
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 145 | 35 | 19 | 57 | 256 |
-| open | 56 | 51 | 372 | 173 | 652 |
+| merged | 148 | 35 | 16 | 57 | 256 |
+| open | 56 | 51 | 373 | 172 | 652 |
 | closed | 8 | 1 | 36 | 52 | 97 |
 | unknown | 0 | 0 | 0 | 8 | 8 |
 
@@ -45,7 +45,7 @@ Sorted by MSC number, highest first.
 | MSC4341 | ❌ ● | 0/0 | Support for RFC 8628 Device Authorization Grant | OAuth Device Authorization Grant (RFC 8628) not advertised |
 | MSC4335 | ❌ ● | 0/0 | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
 | MSC4326 | ✅ ● | 100/100 | Device masquerading for appservices | appservice query device_id asserted; M_UNKNOWN_DEVICE-equivalent on missing |
-| MSC4323 | ❌ ● | 0/0 | User suspension &amp; locking endpoints | client admin suspend/lock endpoints not implemented |
+| MSC4323 | ✅ ● | 100/100 | User suspension &amp; locking endpoints | src/api/client/admin.rs four routes at stable v1 paths; m.account_moderation ... |
 | MSC4313 | ⬛ ● | ?/? | Require HTML `<ol>` `start` Attribute support | client HTML rendering requirement; not applicable to homeserver |
 | MSC4312 | ✅ ● | 90/100 | Resetting cross-signing keys in the OAuth world | cross-signing reset issues m.oauth flow with account-management URL |
 | MSC4311 | 🟨 ◐ | 0/? | Ensuring the create event is available on invites | complement: 0p/1f |
@@ -105,7 +105,7 @@ Sorted by MSC number, highest first.
 | MSC3958 | ✅ ● | 100/100 | Suppress notifications from message edits | SuppressEdits push rule provided via Ruma server_default ruleset |
 | MSC3952 | ✅ ◐ | 80/90 | Intentional Mentions | Intentional mentions push rules ride on Ruma server_default; flag advertised. |
 | MSC3943 | ✅ ● | 100/100 | Partial joins to nameless rooms should include heroes' memberships. | send_join partial-state response includes hero memberships and their auth chains |
-| MSC3939 | ❌ ● | 0/0 | Account locking | Account locking (M_USER_LOCKED, soft_logout) not implemented. |
+| MSC3939 | ✅ ● | 100/100 | Account locking | src/api/router/auth.rs locked_account_check; M_USER_LOCKED 401 with soft_log... |
 | MSC3938 | ✅ ◐ | 80/80 | Remove deprecated `keyId` parameters from `/keys` endpoints | New /key/v2/server (no keyId) implemented; deprecated form retained for compat. |
 | MSC3930 | 🟨 ◐ | 0/? | Polls push rules/notifications | complement: 0p/2f |
 | MSC3925 | 🟨 ◐ | 50/50 | m.replace aggregation with full event | Tuwunel doesn't replace content (good) but also lacks bundled m.replace aggre... |
@@ -121,7 +121,7 @@ Sorted by MSC number, highest first.
 | MSC3828 | ✅ ● | 100/100 | Content Repository Cross Origin Resource Policy (CORP) Headers | media endpoints return Cross-Origin-Resource-Policy: cross-origin |
 | MSC3827 | ✅ ● | 100/100 | Filtering of `/publicRooms` by room type | /publicRooms supports room_types filter and returns room_type |
 | MSC3824 | 🟨 ◐ | 60/60 | OAuth 2.0 API aware clients | oauth_aware_preferred set in /login; SSO redirect action param ignored |
-| MSC3823 | ❌ ● | 0/0 | Account Suspension | no M_USER_SUSPENDED errcode or suspension behavior |
+| MSC3823 | ✅ ● | 100/100 | Account Suspension | src/service/rooms/timeline/build.rs check_pdu_for_suspended_sender + auth.rs ... |
 | MSC3821 | ✅ ● | 90/100 | Update redaction rules, again | redact_in_place uses Ruma RedactionRules.V11 with keep third_party_invite.signed |
 | MSC3820 | ✅ ● | 90/100 | Room Version 11 | v11 stable; redaction and auth rules dispatch via Ruma RoomVersionRules |
 | MSC3818 | ✅ ● | 100/100 | Copy room type on upgrade | upgrade reuses old m.room.create content; type preserved by default |
@@ -348,13 +348,10 @@ for spec compliance.
 | MSC3666 | ❌ ● | 0/0 | Bundled aggregations for server side search | search results do not include bundled aggregations |
 | MSC3771 | ❌ ● | 0/10 | Read receipts for threads | thread_id discarded; receipts always Unthreaded |
 | MSC3773 | ❌ ● | 0/10 | Notifications for threads | sync returns empty unread_thread_notifications map |
-| MSC3823 | ❌ ● | 0/0 | Account Suspension | no M_USER_SUSPENDED errcode or suspension behavior |
-| MSC3939 | ❌ ● | 0/0 | Account locking | Account locking (M_USER_LOCKED, soft_logout) not implemented. |
 | MSC3980 | ❌ ◐ | 0/0 | Dotted Field Consistency | event_fields filter escaping not enforced |
 | MSC4115 | ❌ ● | 0/0 | membership metadata on events | unsigned.membership not populated on events served to clients |
 | MSC4222 | ❌ ● | 0/0 | Adding `state_after` to `/sync` | MSC4222 commit lives only on the `4222` feature branch, not dev |
 | MSC4284 | ❌ ● | 0/0 | Policy Servers | no policy server /sign, no m.room.policy state handling |
-| MSC4323 | ❌ ● | 0/0 | User suspension &amp; locking endpoints | client admin suspend/lock endpoints not implemented |
 | MSC4335 | ❌ ● | 0/0 | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
 | MSC4341 | ❌ ● | 0/0 | Support for RFC 8628 Device Authorization Grant | OAuth Device Authorization Grant (RFC 8628) not advertised |
 
@@ -716,7 +713,7 @@ Sorted by MSC number, highest first.
 | MSC3903 | ⬛ ● | ?/? | X25519 Elliptic-curve Diffie-Hellman ephemeral for establishing secure channe... | [→ MSC4108] client-to-client X25519 ECDH; no server role |
 | MSC3902 | 🟨 ◐ | 30/40 | Faster remote room joins over federation (overview) | sends omit_members but immediately fetches full state |
 | MSC3901 | ❌ ◐ | 0/0 | Deleting State | meta-MSC of sub-proposals; obsolete-state cleanup not implemented |
-| MSC3898 | ⬛ ● | ?/? | Native Matrix VoIP signalling for cascaded SFUs | client/SFU protocol; HS already passes through state and to-device events |
+| MSC3898 | ⬛ ● | ?/? | Native Matrix VoIP signalling for cascaded SFUs | VoIP SFU signalling is opaque events between clients |
 | MSC3896 | ❌ ● | 0/0 | Appservice media | appservice media namespace not implemented |
 | MSC3895 | ❌ ● | 0/0 | Federation API Behaviour of Partial-State Resident Servers | M_UNABLE_DUE_TO_PARTIAL_STATE error code not implemented |
 | MSC3892 | ⬛ ● | ?/? | Custom Emotes with Encryption | custom emotes are pure client/state-event feature |
@@ -818,7 +815,7 @@ Sorted by MSC number, highest first.
 | MSC3468 | ❌ ● | 0/0 | MXC to Hashes | no MXC-to-hash endpoints; no /clone or /hash routes |
 | MSC3417 | ✅ ● | 100/100 | Call room room type | creation_content type=m.call passes through createRoom |
 | MSC3414 | ❌ ● | 0/0 | Encrypted state events | no encrypted state event handling or encrypted_state in publicRooms |
-| MSC3401 | ⬛ ● | ?/? | Native Group VoIP signalling | client-side group call protocol; HS only carries opaque events |
+| MSC3401 | ❌ ● | 0/10 | Native Group VoIP signalling | only default PL for m.call/m.call.member; no to-device signaling |
 | MSC3395 | ❌ ● | 0/0 | Synthetic Appservice Events | no synthetic appservice events emitted on register/login/logout |
 | MSC3394 | ❌ ● | 0/0 | New auth rule that only allows someone to post a message in relation to anoth... | no auth rule restricting top-level vs threaded messages |
 | MSC3389 | ❌ ● | 0/0 | Redaction changes for events with a relation | no m.relates_to preservation in redactions |

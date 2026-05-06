@@ -15,7 +15,7 @@ use futures::{
 		Either::{Left, Right},
 		select_ok,
 	},
-	pin_mut,
+	pin_mut, try_join,
 };
 use ruma::{
 	CanonicalJsonValue, OwnedDeviceId, OwnedServerName, OwnedUserId,
@@ -27,7 +27,10 @@ use ruma::{
 		},
 		client::{
 			directory::get_public_rooms,
-			profile::{get_avatar_url, get_display_name, get_profile, get_profile_field},
+			profile::{
+				get_avatar_url, get_display_name, get_profile, get_profile_field, set_avatar_url,
+				set_display_name,
+			},
 			session::{logout, logout_all},
 			voip::get_turn_server_info,
 		},
@@ -96,16 +99,17 @@ where
 
 	let auth = T::Authentication::dispatch::<T>(services, request, json_body, token).await?;
 
-	locked_account_gate::<T>(services, &auth).await?;
+	try_join!(
+		locked_account_check::<T>(services, &auth),
+		suspended_account_check::<T>(services, &auth),
+	)?;
 
 	Ok(auth)
 }
 
-/// MSC3939: 401 `M_USER_LOCKED` (with `soft_logout: true`) when an
-/// authenticated request is bound to a locked account, except for the two
-/// logout endpoints. Suspension (MSC3823) is a per-action 403 enforced at the
-/// handler, so it does not belong here.
-async fn locked_account_gate<T>(services: &Services, auth: &Auth) -> Result
+/// MSC3939: 401 `M_USER_LOCKED` for locked accounts; logout endpoints
+/// bypass. `soft_logout: true` is emitted by ruma for this errcode.
+async fn locked_account_check<T>(services: &Services, auth: &Auth) -> Result
 where
 	T: IncomingRequest + 'static,
 {
@@ -122,6 +126,28 @@ where
 	}
 
 	Err!(Request(UserLocked("This account has been locked.")))
+}
+
+/// MSC3823: 403 `M_USER_SUSPENDED` on `set_display_name` / `set_avatar_url`
+/// for suspended callers. Companion checks: per-field in the profile
+/// handlers, per-PDU in `timeline::build_and_append_pdu`.
+async fn suspended_account_check<T>(services: &Services, auth: &Auth) -> Result
+where
+	T: IncomingRequest + 'static,
+{
+	let Some(user_id) = auth.sender_user.as_deref() else {
+		return Ok(());
+	};
+
+	let id = TypeId::of::<T>();
+	let blocked = id == TypeId::of::<set_display_name::v3::Request>()
+		|| id == TypeId::of::<set_avatar_url::v3::Request>();
+
+	if !blocked || !services.users.is_suspended(user_id).await {
+		return Ok(());
+	}
+
+	Err!(Request(UserSuspended("Account is suspended.")))
 }
 
 /// Tag identifying an [`AuthScheme`] for tuwunel's purposes.
