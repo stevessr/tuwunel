@@ -1,10 +1,32 @@
-use std::borrow::Borrow;
+use std::{borrow::Borrow, collections::BTreeMap};
 
 use futures::{FutureExt, Stream};
 use ruma::EventId;
 use tuwunel_core::utils::stream::{IterStream, ReadyExt};
 
 use super::AuthSet;
+
+struct Counts<Id: Ord> {
+	by_id: BTreeMap<Id, usize>,
+	total: usize,
+}
+
+impl<Id: Ord> Default for Counts<Id> {
+	fn default() -> Self { Self { by_id: BTreeMap::new(), total: 0 } }
+}
+
+impl<Id: Ord> Counts<Id> {
+	fn merge(mut self, set: AuthSet<Id>) -> Self {
+		self.total = self.total.saturating_add(1);
+		for id in set {
+			let count = self.by_id.entry(id).or_default();
+
+			*count = count.saturating_add(1);
+		}
+
+		self
+	}
+}
 
 /// Get the auth difference for the given auth chains.
 ///
@@ -31,11 +53,12 @@ where
 	Id: Borrow<EventId> + Clone + Eq + Ord + Send + 'a,
 {
 	auth_sets
-		.ready_fold_default(|ret: AuthSet<Id>, set| {
-			ret.symmetric_difference(&set)
-				.cloned()
-				.collect::<AuthSet<Id>>()
+		.ready_fold_default(Counts::<Id>::merge)
+		.map(|Counts { by_id, total }: Counts<Id>| {
+			by_id
+				.into_iter()
+				.filter_map(move |(id, count)| (count < total).then_some(id))
+				.stream()
 		})
-		.map(|set: AuthSet<Id>| set.into_iter().stream())
 		.flatten_stream()
 }

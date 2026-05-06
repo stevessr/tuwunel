@@ -841,3 +841,62 @@ async fn split_conflicted_state_set_mixed() {
 		StateEventType::RoomMember => "@c:hs1" => once(2).collect(),
 	],);
 }
+
+// `auth_difference` returns events in fewer than every input chain
+// (∪Cᵢ - ∩Cᵢ), per the v2 state-res spec.
+
+fn auth_set(ids: &[&str]) -> super::AuthSet<OwnedEventId> {
+	ids.iter().copied().map(event_id).collect()
+}
+
+async fn auth_difference_result(sets: Vec<super::AuthSet<OwnedEventId>>) -> Vec<OwnedEventId> {
+	let mut out: Vec<OwnedEventId> =
+		super::auth_difference::auth_difference(sets.into_iter().stream())
+			.collect()
+			.await;
+	out.sort();
+	out
+}
+
+#[tokio::test]
+async fn auth_difference_three_sets_partial_overlap() {
+	// `a` is in all three sets so it is excluded; the other three are each
+	// missing from one set so they make up the difference.
+	let result = auth_difference_result(vec![
+		auth_set(&["a", "b", "c"]),
+		auth_set(&["a", "b", "d"]),
+		auth_set(&["a", "c", "d"]),
+	])
+	.await;
+
+	assert_eq!(result, vec![event_id("b"), event_id("c"), event_id("d")]);
+}
+
+#[tokio::test]
+async fn auth_difference_three_sets_full_overlap() {
+	let result =
+		auth_difference_result(vec![auth_set(&["a"]), auth_set(&["a"]), auth_set(&["a"])]).await;
+
+	assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn auth_difference_two_sets() {
+	let result = auth_difference_result(vec![auth_set(&["a", "b"]), auth_set(&["a", "c"])]).await;
+
+	assert_eq!(result, vec![event_id("b"), event_id("c")]);
+}
+
+#[tokio::test]
+async fn auth_difference_no_sets() {
+	let result = auth_difference_result(vec![]).await;
+
+	assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn auth_difference_single_set() {
+	let result = auth_difference_result(vec![auth_set(&["a", "b", "c"])]).await;
+
+	assert!(result.is_empty());
+}
