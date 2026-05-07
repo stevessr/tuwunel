@@ -54,8 +54,8 @@ Removes one media file from the database and from storage. Use
 !admin media delete-by-event --event-id $abc123:example.com
 ```
 
-Extracts all MXC URIs from the event — including the primary media URL,
-thumbnail URL, and encrypted file URL — and deletes each one. Returns the
+Extracts all MXC URIs from the event (including the primary media URL,
+thumbnail URL, and encrypted file URL) and deletes each one. Returns the
 number of files deleted. Useful when a user reports a specific message
 containing unwanted media.
 
@@ -132,36 +132,8 @@ uploads that somehow reference the server, add the confirmation flag:
 
 ## Responding to a spam incident
 
-When a server sends spam media to your users, the typical response is:
-
-**1. Identify the source server.**
-Check the MXC URIs in the reported messages — the server name is the
-authority component: `mxc://<server_name>/<media_id>`.
-
-**2. Delete cached copies of their media.**
-
-```
-!admin media delete-all-from-server badserver.tld
-```
-
-**3. Block future media downloads from that server.**
-Add the server to `prevent_media_downloads_from` in your config and reload
-or restart Tuwunel:
-
-```toml
-prevent_media_downloads_from = ["badserver\\.tld$"]
-```
-
-**4. If the spam arrived within a known time window**, use `delete-range` to
-catch anything missed:
-
-```
-!admin media delete-range 2h --newer-than
-```
-
-**5. If you have a list of specific MXC URIs** (e.g. from a moderation tool
-or a shared blocklist), use `delete-list` to remove them in bulk.
-
-**6. Consider server-level federation blocks** via
-`forbidden_remote_server_names` if the server is persistently abusive,
-which will block all federation traffic rather than just media.
+The full incident playbook (cached-media delete, federation blocks, invite
+gating, and the per-room policy-server option) lives in
+[Policy and Moderation > Responding to a spam incident](../moderation.md#responding-to-a-spam-incident).
+That chapter is the source of truth; refer to it when an incident is in
+progress.

@@ -18,16 +18,16 @@
 
 ## Counts
 
-- ✅ `yes`: 212
+- ✅ `yes`: 213
 - 🟨 `partial`: 87
-- ❌ `no`: 425
+- ❌ `no`: 424
 - ⬛ `n/a`: 289
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 148 | 35 | 16 | 57 | 256 |
+| merged | 149 | 35 | 15 | 57 | 256 |
 | open | 56 | 51 | 373 | 172 | 652 |
 | closed | 8 | 1 | 36 | 52 | 97 |
 | unknown | 0 | 0 | 0 | 8 | 8 |
@@ -52,7 +52,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4297 | ✅ ● | 100/100 | State Resolution v2.1 | src/service/rooms/state_res/resolve.rs:257 conflicted state subgraph; tests pass |
 | MSC4291 | 🟨 ● | 80/90 | Room IDs as hashes of the create event | hydra.11 room id format and auth rules in event_auth, pdu format checks |
 | MSC4289 | ✅ ● | 100/100 | Explicitly privilege room creators | src/service/tests/state_res/fixtures/MSC4297-problem-A/pdus-hydra.json:5; com... |
-| MSC4284 | ❌ ● | 0/0 | Policy Servers | no policy server /sign, no m.room.policy state handling |
+| MSC4284 | ✅ ● | 90/90 | Policy Servers | outbound /sign, inbound verify, fetch-on-missing, refusal/backoff cache; v13 ... |
 | MSC4277 | 🟨 ◐ | 30/40 | Harmonizing the reporting endpoints | event and room report endpoints exist; user report endpoint absent |
 | MSC4267 | ✅ ● | 100/100 | Automatically forgetting rooms on leave | forget_forced_upon_leave config honored on Leave or Ban; capability advertised |
 | MSC4260 | ✅ ● | 100/100 | Reporting users (Client-Server API) | src/api/client/report.rs:63; admin notification, 404 M_NOT_FOUND on unknown u... |
@@ -94,7 +94,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3958 | ✅ ● | 100/100 | Suppress notifications from message edits | SuppressEdits push rule provided via Ruma server_default ruleset |
 | MSC3952 | ✅ ◐ | 80/90 | Intentional Mentions | Intentional mentions push rules ride on Ruma server_default; flag advertised. |
 | MSC3943 | ✅ ● | 100/100 | Partial joins to nameless rooms should include heroes' memberships. | send_join partial-state response includes hero memberships and their auth chains |
-| MSC3939 | ✅ ● | 100/100 | Account locking | src/api/router/auth.rs locked_account_check; M_USER_LOCKED 401 with soft_logo... |
+| MSC3939 | ✅ ● | 100/100 | Account locking | src/api/router/auth.rs locked_account_gate; M_USER_LOCKED 401 with soft_logou... |
 | MSC3938 | ✅ ◐ | 80/80 | Remove deprecated `keyId` parameters from `/keys` endpoints | New /key/v2/server (no keyId) implemented; deprecated form retained for compat. |
 | MSC3930 | 🟨 ◐ | 0/? | Polls push rules/notifications | complement: 0p/2f |
 | MSC3925 | 🟨 ◐ | 50/50 | m.replace aggregation with full event | Tuwunel doesn't replace content (good) but also lacks bundled m.replace aggre... |
@@ -114,7 +114,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3820 | ✅ ● | 90/100 | Room Version 11 | v11 stable; redaction and auth rules dispatch via Ruma RoomVersionRules |
 | MSC3818 | ✅ ● | 100/100 | Copy room type on upgrade | upgrade reuses old m.room.create content; type preserved by default |
 | MSC3816 | 🟨 ◐ | 20/40 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |
-| MSC3787 | 🟨 ● | 71/? | Allowing knocks to restricted rooms | complement: 34p/14f |
+| MSC3787 | 🟨 ● | 70/? | Allowing knocks to restricted rooms | complement: 33p/14f |
 | MSC3786 | ✅ ● | 100/100 | Add a default push rule to ignore `m.room.server_acl` events | server_acl predefined push rule via Ruma defaults |
 | MSC3773 | ❌ ● | 0/10 | Notifications for threads | sync returns empty unread_thread_notifications map |
 | MSC3771 | ❌ ● | 0/10 | Read receipts for threads | thread_id discarded; receipts always Unthreaded |
@@ -248,8 +248,8 @@ for spec compliance.
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
 | MSC4291 | 🟨 ● | 80/90 | Room IDs as hashes of the create event | hydra.11 room id format and auth rules in event_auth, pdu format checks |
-| MSC3787 | 🟨 ● | 71/? | Allowing knocks to restricted rooms | complement: 34p/14f |
 | MSC2409 | 🟨 ● | 70/70 | Proposal to send typing, presence and receipts to appservices | typing+receipt EDUs sent to AS; presence not forwarded |
+| MSC3787 | 🟨 ● | 70/? | Allowing knocks to restricted rooms | complement: 33p/14f |
 | MSC4380 | 🟨 ● | 70/70 | Invite blocking | phase A landed (invite-creating endpoints gated, M_INVITE_BLOCKED 403); phase... |
 | MSC1866 | 🟨 ○ | 60/70 | MSC 1866 - Unsupported Room Version Error Code for Invites | federation invite errors propagated; not explicitly mapped |
 | MSC1929 | 🟨 ● | 60/80 | MSC1929 Homeserver Admin Contact and Support page | /.well-known/matrix/support implemented; only single contact via config (no a... |
@@ -295,7 +295,6 @@ for spec compliance.
 | MSC3980 | ❌ ◐ | 0/0 | Dotted Field Consistency | event_fields filter escaping not enforced |
 | MSC4115 | ❌ ● | 0/0 | membership metadata on events | unsigned.membership not populated on events served to clients |
 | MSC4222 | ❌ ● | 0/0 | Adding `state_after` to `/sync` | MSC4222 commit lives only on the `4222` feature branch, not dev |
-| MSC4284 | ❌ ● | 0/0 | Policy Servers | no policy server /sign, no m.room.policy state handling |
 | MSC4335 | ❌ ● | 0/0 | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
 | MSC4341 | ❌ ● | 0/0 | Support for RFC 8628 Device Authorization Grant | OAuth Device Authorization Grant (RFC 8628) not advertised |
 

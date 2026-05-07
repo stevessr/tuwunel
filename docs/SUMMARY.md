@@ -34,6 +34,7 @@
   - [Matrix RTC (Element Call)](calls/matrix_rtc.md)
   - [Legacy Telephony (TURN)](calls/turn.md)
 - [Bridge and Application Services](appservices.md)
+- [Policy and Moderation](moderation.md)
 - [Maintenance](maintenance.md)
 - [Troubleshooting](troubleshooting.md)
 - [Development](development.md)
