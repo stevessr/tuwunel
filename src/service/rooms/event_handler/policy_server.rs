@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, time::Duration};
 
 use ruma::{
-	CanonicalJsonObject, CanonicalJsonValue, OwnedServerName, RoomId, RoomVersionId, ServerName,
+	CanonicalJsonObject, CanonicalJsonValue, RoomId, RoomVersionId, ServerName,
 	SigningKeyAlgorithm,
 	api::{error::ErrorKind, federation::policy::sign_event::v1 as sign_event},
 	events::{StateEventType, room::policy::RoomPolicyEventContent},
@@ -15,19 +15,33 @@ use tuwunel_core::{
 	trace, warn,
 };
 
-/// Resolved policy-server configuration for a room.
-pub struct PolicyConfig {
-	pub via: OwnedServerName,
-	pub ed25519_public_key: Base64,
+/// Outcome of an inbound policy-server signature check.
+#[derive(Debug)]
+pub enum PolicyCheck {
+	/// No policy server is configured for this room (or feature is off, or
+	/// the event is the policy state event itself). The caller should not
+	/// modify its soft-fail decision based on policy considerations.
+	NotApplicable,
+
+	/// Policy server signature is present and verifies cleanly.
+	Pass,
+
+	/// Policy server signature is absent. Per MSC4284, the homeserver SHOULD
+	/// either fetch one from the policy server or soft-fail.
+	Missing,
+
+	/// Policy server signature is present but failed cryptographic
+	/// verification. Soft-fail.
+	Invalid,
 }
 
-/// Returns the room's policy server configuration when one is in effect:
-/// `m.room.policy` (empty state key) is set, parses cleanly, lists at least
-/// one ed25519 public key, and the `via` server has a joined user in the room.
-/// Any failure returns `None`, signalling "no policy server configured" so the
+/// Returns the room's `m.room.policy` event content when a policy server is
+/// in effect: state event present, parses cleanly, lists at least one ed25519
+/// public key, and the `via` server has a joined user in the room. Any
+/// failure returns `None`, signalling "no policy server configured" so the
 /// caller skips the gate entirely.
 #[implement(super::Service)]
-pub async fn lookup_policy_server(&self, room_id: &RoomId) -> Option<PolicyConfig> {
+pub async fn lookup_policy_server(&self, room_id: &RoomId) -> Option<RoomPolicyEventContent> {
 	let content: RoomPolicyEventContent = self
 		.services
 		.state_accessor
@@ -35,19 +49,18 @@ pub async fn lookup_policy_server(&self, room_id: &RoomId) -> Option<PolicyConfi
 		.await
 		.ok()?;
 
-	let public_key = content
+	if !content
 		.public_keys
-		.get(&SigningKeyAlgorithm::Ed25519)
-		.cloned()?;
+		.contains_key(&SigningKeyAlgorithm::Ed25519)
+	{
+		return None;
+	}
 
 	self.services
 		.state_cache
 		.server_in_room(&content.via, room_id)
 		.await
-		.then(|| PolicyConfig {
-			via: content.via,
-			ed25519_public_key: public_key,
-		})
+		.then_some(content)
 }
 
 /// MSC4284: ask the room's policy server to sign an outgoing event. The
@@ -102,10 +115,15 @@ where
 /// success, `None` when the call fails-open (network error or timeout), and
 /// `Err(Forbidden)` when the policy server explicitly refuses to sign.
 #[implement(super::Service)]
-#[tracing::instrument(name = "policy_fetch", level = "debug", skip_all, fields(via = %policy.via))]
+#[tracing::instrument(
+	name = "policy_fetch",
+	level = "debug",
+	skip_all,
+	fields(via = %policy.via)
+)]
 async fn fetch_policy_signature(
 	&self,
-	policy: &PolicyConfig,
+	policy: &RoomPolicyEventContent,
 	pdu_json: &CanonicalJsonObject,
 	room_version: &RoomVersionId,
 ) -> Result<Option<String>> {
@@ -151,26 +169,6 @@ async fn fetch_policy_signature(
 		})
 }
 
-/// Outcome of an inbound policy-server signature check.
-#[derive(Debug)]
-pub enum PolicyCheck {
-	/// No policy server is configured for this room (or feature is off, or
-	/// the event is the policy state event itself). The caller should not
-	/// modify its soft-fail decision based on policy considerations.
-	NotApplicable,
-
-	/// Policy server signature is present and verifies cleanly.
-	Pass,
-
-	/// Policy server signature is absent. Per MSC4284, the homeserver SHOULD
-	/// either fetch one from the policy server (Phase C) or soft-fail.
-	Missing,
-
-	/// Policy server signature is present but failed cryptographic
-	/// verification. Soft-fail.
-	Invalid,
-}
-
 /// MSC4284: verify the policy server signature on an inbound PDU. Returns
 /// `NotApplicable` for rooms without a configured policy server (the gate is
 /// skipped); `Pass` when the signature verifies; `Missing` when no signature
@@ -211,6 +209,14 @@ where
 		return PolicyCheck::NotApplicable;
 	};
 
+	// `lookup_policy_server` already verified the ed25519 entry is present.
+	let Some(public_key) = policy
+		.public_keys
+		.get(&SigningKeyAlgorithm::Ed25519)
+	else {
+		return PolicyCheck::NotApplicable;
+	};
+
 	let Some(signature_b64) = extract_policy_signature(pdu_json, &policy.via) else {
 		return PolicyCheck::Missing;
 	};
@@ -230,7 +236,7 @@ where
 
 	verify_canonical_json_bytes(
 		&SigningKeyAlgorithm::Ed25519,
-		policy.ed25519_public_key.as_bytes(),
+		public_key.as_bytes(),
 		signature.as_bytes(),
 		canonical.as_bytes(),
 	)
