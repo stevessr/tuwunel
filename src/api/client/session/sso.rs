@@ -1,6 +1,6 @@
 mod uiaa;
 
-use std::{borrow::Cow, net::IpAddr, time::Duration};
+use std::{borrow::Cow, collections::BTreeMap, net::IpAddr, time::Duration};
 
 use axum::extract::State;
 use axum_extra::extract::cookie::{Cookie, SameSite};
@@ -179,6 +179,17 @@ async fn handle_sso_login(
 		.map(|mut location| {
 			let query = serde_html_form::to_string(&query).ok();
 			location.set_query(query.as_deref());
+			if !provider.extra_authorization_parameters.is_empty() {
+				// Overlay extra_authorization_parameters onto the base query, overriding
+				// duplicate keys.
+				let merged: BTreeMap<String, String> = location
+					.query_pairs()
+					.map(|(k, v)| (k.into_owned(), v.into_owned()))
+					.chain(provider.extra_authorization_parameters.clone())
+					.collect();
+				location.set_query(None);
+				location.query_pairs_mut().extend_pairs(&merged);
+			}
 			location
 		})
 		.ok_or_else(|| {
