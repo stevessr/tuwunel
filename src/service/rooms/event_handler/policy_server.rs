@@ -4,8 +4,8 @@ use std::{
 };
 
 use ruma::{
-	CanonicalJsonObject, CanonicalJsonValue, EventId, RoomId, RoomVersionId, ServerName,
-	SigningKeyAlgorithm,
+	CanonicalJsonObject, CanonicalJsonValue, EventId, OwnedServerName, RoomId, RoomVersionId,
+	ServerName, SigningKeyAlgorithm,
 	api::{
 		error::{ErrorKind, RetryAfter},
 		federation::policy::sign_event::v1 as sign_event,
@@ -24,6 +24,12 @@ use tuwunel_core::{
 	warn,
 };
 use tuwunel_database::{Cbor, Deserialized};
+
+/// MSC4284 unstable state event type. The merged spec stabilised this to
+/// `m.room.policy`, but the reference policy server (and Element's default
+/// deployments as of 2026-05) still write the unstable type with the singular
+/// `public_key` field; reading both keeps the gate live for those rooms.
+const UNSTABLE_POLICY_TYPE: &str = "org.matrix.msc4284.policy";
 
 /// Outcome of an inbound policy-server signature check.
 #[derive(Debug)]
@@ -80,6 +86,35 @@ enum PolicySigState {
 	},
 }
 
+/// Lenient deserialiser that accepts either the stable
+/// `public_keys: { ed25519: ... }` shape or the MSC4284 unstable singular
+/// `public_key: <ed25519>` shape, and folds the latter into the former.
+#[derive(Deserialize)]
+struct UnstablePolicyContent {
+	via: OwnedServerName,
+
+	#[serde(default)]
+	public_keys: BTreeMap<SigningKeyAlgorithm, Base64>,
+
+	#[serde(default)]
+	public_key: Option<Base64>,
+}
+
+#[implement(UnstablePolicyContent)]
+fn into_stable(
+	Self { via, mut public_keys, public_key }: Self,
+) -> Option<RoomPolicyEventContent> {
+	if let Some(key) = public_key {
+		public_keys
+			.entry(SigningKeyAlgorithm::Ed25519)
+			.or_insert(key);
+	}
+
+	let ed25519 = public_keys.remove(&SigningKeyAlgorithm::Ed25519)?;
+
+	Some(RoomPolicyEventContent::new(via, ed25519))
+}
+
 #[implement(super::Service)]
 fn cache_policy_refused(&self, event_id: &EventId) {
 	self.db
@@ -105,26 +140,28 @@ async fn cached_policy_state(&self, event_id: &EventId) -> Option<PolicySigState
 		.ok()
 }
 
-/// Returns the room's `m.room.policy` event content when a policy server is
-/// in effect: state event present, parses cleanly, lists at least one ed25519
-/// public key, and the `via` server has a joined user in the room. Any
-/// failure returns `None`, signalling "no policy server configured" so the
-/// caller skips the gate entirely.
+/// Returns the room's policy event content when a policy server is in effect:
+/// state event present (stable `m.room.policy`, falling back to MSC4284's
+/// unstable `org.matrix.msc4284.policy`), parses cleanly under either the
+/// stable `public_keys` map or the unstable singular `public_key` field, and
+/// the `via` server has a joined user in the room. Any failure returns `None`,
+/// signalling "no policy server configured" so the caller skips the gate
+/// entirely.
 #[implement(super::Service)]
 pub async fn lookup_policy_server(&self, room_id: &RoomId) -> Option<RoomPolicyEventContent> {
-	let content: RoomPolicyEventContent = self
-		.services
-		.state_accessor
-		.room_state_get_content(room_id, &StateEventType::RoomPolicy, "")
-		.await
-		.ok()?;
+	let read = async |event_type: &StateEventType| {
+		self.services
+			.state_accessor
+			.room_state_get_content::<UnstablePolicyContent>(room_id, event_type, "")
+			.await
+			.ok()
+			.and_then(UnstablePolicyContent::into_stable)
+	};
 
-	if !content
-		.public_keys
-		.contains_key(&SigningKeyAlgorithm::Ed25519)
-	{
-		return None;
-	}
+	let content = match read(&StateEventType::RoomPolicy).await {
+		| Some(content) => content,
+		| None => read(&StateEventType::from(UNSTABLE_POLICY_TYPE.to_owned())).await?,
+	};
 
 	self.services
 		.state_cache
@@ -458,7 +495,13 @@ where
 }
 
 fn is_policy_state_event<E: Event>(pdu: &E) -> bool {
-	pdu.kind().to_cow_str() == "m.room.policy" && pdu.state_key() == Some("")
+	if pdu.state_key() != Some("") {
+		return false;
+	}
+
+	let kind = pdu.kind().to_cow_str();
+
+	kind == "m.room.policy" || kind == UNSTABLE_POLICY_TYPE
 }
 
 fn extract_policy_signature<'a>(
