@@ -1,9 +1,7 @@
-use std::collections::HashSet;
-
 use axum::extract::State;
-use futures::{FutureExt, StreamExt, future::join};
-use ruma::api::client::keys::get_key_changes;
-use tuwunel_core::{Result, at, err};
+use futures::{StreamExt, stream};
+use ruma::{OwnedRoomId, api::client::keys::get_key_changes};
+use tuwunel_core::{Result, at, err, utils::stream::BroadbandExt};
 
 use crate::Ruma;
 
@@ -32,31 +30,25 @@ pub(crate) async fn get_key_changes_route(
 	let user_changes = services
 		.users
 		.keys_changed(sender_user, from, Some(to))
-		.map(ToOwned::to_owned)
-		.collect::<HashSet<_>>();
+		.map(ToOwned::to_owned);
 
 	let room_changes = services
 		.state_cache
 		.rooms_joined(sender_user)
-		.flat_map(|room_id| {
+		.map(ToOwned::to_owned)
+		.broad_then(async |room_id: OwnedRoomId| {
 			services
 				.users
-				.room_keys_changed(room_id, from, Some(to))
+				.room_keys_changed(&room_id, from, Some(to))
 				.map(at!(0))
 				.map(ToOwned::to_owned)
+				.collect::<Vec<_>>()
+				.await
 		})
-		.collect::<HashSet<_>>()
-		.boxed();
-
-	let (user_changes, room_changes) = join(user_changes, room_changes).await;
-
-	let changed: HashSet<_> = user_changes
-		.into_iter()
-		.chain(room_changes)
-		.collect();
+		.flat_map(stream::iter);
 
 	Ok(get_key_changes::v3::Response {
-		changed: changed.into_iter().collect(),
 		left: Vec::new(), // TODO
+		changed: user_changes.chain(room_changes).collect().await,
 	})
 }
