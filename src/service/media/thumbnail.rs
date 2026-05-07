@@ -30,7 +30,7 @@ impl super::Service {
 	#[tracing::instrument(
 		level = "debug",
 		ret(level = "debug")
-		skip(self),
+		skip(self, file),
 	)]
 	pub async fn upload_thumbnail(
 		&self,
