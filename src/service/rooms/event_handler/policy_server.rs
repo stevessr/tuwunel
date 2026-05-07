@@ -1,19 +1,29 @@
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+	collections::BTreeMap,
+	time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use ruma::{
-	CanonicalJsonObject, CanonicalJsonValue, RoomId, RoomVersionId, ServerName,
+	CanonicalJsonObject, CanonicalJsonValue, EventId, RoomId, RoomVersionId, ServerName,
 	SigningKeyAlgorithm,
-	api::{error::ErrorKind, federation::policy::sign_event::v1 as sign_event},
+	api::{
+		error::{ErrorKind, RetryAfter},
+		federation::policy::sign_event::v1 as sign_event,
+	},
 	events::{StateEventType, room::policy::RoomPolicyEventContent},
 	serde::Base64,
 	signatures::{to_canonical_json_string_for_signing, verify_canonical_json_bytes},
 };
+use serde::{Deserialize, Serialize};
 use serde_json::value::to_raw_value;
 use tuwunel_core::{
-	Err, Result, debug, err, implement,
+	Err, Result, at, debug, implement,
 	matrix::{Event, pdu::into_outgoing_federation, room_version},
-	trace, warn,
+	trace,
+	utils::time::now_secs,
+	warn,
 };
+use tuwunel_database::{Cbor, Deserialized};
 
 /// Outcome of an inbound policy-server signature check.
 #[derive(Debug)]
@@ -33,6 +43,66 @@ pub enum PolicyCheck {
 	/// Policy server signature is present but failed cryptographic
 	/// verification. Soft-fail.
 	Invalid,
+}
+
+/// Outcome of a `/sign` round-trip to the policy server.
+#[derive(Debug)]
+enum FetchOutcome {
+	/// Policy server returned a valid signature.
+	Signed(String),
+
+	/// Network error or timeout; the caller should fail open.
+	FailOpen,
+
+	/// Policy server explicitly refused (Forbidden), or returned 200 OK
+	/// with no signature for our `via` (the MSC4284 unstable refusal).
+	Refused,
+
+	/// Policy server returned `M_LIMIT_EXCEEDED`. The caller should record
+	/// the unix-secs deadline so subsequent attempts before then are
+	/// short-circuited.
+	RateLimited {
+		until_secs: u64,
+	},
+}
+
+/// Persisted per-event policy-server outcome in `eventid_policysigstate`.
+/// Absence of a row means "no prior decision recorded; proceed with `/sign`".
+#[derive(Debug, Serialize, Deserialize)]
+enum PolicySigState {
+	/// Policy server already refused this event; do not retry.
+	Refused,
+
+	/// Policy server is rate-limiting; do not retry before this unix-secs
+	/// deadline.
+	BackoffUntil {
+		until_secs: u64,
+	},
+}
+
+#[implement(super::Service)]
+fn cache_policy_refused(&self, event_id: &EventId) {
+	self.db
+		.eventid_policysigstate
+		.raw_put(event_id.as_str(), Cbor(&PolicySigState::Refused));
+}
+
+#[implement(super::Service)]
+fn cache_policy_backoff(&self, event_id: &EventId, until_secs: u64) {
+	self.db
+		.eventid_policysigstate
+		.raw_put(event_id.as_str(), Cbor(&PolicySigState::BackoffUntil { until_secs }));
+}
+
+#[implement(super::Service)]
+async fn cached_policy_state(&self, event_id: &EventId) -> Option<PolicySigState> {
+	self.db
+		.eventid_policysigstate
+		.get(event_id.as_str())
+		.await
+		.deserialized::<Cbor<_>>()
+		.map(at!(0))
+		.ok()
 }
 
 /// Returns the room's `m.room.policy` event content when a policy server is
@@ -70,11 +140,7 @@ pub async fn lookup_policy_server(&self, room_id: &RoomId) -> Option<RoomPolicyE
 /// timeouts fail open with a warn log.
 #[implement(super::Service)]
 #[tracing::instrument(name = "policy_sign", level = "debug", skip_all)]
-pub async fn sign_outgoing_pdu<E>(
-	&self,
-	pdu_json: &mut CanonicalJsonObject,
-	pdu: &E,
-) -> Result<()>
+pub async fn sign_outgoing_pdu<E>(&self, pdu_json: &mut CanonicalJsonObject, pdu: &E) -> Result
 where
 	E: Event,
 {
@@ -100,20 +166,42 @@ where
 		return Ok(());
 	};
 
-	if let Some(signature) = self
+	let event_id = pdu.event_id();
+	match self.cached_policy_state(event_id).await {
+		| Some(PolicySigState::Refused) =>
+			return Err!(Request(Forbidden("Event was rejected by the room's policy server."))),
+
+		| Some(PolicySigState::BackoffUntil { until_secs }) if until_secs > now_secs() => {
+			debug!(via = %policy.via, until_secs, "skipping outbound /sign during policy backoff");
+			return Ok(());
+		},
+		| _ => {},
+	}
+
+	match self
 		.fetch_policy_signature(&policy, pdu_json, &room_version)
-		.await?
+		.await
 	{
-		insert_policy_signature(pdu_json, &policy.via, &signature);
-		debug!(via = %policy.via, event_id = %pdu.event_id(), "folded policy server signature");
+		| FetchOutcome::Signed(signature) => {
+			insert_policy_signature(pdu_json, &policy.via, &signature);
+			debug!(via = %policy.via, event_id = %event_id, "folded policy server signature");
+		},
+		| FetchOutcome::Refused => {
+			self.cache_policy_refused(event_id);
+			return Err!(Request(Forbidden("Event was rejected by the room's policy server.")));
+		},
+		| FetchOutcome::RateLimited { until_secs } => {
+			self.cache_policy_backoff(event_id, until_secs);
+		},
+		| FetchOutcome::FailOpen => {},
 	}
 
 	Ok(())
 }
 
-/// Calls the policy server's `/sign` endpoint. Returns `Some(signature)` on
-/// success, `None` when the call fails-open (network error or timeout), and
-/// `Err(Forbidden)` when the policy server explicitly refuses to sign.
+/// Calls the policy server's `/sign` endpoint. The classification of the
+/// response (`Signed` / `Refused` / `RateLimited` / `FailOpen`) lets each
+/// caller choose its own reaction.
 #[implement(super::Service)]
 #[tracing::instrument(
 	name = "policy_fetch",
@@ -126,10 +214,12 @@ async fn fetch_policy_signature(
 	policy: &RoomPolicyEventContent,
 	pdu_json: &CanonicalJsonObject,
 	room_version: &RoomVersionId,
-) -> Result<Option<String>> {
+) -> FetchOutcome {
 	let outgoing = into_outgoing_federation(pdu_json.clone(), room_version);
-	let raw = to_raw_value(&outgoing)
-		.map_err(|e| err!(Database("failed to serialize PDU for policy /sign: {e}")))?;
+	let Ok(raw) = to_raw_value(&outgoing) else {
+		warn!(via = %policy.via, "failed to serialize PDU for policy /sign; failing open");
+		return FetchOutcome::FailOpen;
+	};
 
 	let timeout = Duration::from_secs(
 		self.services
@@ -147,15 +237,18 @@ async fn fetch_policy_signature(
 	.await
 	{
 		| Ok(Ok(response)) => response,
-		| Ok(Err(error)) if error.kind() == ErrorKind::Forbidden =>
-			return Err!(Request(Forbidden("Event was rejected by the room's policy server."))),
+		| Ok(Err(error)) if error.kind() == ErrorKind::Forbidden => return FetchOutcome::Refused,
 		| Ok(Err(error)) => {
+			if let Some(until_secs) = parse_rate_limit(&error) {
+				warn!(via = %policy.via, until_secs, "policy server /sign rate-limited");
+				return FetchOutcome::RateLimited { until_secs };
+			}
 			warn!(via = %policy.via, %error, "policy server /sign failed; failing open");
-			return Ok(None);
+			return FetchOutcome::FailOpen;
 		},
 		| Err(elapsed) => {
 			warn!(via = %policy.via, %elapsed, "policy server /sign timed out; failing open");
-			return Ok(None);
+			return FetchOutcome::FailOpen;
 		},
 	};
 
@@ -163,10 +256,23 @@ async fn fetch_policy_signature(
 	response
 		.ed25519_signature(&policy.via)
 		.map(ToOwned::to_owned)
-		.map(Some)
-		.ok_or_else(|| {
-			err!(Request(Forbidden("Event was rejected by the room's policy server.")))
-		})
+		.map_or(FetchOutcome::Refused, FetchOutcome::Signed)
+}
+
+fn parse_rate_limit(error: &tuwunel_core::Error) -> Option<u64> {
+	let ErrorKind::LimitExceeded(data) = error.kind() else {
+		return None;
+	};
+
+	let until = match data.retry_after.as_ref()? {
+		| RetryAfter::Delay(d) => SystemTime::now().checked_add(*d)?,
+		| RetryAfter::DateTime(t) => *t,
+	};
+
+	until
+		.duration_since(UNIX_EPOCH)
+		.ok()
+		.map(|d| d.as_secs())
 }
 
 /// MSC4284: verify the inbound PDU's policy server signature; if missing, ask
@@ -198,9 +304,11 @@ where
 /// MSC4284: when an inbound PDU has no policy server signature, ask the
 /// policy server to sign on the originator's behalf; fold the returned
 /// signature into `pdu_json` so it persists with the event and federates
-/// onward. `Forbidden` from the policy server maps to `Invalid`. Network
-/// errors and timeouts fail open with a warn log, mapped to `Pass` since the
-/// next server in the room is likely to retry.
+/// onward. Cached refusals short-circuit to `Invalid`; cached backoffs (or
+/// fresh 429s) fail open as `Pass` until the deadline. `Forbidden` from the
+/// policy server maps to `Invalid`. Network errors and timeouts fail open
+/// with a warn log, mapped to `Pass` since the next server in the room is
+/// likely to retry.
 #[implement(super::Service)]
 #[tracing::instrument(name = "policy_fetch_inbound", level = "debug", skip_all)]
 async fn fetch_inbound_policy_signature<E>(
@@ -224,33 +332,50 @@ where
 		return PolicyCheck::NotApplicable;
 	};
 
+	let event_id = pdu.event_id();
+	match self.cached_policy_state(event_id).await {
+		| Some(PolicySigState::Refused) => return PolicyCheck::Invalid,
+		| Some(PolicySigState::BackoffUntil { until_secs }) if until_secs > now_secs() => {
+			debug!(
+				until_secs,
+				via = %policy.via,
+				"policy server in backoff; failing open"
+			);
+
+			return PolicyCheck::Pass;
+		},
+		| _ => {},
+	}
+
 	match self
 		.fetch_policy_signature(&policy, pdu_json, &room_version)
 		.await
 	{
-		| Ok(None) => {
-			// fail-open: network error or timeout; fetch_policy_signature already warned.
-			PolicyCheck::Pass
-		},
-		| Ok(Some(signature)) => {
-			insert_policy_signature(pdu_json, &policy.via, &signature);
+		| FetchOutcome::Signed(signature) => {
 			debug!(
 				via = %policy.via,
-				event_id = %pdu.event_id(),
+				event_id = %event_id,
 				"folded inbound policy server signature"
 			);
 
+			insert_policy_signature(pdu_json, &policy.via, &signature);
 			PolicyCheck::Pass
 		},
-		| Err(error) => {
+		| FetchOutcome::Refused => {
 			debug!(
-				%error,
 				via = %policy.via,
+				event_id = %event_id,
 				"policy server refused to sign inbound PDU; soft-failing"
 			);
 
+			self.cache_policy_refused(event_id);
 			PolicyCheck::Invalid
 		},
+		| FetchOutcome::RateLimited { until_secs } => {
+			self.cache_policy_backoff(event_id, until_secs);
+			PolicyCheck::Pass
+		},
+		| FetchOutcome::FailOpen => PolicyCheck::Pass,
 	}
 }
 

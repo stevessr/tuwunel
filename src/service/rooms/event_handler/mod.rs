@@ -26,16 +26,21 @@ use tuwunel_core::{
 	matrix::PduEvent,
 	utils::{MutexMap, bytes::pretty, continue_exponential_backoff},
 };
-
-type RoomMutexMap = MutexMap<OwnedRoomId, ()>;
-
-type RateLimitState = (Instant, u32); // Time if last failed try, number of failed tries
+use tuwunel_database::Map;
 
 pub struct Service {
 	pub mutex_federation: RoomMutexMap,
 	services: Arc<crate::services::OnceServices>,
 	bad_event_ratelimiter: Arc<RwLock<HashMap<OwnedEventId, RateLimitState>>>,
+	db: Data,
 }
+
+struct Data {
+	eventid_policysigstate: Arc<Map>,
+}
+
+type RoomMutexMap = MutexMap<OwnedRoomId, ()>;
+type RateLimitState = (Instant, u32); // Time if last failed try, number of failed tries
 
 #[async_trait]
 impl crate::Service for Service {
@@ -44,6 +49,9 @@ impl crate::Service for Service {
 			mutex_federation: RoomMutexMap::new(),
 			services: args.services.clone(),
 			bad_event_ratelimiter: Arc::new(RwLock::new(HashMap::new())),
+			db: Data {
+				eventid_policysigstate: args.db["eventid_policysigstate"].clone(),
+			},
 		}))
 	}
 
