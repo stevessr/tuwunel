@@ -169,6 +169,91 @@ async fn fetch_policy_signature(
 		})
 }
 
+/// MSC4284: verify the inbound PDU's policy server signature; if missing, ask
+/// the policy server to sign and fold the result in. Mirrors
+/// `check_inbound_policy_signature` but upgrades `Missing` to `Pass` (fetched
+/// and verified, or fail-open on network error/timeout) or `Invalid`
+/// (refused).
+#[implement(super::Service)]
+#[tracing::instrument(name = "policy_verify_or_fetch", level = "debug", skip_all)]
+pub async fn verify_or_fetch_inbound_policy_signature<E>(
+	&self,
+	pdu_json: &mut CanonicalJsonObject,
+	pdu: &E,
+) -> PolicyCheck
+where
+	E: Event,
+{
+	match self
+		.check_inbound_policy_signature(pdu_json, pdu)
+		.await
+	{
+		| PolicyCheck::Missing =>
+			self.fetch_inbound_policy_signature(pdu_json, pdu)
+				.await,
+		| other => other,
+	}
+}
+
+/// MSC4284: when an inbound PDU has no policy server signature, ask the
+/// policy server to sign on the originator's behalf; fold the returned
+/// signature into `pdu_json` so it persists with the event and federates
+/// onward. `Forbidden` from the policy server maps to `Invalid`. Network
+/// errors and timeouts fail open with a warn log, mapped to `Pass` since the
+/// next server in the room is likely to retry.
+#[implement(super::Service)]
+#[tracing::instrument(name = "policy_fetch_inbound", level = "debug", skip_all)]
+async fn fetch_inbound_policy_signature<E>(
+	&self,
+	pdu_json: &mut CanonicalJsonObject,
+	pdu: &E,
+) -> PolicyCheck
+where
+	E: Event,
+{
+	let Some(policy) = self.lookup_policy_server(pdu.room_id()).await else {
+		return PolicyCheck::NotApplicable;
+	};
+
+	let Ok(room_version) = self
+		.services
+		.state
+		.get_room_version(pdu.room_id())
+		.await
+	else {
+		return PolicyCheck::NotApplicable;
+	};
+
+	match self
+		.fetch_policy_signature(&policy, pdu_json, &room_version)
+		.await
+	{
+		| Ok(None) => {
+			// fail-open: network error or timeout; fetch_policy_signature already warned.
+			PolicyCheck::Pass
+		},
+		| Ok(Some(signature)) => {
+			insert_policy_signature(pdu_json, &policy.via, &signature);
+			debug!(
+				via = %policy.via,
+				event_id = %pdu.event_id(),
+				"folded inbound policy server signature"
+			);
+
+			PolicyCheck::Pass
+		},
+		| Err(error) => {
+			debug!(
+				%error,
+				via = %policy.via,
+				"policy server refused to sign inbound PDU; soft-failing"
+			);
+
+			PolicyCheck::Invalid
+		},
+	}
+}
+
 /// MSC4284: verify the policy server signature on an inbound PDU. Returns
 /// `NotApplicable` for rooms without a configured policy server (the gate is
 /// skipped); `Pass` when the signature verifies; `Missing` when no signature

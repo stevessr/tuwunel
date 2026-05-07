@@ -34,7 +34,7 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 	origin: &ServerName,
 	room_id: &RoomId,
 	incoming_pdu: PduEvent,
-	pdu_json: CanonicalJsonObject,
+	mut pdu_json: CanonicalJsonObject,
 	room_version: &RoomVersionId,
 	recursion_level: usize,
 	create_event_id: &EventId,
@@ -160,14 +160,12 @@ pub(super) async fn upgrade_outlier_to_timeline_pdu(
 				.await?,
 	};
 
-	// MSC4284: soft-fail when the room's policy server signature is missing
-	// or invalid. The OR short-circuits, so the policy check is skipped when
-	// redaction-soft-fail already fired.
+	// MSC4284: soft-fail when the policy server rejects the event.
 	let soft_fail = soft_fail_redact
 		|| matches!(
-			self.check_inbound_policy_signature(&pdu_json, &incoming_pdu)
+			self.verify_or_fetch_inbound_policy_signature(&mut pdu_json, &incoming_pdu)
 				.await,
-			PolicyCheck::Missing | PolicyCheck::Invalid,
+			PolicyCheck::Invalid,
 		);
 
 	// 13. Use state resolution to find new room state
