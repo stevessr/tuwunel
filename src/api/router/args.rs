@@ -1,4 +1,4 @@
-use std::{fmt::Debug, mem, ops::Deref};
+use std::{any::TypeId, fmt::Debug, mem, ops::Deref};
 
 use axum::{body::Body, extract::FromRequest};
 use axum_extra::extract::cookie::CookieJar;
@@ -117,7 +117,14 @@ where
 			json_body = Some(CanonicalJsonValue::Object(CanonicalJsonObject::new()));
 		}
 
-		let auth = auth::auth::<T>(services, &mut request, json_body.as_ref()).await?;
+		let auth = auth::auth::<T::Authentication>(
+			services,
+			&mut request,
+			json_body.as_ref(),
+			TypeId::of::<T>(),
+		)
+		.await?;
+
 		Ok(Self {
 			body: make_body::<T>(services, &mut request, json_body.as_mut(), &auth)?,
 			cookie: request.cookie,
