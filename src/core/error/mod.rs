@@ -140,7 +140,7 @@ pub enum Error {
 	#[error(transparent)]
 	PowerLevels(#[from] ruma::events::room::power_levels::PowerLevelsError),
 	#[error("from {0}: {1}")]
-	Redaction(ruma::OwnedServerName, ruma::canonical_json::RedactionError),
+	Redaction(ruma::OwnedServerName, ruma::canonical_json::CanonicalJsonFieldError),
 	#[error("{0}: {1}")]
 	Request(ruma::api::error::ErrorKind, Cow<'static, str>, http::StatusCode),
 	#[error(transparent)]

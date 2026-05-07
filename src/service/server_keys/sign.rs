@@ -62,18 +62,12 @@ pub fn hash_and_sign_event(
 	object: &mut CanonicalJsonObject,
 	room_version_id: &RoomVersionId,
 ) -> Result {
-	use ruma::signatures::hash_and_sign_event;
+	use ruma::signatures::{hash_event, sign_event};
 
 	let server_name = &self.services.server.name;
 	let room_version_rules = room_version::rules(room_version_id)?;
 
-	hash_and_sign_event(
-		server_name.as_str(),
-		self.keypair(),
-		object,
-		&room_version_rules.redaction,
-	)
-	.map_err(|e| {
+	let map_err = |e: ruma::signatures::JsonError| {
 		use ruma::signatures::JsonError::PduTooLarge;
 		match e {
 			| PduTooLarge => {
@@ -81,7 +75,11 @@ pub fn hash_and_sign_event(
 			},
 			| _ => err!(Request(Unknown(warn!("Signing event failed: {e}")))),
 		}
-	})
+	};
+
+	hash_event(object).map_err(map_err)?;
+	sign_event(server_name.as_str(), self.keypair(), object, &room_version_rules.redaction)
+		.map_err(map_err)
 }
 
 #[implement(super::Service)]

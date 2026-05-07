@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 
 use futures::future::{join, join3};
 use ruma::{
-	AnyKeyName, SigningKeyId, UserId,
+	AnyKeyName, EventId, SigningKeyId, UserId,
 	events::{StateEventType, room::member::MembershipState},
 	room_version_rules::AuthorizationRules,
 	serde::{Base64, base64::Standard},
@@ -148,9 +148,10 @@ where
 
 	let mut prev_events = room_member_event.prev_events();
 
-	let prev_event_is_room_create_event = prev_events
-		.next()
-		.is_some_and(|event_id| event_id.borrow() == room_create_event.event_id().borrow());
+	let prev_event_is_room_create_event = prev_events.next().is_some_and(|event_id| {
+		<EventId as Borrow<str>>::borrow(event_id)
+			== <EventId as Borrow<str>>::borrow(room_create_event.event_id())
+	});
 
 	let prev_event_is_only_room_create_event =
 		prev_event_is_room_create_event && prev_events.next().is_none();

@@ -258,7 +258,7 @@ fn extract_policy_signature<'a>(
 	};
 
 	let CanonicalJsonValue::String(signature) =
-		key_map.get(sign_event::Response::POLICY_SERVER_ED25519_SIGNING_KEY_ID)?
+		key_map.get(RoomPolicyEventContent::POLICY_SERVER_ED25519_SIGNING_KEY_ID)?
 	else {
 		return None;
 	};
@@ -285,7 +285,7 @@ fn insert_policy_signature(
 
 	if let CanonicalJsonValue::Object(key_map) = entry {
 		key_map.insert(
-			sign_event::Response::POLICY_SERVER_ED25519_SIGNING_KEY_ID.into(),
+			RoomPolicyEventContent::POLICY_SERVER_ED25519_SIGNING_KEY_ID.into(),
 			CanonicalJsonValue::String(signature.to_owned()),
 		);
 	}

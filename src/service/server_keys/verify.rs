@@ -83,7 +83,12 @@ pub async fn verify_event(
 		.get_event_keys(event, &room_version_rules)
 		.await?;
 
-	ruma::signatures::verify_event(&event_keys, event, &room_version_rules).map_err(Into::into)
+	ruma::signatures::verify_event(
+		ruma::signatures::VerifyEventPublicSigningKeys::new(&event_keys),
+		event,
+		&room_version_rules,
+	)
+	.map_err(Into::into)
 }
 
 #[implement(super::Service)]
