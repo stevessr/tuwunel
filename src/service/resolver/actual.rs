@@ -10,7 +10,7 @@ use hickory_resolver::{
 };
 use ipaddress::IPAddress;
 use ruma::ServerName;
-use tuwunel_core::{Err, Result, debug, debug_info, err, error, trace};
+use tuwunel_core::{Err, Result, debug, debug_info, debug_warn, err, error, trace};
 
 use super::{
 	DestString, FedDest,
@@ -366,10 +366,18 @@ impl super::Service {
 	}
 
 	fn handle_resolve_error(e: &NetError, host: &'_ str) -> Result {
+		// `NetError::Dns(_)` covers responses returned by the remote side (NXDOMAIN,
+		// SERVFAIL, REFUSED, ...) only seen with verbose-logging. Local-origin failures
+		// (Timeout, NoConnections, Io, ...) keep their warn/error level so an operator
+		// notices when their own resolver is unhealthy.
 		match e {
 			| NetError::Dns(DnsError::NoRecordsFound(_)) => {
 				// Raise to debug_warn if we can find out the result wasn't from cache
 				debug!(%host, "No DNS records found: {e}");
+				Ok(())
+			},
+			| NetError::Dns(_) => {
+				debug_warn!(%host, "DNS response error: {e}");
 				Ok(())
 			},
 			| NetError::Timeout => Err!(warn!(%host, "DNS {e}")),
