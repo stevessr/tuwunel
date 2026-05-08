@@ -118,7 +118,10 @@ impl<'de> Deserializer<'de> {
 	}
 
 	/// Consume the record separator such that the position cleanly points to
-	/// the start of the next record. (Case for some sequences)
+	/// the start of the next record. When input is exhausted but the
+	/// sequence is not, advance no bytes; the caller deserializes from an
+	/// empty slice. See `next_element_seed` for the additive-tail mechanic
+	/// this enables.
 	#[inline]
 	fn record_start(&mut self) {
 		let started = self.pos != 0 || self.rec > 0;
@@ -480,11 +483,18 @@ impl<'a, 'de: 'a> de::SeqAccess<'de> for &'a mut Deserializer<'de> {
 		// Completely satisfied the output.
 		let complete = self.rec >= self.seq;
 
-		// Leave after reaching the end of both the input and output. Leaving before
-		// reaching the end of the input trips the finished() assertion. Leaving before
-		// reaching the end of the output causes a length expectation panic on type T
-		// i.e. tuple of size X instead of Y and trailing defaulting elements will not
-		// be possible.
+		// Early-return only when both input and output are exhausted. If
+		// input is exhausted but the tuple is not, fall through:
+		// `record_start` does not advance pos and the inner deserializer
+		// runs against an empty slice. Tail types that visit an empty slice
+		// successfully (`&str` -> "", `&[u8]` -> &[], `Option<_>` -> None)
+		// round-trip; non-tolerant tails (numerics, typed Matrix IDs) error.
+		// This enables additive evolution of record-key tuples without a
+		// migration.
+		//
+		// Returning early before the input is exhausted trips the
+		// `finished()` check; before the tuple is exhausted, serde's length
+		// check.
 		if finished && complete {
 			return Ok(None);
 		}

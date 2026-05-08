@@ -380,6 +380,94 @@ fn de_tuple_incomplete_option() {
 }
 
 #[test]
+fn de_tuple_incomplete_str() {
+	let user_id: &UserId = "@user:example.com".try_into().unwrap();
+
+	let raw: &[u8] = b"@user:example.com";
+	let (a, b): (&UserId, &str) = de::from_slice(raw).expect("failed to deserialize");
+
+	assert_eq!(a, user_id, "deserialized user_id does not match");
+	assert_eq!(b, "", "trailing &str defaulted from missing input");
+}
+
+#[test]
+fn de_tuple_incomplete_bytes() {
+	let user_id: &UserId = "@user:example.com".try_into().unwrap();
+
+	let raw: &[u8] = b"@user:example.com";
+	let (a, b): (&UserId, &[u8]) = de::from_slice(raw).expect("failed to deserialize");
+
+	assert_eq!(a, user_id, "deserialized user_id does not match");
+	assert!(b.is_empty(), "trailing &[u8] defaulted from missing input");
+}
+
+#[test]
+fn de_tuple_incomplete_str_after_sep() {
+	let user_id: &UserId = "@user:example.com".try_into().unwrap();
+
+	let raw: &[u8] = b"@user:example.com\xFF";
+	let (a, b): (&UserId, &str) = de::from_slice(raw).expect("failed to deserialize");
+
+	assert_eq!(a, user_id, "deserialized user_id does not match");
+	assert_eq!(b, "", "trailing &str defaulted from empty record after sep");
+}
+
+#[test]
+fn serde_tuple_additive_evolution() {
+	let room_id: &RoomId = "!room:example.com".try_into().unwrap();
+	let user_id: &UserId = "@user:example.com".try_into().unwrap();
+	let count: u64 = 42;
+
+	let old_bytes =
+		serialize_to_vec(&(room_id, count, user_id)).expect("failed to serialize old key");
+
+	let (r, c, u, tail): (&RoomId, u64, &UserId, &str) =
+		de::from_slice(&old_bytes).expect("failed to deserialize old key as new type");
+
+	assert_eq!(r, room_id);
+	assert_eq!(c, count);
+	assert_eq!(u, user_id);
+	assert_eq!(tail, "", "tail must default to empty for old rows");
+
+	let new_bytes =
+		serialize_to_vec(&(room_id, count, user_id, "")).expect("failed to serialize new key");
+
+	assert_eq!(&new_bytes[..old_bytes.len()], &*old_bytes);
+	assert_eq!(new_bytes.len(), old_bytes.len() + 1);
+	assert_eq!(*new_bytes.last().unwrap(), 0xFF);
+
+	let (r, c, u, tail): (&RoomId, u64, &UserId, &str) =
+		de::from_slice(&new_bytes).expect("failed to deserialize new key");
+
+	assert_eq!(r, room_id);
+	assert_eq!(c, count);
+	assert_eq!(u, user_id);
+	assert_eq!(tail, "");
+}
+
+#[test]
+fn serde_tuple_additive_evolution_option() {
+	let room_id: &RoomId = "!room:example.com".try_into().unwrap();
+	let count: u64 = 42;
+
+	let old_bytes = serialize_to_vec(&(room_id, count)).expect("failed to serialize old key");
+
+	let (r, c, tail): (&RoomId, u64, Option<&UserId>) =
+		de::from_slice(&old_bytes).expect("failed to deserialize");
+
+	assert_eq!(r, room_id);
+	assert_eq!(c, count);
+	assert_eq!(tail, None);
+}
+
+#[test]
+#[should_panic(expected = "failed to deserialize")]
+fn de_tuple_incomplete_non_tolerant_tail() {
+	let raw: &[u8] = b"@user:example.com";
+	let _: (&UserId, u64) = de::from_slice(raw).expect("failed to deserialize");
+}
+
+#[test]
 #[should_panic(expected = "failed to deserialize")]
 fn de_tuple_incomplete_with_sep() {
 	let user_id: &UserId = "@user:example.com".try_into().unwrap();

@@ -26,6 +26,9 @@ pub(super) type ReceiptItem<'a> = (&'a UserId, u64, Raw<AnySyncEphemeralRoomEven
 /// `Thread(...)` (event ids start with `$`, so the values are mutually
 /// exclusive). Custom variants reuse their string form. Falls back to
 /// unthreaded for empty or multi-entry events.
+///
+/// Appended to the receipt-row key as a tolerant trailing field. Pre-
+/// MSC3771 rows have no trailing kind; they round-trip as `""`.
 fn event_thread_kind(event: &ReceiptEvent) -> &str {
 	event
 		.content
@@ -95,6 +98,7 @@ impl Data {
 		since: u64,
 		to: Option<u64>,
 	) -> impl Stream<Item = ReceiptItem<'_>> + Send + 'a {
+		// 4-tuple key: pre-MSC3771 rows deserialize with `&str` tail empty.
 		type Key<'a> = (&'a RoomId, u64, &'a UserId, &'a str);
 		type KeyVal<'a> = (Key<'a>, CanonicalJsonObject);
 
@@ -124,6 +128,7 @@ impl Data {
 		since: Option<u64>,
 		user_id: Option<&'a UserId>,
 	) -> Result<u64> {
+		// 4-tuple key: pre-MSC3771 rows deserialize with `&str` tail empty.
 		type Key<'a> = (&'a RoomId, u64, &'a UserId, &'a str);
 
 		let key = (room_id, u64::MAX);
