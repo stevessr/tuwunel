@@ -97,7 +97,7 @@ rtc:
   port_range_start: 50100
   port_range_end: 50200
   use_external_ip: true
-  enable_loopback_candidate: false
+  enable_loopback_candidate: true
 keys:
   MRTCKEY: MRTCSECRET
 ```
