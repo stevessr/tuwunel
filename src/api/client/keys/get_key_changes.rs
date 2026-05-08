@@ -1,5 +1,6 @@
 use axum::extract::State;
 use futures::{StreamExt, stream};
+use itertools::Itertools;
 use ruma::{OwnedRoomId, api::client::keys::get_key_changes};
 use tuwunel_core::{Result, at, err, utils::stream::BroadbandExt};
 
@@ -47,8 +48,17 @@ pub(crate) async fn get_key_changes_route(
 		})
 		.flat_map(stream::iter);
 
+	let changed = user_changes
+		.chain(room_changes)
+		.collect::<Vec<_>>()
+		.await
+		.into_iter()
+		.sorted_unstable()
+		.dedup()
+		.collect();
+
 	Ok(get_key_changes::v3::Response {
 		left: Vec::new(), // TODO
-		changed: user_changes.chain(room_changes).collect().await,
+		changed,
 	})
 }
