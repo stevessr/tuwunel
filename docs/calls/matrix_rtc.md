@@ -529,3 +529,29 @@ This can be used to test the ability of your Livekit service to route calls.
 If any of these tests fail, further information can be found in the container
 logs. Run `docker compose logs --follow` in the directory where your
 `compose.yaml` is located.
+
+### Calls connect for some clients but not others
+
+A common failure mode is that calls work for clients outside your local
+network but fail for clients on the same LAN as the Livekit server, and
+the failure is browser-dependent (Firefox often breaks while Chromium
+succeeds, or vice versa).
+
+This is usually a NAT routing issue rather than a Livekit configuration
+issue. Livekit advertises the server's public IP as an ICE candidate via
+STUN. Clients on the same LAN that try to reach that public IP must
+traverse the router back into the LAN, a feature called "NAT loopback"
+or "hairpin NAT". Some routers do not support it, and in that case
+local clients cannot establish a media path to any candidate that names
+the public IP. Browsers differ in how aggressively they retry
+alternative candidates and in how they handle host candidates under
+mDNS obfuscation, so the same network can break one browser while
+another works.
+
+The reliable fix is to make local clients resolve the MatrixRTC
+subdomain to the LAN address, so they bypass the router for that
+traffic. Most routers expose this as a "local DNS override", "DNS
+rewrite", or "host override" setting. Alternatively, run a small local
+DNS resolver (dnsmasq, AdGuard Home, Pi-hole) on the network and point
+LAN clients at it. External clients continue to resolve the subdomain
+to the public IP via public DNS.
