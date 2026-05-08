@@ -1,8 +1,23 @@
-use std::{convert::Infallible, fmt};
+use std::{convert::Infallible, error::Error as StdError, fmt, iter::successors};
 
 use tracing::Level;
 
 use super::Error;
+
+/// Flatten an error's `source()` chain into one `; caused by: ` string.
+///
+/// Storage and HTTP backends wrap transport errors several layers deep;
+/// the outer Display can show "error sending request" while the actual
+/// cause (e.g. rustls `UnknownIssuer`, hyper connect failure) is only
+/// reachable via `source()`. Logging the full chain at the failure site
+/// makes these self-diagnosing without per-crate trace logging.
+#[must_use]
+pub fn error_chain(e: &dyn StdError) -> String {
+	successors(Some(e), |&e| e.source())
+		.map(ToString::to_string)
+		.collect::<Vec<_>>()
+		.join("; caused by: ")
+}
 
 #[inline]
 pub fn else_log<T, E>(error: E) -> Result<T, Infallible>

@@ -20,7 +20,9 @@ use object_store::{
 use tuwunel_core::{
 	Error, Result,
 	config::StorageProvider,
-	debug, err, error, extract_variant, implement, info, trace,
+	debug, err, error,
+	error::error_chain,
+	extract_variant, implement, info, trace,
 	utils::{
 		BoolExt,
 		result::FlatOk,
@@ -179,7 +181,7 @@ where
 
 	match input
 		.try_for_each(|t| handle.put_part(t.into()).map_err(Error::from))
-		.inspect_err(|e| error!(?path, "Failed to store object: {e:?}"))
+		.inspect_err(|e| error!(?path, chain = %error_chain(e), "Failed to store object"))
 		.await
 	{
 		| Ok(()) =>
@@ -187,7 +189,11 @@ where
 				.complete()
 				.map_err(Error::from)
 				.inspect_err(|e| {
-					error!(?path, "Failed to store object during completion: {e:?}");
+					error!(
+						?path,
+						chain = %error_chain(e),
+						"Failed to store object during completion",
+					);
 				})
 				.await,
 
@@ -197,7 +203,11 @@ where
 				.map_ok(|()| Err(e))
 				.map_err(Error::from)
 				.inspect_err(|e| {
-					error!(?path, "Additional errors during error handling: {e:?}");
+					error!(
+						?path,
+						chain = %error_chain(e),
+						"Additional errors during error handling",
+					);
 				})
 				.await?,
 	}
@@ -465,7 +475,9 @@ pub async fn head(&self, path: &str) -> Result<ObjectMeta> {
 pub async fn ping(&self) -> Result {
 	self.list(None)
 		.try_next()
-		.inspect_err(|e| error!("Failed to connect to storage provider: {e:?}"))
+		.inspect_err(|e| {
+			error!(chain = %error_chain(e), "Failed to connect to storage provider");
+		})
 		.boxed()
 		.await
 		.map(|_| ())
