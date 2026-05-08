@@ -527,7 +527,7 @@ fn multipart_threshold(&self) -> usize {
 		.map(|config| config.multipart_threshold.as_u64())
 		.map(TryInto::try_into)
 		.flat_ok()
-		.unwrap_or_default()
+		.unwrap_or(usize::MAX)
 }
 
 #[implement(Provider)]
