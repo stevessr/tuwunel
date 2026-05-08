@@ -33,9 +33,17 @@ your.server.name, your.server.name:8448 {
 
 ### Client IP source
 
-If Caddy is the only way clients can reach Tuwunel, set
-`ip_source = "rightmost_x_forwarded_for"` in `tuwunel.toml`. If you use the
-Unix-socket `reverse_proxy` target, leave `ip_source` unset instead.
+By default, Tuwunel treats Caddy as the connecting peer, so registration
+logs, rate limiting, and security tooling all attribute requests to Caddy's
+address rather than the real client. If Caddy is the only way clients can
+reach Tuwunel, set `ip_source = "rightmost_x_forwarded_for"` in
+`tuwunel.toml` (or `TUWUNEL_IP_SOURCE=rightmost_x_forwarded_for` in Docker).
+This makes Tuwunel trust the `X-Forwarded-For` header that Caddy's
+`reverse_proxy` directive already sets. If you use the Unix-socket
+`reverse_proxy` target, leave `ip_source` unset instead.
+
+The setting only takes effect at startup, so restart Tuwunel after changing
+it.
 
 That's it! Just start and enable the service and you're set.
 
