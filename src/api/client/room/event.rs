@@ -71,16 +71,16 @@ pub(crate) async fn get_room_event_route(
 
 	let mut event = event?;
 
+	if !visible {
+		return Err!(Request(Forbidden("You don't have permission to view this event.")));
+	}
+
 	if is_ignored_pdu(&services, &event, body.sender_user()).await {
 		return Err!(HttpJson(NOT_FOUND, {
 			"errcode": "M_SENDER_IGNORED",
 			"error": "You have ignored the user that sent this event",
 			"sender": event.sender().as_str(),
 		}));
-	}
-
-	if !visible {
-		return Err!(Request(Forbidden("You don't have permission to view this event.")));
 	}
 
 	debug_assert!(
