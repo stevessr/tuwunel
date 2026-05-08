@@ -372,6 +372,7 @@ target "complement-tester-valgrind" {
     tags = [
         elem_tag("complement-tester-valgrind", [sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = trunk_labels
     entitlements = ["network.host"]
     matrix = sys
     inherits = [
@@ -387,6 +388,7 @@ target "complement-tester" {
     tags = [
         elem_tag("complement-tester", [sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = trunk_labels
     target = "complement-tester"
     output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
     entitlements = ["network.host"]
@@ -405,6 +407,7 @@ target "complement-base" {
     tags = [
         elem_tag("complement-base", [sys_name, sys_version, sys_target], "latest")
     ]
+    labels = trunk_labels
     target = "complement-base"
     matrix = sys
     inherits = [
@@ -421,6 +424,7 @@ target "complement-config" {
     tags = [
         elem_tag("complement-config", [sys_name, sys_version, sys_target], "latest")
     ]
+    labels = trunk_labels
     target = "complement-config"
     dockerfile = "${docker_dir}/Dockerfile.complement"
     matrix = sys
@@ -460,6 +464,7 @@ target "rust-sdk-valgrind" {
     tags = [
         elem_tag("rust-sdk-valgrind", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("rust-sdk-integ", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -486,7 +491,7 @@ target "rust-sdk-integ" {
         elem_tag("rust-sdk-integ", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
     output = ["type=docker,compression=zstd,mode=max,compression-level=${zstd_image_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level}"]
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=leaf"]
     target = "rust-sdk-integration"
     dockerfile = "${docker_dir}/Dockerfile.matrix-rust-sdk"
     matrix = cargo_rust_feat_sys
@@ -515,6 +520,7 @@ target "integ-valgrind" {
     tags = [
         elem_tag("integ-valgrind", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("integ", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
@@ -535,6 +541,7 @@ target "integ" {
     tags = [
         elem_tag("integ", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
@@ -570,6 +577,7 @@ target "smoke-nix" {
     tags = [
         elem_tag("smoke-nix", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
     dockerfile = "${docker_dir}/Dockerfile.nix"
     target = "smoke-nix"
@@ -661,6 +669,7 @@ target "unit-valgrind" {
     tags = [
         elem_tag("unit-valgrind", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "cargo"
     matrix = cargo_rust_feat_sys
     inherits = [
@@ -681,6 +690,7 @@ target "unit" {
     tags = [
         elem_tag("unit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "cargo"
     matrix = cargo_rust_feat_sys
     inherits = [
@@ -699,6 +709,7 @@ target "unit" {
 
 target "doc" {
     name = elem("doc", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    labels = leaf_labels
     tags = [
         elem_tag("doc", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
@@ -730,7 +741,20 @@ group "installs" {
     ]
 }
 
+trunk_labels = {
+    "cache.tier" = "trunk"
+}
+
+branch_labels = {
+    "cache.tier" = "branch"
+}
+
+leaf_labels = {
+    "cache.tier" = "leaf"
+}
+
 install_labels = {
+    "cache.tier" = "leaf"
     "org.opencontainers.image.authors" = "${package_authors}"
     "org.opencontainers.image.created" = "${package_last_modified}"
     "org.opencontainers.image.description" = "Matrix Chat Server in Rust"
@@ -857,7 +881,7 @@ target "install" {
     labels = install_labels
     annotations = install_annotations
     output = ["type=docker,compression=zstd,mode=max,compression-level=${zstd_image_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level}"]
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=leaf"]
     dockerfile = "${docker_dir}/Dockerfile.install"
     target = "install"
     matrix = cargo_rust_feat_sys
@@ -900,6 +924,7 @@ target "rpm-install" {
     tags = [
         elem_tag("rpm-install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "rpm-install"
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
     matrix = cargo_rust_feat_sys
@@ -917,6 +942,7 @@ target "rpm" {
     tags = [
         elem_tag("rpm", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "rpm"
     output = ["type=docker,compression=zstd,mode=min"]
     matrix = cargo_rust_feat_sys
@@ -933,6 +959,7 @@ target "build-rpm" {
     tags = [
         elem_tag("build-rpm", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "build-rpm"
     dockerfile = "${docker_dir}/Dockerfile.cargo.rpm"
     matrix = cargo_rust_feat_sys
@@ -952,6 +979,7 @@ target "deb-install" {
     tags = [
         elem_tag("deb-install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "deb-install"
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
     matrix = cargo_rust_feat_sys
@@ -969,6 +997,7 @@ target "deb" {
     tags = [
         elem_tag("deb", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "deb"
     output = ["type=docker,compression=zstd,mode=min"]
     matrix = cargo_rust_feat_sys
@@ -985,6 +1014,7 @@ target "build-deb" {
     tags = [
         elem_tag("build-deb", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "build-deb"
     dockerfile = "${docker_dir}/Dockerfile.cargo.deb"
     matrix = cargo_rust_feat_sys
@@ -1004,6 +1034,7 @@ target "nix" {
     tags = [
         elem_tag("nix", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
     target = "nix-pkg"
     matrix = cargo_rust_feat_sys
@@ -1018,7 +1049,7 @@ target "build-nix" {
         elem_tag("build-nix", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level}"]
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=leaf"]
     dockerfile = "${docker_dir}/Dockerfile.nix"
     target = "build-nix"
     matrix = cargo_rust_feat_sys
@@ -1041,6 +1072,7 @@ target "book" {
     tags = [
         elem_tag("book", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "book"
     output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
     matrix = cargo_rust_feat_sys
@@ -1062,6 +1094,7 @@ target "docs" {
     tags = [
         elem_tag("docs", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
     matrix = cargo_rust_feat_sys
     inherits = [
@@ -1082,6 +1115,7 @@ target "build-bins" {
     tags = [
         elem_tag("build-bins", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = branch_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-build-bins", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
@@ -1102,6 +1136,7 @@ target "build-tests" {
     tags = [
         elem_tag("build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = branch_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
@@ -1122,6 +1157,7 @@ target "build" {
     tags = [
         elem_tag("build", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = branch_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-build", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
@@ -1142,6 +1178,7 @@ target "clippy" {
     tags = [
         elem_tag("clippy", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-clippy", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
@@ -1162,6 +1199,7 @@ target "check" {
     tags = [
         elem_tag("check", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-check", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target]),
@@ -1182,6 +1220,7 @@ target "lychee" {
     tags = [
         elem_tag("lychee", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "lychee"
     dockerfile = "${docker_dir}/Dockerfile.cargo.lychee"
     matrix = cargo_rust_feat_sys
@@ -1199,6 +1238,7 @@ target "audit" {
     tags = [
         elem_tag("audit", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "audit"
     dockerfile = "${docker_dir}/Dockerfile.cargo.audit"
     matrix = cargo_rust_feat_sys
@@ -1216,6 +1256,7 @@ target "typos" {
     tags = [
         elem_tag("typos", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "typos"
     dockerfile = "${docker_dir}/Dockerfile.cargo.typos"
     matrix = cargo_rust_feat_sys
@@ -1233,6 +1274,7 @@ target "fmt" {
     tags = [
         elem_tag("fmt", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = leaf_labels
     target = "fmt"
     dockerfile = "${docker_dir}/Dockerfile.cargo.fmt"
     matrix = cargo_rust_feat_sys
@@ -1252,7 +1294,7 @@ target "cargo" {
     name = elem("cargo", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
     target = "cargo"
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level}"]
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=branch"]
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-base", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -1286,6 +1328,7 @@ target "deps-build-bins" {
     tags = [
         elem_tag("deps-build-bins", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = branch_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-base", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -1300,6 +1343,7 @@ target "deps-build-tests" {
     tags = [
         elem_tag("deps-build-tests", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = branch_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-base", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -1314,6 +1358,7 @@ target "deps-build" {
     tags = [
         elem_tag("deps-build", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = branch_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-base", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -1328,6 +1373,7 @@ target "deps-clippy" {
     tags = [
         elem_tag("deps-clippy", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = branch_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-base", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -1342,6 +1388,7 @@ target "deps-check" {
     tags = [
         elem_tag("deps-check", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = branch_labels
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-base", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -1362,7 +1409,7 @@ target "deps-base" {
     ]
     target = "cook"
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level}"]
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=branch"]
     dockerfile = "${docker_dir}/Dockerfile.cargo"
     matrix = cargo_rust_feat_sys
     inherits = [
@@ -1528,6 +1575,7 @@ target "rocksdb-build" {
     tags = [
         elem_tag("rocksdb-build", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest")
     ]
+    labels = trunk_labels
     target = "rocksdb-build"
     matrix = cargo_rust_feat_sys
     inherits = [
@@ -1636,7 +1684,7 @@ target "ingredients" {
     tags = [
         elem_tag("ingredients", [rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
-    cache_to = ["type=local,compression=zstd,mode=max"]
+    cache_to = ["type=local,compression=zstd,mode=max,label=cache.tier=branch"]
     target =  "ingredients"
     dockerfile = "${docker_dir}/Dockerfile.source"
     matrix = rust_feat_sys
@@ -1673,6 +1721,7 @@ target "source" {
     tags = [
         elem_tag("source", [sys_name, sys_version, sys_target], "latest")
     ]
+    labels = trunk_labels
     target =  "source"
     dockerfile = "${docker_dir}/Dockerfile.source"
     matrix = sys
@@ -1724,6 +1773,7 @@ target "rust" {
         elem_tag("rust", [rust_toolchain, rust_target, sys_name, sys_version, sys_target], "latest"),
     ]
     target = "rust"
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=trunk"]
     matrix = rust_tool_sys
     inherits = [
         elem("rustup", [rust_target, sys_name, sys_version, sys_target])
@@ -1761,6 +1811,7 @@ target "rustup" {
     tags = [
         elem_tag("rustup", [rust_target, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = trunk_labels
     target = "rustup"
     dockerfile = "${docker_dir}/Dockerfile.rust"
     matrix = rust_sys
@@ -1817,6 +1868,7 @@ target "kitchen" {
     tags = [
         elem_tag("kitchen", [feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = trunk_labels
     matrix = feat_sys
     inherits = [
         elem("builder", [sys_name, sys_version, sys_target])
@@ -1841,6 +1893,7 @@ target "builder" {
     tags = [
         elem_tag("builder", [sys_name, sys_version, sys_target], "latest"),
     ]
+    labels = trunk_labels
     matrix = sys
     inherits = [
         elem("base", [sys_name, sys_version, sys_target])
@@ -1875,6 +1928,7 @@ sys = {
 }
 
 target "perf" {
+    labels = trunk_labels
     description = "Base runtime environment with linux-perf installed."
     name = elem("perf", [feat_set, sys_name, sys_version, sys_target])
     tags = [
@@ -1890,6 +1944,7 @@ target "perf" {
 }
 
 target "valgrind" {
+    labels = trunk_labels
     description = "Base runtime environment with valgrind installed."
     name = elem("valgrind", [feat_set, sys_name, sys_version, sys_target])
     tags = [
@@ -1910,6 +1965,7 @@ target "valgrind" {
 }
 
 target "runtime" {
+    labels = trunk_labels
     description = "Base runtime environment for executing the application."
     name = elem("runtime", [feat_set, sys_name, sys_version, sys_target])
     tags = [
@@ -1945,6 +2001,7 @@ base_pkgs = [
 ]
 
 target "base" {
+    labels = trunk_labels
     description = "Base runtime environment with essential runtime packages"
     name = elem("base", [sys_name, sys_version, sys_target])
     tags = [
@@ -1978,7 +2035,7 @@ target "system" {
     ]
     target = "system"
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level}"]
+    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=trunk"]
     cache_from = ["type=local"]
     dockerfile = "${docker_dir}/Dockerfile.system"
     context = "."
