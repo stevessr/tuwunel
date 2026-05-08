@@ -97,10 +97,17 @@ rtc:
   port_range_start: 50100
   port_range_end: 50200
   use_external_ip: true
-  enable_loopback_candidate: true
+  enable_loopback_candidate: false
 keys:
   MRTCKEY: MRTCSECRET
 ```
+
+> [!NOTE]
+> The `enable_loopback_candidate` option above causes Livekit to include
+> `127.0.0.1` and `::1` as ICE host candidates. It is intended for deployments
+> where the public IP is mapped to the loopback interface on the host. Set it
+> to `true` if you have that specific topology. If calls fail only for clients
+> on the same LAN as the server, see the Troubleshooting section.
 
 ## 3. Configure .well-known
 
