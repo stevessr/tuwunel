@@ -1,6 +1,7 @@
 pub mod providers;
 pub mod server;
 pub mod sessions;
+pub mod token_response;
 pub mod user_info;
 
 use std::sync::Arc;
@@ -26,6 +27,7 @@ pub use self::{
 	providers::{Provider, ProviderId},
 	server::Server,
 	sessions::{CODE_VERIFIER_LENGTH, SESSION_ID_LENGTH, Session, SessionId},
+	token_response::TokenResponse,
 	user_info::UserInfo,
 };
 use crate::SelfServices;
@@ -186,7 +188,7 @@ pub async fn request_token(
 	&self,
 	(provider, session): (&Provider, &Session),
 	code: &str,
-) -> Result<Session> {
+) -> Result<TokenResponse> {
 	#[derive(Debug, Serialize)]
 	struct TokenQuery<'a> {
 		client_id: &'a str,

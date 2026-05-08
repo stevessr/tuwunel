@@ -34,11 +34,9 @@ struct Data {
 }
 
 /// Session ultimately represents an OAuth authorization session yielding an
-/// associated matrix user registration.
-///
-/// Mixed-use structure capable of deserializing response values, maintaining
-/// the state between authorization steps, and maintaining the association to
-/// the matrix user until deactivation or revocation.
+/// associated matrix user registration. Maintains the state between
+/// authorization steps and the association to the matrix user until
+/// deactivation or revocation.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Session {
 	/// Identity Provider ID (the `client_id` in the configuration) associated
