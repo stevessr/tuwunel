@@ -1,53 +1,32 @@
-use std::{
-	cmp::Ordering,
-	collections::{BTreeMap, HashSet},
-};
+mod bump_stamp;
+mod heroes;
+
+use std::collections::{BTreeMap, HashSet};
 
 use futures::{
 	FutureExt, StreamExt, TryFutureExt, TryStreamExt,
 	future::{join, join3, join4},
 };
 use ruma::{
-	JsOption, MxcUri, OwnedMxcUri, OwnedRoomId, RoomId, UInt, UserId,
-	api::client::sync::sync_events::{
-		UnreadNotificationsCount,
-		v5::{DisplayName, response, response::Heroes},
-	},
-	events::{
-		StateEventType,
-		TimelineEventType::{
-			self, Beacon, CallInvite, PollStart, RoomEncrypted, RoomMessage, Sticker,
-		},
-		room::member::MembershipState,
-	},
+	JsOption, OwnedRoomId, UserId,
+	api::client::sync::sync_events::{UnreadNotificationsCount, v5::response},
+	events::{StateEventType, TimelineEventType, room::member::MembershipState},
 };
 use tuwunel_core::{
 	Result, at, err, error, is_equal_to,
 	itertools::Itertools,
-	matrix::{
-		Event, StateKey,
-		pdu::{PduCount, PduEvent},
-	},
+	matrix::{Event, StateKey, pdu::PduCount},
 	ref_at,
 	utils::{
 		BoolExt, IterStream, ReadyExt, TryFutureExtExt, math::usize_from_ruma, result::FlatOk,
 		stream::BroadbandExt,
 	},
 };
-use tuwunel_service::{Services, sync::Room};
+use tuwunel_service::sync::Room;
 
+use self::{bump_stamp::room_bump_stamp, heroes::calculate_heroes};
 use super::{super::load_timeline, Connection, SyncInfo, Window, WindowRoom};
 use crate::client::ignored_filter;
-
-/// MUST be sorted by `TimelineEventType::event_type_str()` for `binary_search`.
-static DEFAULT_BUMP_TYPES: [TimelineEventType; 6] = [
-	CallInvite,    // m.call.invite
-	PollStart,     // m.poll.start
-	RoomEncrypted, // m.room.encrypted
-	RoomMessage,   // m.room.message
-	Sticker,       // m.sticker
-	Beacon,        // org.matrix.msc3672.beacon
-];
 
 #[tracing::instrument(
     name = "rooms",
@@ -363,226 +342,4 @@ async fn handle_room(
 		invited_count,
 		unread_notifications: UnreadNotificationsCount { highlight_count, notification_count },
 	})
-}
-
-async fn room_bump_stamp(
-	services: &Services,
-	sender_user: &UserId,
-	room_id: &RoomId,
-	roomsince: PduCount,
-	next_batch: PduCount,
-	last_timeline_count: PduCount,
-) -> Option<UInt> {
-	if last_timeline_count <= roomsince {
-		return None;
-	}
-
-	let bumpable_pdus = services
-		.timeline
-		.pdus_rev(Some(sender_user), room_id, None)
-		.ready_filter_map(Result::ok)
-		.ready_skip_while(|&(pdu_count, _)| pdu_count > next_batch)
-		.ready_take_while(|&(pdu_count, _)| pdu_count > roomsince)
-		.ready_filter_map(|(pdu_count, pdu)| {
-			is_bumpable_pdu(&pdu, sender_user)
-				.then(|| pdu_count.into_signed().try_into().ok())
-				.flatten()
-		});
-
-	futures::pin_mut!(bumpable_pdus);
-	bumpable_pdus.next().await
-}
-
-fn is_bumpable_pdu(pdu: &PduEvent, sender_user: &UserId) -> bool {
-	if pdu.is_redacted() {
-		return false;
-	}
-
-	if *pdu.event_type() == TimelineEventType::RoomMember {
-		return pdu
-			.state_key()
-			.is_some_and(is_equal_to!(sender_user.as_str()));
-	}
-
-	DEFAULT_BUMP_TYPES
-		.binary_search(pdu.event_type())
-		.is_ok()
-}
-
-#[tracing::instrument(name = "heroes", level = "trace", skip_all)]
-async fn calculate_heroes(
-	services: &Services,
-	sender_user: &UserId,
-	room_id: &RoomId,
-	room_name: Option<&DisplayName>,
-	room_avatar: Option<&MxcUri>,
-) -> (Option<Heroes>, Option<DisplayName>, Option<OwnedMxcUri>) {
-	const MAX_HEROES: usize = 5;
-
-	let heroes: Heroes = services
-		.state_cache
-		.room_members(room_id)
-		.ready_filter(|&member| member != sender_user)
-		.ready_filter_map(|member| room_name.is_none().then_some(member))
-		.map(ToOwned::to_owned)
-		.broadn_filter_map(MAX_HEROES, async |user_id| {
-			let content = services
-				.state_accessor
-				.get_member(room_id, &user_id)
-				.await
-				.ok()?;
-
-			let name = content
-				.displayname
-				.is_none()
-				.then_async(|| services.users.displayname(&user_id).ok());
-
-			let avatar = content
-				.avatar_url
-				.is_none()
-				.then_async(|| services.users.avatar_url(&user_id).ok());
-
-			let (name, avatar) = join(name, avatar).await;
-			let hero = response::Hero {
-				user_id,
-				avatar: avatar.unwrap_or(content.avatar_url),
-				name: name
-					.unwrap_or(content.displayname)
-					.map(Into::into),
-			};
-
-			Some(hero)
-		})
-		.take(MAX_HEROES)
-		.collect()
-		.await;
-
-	let hero_name = match heroes.len().cmp(&(1_usize)) {
-		| Ordering::Less => None,
-		| Ordering::Equal => Some(
-			heroes[0]
-				.name
-				.clone()
-				.unwrap_or_else(|| heroes[0].user_id.as_str().into()),
-		),
-		| Ordering::Greater => {
-			let firsts = heroes[1..]
-				.iter()
-				.map(|h| {
-					h.name
-						.clone()
-						.unwrap_or_else(|| h.user_id.as_str().into())
-				})
-				.collect::<Vec<_>>()
-				.join(", ");
-
-			let last = heroes[0]
-				.name
-				.clone()
-				.unwrap_or_else(|| heroes[0].user_id.as_str().into());
-
-			Some(format!("{firsts} and {last}")).map(Into::into)
-		},
-	};
-
-	let heroes_avatar = (room_avatar.is_none() && room_name.is_none())
-		.then(|| {
-			heroes
-				.first()
-				.and_then(|hero| hero.avatar.clone())
-		})
-		.flatten();
-
-	(Some(heroes), hero_name, heroes_avatar)
-}
-
-#[cfg_attr(debug_assertions, tuwunel_core::ctor)]
-fn _is_sorted() {
-	debug_assert!(
-		DEFAULT_BUMP_TYPES.is_sorted(),
-		"DEFAULT_BUMP_TYPES must be sorted by the developer"
-	);
-}
-
-#[cfg(test)]
-mod tests {
-	use ruma::{
-		CanonicalJsonObject, event_id, events::TimelineEventType, room_id, serde::Raw, uint,
-		user_id,
-	};
-	use serde_json::{json, value::to_raw_value};
-	use tuwunel_core::matrix::{StateKey, pdu::PduEvent};
-
-	use super::{DEFAULT_BUMP_TYPES, is_bumpable_pdu};
-
-	fn pdu(kind: TimelineEventType, state_key: Option<StateKey>, redacted: bool) -> PduEvent {
-		let unsigned = redacted
-			.then(|| to_raw_value(&json!({ "redacted_because": {} })).expect("valid unsigned"));
-
-		PduEvent {
-			kind,
-			content: Raw::from_json(
-				to_raw_value(&CanonicalJsonObject::new()).expect("valid content"),
-			),
-			event_id: event_id!("$event:example.com").to_owned(),
-			room_id: room_id!("!room:example.com").to_owned(),
-			sender: user_id!("@alice:example.com").to_owned(),
-			state_key,
-			redacts: None,
-			prev_events: Default::default(),
-			auth_events: Default::default(),
-			origin_server_ts: uint!(1),
-			depth: uint!(1),
-			hashes: Default::default(),
-			origin: None,
-			unsigned,
-			signatures: None,
-		}
-	}
-
-	#[test]
-	fn default_bump_types_are_sorted() {
-		assert!(DEFAULT_BUMP_TYPES.is_sorted());
-	}
-
-	#[test]
-	fn default_bump_types_bump() {
-		let sender = user_id!("@alice:example.com");
-
-		for kind in DEFAULT_BUMP_TYPES.iter().cloned() {
-			assert!(is_bumpable_pdu(&pdu(kind, None, false), sender));
-		}
-	}
-
-	#[test]
-	fn non_bump_type_does_not_bump() {
-		let sender = user_id!("@alice:example.com");
-		let pdu = pdu(TimelineEventType::RoomName, Some("".into()), false);
-
-		assert!(!is_bumpable_pdu(&pdu, sender));
-	}
-
-	#[test]
-	fn own_membership_bumps() {
-		let sender = user_id!("@alice:example.com");
-		let pdu = pdu(TimelineEventType::RoomMember, Some(sender.as_str().into()), false);
-
-		assert!(is_bumpable_pdu(&pdu, sender));
-	}
-
-	#[test]
-	fn other_membership_does_not_bump() {
-		let sender = user_id!("@alice:example.com");
-		let pdu = pdu(TimelineEventType::RoomMember, Some("@bob:example.com".into()), false);
-
-		assert!(!is_bumpable_pdu(&pdu, sender));
-	}
-
-	#[test]
-	fn redacted_pdu_does_not_bump() {
-		let sender = user_id!("@alice:example.com");
-		let pdu = pdu(TimelineEventType::RoomMessage, None, true);
-
-		assert!(!is_bumpable_pdu(&pdu, sender));
-	}
 }
