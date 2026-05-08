@@ -181,10 +181,6 @@ pub async fn take_fallback_key(
 		.map(|Json(entry)| entry)
 		.map_err(|_| err!(Request(NotFound("No fallback key found"))))?;
 
-	if entry.used {
-		return Err!(Request(NotFound("No unused fallback key found")));
-	}
-
 	let updated = FallbackEntry { used: true, ..entry };
 	self.db
 		.userdeviceidalgorithm_fallback
