@@ -1,6 +1,9 @@
 use std::{collections::HashSet, sync::Arc};
 
-use futures::{FutureExt, StreamExt, future::join};
+use futures::{
+	FutureExt, StreamExt,
+	future::{join, join4},
+};
 use ruma::{
 	RoomId, UserId,
 	api::client::push::ProfileTag,
@@ -14,7 +17,7 @@ use tuwunel_core::{
 		event::Event,
 		pdu::{Count, Pdu, PduId, RawPduId},
 	},
-	utils::{BoolExt, ReadyExt, future::TryExtExt, time::now_millis},
+	utils::{BoolExt, ReadyExt, future::TryExtExt, option::OptionExt, time::now_millis},
 };
 use tuwunel_database::{Deserialized, Json, Map};
 
@@ -80,6 +83,7 @@ pub(crate) async fn append_pdu(&self, pdu_id: RawPduId, pdu: &Pdu) -> Result {
 	}
 
 	let serialized = pdu.to_format();
+	let thread_root = self.services.threads.get_thread_id(pdu).await;
 	let _cork = self.db.db.cork();
 	for user in &push_target {
 		let rules_for_user = self
@@ -109,13 +113,25 @@ pub(crate) async fn append_pdu(&self, pdu_id: RawPduId, pdu: &Pdu) -> Result {
 			)
 		});
 
-		let increment_notify =
-			notify.then_async(|| self.increment_notificationcount(pdu.room_id(), user));
+		// Mutually-exclusive partition: each notify (and each highlight)
+		// lands in either the room-level or thread bucket, never both.
+		let main_notify = (notify && thread_root.is_none())
+			.then_async(|| self.increment_notificationcount(pdu.room_id(), user));
 
-		let increment_highlight =
-			highlight.then_async(|| self.increment_highlightcount(pdu.room_id(), user));
+		let main_highlight = (highlight && thread_root.is_none())
+			.then_async(|| self.increment_highlightcount(pdu.room_id(), user));
 
-		join(increment_notify, increment_highlight).await;
+		let thread_notify = thread_root
+			.as_deref()
+			.filter(|_| notify)
+			.map_async(|root| self.increment_thread_notificationcount(pdu.room_id(), user, root));
+
+		let thread_highlight = thread_root
+			.as_deref()
+			.filter(|_| highlight)
+			.map_async(|root| self.increment_thread_highlightcount(pdu.room_id(), user, root));
+
+		join4(main_notify, thread_notify, main_highlight, thread_highlight).await;
 
 		if notify || highlight {
 			let id: PduId = pdu_id.into();
@@ -169,7 +185,41 @@ async fn increment_highlightcount(&self, room_id: &RoomId, user_id: &UserId) {
 	increment(db, (user_id, room_id)).await;
 }
 
+#[implement(super::Service)]
+async fn increment_thread_notificationcount(
+	&self,
+	room_id: &RoomId,
+	user_id: &UserId,
+	thread_root: &ruma::EventId,
+) {
+	let db = &self.db.userroomid_notificationcount;
+	let key = (room_id.to_owned(), user_id.to_owned());
+	let _lock = self.notification_increment_mutex.lock(&key).await;
+
+	increment_thread(db, (user_id, room_id, thread_root)).await;
+}
+
+#[implement(super::Service)]
+async fn increment_thread_highlightcount(
+	&self,
+	room_id: &RoomId,
+	user_id: &UserId,
+	thread_root: &ruma::EventId,
+) {
+	let db = &self.db.userroomid_highlightcount;
+	let key = (room_id.to_owned(), user_id.to_owned());
+	let _lock = self.highlight_increment_mutex.lock(&key).await;
+
+	increment_thread(db, (user_id, room_id, thread_root)).await;
+}
+
 async fn increment(db: &Arc<Map>, key: (&UserId, &RoomId)) {
+	let old: u64 = db.qry(&key).await.deserialized().unwrap_or(0);
+	let new = old.saturating_add(1);
+	db.put(key, new);
+}
+
+async fn increment_thread(db: &Arc<Map>, key: (&UserId, &RoomId, &ruma::EventId)) {
 	let old: u64 = db.qry(&key).await.deserialized().unwrap_or(0);
 	let new = old.saturating_add(1);
 	db.put(key, new);

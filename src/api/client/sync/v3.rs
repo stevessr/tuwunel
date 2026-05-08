@@ -854,7 +854,7 @@ async fn load_joined_room(
 				.await
 				.or_some((read_user.to_owned(), edu))
 		})
-		.collect::<HashMap<OwnedUserId, Raw<AnySyncEphemeralRoomEvent>>>();
+		.collect::<Vec<(OwnedUserId, Raw<AnySyncEphemeralRoomEvent>)>>();
 
 	let (
 		(since_shortstatehash, horizon_shortstatehash, current_shortstatehash),
@@ -903,7 +903,7 @@ async fn load_joined_room(
 			.map(ref_at!(1))
 			.map(Event::sender)
 			.map(Into::into)
-			.chain(receipt_events.keys().map(Into::into))
+			.chain(receipt_events.iter().map(ref_at!(0)).cloned())
 			.collect();
 
 		services
@@ -1026,6 +1026,15 @@ async fn load_joined_room(
 			.unwrap_or(uint!(0))
 	});
 
+	// MSC3773: per-thread counts. Always queried so we can include them in
+	// the legacy `unread_notifications` totals when the client filter does
+	// not opt in to the partitioned `unread_thread_notifications` view.
+	let thread_counts = send_notification_counts.then_async(|| {
+		services
+			.pusher
+			.thread_notification_counts(sender_user, room_id)
+	});
+
 	let private_read_event = last_privateread_update.gt(&since).then_async(|| {
 		services
 			.read_receipt
@@ -1119,12 +1128,12 @@ async fn load_joined_room(
 	let (
 		(room_events, account_data_events),
 		(typing_events, private_read_event),
-		(notification_count, highlight_count),
+		(notification_count, highlight_count, thread_counts),
 		(device_list_updates, left_encrypted_users),
 	) = join4(
 		join(room_events, account_data_events),
 		join(typing_events, private_read_event),
-		join(notification_count, highlight_count),
+		join3(notification_count, highlight_count, thread_counts),
 		device_list_updates,
 	)
 	.boxed()
@@ -1156,9 +1165,57 @@ async fn load_joined_room(
 		.collect();
 
 	let edus: Vec<Raw<AnySyncEphemeralRoomEvent>> = receipt_events
-		.into_values()
-		.chain(typing_events.into_iter())
-		.chain(private_read_event.flatten().into_iter())
+		.into_iter()
+		.map(at!(1))
+		.chain(typing_events)
+		.chain(private_read_event.flatten())
+		.collect();
+
+	let thread_counts = thread_counts.unwrap_or_default();
+
+	let thread_total_notifications = thread_counts
+		.values()
+		.map(at!(0))
+		.fold(0_u64, u64::saturating_add);
+
+	let thread_total_highlights = thread_counts
+		.values()
+		.map(at!(1))
+		.fold(0_u64, u64::saturating_add);
+
+	// MSC3773: when the client opts in via the timeline filter, partition
+	// notification counts per thread. Otherwise sum into the room total.
+	let want_thread_unread = filter.room.timeline.unread_thread_notifications;
+
+	let merge_total = |total: u64| {
+		move |count: UInt| {
+			want_thread_unread
+				.is_false()
+				.then(|| count.saturating_add(UInt::try_from(total).unwrap_or_default()))
+				.unwrap_or(count)
+		}
+	};
+
+	let unread_notifications = UnreadNotificationsCount {
+		highlight_count: highlight_count
+			.map(merge_total(thread_total_highlights))
+			.filter(send_notification_count_filter),
+		notification_count: notification_count
+			.map(merge_total(thread_total_notifications))
+			.filter(send_notification_count_filter),
+	};
+
+	let unread_thread_notifications = thread_counts
+		.into_iter()
+		.filter(|_| want_thread_unread)
+		.map(|(root, (notifications, highlights))| {
+			let counts = UnreadNotificationsCount {
+				notification_count: UInt::try_from(notifications).ok(),
+				highlight_count: UInt::try_from(highlights).ok(),
+			};
+
+			(root, counts)
+		})
 		.collect();
 
 	let joined_room = JoinedRoom {
@@ -1178,11 +1235,8 @@ async fn load_joined_room(
 				.map(Event::into_format)
 				.collect(),
 		},
-		unread_notifications: UnreadNotificationsCount {
-			highlight_count: highlight_count.filter(send_notification_count_filter),
-			notification_count: notification_count.filter(send_notification_count_filter),
-		},
-		unread_thread_notifications: BTreeMap::new(),
+		unread_notifications,
+		unread_thread_notifications,
 	};
 
 	Ok((joined_room, device_list_updates, left_encrypted_users))

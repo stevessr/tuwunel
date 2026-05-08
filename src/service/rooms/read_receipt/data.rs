@@ -10,7 +10,7 @@ use tuwunel_core::{
 	Result, err, is_equal_to, trace,
 	utils::{ReadyExt, stream::TryIgnore},
 };
-use tuwunel_database::{Deserialized, Interfix, Json, Map};
+use tuwunel_database::{Deserialized, Interfix, Json, Map, serialize_key};
 
 pub(super) struct Data {
 	roomuserid_privateread: Arc<Map>,
@@ -20,6 +20,23 @@ pub(super) struct Data {
 }
 
 pub(super) type ReceiptItem<'a> = (&'a UserId, u64, Raw<AnySyncEphemeralRoomEvent>);
+
+/// Tag string used in the storage key to discriminate receipts per thread.
+/// Empty for `Unthreaded`, `"main"` for `Main`, the event-id string for
+/// `Thread(...)` (event ids start with `$`, so the values are mutually
+/// exclusive). Custom variants reuse their string form. Falls back to
+/// unthreaded for empty or multi-entry events.
+fn event_thread_kind(event: &ReceiptEvent) -> &str {
+	event
+		.content
+		.0
+		.values()
+		.next()
+		.and_then(|by_type| by_type.values().next())
+		.and_then(|by_user| by_user.values().next())
+		.and_then(|receipt| receipt.thread.as_str())
+		.unwrap_or_default()
+}
 
 impl Data {
 	pub(super) fn new(args: &crate::Args<'_>) -> Self {
@@ -39,18 +56,34 @@ impl Data {
 		room_id: &RoomId,
 		event: &ReceiptEvent,
 	) {
-		// Remove old entry
+		let thread_kind = event_thread_kind(event);
+		// MSC3771: storage key suffix is `user_id || 0xFF || thread_kind` so
+		// each (user, thread-context) tuple lives in its own row. Pre-MSC3771
+		// rows have no kind tail; on an Unthreaded sweep also match the
+		// bare-user-id ending so legacy rows are superseded rather than
+		// orphaned. Kind tails ("main", `$root`) never end in `@user:host`,
+		// so the legacy match cannot collide with thread-aware rows.
+		let suffix = serialize_key((user_id, thread_kind))
+			.expect("failed to serialize receipt key suffix");
+
+		let user_id_bytes = user_id.as_bytes();
+		let legacy_match = thread_kind.is_empty();
+
 		let last_possible_key = (room_id, u64::MAX);
 		self.readreceiptid_readreceipt
 			.rev_keys_from_raw(&last_possible_key)
 			.ignore_err()
 			.ready_take_while(|key| key.starts_with(room_id.as_bytes()))
-			.ready_filter_map(|key| key.ends_with(user_id.as_bytes()).then_some(key))
+			.ready_filter_map(|key| {
+				(key.ends_with(suffix.as_slice())
+					|| (legacy_match && key.ends_with(user_id_bytes)))
+				.then_some(key)
+			})
 			.ready_for_each(|key| self.readreceiptid_readreceipt.del(key))
 			.await;
 
 		let count = self.services.globals.next_count();
-		let latest_id = (room_id, *count, user_id);
+		let latest_id = (room_id, *count, user_id, thread_kind);
 		self.readreceiptid_readreceipt
 			.put(latest_id, Json(event));
 	}
@@ -62,7 +95,7 @@ impl Data {
 		since: u64,
 		to: Option<u64>,
 	) -> impl Stream<Item = ReceiptItem<'_>> + Send + 'a {
-		type Key<'a> = (&'a RoomId, u64, &'a UserId);
+		type Key<'a> = (&'a RoomId, u64, &'a UserId, &'a str);
 		type KeyVal<'a> = (Key<'a>, CanonicalJsonObject);
 
 		let after_since = since.saturating_add(1); // +1 so we don't send the event at since
@@ -74,7 +107,7 @@ impl Data {
 			.ready_take_while(move |((r, c, ..), _): &KeyVal<'_>| {
 				*r == room_id && to.is_none_or(|to| *c <= to)
 			})
-			.map(move |((_, count, user_id), mut json): KeyVal<'_>| {
+			.map(move |((_, count, user_id, _), mut json): KeyVal<'_>| {
 				json.remove("room_id");
 
 				let event = serde_json::value::to_raw_value(&json)?;
@@ -91,16 +124,16 @@ impl Data {
 		since: Option<u64>,
 		user_id: Option<&'a UserId>,
 	) -> Result<u64> {
-		type Key<'a> = (&'a RoomId, u64, &'a UserId);
+		type Key<'a> = (&'a RoomId, u64, &'a UserId, &'a str);
 
 		let key = (room_id, u64::MAX);
 		self.readreceiptid_readreceipt
 			.rev_keys_prefix(&key)
 			.ignore_err()
-			.ready_take_while(|(_, c, u): &Key<'_>| {
+			.ready_take_while(|(_, c, u, _): &Key<'_>| {
 				since.is_none_or(|since| since > *c) && user_id.is_none_or(is_equal_to!(*u))
 			})
-			.map(|(_, c, _): Key<'_>| c)
+			.map(|(_, c, ..): Key<'_>| c)
 			.boxed()
 			.next()
 			.await

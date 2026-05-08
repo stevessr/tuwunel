@@ -115,13 +115,47 @@ pub(crate) async fn create_receipt_route(
 ) -> Result<create_receipt::v3::Response> {
 	let sender_user = body.sender_user();
 
+	// MSC3771: thread_id MUST NOT be provided with `m.fully_read`.
+	if matches!(&body.receipt_type, create_receipt::v3::ReceiptType::FullyRead)
+		&& !matches!(body.thread, ReceiptThread::Unthreaded)
+	{
+		return Err!(Request(InvalidParam(
+			"thread_id must not be set for m.fully_read receipts"
+		)));
+	}
+
+	// MSC3771: a present thread_id must be a non-empty string.
+	if body.thread.as_str() == Some("") {
+		return Err!(Request(InvalidParam("thread_id must be a non-empty string")));
+	}
+
+	// MSC3771: event_id must belong to the thread the receipt targets.
+	if matches!(&body.thread, ReceiptThread::Main | ReceiptThread::Thread(_)) {
+		let resolved = services
+			.threads
+			.get_thread_id_for_event(&body.event_id)
+			.await;
+
+		let in_thread = match (&body.thread, resolved.as_deref()) {
+			| (ReceiptThread::Main, None) => true,
+			| (ReceiptThread::Thread(root), Some(parent)) => &**root == parent,
+			| (ReceiptThread::Thread(root), None) => **root == *body.event_id,
+			| _ => false,
+		};
+
+		if !in_thread {
+			return Err!(Request(InvalidParam("event_id is not related to the given thread_id")));
+		}
+	}
+
 	if matches!(
 		&body.receipt_type,
 		create_receipt::v3::ReceiptType::Read | create_receipt::v3::ReceiptType::ReadPrivate
 	) {
 		services
 			.pusher
-			.reset_notification_counts(sender_user, &body.room_id);
+			.reset_notification_counts_for_thread(sender_user, &body.room_id, &body.thread)
+			.await;
 	}
 
 	match body.receipt_type {
@@ -146,7 +180,7 @@ pub(crate) async fn create_receipt_route(
 					ReceiptType::Read,
 					BTreeMap::from_iter([(sender_user.to_owned(), Receipt {
 						ts: Some(MilliSecondsSinceUnixEpoch::now()),
-						thread: ReceiptThread::Unthreaded,
+						thread: body.thread.clone(),
 					})]),
 				)]),
 			)]);

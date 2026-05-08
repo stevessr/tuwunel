@@ -1,9 +1,15 @@
-use ruma::{RoomId, UserId};
+use std::collections::BTreeMap;
+
+use futures::{StreamExt, stream::select};
+use ruma::{EventId, OwnedEventId, RoomId, UserId, events::receipt::ReceiptThread};
 use tuwunel_core::{
 	Result, implement, trace,
 	utils::stream::{ReadyExt, TryIgnore},
 };
 use tuwunel_database::{Deserialized, Interfix};
+
+/// Per-thread unread counts: `(notification, highlight)` keyed by thread root.
+type ThreadCounts = BTreeMap<OwnedEventId, (u64, u64)>;
 
 #[implement(super::Service)]
 #[tracing::instrument(level = "debug", skip(self))]
@@ -29,6 +35,82 @@ pub fn reset_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
 	}
 }
 
+/// Reset just the main-timeline counts; per-thread counts are untouched.
+#[implement(super::Service)]
+pub fn reset_main_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
+	self.reset_notification_counts(user_id, room_id);
+}
+
+/// Reset counts for a single thread within a room. Per-thread rows live in
+/// the same CFs as the main `(user, room)` rows; the trailing event id
+/// keeps them disjoint.
+#[implement(super::Service)]
+#[tracing::instrument(level = "debug", skip(self))]
+pub fn reset_thread_notification_counts(
+	&self,
+	user_id: &UserId,
+	room_id: &RoomId,
+	thread_root: &EventId,
+) {
+	let key = (user_id, room_id, thread_root);
+	self.db.userroomid_highlightcount.put(key, 0_u64);
+	self.db
+		.userroomid_notificationcount
+		.put(key, 0_u64);
+}
+
+/// Clear every per-thread notification and highlight count for this user
+/// and room. The `Interfix` prefix forces a trailing separator into the
+/// scan key, so the legacy 2-tuple `(user, room)` main row (which has no
+/// trailing separator) is excluded by construction; only 3-tuple thread
+/// rows match. Sweeps run sequentially: parallelizing the two via `join`
+/// triggers a `for<'a> FnMut(&[u8])` Send-not-general-enough cascade
+/// through the route handler.
+#[implement(super::Service)]
+pub async fn clear_all_thread_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
+	let prefix = (user_id, room_id, Interfix);
+
+	self.db
+		.userroomid_highlightcount
+		.keys_prefix_raw(&prefix)
+		.ignore_err()
+		.ready_for_each(|key| {
+			self.db.userroomid_highlightcount.remove(key);
+		})
+		.await;
+
+	self.db
+		.userroomid_notificationcount
+		.keys_prefix_raw(&prefix)
+		.ignore_err()
+		.ready_for_each(|key| {
+			self.db.userroomid_notificationcount.remove(key);
+		})
+		.await;
+}
+
+/// Dispatcher: route a receipt's `ReceiptThread` to the matching reset path.
+/// `Unthreaded` clears all room and thread counts; `Main` clears only main;
+/// `Thread(id)` clears just that thread; unknown variants act as `Unthreaded`.
+#[implement(super::Service)]
+pub async fn reset_notification_counts_for_thread(
+	&self,
+	user_id: &UserId,
+	room_id: &RoomId,
+	thread: &ReceiptThread,
+) {
+	match thread {
+		| ReceiptThread::Main => self.reset_main_notification_counts(user_id, room_id),
+		| ReceiptThread::Thread(root) =>
+			self.reset_thread_notification_counts(user_id, room_id, root),
+		| _ => {
+			self.reset_notification_counts(user_id, room_id);
+			self.clear_all_thread_notification_counts(user_id, room_id)
+				.await;
+		},
+	}
+}
+
 #[implement(super::Service)]
 #[tracing::instrument(level = "debug", skip(self), ret(level = "trace"))]
 pub async fn notification_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
@@ -51,6 +133,58 @@ pub async fn highlight_count(&self, user_id: &UserId, room_id: &RoomId) -> u64 {
 		.await
 		.deserialized()
 		.unwrap_or(0)
+}
+
+/// Per-thread `(notification, highlight)` counts for one room and user.
+/// `Interfix` excludes the legacy 2-tuple main row from the scan; only
+/// 3-tuple `(user, room, root)` rows match.
+#[implement(super::Service)]
+#[tracing::instrument(level = "debug", skip(self))]
+pub async fn thread_notification_counts(
+	&self,
+	user_id: &UserId,
+	room_id: &RoomId,
+) -> ThreadCounts {
+	let prefix = (user_id, room_id, Interfix);
+	let notifications = self
+		.db
+		.userroomid_notificationcount
+		.stream_prefix(&prefix)
+		.ignore_err()
+		.map(notification_kv);
+
+	let highlights = self
+		.db
+		.userroomid_highlightcount
+		.stream_prefix(&prefix)
+		.ignore_err()
+		.map(highlight_kv);
+
+	select(notifications, highlights)
+		.ready_fold(ThreadCounts::default(), merge_thread_count)
+		.await
+}
+
+fn notification_kv(
+	(key, notifications): ((&UserId, &RoomId, OwnedEventId), u64),
+) -> (OwnedEventId, (u64, u64)) {
+	(key.2, (notifications, 0))
+}
+
+fn highlight_kv(
+	(key, highlights): ((&UserId, &RoomId, OwnedEventId), u64),
+) -> (OwnedEventId, (u64, u64)) {
+	(key.2, (0, highlights))
+}
+
+fn merge_thread_count(
+	mut counts: ThreadCounts,
+	(root, (notifications, highlights)): (OwnedEventId, (u64, u64)),
+) -> ThreadCounts {
+	let entry = counts.entry(root).or_default();
+	entry.0 = entry.0.saturating_add(notifications);
+	entry.1 = entry.1.saturating_add(highlights);
+	counts
 }
 
 #[implement(super::Service)]

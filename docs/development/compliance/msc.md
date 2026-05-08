@@ -18,16 +18,16 @@
 
 ## Counts
 
-- ✅ `yes`: 213
-- 🟨 `partial`: 87
-- ❌ `no`: 424
+- ✅ `yes`: 214
+- 🟨 `partial`: 88
+- ❌ `no`: 422
 - ⬛ `n/a`: 289
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 149 | 35 | 15 | 57 | 256 |
+| merged | 150 | 36 | 13 | 57 | 256 |
 | open | 56 | 51 | 373 | 172 | 652 |
 | closed | 8 | 1 | 36 | 52 | 97 |
 | unknown | 0 | 0 | 0 | 8 | 8 |
@@ -116,8 +116,8 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3816 | 🟨 ◐ | 20/40 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |
 | MSC3787 | 🟨 ● | 70/? | Allowing knocks to restricted rooms | complement: 33p/14f |
 | MSC3786 | ✅ ● | 100/100 | Add a default push rule to ignore `m.room.server_acl` events | server_acl predefined push rule via Ruma defaults |
-| MSC3773 | ❌ ● | 0/10 | Notifications for threads | sync returns empty unread_thread_notifications map |
-| MSC3771 | ❌ ● | 0/10 | Read receipts for threads | thread_id discarded; receipts always Unthreaded |
+| MSC3773 | ✅ ● | 100/100 | Notifications for threads | rooms::threads::get_thread_id walks m.relates_to up to 3 hops; notify/highlight partition into per-thread (room,user,root) rows; sync v3 surfaces unread_thread_notifications when filter opts in |
+| MSC3771 | 🟨 ● | 80/100 | Read receipts for threads | m.read keyed per (user, thread); read_marker rejects empty thread_id, m.fully_read+thread, and event/thread mismatches via the same 3-hop resolver; m.read.private still uses single (room, user) marker |
 | MSC3765 | 🟨 ◐ | 30/40 | Rich text in room topics | topic_block accepted via Ruma; createRoom only writes plain topic |
 | MSC3758 | ✅ ● | 90/100 | Add `event_property_is` push rule condition kind | event_property_is dispatched via Ruma Ruleset::get_actions |
 | MSC3743 | ✅ ● | 90/100 | Standardized error response for unknown endpoints | M_UNRECOGNIZED 404/405 fallback wired in router |
@@ -247,6 +247,7 @@ for spec compliance.
 
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
+| MSC3771 | 🟨 ● | 80/100 | Read receipts for threads | m.read keyed per (user, thread); read_marker rejects empty thread_id, m.fully_read+thread, and event/thread mismatches via the same 3-hop resolver; m.read.private still uses single (room, user) marker |
 | MSC4291 | 🟨 ● | 80/90 | Room IDs as hashes of the create event | hydra.11 room id format and auth rules in event_auth, pdu format checks |
 | MSC2409 | 🟨 ● | 70/70 | Proposal to send typing, presence and receipts to appservices | typing+receipt EDUs sent to AS; presence not forwarded |
 | MSC3787 | 🟨 ● | 70/? | Allowing knocks to restricted rooms | complement: 33p/14f |
@@ -290,8 +291,6 @@ for spec compliance.
 | MSC3288 | ❌ ● | 0/0 | Add room type to `/_matrix/identity/v2/store-invite` API | no /_matrix/identity/v2/store-invite call site; no room_type forwarded |
 | MSC3419 | ❌ ◐ | 0/0 | Guest State Events | guests still cannot send arbitrary state events |
 | MSC3666 | ❌ ● | 0/0 | Bundled aggregations for server side search | search results do not include bundled aggregations |
-| MSC3771 | ❌ ● | 0/10 | Read receipts for threads | thread_id discarded; receipts always Unthreaded |
-| MSC3773 | ❌ ● | 0/10 | Notifications for threads | sync returns empty unread_thread_notifications map |
 | MSC3980 | ❌ ◐ | 0/0 | Dotted Field Consistency | event_fields filter escaping not enforced |
 | MSC4115 | ❌ ● | 0/0 | membership metadata on events | unsigned.membership not populated on events served to clients |
 | MSC4222 | ❌ ● | 0/0 | Adding `state_after` to `/sync` | MSC4222 commit lives only on the `4222` feature branch, not dev |
