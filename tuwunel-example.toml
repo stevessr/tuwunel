@@ -2636,6 +2636,16 @@
 #
 #check_cookie = true
 
+# Extra query parameters appended to every authorization request sent to the identity provider.
+#
+# E.g. to force re-authentication even if IdP cookies are present:
+# ```toml
+# [[global.identity_provider]]
+# extra_authorization_parameters = { prompt = "login" }
+# ```
+#
+#extra_authorization_parameters = {}
+
 
 
 #[global.storage_provider.<ID>.local]

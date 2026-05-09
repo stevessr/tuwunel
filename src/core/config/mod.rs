@@ -3087,6 +3087,19 @@ pub struct IdentityProvider {
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub check_cookie: bool,
+
+	/// Extra query parameters appended to every authorization request sent to
+	/// the identity provider.
+	///
+	/// E.g. to force re-authentication even if IdP cookies are present:
+	/// ```toml
+	/// [[global.identity_provider]]
+	/// extra_authorization_parameters = { prompt = "login" }
+	/// ```
+	///
+	/// default: {}
+	#[serde(default)]
+	pub extra_authorization_parameters: BTreeMap<String, String>,
 }
 
 impl IdentityProvider {
