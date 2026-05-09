@@ -14,7 +14,7 @@ use tuwunel_core::{
 	},
 	warn,
 };
-use tuwunel_database::Deserialized;
+use tuwunel_database::{Deserialized, SEP};
 
 use crate::{Services, media};
 
@@ -104,6 +104,7 @@ async fn fresh(services: &Services) -> Result {
 	db["global"].insert(b"fix_referencedevents_missing_sep", []);
 	db["global"].insert(b"fix_readreceiptid_readreceipt_duplicates", []);
 	db["global"].insert(b"fix_hashed_sentinel_passwords", []);
+	db["global"].insert(b"upgrade_legacy_mediaid_user", []);
 	db["global"].insert(b"remove_remote_media_userid", []);
 
 	// Create the admin room and server user on first run
@@ -181,6 +182,14 @@ async fn migrate(services: &Services) -> Result {
 		.is_not_found()
 	{
 		fix_hashed_sentinel_passwords(services).await?;
+	}
+
+	if db["global"]
+		.get(b"upgrade_legacy_mediaid_user")
+		.await
+		.is_not_found()
+	{
+		upgrade_legacy_mediaid_user(services).await?;
 	}
 
 	if db["global"]
@@ -429,7 +438,7 @@ async fn fix_referencedevents_missing_sep(services: &Services) -> Result {
 		.ready_fold(totals, |mut a, (i, (key, val))| {
 			debug_assert!(val.is_empty(), "expected no value");
 
-			let has_sep = key.contains(&tuwunel_database::SEP);
+			let has_sep = key.contains(&SEP);
 
 			if !has_sep {
 				let key_str = std::str::from_utf8(key).expect("key not utf-8");
@@ -558,6 +567,67 @@ async fn fix_hashed_sentinel_passwords(services: &Services) -> Result {
 	info!(?checked, ?good, ?bad, "Fixed any occurrences of hashed sentinel passwords");
 
 	db["global"].insert(b"fix_hashed_sentinel_passwords", []);
+	db.engine.sort()
+}
+
+async fn upgrade_legacy_mediaid_user(services: &Services) -> Result {
+	let db = &services.db;
+	let cork = db.cork_and_sync();
+	let mediaid_user = db["mediaid_user"].clone();
+
+	warn!("Upgrading legacy mediaid_user keys to composite (mxc, user_id) layout");
+
+	let (checked, upgraded, removed_invalid) = mediaid_user
+		.raw_stream()
+		.ignore_err()
+		.ready_fold(
+			(0_usize, 0_usize, 0_usize),
+			|(mut checked, mut upgraded, mut removed_invalid), (raw_key, raw_val)| {
+				checked = checked.saturating_add(1);
+
+				let has_sep = raw_key.contains(&SEP);
+				let user_id = str::from_utf8(raw_val)
+					.ok()
+					.and_then(|s| <&UserId>::try_from(s).ok());
+
+				match (has_sep, user_id) {
+					| (true, _) => {},
+					| (false, None) => {
+						warn!(
+							?raw_key,
+							?raw_val,
+							"Legacy entry has unparsable user_id, removing"
+						);
+
+						mediaid_user.remove(raw_key);
+						removed_invalid = removed_invalid.saturating_add(1);
+					},
+					| (false, Some(user_id)) => {
+						let mut new_key = raw_key.to_vec();
+						new_key.push(SEP);
+						new_key.extend_from_slice(user_id.as_bytes());
+
+						mediaid_user.put_raw(new_key, user_id.as_str());
+						mediaid_user.remove(raw_key);
+
+						upgraded = upgraded.saturating_add(1);
+					},
+				}
+
+				(checked, upgraded, removed_invalid)
+			},
+		)
+		.await;
+
+	drop(cork);
+	info!(
+		%checked,
+		%upgraded,
+		%removed_invalid,
+		"Upgraded legacy mediaid_user keys"
+	);
+
+	db["global"].insert(b"upgrade_legacy_mediaid_user", []);
 	db.engine.sort()
 }
 
