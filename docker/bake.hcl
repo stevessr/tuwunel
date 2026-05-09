@@ -491,7 +491,6 @@ target "rust-sdk-integ" {
         elem_tag("rust-sdk-integ", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
     output = ["type=docker,compression=zstd,mode=max,compression-level=${zstd_image_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=leaf"]
     target = "rust-sdk-integration"
     dockerfile = "${docker_dir}/Dockerfile.matrix-rust-sdk"
     matrix = cargo_rust_feat_sys
@@ -881,7 +880,6 @@ target "install" {
     labels = install_labels
     annotations = install_annotations
     output = ["type=docker,compression=zstd,mode=max,compression-level=${zstd_image_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=leaf"]
     dockerfile = "${docker_dir}/Dockerfile.install"
     target = "install"
     matrix = cargo_rust_feat_sys
@@ -1049,7 +1047,6 @@ target "build-nix" {
         elem_tag("build-nix", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=leaf"]
     dockerfile = "${docker_dir}/Dockerfile.nix"
     target = "build-nix"
     matrix = cargo_rust_feat_sys
@@ -1294,7 +1291,6 @@ target "cargo" {
     name = elem("cargo", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
     target = "cargo"
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=branch"]
     matrix = cargo_rust_feat_sys
     inherits = [
         elem("deps-base", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -1409,7 +1405,6 @@ target "deps-base" {
     ]
     target = "cook"
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=branch"]
     dockerfile = "${docker_dir}/Dockerfile.cargo"
     matrix = cargo_rust_feat_sys
     inherits = [
@@ -1684,7 +1679,6 @@ target "ingredients" {
     tags = [
         elem_tag("ingredients", [rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
-    cache_to = ["type=local,compression=zstd,mode=max,label=cache.tier=branch"]
     target =  "ingredients"
     dockerfile = "${docker_dir}/Dockerfile.source"
     matrix = rust_feat_sys
@@ -1773,7 +1767,6 @@ target "rust" {
         elem_tag("rust", [rust_toolchain, rust_target, sys_name, sys_version, sys_target], "latest"),
     ]
     target = "rust"
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=trunk"]
     matrix = rust_tool_sys
     inherits = [
         elem("rustup", [rust_target, sys_name, sys_version, sys_target])
@@ -2035,8 +2028,6 @@ target "system" {
     ]
     target = "system"
     output = ["type=cacheonly,compression=zstd,mode=min,compression-level=${cache_compress_level}"]
-    cache_to = ["type=local,compression=zstd,mode=max,compression-level=${cache_compress_level},label=cache.tier=trunk"]
-    cache_from = ["type=local"]
     dockerfile = "${docker_dir}/Dockerfile.system"
     context = "."
     matrix = sys
