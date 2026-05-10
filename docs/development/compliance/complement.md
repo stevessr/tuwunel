@@ -4,10 +4,10 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 201. Passing: **68.7%**
-  - ✅ `pass`: 138
+- Test groups: 201. Passing: **69.2%**
+  - ✅ `pass`: 139
   - 🟨 `some`: 27
-  - ❌ `fail`: 34
+  - ❌ `fail`: 33
   - ⬛ `skip`: 2
 
 - Subtests: 591. Passing: **68.2%**
@@ -92,7 +92,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestJson` | ✅ | 3/0/0 |
 | `TestJumpToDateEndpoint` | 🟨 | 6/8/0 |
 | `TestKeyChangesLocal` | ✅ | 1/0/0 |
-| `TestKeyClaimOrdering` | ❌ | – |
+| `TestKeyClaimOrdering` | ✅ | – |
 | `TestKeysQueryWithDeviceIDAsObjectFails` | ✅ | – |
 | `TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11` | ✅ | – |
 | `TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12` | ✅ | – |

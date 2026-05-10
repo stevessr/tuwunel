@@ -175,6 +175,10 @@ pub(super) static MAPS: &[Descriptor] = &[
 	},
 	Descriptor {
 		name: "onetimekeyid_onetimekeys",
+		..descriptor::DROPPED
+	},
+	Descriptor {
+		name: "onetimekeyid4225_otk",
 		..descriptor::RANDOM_SMALL
 	},
 	Descriptor {

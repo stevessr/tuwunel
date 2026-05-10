@@ -18,16 +18,16 @@
 
 ## Counts
 
-- ✅ `yes`: 205
+- ✅ `yes`: 206
 - 🟨 `partial`: 61
-- ❌ `no`: 453
+- ❌ `no`: 452
 - ⬛ `n/a`: 291
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 146 | 31 | 16 | 63 | 256 |
+| merged | 147 | 31 | 15 | 63 | 256 |
 | open | 51 | 29 | 400 | 176 | 656 |
 | closed | 8 | 1 | 37 | 52 | 98 |
 
@@ -58,7 +58,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4254 | ✅ ● | 100/100 | Usage of [RFC7009] Token Revocation for Matrix client logout | src/api/oidc/revoke.rs:37; RFC7009 form-urlencoded; revokes both tokens; 200 ... |
 | MSC4239 | ✅ ● | 100/100 | Room version 11 as the default room version | default_default_room_version = V11 |
 | MSC4230 | ✅ ● | 100/100 | 'Animated' flag for images | event-only; passthrough; merged in spec |
-| MSC4225 | ❌ ◐ | 10/10 | Specification of an order in which one-time-keys should be issued | OTKs scanned in lexicographic key-id order; not strict upload order |
+| MSC4225 | ✅ ● | 100/100 | Specification of an order in which one-time-keys should be issued | OTKs issued in upload order via count_be prefix; src/service/users/keys.rs:99 |
 | MSC4222 | ✅ ● | 100/100 | Adding `state_after` to `/sync` | src/api/client/sync/v3.rs; use_state_after wired through joined+left rooms; s... |
 | MSC4213 | ✅ ● | 90/90 | Remove `server_name` parameter | join/knock use via; server_name still accepted via Ruma fallback |
 | MSC4210 | ✅ ● | 100/100 | Remove legacy mentions | deprecated mention push rules removed at /pushrules read time |
@@ -275,7 +275,6 @@ for spec compliance.
 | MSC3860 | ❌ ◐ | 20/20 | Media Download Redirects | forwards allow_redirect to remote fetch but does not emit own redirect |
 | MSC1759 | ❌ ◐ | 10/20 | MSC 1759 - Rooms V2 | v2 algorithm in use for v3+; v2 itself not in supported_room_versions |
 | MSC3816 | ❌ ◐ | 10/10 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |
-| MSC4225 | ❌ ◐ | 10/10 | Specification of an order in which one-time-keys should be issued | OTKs scanned in lexicographic key-id order; not strict upload order |
 | MSC1692 | ❌ ◐ | 0/10 | Terms of service at registration | AuthType::Terms exists in Ruma but Tuwunel's register flow does not advertise... |
 | MSC1767 | ❌ ◐ | 0/0 | Extensible events in Matrix | no extensible-events handling; relies on generic event relay |
 | MSC1957 | ❌ ◐ | 0/0 | Integration manager discovery | merged; m.integrations not present in /.well-known/matrix/client |
