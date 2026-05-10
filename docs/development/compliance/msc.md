@@ -18,16 +18,16 @@
 
 ## Counts
 
-- ✅ `yes`: 204
+- ✅ `yes`: 205
 - 🟨 `partial`: 61
-- ❌ `no`: 454
+- ❌ `no`: 453
 - ⬛ `n/a`: 291
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 145 | 31 | 17 | 63 | 256 |
+| merged | 146 | 31 | 16 | 63 | 256 |
 | open | 51 | 29 | 400 | 176 | 656 |
 | closed | 8 | 1 | 37 | 52 | 98 |
 
@@ -59,7 +59,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4239 | ✅ ● | 100/100 | Room version 11 as the default room version | default_default_room_version = V11 |
 | MSC4230 | ✅ ● | 100/100 | 'Animated' flag for images | event-only; passthrough; merged in spec |
 | MSC4225 | ❌ ◐ | 10/10 | Specification of an order in which one-time-keys should be issued | OTKs scanned in lexicographic key-id order; not strict upload order |
-| MSC4222 | ❌ ● | 0/0 | Adding `state_after` to `/sync` | MSC4222 commit lives only on the `4222` feature branch, not dev |
+| MSC4222 | ✅ ● | 100/100 | Adding `state_after` to `/sync` | src/api/client/sync/v3.rs; use_state_after wired through joined+left rooms; s... |
 | MSC4213 | ✅ ● | 90/90 | Remove `server_name` parameter | join/knock use via; server_name still accepted via Ruma fallback |
 | MSC4210 | ✅ ● | 100/100 | Remove legacy mentions | deprecated mention push rules removed at /pushrules read time |
 | MSC4191 | 🟨 ◐ | 50/80 | Account management for OAuth 2.0 API | metadata wired but action names diverge from MSC |
@@ -285,7 +285,6 @@ for spec compliance.
 | MSC2705 | ❌ ◐ | 0/10 | Animated thumbnails | animated param accepted; thumbnails always PNG static |
 | MSC3980 | ❌ ◐ | 0/0 | Dotted Field Consistency | event_fields filter escaping not enforced |
 | MSC4115 | ❌ ● | 0/0 | membership metadata on events | unsigned.membership not populated on events served to clients |
-| MSC4222 | ❌ ● | 0/0 | Adding `state_after` to `/sync` | MSC4222 commit lives only on the `4222` feature branch, not dev |
 | MSC4335 | ❌ ● | 0/0 | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
 | MSC4341 | ❌ ● | 0/0 | Support for RFC 8628 Device Authorization Grant | OAuth Device Authorization Grant (RFC 8628) not advertised |
 

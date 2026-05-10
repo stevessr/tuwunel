@@ -59,7 +59,7 @@ static VERSIONS: [&str; 17] = [
 	"v1.15",  /* custom profile fields */
 ];
 
-static UNSTABLE_FEATURES: [&str; 33] = [
+static UNSTABLE_FEATURES: [&str; 34] = [
 	"org.matrix.e2e_cross_signing",
 	// private read receipts (https://github.com/matrix-org/matrix-spec-proposals/pull/2285)
 	"org.matrix.msc2285.stable",
@@ -122,4 +122,6 @@ static UNSTABLE_FEATURES: [&str; 33] = [
 	"org.matrix.msc3771",
 	// Notifications for threads (https://github.com/matrix-org/matrix-spec-proposals/pull/3773)
 	"org.matrix.msc3773",
+	// state_after on /sync (https://github.com/matrix-org/matrix-spec-proposals/pull/4222)
+	"org.matrix.msc4222",
 ];

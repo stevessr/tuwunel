@@ -150,6 +150,7 @@ pub(crate) async fn sync_events_route(
 	let filter = filter.map(Option::unwrap_or_default);
 	let full_state = body.body.full_state;
 	let set_presence = &body.body.set_presence;
+	let use_state_after = body.body.use_state_after;
 	let ping_presence = services
 		.presence
 		.maybe_ping_presence(
@@ -214,6 +215,7 @@ pub(crate) async fn sync_events_route(
 				since,
 				next_batch,
 				full_state,
+				use_state_after,
 				&filter,
 			)
 			.await?;
@@ -289,6 +291,7 @@ async fn build_empty_response(
 		count = ?services.globals.pending_count(),
     )
 )]
+#[expect(clippy::too_many_arguments)]
 async fn build_sync_events(
 	services: &Services,
 	sender_user: &UserId,
@@ -296,6 +299,7 @@ async fn build_sync_events(
 	since: u64,
 	next_batch: u64,
 	full_state: bool,
+	use_state_after: bool,
 	filter: &FilterDefinition,
 ) -> Result<sync_events::v3::Response> {
 	let joined_rooms = services
@@ -312,6 +316,7 @@ async fn build_sync_events(
 				since,
 				next_batch,
 				full_state,
+				use_state_after,
 				filter,
 			)
 			.map_ok(move |(joined_room, dlu, jeu)| (room_id, joined_room, dlu, jeu))
@@ -343,6 +348,7 @@ async fn build_sync_events(
 				sender_user,
 				next_batch,
 				full_state,
+				use_state_after,
 				filter,
 			)
 			.map_ok(move |left_room| (room_id, left_room))
@@ -559,6 +565,7 @@ async fn process_presence_updates(
 		full = %full_state,
 	),
 )]
+#[expect(clippy::too_many_arguments)]
 async fn handle_left_room(
 	services: &Services,
 	since: u64,
@@ -566,6 +573,7 @@ async fn handle_left_room(
 	sender_user: &UserId,
 	next_batch: u64,
 	full_state: bool,
+	use_state_after: bool,
 	filter: &FilterDefinition,
 ) -> Result<Option<LeftRoom>> {
 	let left_count = services
@@ -618,9 +626,17 @@ async fn handle_left_room(
 			signatures: None,
 		};
 
+		let state = StateEvents { events: vec![event.into_format()] };
+
+		let state = if use_state_after {
+			RoomState::After(state)
+		} else {
+			RoomState::Before(state)
+		};
+
 		return Ok(Some(LeftRoom {
 			account_data: RoomAccountData::default(),
-			state: RoomState::Before(StateEvents { events: vec![event.into_format()] }),
+			state,
 			timeline: Timeline {
 				limited: false,
 				events: Default::default(),
@@ -629,10 +645,21 @@ async fn handle_left_room(
 		}));
 	}
 
-	load_left_room(services, sender_user, room_id, since, left_count, full_state, filter).await
+	load_left_room(
+		services,
+		sender_user,
+		room_id,
+		since,
+		left_count,
+		full_state,
+		use_state_after,
+		filter,
+	)
+	.await
 }
 
 #[tracing::instrument(name = "load", level = "debug", skip_all)]
+#[expect(clippy::too_many_arguments)]
 async fn load_left_room(
 	services: &Services,
 	sender_user: &UserId,
@@ -640,6 +667,7 @@ async fn load_left_room(
 	since: u64,
 	left_count: u64,
 	full_state: bool,
+	use_state_after: bool,
 	filter: &FilterDefinition,
 ) -> Result<Option<LeftRoom>> {
 	let initial = since == 0;
@@ -679,6 +707,18 @@ async fn load_left_room(
 				.ok()
 		});
 
+	// MSC4222 `state_after`: state at the leave (end of timeline). The
+	// stored shortstatehash at the leave PDU is state-before-leave, so
+	// step to the next PDU; if no event followed, the room's current
+	// shortstatehash is the post-leave state.
+	let after_shortstatehash = use_state_after.then_async(|| {
+		services
+			.timeline
+			.next_shortstatehash(room_id, PduCount::Normal(left_count))
+			.or_else(|_| services.state.get_room_shortstatehash(room_id))
+			.inspect_err(inspect_debug_log)
+	});
+
 	let left_shortstatehash = services
 		.timeline
 		.get_shortstatehash(room_id, PduCount::Normal(left_count))
@@ -686,18 +726,25 @@ async fn load_left_room(
 		.or_else(|_| services.state.get_room_shortstatehash(room_id))
 		.map_err(|_| err!(Database(error!("Room {room_id} has no state"))));
 
-	let (since_shortstatehash, horizon_shortstatehash, left_shortstatehash) =
-		join3(since_shortstatehash, horizon_shortstatehash, left_shortstatehash)
-			.boxed()
-			.await;
+	let (since_shortstatehash, horizon_shortstatehash, after_shortstatehash, left_shortstatehash) =
+		join4(
+			since_shortstatehash,
+			horizon_shortstatehash,
+			after_shortstatehash,
+			left_shortstatehash,
+		)
+		.boxed()
+		.await;
 
 	let StateChanges { state_events, .. } = calculate_state_changes(
 		services,
 		sender_user,
 		room_id,
 		full_state || initial,
+		use_state_after,
 		since_shortstatehash,
 		horizon_shortstatehash.flatten(),
+		after_shortstatehash.flat_ok(),
 		left_shortstatehash?,
 		false,
 		None,
@@ -756,9 +803,17 @@ async fn load_left_room(
 		.boxed()
 		.await;
 
+	let state = StateEvents { events: state_events };
+
+	let state = if use_state_after {
+		RoomState::After(state)
+	} else {
+		RoomState::Before(state)
+	};
+
 	Ok(Some(LeftRoom {
 		account_data: RoomAccountData { events: account_data_events },
-		state: RoomState::Before(StateEvents { events: state_events }),
+		state,
 		timeline: Timeline {
 			prev_batch,
 			limited: limited || timeline_limit == 0,
@@ -787,6 +842,7 @@ async fn load_joined_room(
 	since: u64,
 	next_batch: u64,
 	full_state: bool,
+	use_state_after: bool,
 	filter: &FilterDefinition,
 ) -> Result<(JoinedRoom, HashSet<OwnedUserId>, HashSet<OwnedUserId>)> {
 	let initial = since == 0;
@@ -832,6 +888,18 @@ async fn load_joined_room(
 				.inspect_err(inspect_debug_log)
 		});
 
+	// MSC4222 `state_after` semantics: state at the *end* of the timeline
+	// window. `next_shortstatehash` reads state-before the next PDU, which
+	// equals state-after our last PDU; falling back to the room's current
+	// state covers the case where our window already touches HEAD.
+	let after_shortstatehash = use_state_after.then_async(|| {
+		services
+			.timeline
+			.next_shortstatehash(room_id, last_timeline_count)
+			.or_else(|_| services.state.get_room_shortstatehash(room_id))
+			.inspect_err(inspect_debug_log)
+	});
+
 	let current_shortstatehash = timeline_changed.then_async(|| {
 		services
 			.timeline
@@ -857,17 +925,27 @@ async fn load_joined_room(
 		.collect::<Vec<(OwnedUserId, Raw<AnySyncEphemeralRoomEvent>)>>();
 
 	let (
-		(since_shortstatehash, horizon_shortstatehash, current_shortstatehash),
+		(
+			since_shortstatehash,
+			horizon_shortstatehash,
+			after_shortstatehash,
+			current_shortstatehash,
+		),
 		receipt_events,
 		encrypted_room,
 	) = join3(
-		join3(since_shortstatehash, horizon_shortstatehash, current_shortstatehash),
+		join4(
+			since_shortstatehash,
+			horizon_shortstatehash,
+			after_shortstatehash,
+			current_shortstatehash,
+		),
 		receipt_events,
 		encrypted_room,
 	)
-	.map(|((since, horizon, current), receipt, encrypted_room)| -> Result<_> {
+	.map(|((since, horizon, after, current), receipt, encrypted_room)| -> Result<_> {
 		Ok((
-			(since.flatten(), horizon.flat_ok(), current.transpose()?),
+			(since.flatten(), horizon.flat_ok(), after.flat_ok(), current.transpose()?),
 			receipt,
 			encrypted_room,
 		))
@@ -963,8 +1041,10 @@ async fn load_joined_room(
 			sender_user,
 			room_id,
 			full_state || initial,
+			use_state_after,
 			since_shortstatehash,
 			horizon_shortstatehash,
+			after_shortstatehash,
 			current_shortstatehash,
 			joined_since_last_sync,
 			witness.as_ref(),
@@ -1166,9 +1246,12 @@ async fn load_joined_room(
 			.any(is_equal_to!(event.event_id()))
 	};
 
+	// MSC4222: when the client opts into `state_after`, state events that
+	// took effect within the timeline appear in both the timeline and the
+	// state section, so the in-timeline exclusion is bypassed.
 	let include_in_state = |event: &PduEvent| {
 		let filter = &filter.room.state;
-		filter.matches(event) && (full_state || !is_in_timeline(event))
+		filter.matches(event) && (full_state || use_state_after || !is_in_timeline(event))
 	};
 
 	let state_events = state_events
@@ -1247,10 +1330,18 @@ async fn load_joined_room(
 		})
 		.collect();
 
+	let state = StateEvents { events: state_events };
+
+	let state = if use_state_after {
+		RoomState::After(state)
+	} else {
+		RoomState::Before(state)
+	};
+
 	let joined_room = JoinedRoom {
 		account_data: RoomAccountData { events: account_data_events },
 		ephemeral: Ephemeral { events: edus },
-		state: RoomState::Before(StateEvents { events: state_events }),
+		state,
 		summary: RoomSummary {
 			joined_member_count: joined_member_count.map(ruma_from_u64),
 			invited_member_count: invited_member_count.map(ruma_from_u64),
@@ -1277,8 +1368,10 @@ async fn load_joined_room(
 	skip_all,
 	fields(
 	    full = %full_state,
+	    after = %use_state_after,
 	    ss = ?since_shortstatehash,
 	    hs = ?horizon_shortstatehash,
+	    as = ?after_shortstatehash,
 	    cs = %current_shortstatehash,
     )
 )]
@@ -1288,15 +1381,24 @@ async fn calculate_state_changes<'a>(
 	sender_user: &UserId,
 	room_id: &RoomId,
 	full_state: bool,
+	use_state_after: bool,
 	since_shortstatehash: Option<ShortStateHash>,
 	horizon_shortstatehash: Option<ShortStateHash>,
+	after_shortstatehash: Option<ShortStateHash>,
 	current_shortstatehash: ShortStateHash,
 	joined_since_last_sync: bool,
 	witness: Option<&'a Witness>,
 ) -> Result<StateChanges> {
 	let incremental = !full_state && !joined_since_last_sync && since_shortstatehash.is_some();
 
-	let horizon_shortstatehash = horizon_shortstatehash.unwrap_or(current_shortstatehash);
+	// MSC4222: `state_after` requests need state at the *end* of the
+	// timeline; legacy `state` requests need state at the *start*. Pick
+	// the right delta endpoint, falling back to the room's current
+	// shortstatehash when the preferred lookup is unavailable.
+	let horizon_shortstatehash = use_state_after
+		.then_some(after_shortstatehash)
+		.unwrap_or(horizon_shortstatehash)
+		.unwrap_or(current_shortstatehash);
 
 	let since_shortstatehash = since_shortstatehash.unwrap_or(horizon_shortstatehash);
 

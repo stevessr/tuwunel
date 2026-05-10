@@ -10,9 +10,9 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
   - ❌ `fail`: 34
   - ⬛ `skip`: 2
 
-- Subtests: 590. Passing: **67.8%**
-  - ✅ `pass`: 400
-  - ❌ `fail`: 177
+- Subtests: 591. Passing: **68.2%**
+  - ✅ `pass`: 403
+  - ❌ `fail`: 175
   - ⬛ `skip`: 13
 
 ## All Top-Level Tests
@@ -193,7 +193,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestSendMessageWithTxn` | ✅ | – |
 | `TestServerCapabilities` | ✅ | – |
 | `TestServerNotices` | ⬛ | – |
-| `TestSync` | 🟨 | 7/5/0 |
+| `TestSync` | 🟨 | 10/3/0 |
 | `TestSyncFilter` | ✅ | 2/0/0 |
 | `TestSyncLeaveSection` | ✅ | 3/0/0 |
 | `TestSyncOmitsStateChangeOnFilteredEvents` | ✅ | – |
