@@ -3,6 +3,8 @@ mod notification;
 mod request;
 mod send;
 mod suppressed;
+#[cfg(test)]
+mod tests;
 
 use std::sync::Arc;
 

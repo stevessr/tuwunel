@@ -1,4 +1,6 @@
 mod data;
+#[cfg(test)]
+mod tests;
 
 use std::{collections::BTreeMap, sync::Arc};
 
