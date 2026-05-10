@@ -3,7 +3,10 @@ use std::sync::Arc;
 use futures::{Stream, StreamExt};
 use ruma::{
 	CanonicalJsonObject, RoomId, UserId,
-	events::{AnySyncEphemeralRoomEvent, receipt::ReceiptEvent},
+	events::{
+		AnySyncEphemeralRoomEvent,
+		receipt::{ReceiptEvent, ReceiptThread},
+	},
 	serde::Raw,
 };
 use tuwunel_core::{
@@ -11,6 +14,8 @@ use tuwunel_core::{
 	utils::{ReadyExt, stream::TryIgnore},
 };
 use tuwunel_database::{Deserialized, Interfix, Json, Map, serialize_key};
+
+use super::ThreadKind;
 
 pub(super) struct Data {
 	roomuserid_privateread: Arc<Map>,
@@ -145,16 +150,45 @@ impl Data {
 			.ok_or_else(|| err!(Request(NotFound("No receipts found in room"))))
 	}
 
+	/// Sets the private read marker for `(room, user, thread)`.
+	///
+	/// Unthreaded writes use the legacy 2-tuple `(room, user)` key shape
+	/// and sweep any pre-existing per-thread rows so the room-wide receipt
+	/// supersedes prior thread state. Threaded writes (Main, Thread, custom)
+	/// use a 3-tuple `(room, user, thread_kind)` key disjoint from the
+	/// legacy row by trailing separator. `roomuserid_lastprivatereadupdate`
+	/// stays 2-tuple and is bumped on every write so sync gating remains a
+	/// single point query.
 	#[inline]
-	pub(super) fn private_read_set(&self, room_id: &RoomId, user_id: &UserId, pdu_count: u64) {
-		let key = (room_id, user_id);
+	pub(super) async fn private_read_set(
+		&self,
+		room_id: &RoomId,
+		user_id: &UserId,
+		pdu_count: u64,
+		thread: &ReceiptThread,
+	) {
 		let next_count = self.services.globals.next_count();
 
-		self.roomuserid_privateread.put(key, pdu_count);
+		let lastupdate_key = (room_id, user_id);
 		self.roomuserid_lastprivatereadupdate
-			.put(key, *next_count);
+			.put(lastupdate_key, *next_count);
+
+		match thread.as_str() {
+			| None | Some("") => {
+				self.clear_thread_private_reads(room_id, user_id)
+					.await;
+
+				let key = (room_id, user_id);
+				self.roomuserid_privateread.put(key, pdu_count);
+			},
+			| Some(thread_kind) => {
+				let key = (room_id, user_id, thread_kind);
+				self.roomuserid_privateread.put(key, pdu_count);
+			},
+		}
 	}
 
+	/// Latest unthreaded (legacy 2-tuple) private read PDU count.
 	#[inline]
 	pub(super) async fn private_read_get_count(
 		&self,
@@ -166,6 +200,37 @@ impl Data {
 			.qry(&key)
 			.await
 			.deserialized()
+	}
+
+	/// Stream of `(thread_kind, pdu_count)` for the per-thread (3-tuple)
+	/// private read rows for this `(room, user)`. The legacy 2-tuple row is
+	/// excluded by the trailing-separator prefix; query it via
+	/// `private_read_get_count`.
+	#[inline]
+	pub(super) fn private_read_threaded_stream<'a>(
+		&'a self,
+		room_id: &'a RoomId,
+		user_id: &'a UserId,
+	) -> impl Stream<Item = (ThreadKind, u64)> + Send + 'a {
+		type ThreadKv<'a> = ((&'a RoomId, &'a UserId, &'a str), u64);
+
+		let prefix = (room_id, user_id, Interfix);
+		self.roomuserid_privateread
+			.stream_prefix(&prefix)
+			.ignore_err()
+			.map(|((_, _, kind), count): ThreadKv<'_>| (ThreadKind::from(kind), count))
+	}
+
+	#[inline]
+	async fn clear_thread_private_reads(&self, room_id: &RoomId, user_id: &UserId) {
+		let prefix = (room_id, user_id, Interfix);
+		self.roomuserid_privateread
+			.keys_prefix_raw(&prefix)
+			.ignore_err()
+			.ready_for_each(|key| {
+				self.roomuserid_privateread.remove(key);
+			})
+			.await;
 	}
 
 	#[inline]

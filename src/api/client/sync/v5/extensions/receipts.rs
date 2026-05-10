@@ -9,7 +9,10 @@ use tuwunel_core::{
 	Result,
 	utils::{BoolExt, IterStream, stream::BroadbandExt},
 };
-use tuwunel_service::{rooms::read_receipt::pack_receipts, sync::Room};
+use tuwunel_service::{
+	rooms::read_receipt::{PrivateReadEvents, pack_receipts},
+	sync::Room,
+};
 
 use super::{Connection, SyncInfo, Window, selector};
 
@@ -57,17 +60,15 @@ async fn collect_room(
 		.last_privateread_update(sender_user, room_id)
 		.then(async |last_private_update| {
 			if last_private_update <= roomsince || last_private_update > conn.next_batch {
-				return None;
+				return PrivateReadEvents::new();
 			}
 
 			services
 				.read_receipt
 				.private_read_get(room_id, sender_user)
-				.map(Some)
 				.await
+				.unwrap_or_default()
 		})
-		.map(Option::into_iter)
-		.map(Iterator::flatten)
 		.map(IterStream::stream)
 		.flatten_stream();
 

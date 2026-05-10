@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use ruma::{RoomId, UserId};
-use tuwunel_database::{SEP, serialize_to_vec};
+use tuwunel_database::{Interfix, SEP, serialize_to_vec};
 
 const ROOM: &str = "!room:example.com";
 const USER: &str = "@user:example.com";
@@ -98,4 +98,77 @@ fn legacy_match_does_not_collide_with_kind_tails() {
 	assert!(!new_key(THREAD_ROOT).ends_with(user_bytes));
 	assert!(!new_key("").ends_with(user_bytes), "empty kind ends with SEP, not user_id");
 	assert!(legacy_key().ends_with(user_bytes));
+}
+
+/// MSC3771 per-thread `m.read.private` storage. `roomuserid_privateread`
+/// stores the unthreaded marker as a 2-tuple `(room, user)` (legacy shape,
+/// unchanged) and per-thread markers as 3-tuple `(room, user, kind)` rows.
+/// The Interfix prefix excludes the legacy 2-tuple by construction so a
+/// sweep of thread rows leaves the unthreaded marker intact.
+mod private_read {
+	use super::*;
+
+	fn legacy_2tuple() -> Vec<u8> {
+		serialize_to_vec((room(), user())).expect("serialize legacy 2-tuple key")
+	}
+
+	fn thread_3tuple(kind: &str) -> Vec<u8> {
+		serialize_to_vec((room(), user(), kind)).expect("serialize 3-tuple key")
+	}
+
+	fn thread_prefix() -> Vec<u8> {
+		serialize_to_vec((room(), user(), Interfix)).expect("serialize thread prefix")
+	}
+
+	#[test]
+	fn legacy_2tuple_and_3tuple_are_byte_distinct() {
+		let legacy = legacy_2tuple();
+		let main = thread_3tuple("main");
+		let thread = thread_3tuple(THREAD_ROOT);
+
+		assert_ne!(legacy, main);
+		assert_ne!(legacy, thread);
+		assert_eq!(&main[..legacy.len()], &*legacy);
+		assert_eq!(main[legacy.len()], SEP);
+	}
+
+	#[test]
+	fn interfix_prefix_excludes_legacy_2tuple_row() {
+		let prefix = thread_prefix();
+		let legacy = legacy_2tuple();
+
+		assert!(
+			!legacy.starts_with(&prefix),
+			"legacy 2-tuple has no trailing SEP; cannot match thread prefix"
+		);
+		assert_eq!(prefix.len(), legacy.len() + 1);
+		assert_eq!(&prefix[..legacy.len()], &*legacy);
+		assert_eq!(*prefix.last().unwrap(), SEP);
+	}
+
+	#[test]
+	fn interfix_prefix_includes_thread_rows() {
+		let prefix = thread_prefix();
+
+		assert!(thread_3tuple("main").starts_with(&prefix));
+		assert!(thread_3tuple(THREAD_ROOT).starts_with(&prefix));
+	}
+
+	#[test]
+	fn distinct_thread_kinds_have_distinct_keys() {
+		assert_ne!(thread_3tuple("main"), thread_3tuple(THREAD_ROOT));
+		assert_ne!(thread_3tuple(THREAD_ROOT), thread_3tuple("$other_root"));
+	}
+
+	#[test]
+	fn thread_sweep_preserves_legacy_unthreaded_row() {
+		let prefix = thread_prefix();
+		let legacy = legacy_2tuple();
+		let main = thread_3tuple("main");
+		let thread = thread_3tuple(THREAD_ROOT);
+
+		assert!(!legacy.starts_with(&prefix));
+		assert!(main.starts_with(&prefix));
+		assert!(thread.starts_with(&prefix));
+	}
 }

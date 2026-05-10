@@ -1052,11 +1052,11 @@ async fn load_joined_room(
 			.thread_notification_counts(sender_user, room_id)
 	});
 
-	let private_read_event = last_privateread_update.gt(&since).then_async(|| {
+	let private_read_events = last_privateread_update.gt(&since).then_async(|| {
 		services
 			.read_receipt
 			.private_read_get(room_id, sender_user)
-			.map(Result::ok)
+			.unwrap_or_default()
 	});
 
 	let typing_events = services
@@ -1144,12 +1144,12 @@ async fn load_joined_room(
 
 	let (
 		(room_events, account_data_events),
-		(typing_events, private_read_event),
+		(typing_events, private_read_events),
 		(notification_count, highlight_count, thread_counts),
 		(device_list_updates, left_encrypted_users),
 	) = join4(
 		join(room_events, account_data_events),
-		join(typing_events, private_read_event),
+		join(typing_events, private_read_events),
 		join3(notification_count, highlight_count, thread_counts),
 		device_list_updates,
 	)
@@ -1185,7 +1185,7 @@ async fn load_joined_room(
 		.into_iter()
 		.map(at!(1))
 		.chain(typing_events)
-		.chain(private_read_event.flatten())
+		.chain(private_read_events.into_iter().flatten())
 		.collect();
 
 	let thread_counts = thread_counts.unwrap_or_default();

@@ -4,13 +4,15 @@ mod tests;
 
 use std::{collections::BTreeMap, sync::Arc};
 
-use futures::{Stream, TryFutureExt, try_join};
+use futures::{Stream, StreamExt};
 use ruma::{
 	OwnedEventId, OwnedUserId, RoomId, UserId,
 	api::appservice::event::push_events::v1::EphemeralData,
 	events::{
 		AnySyncEphemeralRoomEvent, SyncEphemeralRoomEvent,
-		receipt::{ReceiptEvent, ReceiptEventContent, Receipts},
+		receipt::{
+			Receipt, ReceiptEvent, ReceiptEventContent, ReceiptThread, ReceiptType, Receipts,
+		},
 	},
 	serde::Raw,
 };
@@ -20,10 +22,25 @@ use tuwunel_core::{
 		Event,
 		pdu::{PduCount, PduId, RawPduId},
 	},
-	trace, warn,
+	smallstr::SmallString,
+	smallvec::SmallVec,
+	trace,
+	utils::IterStream,
+	warn,
 };
 
 use self::data::{Data, ReceiptItem};
+
+/// Private read receipts surfaced by `private_read_get`. One legacy
+/// unthreaded row plus zero or more per-thread rows; inline-1 catches the
+/// dominant case (a single unthreaded marker) without a heap alloc.
+pub type PrivateReadEvents = SmallVec<[Raw<AnySyncEphemeralRoomEvent>; 1]>;
+
+/// Stored thread-kind tag: `""` for `Unthreaded`, `"main"` for `Main`, or
+/// the event-id string for `Thread(...)`. v3+ event ids are 44 bytes
+/// including the leading `$`; 48 bytes inline matches the project's
+/// `StateKey` budget and stays inline for every realistic thread root.
+type ThreadKind = SmallString<[u8; 48]>;
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
@@ -79,57 +96,88 @@ impl Service {
 		}
 	}
 
-	/// Gets the latest private read receipt from the user in the room
+	/// Gets every stored private read receipt for `(room, user)`. Returns
+	/// one ephemeral event per stored row (legacy unthreaded plus per-thread
+	/// rows). An empty result means no marker is set.
 	#[tracing::instrument(skip(self), level = "debug", name = "get_private")]
 	pub async fn private_read_get(
 		&self,
 		room_id: &RoomId,
 		user_id: &UserId,
-	) -> Result<Raw<AnySyncEphemeralRoomEvent>> {
-		let count = self
-			.private_read_get_count(room_id, user_id)
-			.map_err(|e| {
-				err!(Database(warn!("No private read receipt was set in {room_id}: {e}")))
-			});
-
+	) -> Result<PrivateReadEvents> {
 		let shortroomid = self
 			.services
 			.short
 			.get_shortroomid(room_id)
+			.await
 			.map_err(|e| {
 				err!(Database(warn!(
 					"Short room ID does not exist in database for {room_id}: {e}"
 				)))
-			});
+			})?;
 
-		let (count, shortroomid) = try_join!(count, shortroomid)?;
-		let count = PduCount::Normal(count);
-		let pdu_id: RawPduId = PduId { shortroomid, count }.into();
+		let legacy = self
+			.private_read_get_count(room_id, user_id)
+			.await
+			.ok()
+			.map(|count| (ThreadKind::new(), count));
+
+		let threaded: SmallVec<[(ThreadKind, u64); 1]> = self
+			.db
+			.private_read_threaded_stream(room_id, user_id)
+			.collect()
+			.await;
+
+		let events = legacy
+			.into_iter()
+			.chain(threaded)
+			.stream()
+			.filter_map(|(kind, count)| async move {
+				self.build_private_read_event(shortroomid, count, user_id, &kind)
+					.await
+			})
+			.collect()
+			.await;
+
+		Ok(events)
+	}
+
+	async fn build_private_read_event(
+		&self,
+		shortroomid: u64,
+		count: u64,
+		user_id: &UserId,
+		thread_kind: &str,
+	) -> Option<Raw<AnySyncEphemeralRoomEvent>> {
+		let pdu_id: RawPduId = PduId {
+			shortroomid,
+			count: PduCount::Normal(count),
+		}
+		.into();
 		let pdu = self
 			.services
 			.timeline
 			.get_pdu_from_id(&pdu_id)
-			.await?;
+			.await
+			.ok()?;
 
+		let thread = thread_kind_to_receipt(thread_kind);
 		let event_id: OwnedEventId = pdu.event_id().to_owned();
 		let user_id: OwnedUserId = user_id.to_owned();
 		let content: BTreeMap<OwnedEventId, Receipts> = BTreeMap::from_iter([(
 			event_id,
 			BTreeMap::from_iter([(
-				ruma::events::receipt::ReceiptType::ReadPrivate,
-				BTreeMap::from_iter([(user_id, ruma::events::receipt::Receipt {
-					ts: None, // TODO: start storing the timestamp so we can return one
-					thread: ruma::events::receipt::ReceiptThread::Unthreaded,
-				})]),
+				ReceiptType::ReadPrivate,
+				BTreeMap::from_iter([(user_id, Receipt { ts: None, thread })]),
 			)]),
 		)]);
+
 		let receipt_event_content = ReceiptEventContent(content);
 		let receipt_sync_event = SyncEphemeralRoomEvent { content: receipt_event_content };
-
 		let event = serde_json::value::to_raw_value(&receipt_sync_event)
 			.expect("receipt created manually");
 
-		Ok(Raw::from_json(event))
+		Some(Raw::from_json(event))
 	}
 
 	/// Returns an iterator over the most recent read_receipts in a room that
@@ -144,10 +192,20 @@ impl Service {
 		self.db.readreceipts_since(room_id, since, to)
 	}
 
-	/// Sets a private read marker at PDU `count`.
+	/// Sets a private read marker at PDU `count` for the given thread.
+	/// Unthreaded writes supersede prior per-thread rows so the room-wide
+	/// receipt subsumes thread state.
 	#[tracing::instrument(skip(self), level = "debug", name = "set_private")]
-	pub fn private_read_set(&self, room_id: &RoomId, user_id: &UserId, count: u64) {
-		self.db.private_read_set(room_id, user_id, count);
+	pub async fn private_read_set(
+		&self,
+		room_id: &RoomId,
+		user_id: &UserId,
+		count: u64,
+		thread: &ReceiptThread,
+	) {
+		self.db
+			.private_read_set(room_id, user_id, count, thread)
+			.await;
 	}
 
 	/// Returns the private read marker PDU count.
@@ -199,6 +257,19 @@ impl Service {
 
 	pub async fn delete_all_read_receipts(&self, room_id: &RoomId) -> Result {
 		self.db.delete_all_read_receipts(room_id).await
+	}
+}
+
+/// Reverse of `ReceiptThread::as_str`: parse a stored thread tag into the
+/// enum. Empty string maps to `Unthreaded`; `"main"` to `Main`; anything
+/// starting with `$` to `Thread(event_id)` if parseable.
+fn thread_kind_to_receipt(thread_kind: &str) -> ReceiptThread {
+	match thread_kind {
+		| "" => ReceiptThread::Unthreaded,
+		| "main" => ReceiptThread::Main,
+		| _ => OwnedEventId::try_from(thread_kind)
+			.map(ReceiptThread::Thread)
+			.unwrap_or(ReceiptThread::Unthreaded),
 	}
 }
 
