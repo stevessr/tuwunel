@@ -1028,7 +1028,10 @@ async fn load_joined_room(
 	let send_notification_count_filter =
 		|count: &UInt| *count != uint!(0) || send_notification_resets;
 
-	let notification_count = send_main_counts.then_async(|| {
+	// Fetch main counts whenever either cursor advanced: a thread-only reset
+	// leaves the main count unchanged but still shifts the merged total that
+	// clients without `unread_thread_notifications` receive.
+	let notification_count = send_notification_counts.then_async(|| {
 		services
 			.pusher
 			.notification_count(sender_user, room_id)
@@ -1036,7 +1039,7 @@ async fn load_joined_room(
 			.unwrap_or(uint!(0))
 	});
 
-	let highlight_count = send_main_counts.then_async(|| {
+	let highlight_count = send_notification_counts.then_async(|| {
 		services
 			.pusher
 			.highlight_count(sender_user, room_id)
@@ -1190,15 +1193,11 @@ async fn load_joined_room(
 
 	let thread_counts = thread_counts.unwrap_or_default();
 
-	let thread_total_notifications = thread_counts
+	let (thread_total_notifications, thread_total_highlights) = thread_counts
 		.values()
-		.map(at!(0))
-		.fold(0_u64, u64::saturating_add);
-
-	let thread_total_highlights = thread_counts
-		.values()
-		.map(at!(1))
-		.fold(0_u64, u64::saturating_add);
+		.fold((0_u64, 0_u64), |(n, h), &(notifs, hl)| {
+			(n.saturating_add(notifs), h.saturating_add(hl))
+		});
 
 	// MSC3773: when the client opts in via the timeline filter, partition
 	// notification counts per thread. Otherwise sum into the room total.
@@ -1225,10 +1224,13 @@ async fn load_joined_room(
 	// On quiet rounds (timeline empty) `thread_last_reads` is `Some`; emit
 	// only threads whose read cursor advanced within the window. When the
 	// timeline carried events `thread_last_reads` is `None`; emit all.
+	// Initial sync (since == 0) is a full snapshot; bypass the gate so
+	// clients with no prior cursor still see existing thread counts.
 	let advanced_in_window = |root: &EventId| {
-		thread_last_reads
-			.as_ref()
-			.is_none_or(|reads| reads.get(root).copied().is_some_and(in_window))
+		initial
+			|| thread_last_reads
+				.as_ref()
+				.is_none_or(|reads| reads.get(root).copied().is_some_and(in_window))
 	};
 
 	let unread_thread_notifications = thread_counts

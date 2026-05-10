@@ -532,9 +532,8 @@ impl Service {
 			.max()
 			.unwrap_or(0);
 
-		let mut events = EduVec::new();
-		for rank in 0..max_rank {
-			let receipts: BTreeMap<OwnedRoomId, ReceiptMap> = by_room
+		let pivot_rank = |rank: usize| -> Option<BTreeMap<OwnedRoomId, ReceiptMap>> {
+			let receipts: BTreeMap<_, _> = by_room
 				.iter()
 				.filter_map(|(room_id, maps)| {
 					maps.get(rank)
@@ -543,19 +542,20 @@ impl Service {
 				})
 				.collect();
 
-			if receipts.is_empty() {
-				continue;
-			}
+			receipts.is_empty().is_false().then_some(receipts)
+		};
 
-			let receipt_content = Edu::Receipt(ReceiptContent { receipts });
+		let serialize_edu = |receipts: BTreeMap<OwnedRoomId, ReceiptMap>| -> EduBuf {
 			let mut buf = EduBuf::new();
-			serde_json::to_writer(&mut buf, &receipt_content)
+			serde_json::to_writer(&mut buf, &Edu::Receipt(ReceiptContent { receipts }))
 				.expect("Failed to serialize Receipt EDU to JSON vec");
+			buf
+		};
 
-			events.push(buf);
-		}
-
-		events
+		(0..max_rank)
+			.filter_map(pivot_rank)
+			.map(serialize_edu)
+			.collect()
 	}
 
 	/// Look for read receipts in this room.
@@ -632,25 +632,24 @@ impl Service {
 			}
 		}
 
-		let max_rank = by_user
-			.values()
-			.map(SmallVec::len)
-			.max()
-			.unwrap_or(0);
-
-		let mut ranked: Vec<BTreeMap<OwnedUserId, ReceiptData>> =
-			(0..max_rank).map(|_| BTreeMap::new()).collect();
-
-		for (user_id, receipts) in by_user {
-			for (rank, receipt_data) in receipts.into_iter().enumerate() {
-				ranked[rank].insert(user_id.clone(), receipt_data);
-			}
-		}
-
-		ranked
+		// Pivot per-user count-ordered receipts into rank-major
+		// `RankedReceipts`. Rank 0 carries each user's earliest receipt in
+		// the window, rank 1 the next, and so on.
+		by_user
 			.into_iter()
-			.map(|read| ReceiptMap { read })
-			.collect()
+			.fold(RankedReceipts::new(), |mut acc, (user_id, receipts)| {
+				for (rank, receipt_data) in receipts.into_iter().enumerate() {
+					if rank >= acc.len() {
+						acc.push(ReceiptMap { read: BTreeMap::new() });
+					}
+
+					acc[rank]
+						.read
+						.insert(user_id.clone(), receipt_data);
+				}
+
+				acc
+			})
 	}
 
 	/// Look for presence

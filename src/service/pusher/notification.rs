@@ -40,12 +40,6 @@ pub fn reset_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
 	}
 }
 
-/// Reset just the main-timeline counts; per-thread counts are untouched.
-#[implement(super::Service)]
-pub fn reset_main_notification_counts(&self, user_id: &UserId, room_id: &RoomId) {
-	self.reset_notification_counts(user_id, room_id);
-}
-
 /// Reset counts for a single thread within a room. Per-thread rows live in
 /// the same CFs as the main `(user, room)` rows; the trailing event id
 /// keeps them disjoint. Stamps a per-thread last-read so sync v3 can gate
@@ -119,8 +113,8 @@ pub async fn clear_all_thread_notification_counts(&self, user_id: &UserId, room_
 }
 
 /// Dispatcher: route a receipt's `ReceiptThread` to the matching reset path.
-/// `Unthreaded` clears all room and thread counts; `Main` clears only main;
-/// `Thread(id)` clears just that thread; unknown variants act as `Unthreaded`.
+/// `Unthreaded` clears all room and thread counts; `Main` clears only the
+/// main-timeline counts; `Thread(id)` clears just that thread.
 #[implement(super::Service)]
 pub async fn reset_notification_counts_for_thread(
 	&self,
@@ -129,7 +123,7 @@ pub async fn reset_notification_counts_for_thread(
 	thread: &ReceiptThread,
 ) {
 	match thread {
-		| ReceiptThread::Main => self.reset_main_notification_counts(user_id, room_id),
+		| ReceiptThread::Main => self.reset_notification_counts(user_id, room_id),
 		| ReceiptThread::Thread(root) =>
 			self.reset_thread_notification_counts(user_id, room_id, root),
 		| _ => {

@@ -26,26 +26,6 @@ pub(super) struct Data {
 
 pub(super) type ReceiptItem<'a> = (&'a UserId, u64, Raw<AnySyncEphemeralRoomEvent>);
 
-/// Tag string used in the storage key to discriminate receipts per thread.
-/// Empty for `Unthreaded`, `"main"` for `Main`, the event-id string for
-/// `Thread(...)` (event ids start with `$`, so the values are mutually
-/// exclusive). Custom variants reuse their string form. Falls back to
-/// unthreaded for empty or multi-entry events.
-///
-/// Appended to the receipt-row key as a tolerant trailing field. Pre-
-/// MSC3771 rows have no trailing kind; they round-trip as `""`.
-fn event_thread_kind(event: &ReceiptEvent) -> &str {
-	event
-		.content
-		.0
-		.values()
-		.next()
-		.and_then(|by_type| by_type.values().next())
-		.and_then(|by_user| by_user.values().next())
-		.and_then(|receipt| receipt.thread.as_str())
-		.unwrap_or_default()
-}
-
 impl Data {
 	pub(super) fn new(args: &crate::Args<'_>) -> Self {
 		let db = &args.db;
@@ -174,15 +154,15 @@ impl Data {
 			.put(lastupdate_key, *next_count);
 
 		match thread.as_str() {
-			| None | Some("") => {
+			| Some(thread_kind) if !thread_kind.is_empty() => {
+				let key = (room_id, user_id, thread_kind);
+				self.roomuserid_privateread.put(key, pdu_count);
+			},
+			| _ => {
 				self.clear_thread_private_reads(room_id, user_id)
 					.await;
 
 				let key = (room_id, user_id);
-				self.roomuserid_privateread.put(key, pdu_count);
-			},
-			| Some(thread_kind) => {
-				let key = (room_id, user_id, thread_kind);
 				self.roomuserid_privateread.put(key, pdu_count);
 			},
 		}
@@ -280,4 +260,38 @@ impl Data {
 
 		Ok(())
 	}
+}
+
+/// Tag string used in the storage key to discriminate receipts per thread.
+/// Empty for `Unthreaded`, `"main"` for `Main`, the event-id string for
+/// `Thread(...)` (event ids start with `$`, so the values are mutually
+/// exclusive). Custom variants reuse their string form; the C/S boundary
+/// rejects them, but federation receipts may still carry them through.
+///
+/// Reads only the first `(event_id, type, user)` triple. All callers
+/// build single-entry receipts (one event id, one type, one user); a
+/// debug assertion catches future regressions. An entirely empty event
+/// or one whose only receipt lacks a thread field falls back to `""`.
+///
+/// Appended to the receipt-row key as a tolerant trailing field. Pre-
+/// MSC3771 rows have no trailing kind; they round-trip as `""`.
+fn event_thread_kind(event: &ReceiptEvent) -> &str {
+	debug_assert!(
+		event
+			.content
+			.values()
+			.all(|by_type| by_type.len() == 1
+				&& by_type.values().all(|by_user| by_user.len() == 1))
+			&& event.content.len() == 1,
+		"receipt event must carry exactly one (event_id, type, user) triple"
+	);
+
+	event
+		.content
+		.values()
+		.next()
+		.and_then(|by_type| by_type.values().next())
+		.and_then(|by_user| by_user.values().next())
+		.and_then(|receipt| receipt.thread.as_str())
+		.unwrap_or_default()
 }

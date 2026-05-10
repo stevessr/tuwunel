@@ -137,6 +137,17 @@ pub(crate) async fn create_receipt_route(
 		return Err!(Request(InvalidParam("thread_id must be a non-empty string")));
 	}
 
+	// MSC3771: thread_id is either `"main"` or a thread root event id (which
+	// starts with `$`).
+	if !matches!(
+		&body.thread,
+		ReceiptThread::Unthreaded | ReceiptThread::Main | ReceiptThread::Thread(_)
+	) {
+		return Err!(Request(InvalidParam(
+			"thread_id must be either \"main\" or a thread root event id"
+		)));
+	}
+
 	// MSC3771: event_id must belong to the thread the receipt targets.
 	if matches!(&body.thread, ReceiptThread::Main | ReceiptThread::Thread(_)) {
 		let resolved = services
