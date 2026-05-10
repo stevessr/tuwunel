@@ -69,7 +69,7 @@ use tuwunel_service::{
 use super::{load_timeline, share_encrypted_room};
 use crate::{
 	ClientIp, Ruma,
-	client::{ignored_filter, is_empty_account_data_event},
+	client::{ignored_filter, is_empty_account_data_event, with_membership},
 };
 
 #[derive(Default)]
@@ -762,11 +762,18 @@ async fn load_left_room(
 		.into_iter()
 		.flat_map(Option::into_iter);
 
+	let encrypted = services
+		.state_accessor
+		.is_encrypted_room(room_id)
+		.await;
+
 	let state_events = state_events
 		.into_iter()
 		.filter(|pdu| filter.room.state.matches(pdu))
 		.filter(|pdu| timeline_limit > 0 || !is_sender_membership(pdu))
 		.chain(timeline_sender_member)
+		.stream()
+		.wide_then(|pdu| with_membership(services, pdu, sender_user, encrypted))
 		.map(Event::into_format)
 		.collect();
 
@@ -790,6 +797,7 @@ async fn load_left_room(
 		.map(at!(1))
 		.ready_filter(|pdu| filter.room.timeline.matches(pdu))
 		.take(timeline_limit)
+		.wide_then(|pdu| with_membership(services, pdu, sender_user, encrypted))
 		.collect::<Vec<_>>();
 
 	let account_data_events = services
@@ -799,9 +807,10 @@ async fn load_left_room(
 		.ready_filter(move |e| since != 0 || !is_empty_account_data_event(e))
 		.collect();
 
-	let (account_data_events, timeline_events) = join(account_data_events, timeline_events)
-		.boxed()
-		.await;
+	let (state_events, account_data_events, timeline_events) =
+		join3(state_events, account_data_events, timeline_events)
+			.boxed()
+			.await;
 
 	let state = StateEvents { events: state_events };
 
@@ -1209,6 +1218,9 @@ async fn load_joined_room(
 		filter.matches(event)
 	};
 
+	// `encrypted_room` is `Some` whenever timeline or state events are emitted.
+	let encrypted = encrypted_room.unwrap_or(false);
+
 	let room_events = timeline_pdus
 		.into_iter()
 		.stream()
@@ -1216,6 +1228,7 @@ async fn load_joined_room(
 		.map(at!(1))
 		.chain(joined_sender_member.into_iter().stream())
 		.ready_filter(include_in_timeline)
+		.wide_then(|pdu| with_membership(services, pdu, sender_user, encrypted))
 		.collect::<Vec<_>>();
 
 	let account_data_events = services
@@ -1254,11 +1267,14 @@ async fn load_joined_room(
 		filter.matches(event) && (full_state || use_state_after || !is_in_timeline(event))
 	};
 
-	let state_events = state_events
+	let state_events: Vec<_> = state_events
 		.into_iter()
 		.filter(include_in_state)
+		.stream()
+		.wide_then(|pdu| with_membership(services, pdu, sender_user, encrypted))
 		.map(Event::into_format)
-		.collect();
+		.collect()
+		.await;
 
 	let heroes = heroes
 		.into_iter()

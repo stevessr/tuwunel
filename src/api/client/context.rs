@@ -18,7 +18,10 @@ use crate::{
 	Ruma,
 	client::{
 		is_ignored_pdu,
-		message::{event_filter, ignored_filter, lazy_loading_witness, visibility_filter},
+		message::{
+			add_membership_unsigned, event_filter, ignored_filter, lazy_loading_witness,
+			visibility_filter, with_membership,
+		},
 	},
 };
 
@@ -92,7 +95,15 @@ pub(crate) async fn get_context_route(
 
 	let base_count = base_id.pdu_count();
 
-	let base_event = ignored_filter(&services, (base_count, base_pdu), sender_user);
+	let encrypted = services
+		.state_accessor
+		.is_encrypted_room(room_id)
+		.await;
+
+	let base_event = async {
+		let item = ignored_filter(&services, (base_count, base_pdu), sender_user).await?;
+		Some(add_membership_unsigned(&services, item, sender_user, encrypted).await)
+	};
 
 	let events_before = services
 		.timeline
@@ -102,6 +113,7 @@ pub(crate) async fn get_context_route(
 		.wide_filter_map(|item| ignored_filter(&services, item, sender_user))
 		.wide_filter_map(|item| visibility_filter(&services, item, sender_user))
 		.take(limit / 2)
+		.wide_then(|item| add_membership_unsigned(&services, item, sender_user, encrypted))
 		.collect();
 
 	let events_after = services
@@ -112,6 +124,7 @@ pub(crate) async fn get_context_route(
 		.wide_filter_map(|item| ignored_filter(&services, item, sender_user))
 		.wide_filter_map(|item| visibility_filter(&services, item, sender_user))
 		.take(limit.div_ceil(2))
+		.wide_then(|item| add_membership_unsigned(&services, item, sender_user, encrypted))
 		.collect();
 
 	let (base_event, events_before, events_after): (_, Vec<_>, Vec<_>) =
@@ -187,6 +200,7 @@ pub(crate) async fn get_context_route(
 		.broad_filter_map(|event_id: &OwnedEventId| {
 			services.timeline.get_pdu(event_id.as_ref()).ok()
 		})
+		.broad_then(|pdu| with_membership(&services, pdu, sender_user, encrypted))
 		.map(Event::into_format)
 		.collect()
 		.await;

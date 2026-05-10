@@ -13,7 +13,7 @@ use tuwunel_core::{
 	Err, Result, at,
 	matrix::{
 		event::{Event, Matches},
-		pdu::PduCount,
+		pdu::{PduCount, PduEvent},
 	},
 	ref_at,
 	utils::{
@@ -119,11 +119,17 @@ pub(crate) async fn get_message_events_route(
 		),
 	};
 
+	let encrypted = services
+		.state_accessor
+		.is_encrypted_room(room_id)
+		.await;
+
 	let events: Vec<_> = it
 		.ready_take_while(|(count, _)| Some(*count) != to)
 		.ready_filter_map(|item| event_filter(item, filter))
 		.wide_filter_map(|item| event_filters(&services, sender_user, item))
 		.take(limit)
+		.wide_then(|item| add_membership_unsigned(&services, item, sender_user, encrypted))
 		.collect()
 		.await;
 
@@ -305,6 +311,52 @@ pub(crate) async fn visibility_filter(
 pub(crate) fn event_filter(item: PdusIterItem, filter: &RoomEventFilter) -> Option<PdusIterItem> {
 	let (_, pdu) = &item;
 	filter.matches(pdu).then_some(item)
+}
+
+/// MSC4115: stamp `unsigned.membership` on a served PDU with the requesting
+/// user's membership at the time of the event. The MSC permits omitting the
+/// property when calculating it is expensive, so the project restricts it to
+/// encrypted rooms where membership-vs-event ordering matters for key share.
+#[inline]
+pub(crate) async fn annotate_membership(
+	services: &Services,
+	pdu: &mut PduEvent,
+	user_id: &UserId,
+	encrypted: bool,
+) {
+	if !encrypted {
+		return;
+	}
+
+	let membership = services
+		.state_accessor
+		.user_membership_at_pdu(user_id, pdu)
+		.await;
+
+	pdu.add_membership(&membership).log_err().ok();
+}
+
+/// `annotate_membership` consume-and-return adapter for stream chains.
+#[inline]
+pub(crate) async fn with_membership(
+	services: &Services,
+	mut pdu: PduEvent,
+	user_id: &UserId,
+	encrypted: bool,
+) -> PduEvent {
+	annotate_membership(services, &mut pdu, user_id, encrypted).await;
+	pdu
+}
+
+/// `with_membership` adapter for timeline-iterator items.
+#[inline]
+pub(crate) async fn add_membership_unsigned(
+	services: &Services,
+	(count, pdu): PdusIterItem,
+	user_id: &UserId,
+	encrypted: bool,
+) -> PdusIterItem {
+	(count, with_membership(services, pdu, user_id, encrypted).await)
 }
 
 #[cfg_attr(debug_assertions, tuwunel_core::ctor)]

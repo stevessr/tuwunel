@@ -7,7 +7,10 @@ use tuwunel_core::{
 	utils::{BoolExt, FutureBoolExt, TryFutureExtExt, future::OptionFutureExt},
 };
 
-use crate::{Ruma, client::is_ignored_pdu};
+use crate::{
+	Ruma,
+	client::{annotate_membership, is_ignored_pdu},
+};
 
 /// # `GET /_matrix/client/r0/rooms/{roomId}/event/{eventId}`
 ///
@@ -89,6 +92,13 @@ pub(crate) async fn get_room_event_route(
 	);
 
 	event.add_age().ok();
+
+	let encrypted = services
+		.state_accessor
+		.is_encrypted_room(room_id)
+		.await;
+
+	annotate_membership(&services, &mut event, sender_user, encrypted).await;
 
 	Ok(get_room_event::v3::Response { event: event.into_format() })
 }

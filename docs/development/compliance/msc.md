@@ -18,16 +18,16 @@
 
 ## Counts
 
-- ✅ `yes`: 206
+- ✅ `yes`: 207
 - 🟨 `partial`: 61
-- ❌ `no`: 452
+- ❌ `no`: 451
 - ⬛ `n/a`: 291
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 147 | 31 | 15 | 63 | 256 |
+| merged | 148 | 31 | 14 | 63 | 256 |
 | open | 51 | 29 | 400 | 176 | 656 |
 | closed | 8 | 1 | 37 | 52 | 98 |
 
@@ -75,7 +75,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4138 | ✅ ● | 100/100 | Update allowed HTTP methods in CORS responses | CORS METHODS list includes HEAD and PATCH; excludes CONNECT/TRACE |
 | MSC4133 | 🟨 ● | 70/80 | Extending User Profile API with Custom Key:Value Pairs | GET/PUT/DELETE profile field endpoints routed at unstable prefix |
 | MSC4126 | ✅ ● | 100/100 | Deprecation of query string auth | deprecation of query string auth; server still accepts both |
-| MSC4115 | ❌ ● | 0/0 | membership metadata on events | unsigned.membership not populated on events served to clients |
+| MSC4115 | ✅ ● | 100/100 | membership metadata on events | src/core/matrix/pdu/unsigned.rs add_membership; src/service/rooms/state_acces... |
 | MSC4041 | ✅ ◐ | 90/90 | Use http header Retry-After to enable library-assisted retry handling | Ruma error type emits Retry-After header for LimitExceeded responses. |
 | MSC4040 | ✅ ● | 100/100 | Update SRV service name to IANA registration | Tuwunel queries _matrix-fed first then falls back to _matrix. |
 | MSC4026 | ✅ ◐ | 80/90 | Allow /versions to optionally accept authentication | versions endpoint accepts optional auth via Ruma |
@@ -283,7 +283,6 @@ for spec compliance.
 | MSC2540 | ❌ ◐ | 0/0 | Stricter event validation: JSON compliance | ruma exposes strict_canonical_json flag; Tuwunel does not enforce floats reje... |
 | MSC2705 | ❌ ◐ | 0/10 | Animated thumbnails | animated param accepted; thumbnails always PNG static |
 | MSC3980 | ❌ ◐ | 0/0 | Dotted Field Consistency | event_fields filter escaping not enforced |
-| MSC4115 | ❌ ● | 0/0 | membership metadata on events | unsigned.membership not populated on events served to clients |
 | MSC4335 | ❌ ● | 0/0 | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
 | MSC4341 | ❌ ● | 0/0 | Support for RFC 8628 Device Authorization Grant | OAuth Device Authorization Grant (RFC 8628) not advertised |
 

@@ -26,7 +26,7 @@ use tuwunel_service::sync::Room;
 
 use self::{bump_stamp::room_bump_stamp, heroes::calculate_heroes};
 use super::{super::load_timeline, Connection, SyncInfo, Window, WindowRoom};
-use crate::client::ignored_filter;
+use crate::client::{annotate_membership, ignored_filter, with_membership};
 
 #[tracing::instrument(
     name = "rooms",
@@ -100,6 +100,12 @@ async fn handle_room(
 	}
 
 	let is_invite = *membership == Some(MembershipState::Invite);
+
+	let encrypted = services
+		.state_accessor
+		.is_encrypted_room(room_id)
+		.await;
+
 	let default_details = (0_usize, HashSet::new());
 	let (timeline_limit, required_state) = lists
 		.iter()
@@ -220,12 +226,16 @@ async fn handle_room(
 				| _ => state.1.clone(),
 			};
 
-			services
+			let mut pdu = services
 				.state_accessor
 				.room_state_get(room_id, &state.0, &state_key)
-				.map_ok(Event::into_format)
+				.map_ok(Event::into_pdu)
 				.ok()
-				.await
+				.await?;
+
+			annotate_membership(services, &mut pdu, sender_user, encrypted).await;
+
+			Some(Event::into_format(pdu))
 		})
 		.collect();
 
@@ -290,6 +300,7 @@ async fn handle_room(
 		.stream()
 		.filter_map(|item| ignored_filter(services, item.clone(), sender_user))
 		.map(at!(1))
+		.broad_then(|pdu| with_membership(services, pdu, sender_user, encrypted))
 		.map(Event::into_format)
 		.collect();
 

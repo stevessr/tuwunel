@@ -4,7 +4,7 @@ use futures::{FutureExt, Stream, StreamExt, TryFutureExt, future::try_join, pin_
 use ruma::{
 	OwnedEventId, UserId,
 	events::{
-		StateEventType,
+		StateEventType, TimelineEventType,
 		room::member::{MembershipState, RoomMemberEventContent},
 	},
 };
@@ -53,6 +53,32 @@ pub async fn user_membership(
 	self.state_get_content(shortstatehash, &StateEventType::RoomMember, user_id.as_str())
 		.await
 		.map_or(MembershipState::Leave, |c: RoomMemberEventContent| c.membership)
+}
+
+/// MSC4115: the user's room membership "just after" the given PDU landed.
+///
+/// `pdu_shortstatehash` returns state-before-the-event, so a member event
+/// targeting `user_id` overrides that lookup with its own content.
+#[implement(super::Service)]
+pub async fn user_membership_at_pdu(&self, user_id: &UserId, pdu: &Pdu) -> MembershipState {
+	if pdu.kind() == &TimelineEventType::RoomMember
+		&& pdu.state_key() == Some(user_id.as_str())
+		&& let Ok(content) = pdu.get_content::<RoomMemberEventContent>()
+	{
+		return content.membership;
+	}
+
+	let Ok(shortstatehash) = self
+		.services
+		.state
+		.pdu_shortstatehash(pdu.event_id())
+		.await
+	else {
+		return MembershipState::Leave;
+	};
+
+	self.user_membership(shortstatehash, user_id)
+		.await
 }
 
 /// Returns a single PDU from `room_id` with key (`event_type`,`state_key`).

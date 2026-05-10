@@ -1,5 +1,5 @@
 use axum::extract::State;
-use futures::{FutureExt, TryFutureExt, TryStreamExt};
+use futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt};
 use ruma::{
 	OwnedEventId, OwnedRoomAliasId, RoomId, UserId,
 	api::client::state::{
@@ -22,11 +22,11 @@ use serde_json::json;
 use tuwunel_core::{
 	Err, Result, err, is_false,
 	matrix::{Event, pdu::PduBuilder},
-	utils::BoolExt,
+	utils::{BoolExt, IterStream, stream::WidebandExt},
 };
 use tuwunel_service::Services;
 
-use crate::{Ruma, RumaResponse};
+use crate::{Ruma, RumaResponse, client::with_membership};
 
 /// # `PUT /_matrix/client/*/rooms/{roomId}/state/{eventType}/{stateKey}`
 ///
@@ -88,14 +88,25 @@ pub(crate) async fn get_state_events_route(
 		return Err!(Request(Forbidden("You don't have permission to view the room state.")));
 	}
 
-	Ok(get_state_events::v3::Response {
-		room_state: services
-			.state_accessor
-			.room_state_full_pdus(&body.room_id)
-			.map_ok(Event::into_format)
-			.try_collect()
-			.await?,
-	})
+	let encrypted = services
+		.state_accessor
+		.is_encrypted_room(&body.room_id)
+		.await;
+
+	let room_state = services
+		.state_accessor
+		.room_state_full_pdus(&body.room_id)
+		.map_ok(Event::into_pdu)
+		.try_collect::<Vec<_>>()
+		.await?
+		.into_iter()
+		.stream()
+		.wide_then(|pdu| with_membership(&services, pdu, sender_user, encrypted))
+		.map(Event::into_format)
+		.collect()
+		.await;
+
+	Ok(get_state_events::v3::Response { room_state })
 }
 
 /// # `GET /_matrix/client/v3/rooms/{roomid}/state/{eventType}/{stateKey}`

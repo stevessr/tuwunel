@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use ruma::MilliSecondsSinceUnixEpoch;
+use ruma::{MilliSecondsSinceUnixEpoch, events::room::member::MembershipState};
 use serde_json::value::{RawValue as RawJsonValue, Value as JsonValue, to_raw_value};
 
 use super::Pdu;
@@ -42,6 +42,25 @@ pub fn add_age(&mut self) -> Result {
 	let this_age = now.saturating_sub(then);
 
 	unsigned.insert("age", to_raw_value(&this_age)?);
+	self.unsigned = Some(to_raw_value(&unsigned)?);
+
+	Ok(())
+}
+
+/// MSC4115: annotate the served event with the requesting user's room
+/// membership at the time of the event.
+#[implement(Pdu)]
+pub fn add_membership(&mut self, membership: &MembershipState) -> Result {
+	use BTreeMap as Map;
+
+	let mut unsigned: Map<&str, Box<RawJsonValue>> = self
+		.unsigned
+		.as_deref()
+		.map(RawJsonValue::get)
+		.map_or_else(|| Ok(Map::new()), serde_json::from_str)
+		.map_err(|e| err!(Database("Invalid unsigned in pdu event: {e}")))?;
+
+	unsigned.insert("membership", to_raw_value(membership)?);
 	self.unsigned = Some(to_raw_value(&unsigned)?);
 
 	Ok(())
