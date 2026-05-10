@@ -183,15 +183,8 @@ impl Service {
 		self.db.remove_pending_mxc(mxc);
 
 		let mxc_uri: OwnedMxcUri = mxc.to_string().into();
-		if let Some(notifier) = self
-			.mxc_state
-			.notifiers
-			.lock()?
-			.get(&mxc_uri)
-			.cloned()
-		{
+		if let Some(notifier) = self.mxc_state.notifiers.lock()?.remove(&mxc_uri) {
 			notifier.notify_waiters();
-			self.mxc_state.notifiers.lock()?.remove(&mxc_uri);
 		}
 
 		Ok(())
