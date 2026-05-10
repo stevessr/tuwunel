@@ -1,5 +1,5 @@
 use std::{
-	collections::{BTreeMap, HashMap, HashSet},
+	collections::{BTreeMap, HashMap, HashSet, btree_map::Entry},
 	fmt::Debug,
 	sync::{
 		Arc,
@@ -41,6 +41,7 @@ use ruma::{
 use tuwunel_core::{
 	Error, Event, Result, debug, err, error, extract_variant,
 	result::LogErr,
+	smallvec::SmallVec,
 	trace,
 	utils::{
 		BoolExt, ReadyExt, calculate_hash, continue_exponential_backoff_secs,
@@ -65,6 +66,17 @@ type SendingResult = Result<Destination, SendingError>;
 type SendingFuture<'a> = BoxFuture<'a, SendingResult>;
 type SendingFutures<'a> = FuturesUnordered<SendingFuture<'a>>;
 type CurTransactionStatus = HashMap<Destination, TransactionStatus>;
+
+/// Per-(room, user) bucket of `ReceiptData`. MSC3771 allows one receipt
+/// per thread context per user per EDU window; the dominant case is
+/// still a single receipt, so inline-1 fits without a heap touch.
+type UserReceipts = SmallVec<[ReceiptData; 1]>;
+
+/// Per-rank slice of receipt EDU output. Each entry becomes one
+/// `Edu::Receipt` buffer; rank 0 carries each user's earliest receipt
+/// in the window, rank 1 the next, and so on. Most windows produce a
+/// single rank.
+type RankedReceipts = SmallVec<[ReceiptMap; 1]>;
 
 const SELECT_PRESENCE_LIMIT: usize = 256;
 const SELECT_RECEIPT_LIMIT: usize = 256;
@@ -475,6 +487,14 @@ impl Service {
 	}
 
 	/// Look for read receipts in this room
+	///
+	/// MSC3771 lets a user emit multiple receipts in the same EDU window, one
+	/// per thread context. The federation EDU shape allows only one
+	/// `ReceiptData` per `(room, user)` slot, so a user with N parallel
+	/// thread receipts ships across N parallel `Edu::Receipt` buffers within
+	/// the same transaction. Each buffer is shape-compliant; receivers
+	/// process them as independent receipt EDUs and our storage keeps each
+	/// thread distinct.
 	#[tracing::instrument(
 		name = "receipts",
 		level = "trace",
@@ -485,42 +505,67 @@ impl Service {
 		server_name: &ServerName,
 		since: (u64, u64),
 		max_edu_count: &AtomicU64,
-	) -> Option<EduBuf> {
+	) -> EduVec {
 		let num = AtomicUsize::new(0);
-		let receipts: BTreeMap<OwnedRoomId, ReceiptMap> = self
+		let by_room: SmallVec<[(OwnedRoomId, RankedReceipts); 1]> = self
 			.services
 			.state_cache
 			.server_rooms(server_name)
 			.map(ToOwned::to_owned)
 			.broad_filter_map(async |room_id| {
-				let receipt_map = self
+				let ranked = self
 					.select_edus_receipts_room(&room_id, since, max_edu_count, &num)
 					.await;
 
-				receipt_map
-					.read
+				ranked
 					.is_empty()
-					.eq(&false)
-					.then_some((room_id, receipt_map))
+					.is_false()
+					.then_some((room_id, ranked))
 			})
 			.collect()
 			.boxed()
 			.await;
 
-		if receipts.is_empty() {
-			return None;
+		let max_rank = by_room
+			.iter()
+			.map(|(_, maps)| maps.len())
+			.max()
+			.unwrap_or(0);
+
+		let mut events = EduVec::new();
+		for rank in 0..max_rank {
+			let receipts: BTreeMap<OwnedRoomId, ReceiptMap> = by_room
+				.iter()
+				.filter_map(|(room_id, maps)| {
+					maps.get(rank)
+						.cloned()
+						.map(|map| (room_id.clone(), map))
+				})
+				.collect();
+
+			if receipts.is_empty() {
+				continue;
+			}
+
+			let receipt_content = Edu::Receipt(ReceiptContent { receipts });
+			let mut buf = EduBuf::new();
+			serde_json::to_writer(&mut buf, &receipt_content)
+				.expect("Failed to serialize Receipt EDU to JSON vec");
+
+			events.push(buf);
 		}
 
-		let receipt_content = Edu::Receipt(ReceiptContent { receipts });
-
-		let mut buf = EduBuf::new();
-		serde_json::to_writer(&mut buf, &receipt_content)
-			.expect("Failed to serialize Receipt EDU to JSON vec");
-
-		Some(buf)
+		events
 	}
 
-	/// Look for read receipts in this room
+	/// Look for read receipts in this room.
+	///
+	/// Returns a per-rank vector of [`ReceiptMap`]s. Each user's receipts in
+	/// the window (one per thread context, count-ordered) are placed into
+	/// successive ranks, so rank 0 carries each user's earliest receipt,
+	/// rank 1 the next, and so on. The receipt-limit budget bounds distinct
+	/// users only; subsequent thread receipts for an already-counted user do
+	/// not consume additional budget.
 	#[tracing::instrument(
 		name = "receipts",
 		level = "trace",
@@ -532,14 +577,14 @@ impl Service {
 		since: (u64, u64),
 		max_edu_count: &AtomicU64,
 		num: &AtomicUsize,
-	) -> ReceiptMap {
+	) -> RankedReceipts {
 		let receipts =
 			self.services
 				.read_receipt
 				.readreceipts_since(room_id, since.0, Some(since.1));
 
 		pin_mut!(receipts);
-		let mut read = BTreeMap::<OwnedUserId, ReceiptData>::new();
+		let mut by_user = BTreeMap::<OwnedUserId, UserReceipts>::new();
 		while let Some((user_id, count, read_receipt)) = receipts.next().await {
 			debug_assert!(count <= since.1, "exceeds upper-bound");
 
@@ -571,23 +616,41 @@ impl Service {
 				.remove(user_id)
 				.expect("our read receipts always have the user here");
 
-			let receipt_data = ReceiptData {
-				data: receipt,
-				event_ids: vec![event_id.clone()],
-			};
+			let receipt_data = ReceiptData { data: receipt, event_ids: vec![event_id] };
 
-			if read
-				.insert(user_id.to_owned(), receipt_data)
-				.is_none()
-			{
-				let num = num.fetch_add(1, Ordering::Relaxed);
-				if num >= SELECT_RECEIPT_LIMIT {
-					break;
-				}
+			match by_user.entry(user_id.to_owned()) {
+				| Entry::Vacant(slot) => {
+					slot.insert(SmallVec::from_buf([receipt_data]));
+					let num = num.fetch_add(1, Ordering::Relaxed);
+					if num >= SELECT_RECEIPT_LIMIT {
+						break;
+					}
+				},
+				| Entry::Occupied(mut slot) => {
+					slot.get_mut().push(receipt_data);
+				},
 			}
 		}
 
-		ReceiptMap { read }
+		let max_rank = by_user
+			.values()
+			.map(SmallVec::len)
+			.max()
+			.unwrap_or(0);
+
+		let mut ranked: Vec<BTreeMap<OwnedUserId, ReceiptData>> =
+			(0..max_rank).map(|_| BTreeMap::new()).collect();
+
+		for (user_id, receipts) in by_user {
+			for (rank, receipt_data) in receipts.into_iter().enumerate() {
+				ranked[rank].insert(user_id.clone(), receipt_data);
+			}
+		}
+
+		ranked
+			.into_iter()
+			.map(|read| ReceiptMap { read })
+			.collect()
 	}
 
 	/// Look for presence
