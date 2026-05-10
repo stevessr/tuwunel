@@ -114,6 +114,8 @@ RUN \
     set -eux
     ulimit -n 65535
 
+    example_sha=$(sha1sum tuwunel-example.toml)
+
     rustup run "${rust_toolchain}" \
         cargo ${cargo_cmd} \
             --verbose \
@@ -127,4 +129,9 @@ RUN \
             "--manifest-path=Cargo.toml" \
             ${color_args} \
             ${cargo_args}
+
+    if ! echo "$example_sha" | sha1sum --check --status; then
+        echo "tuwunel-example.toml drift: run cargo check yourself and commit the result." >&2
+        exit 1
+    fi
 EOF
