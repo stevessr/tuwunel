@@ -931,16 +931,22 @@ async fn load_joined_room(
 			.ok()
 	});
 
+	let thread_last_reads = timeline_pdus.is_empty().then_async(|| {
+		services
+			.pusher
+			.thread_last_notification_reads(sender_user, room_id)
+	});
+
 	let last_privateread_update = services
 		.read_receipt
 		.last_privateread_update(sender_user, room_id);
 
 	let (
-		(last_privateread_update, last_notification_read),
+		(last_privateread_update, last_notification_read, thread_last_reads),
 		(sender_joined_count, since_encryption),
 		witness,
 	) = join3(
-		join(last_privateread_update, last_notification_read),
+		join3(last_privateread_update, last_notification_read, thread_last_reads),
 		join(sender_joined_count, since_encryption),
 		witness,
 	)
@@ -999,9 +1005,21 @@ async fn load_joined_room(
 			.map(Into::into)
 	});
 
-	let send_notification_counts = last_notification_read
+	let in_window = |count: u64| count > since && count <= next_batch;
+
+	let send_main_counts = last_notification_read
 		.flatten()
-		.is_none_or(|last_count| last_count > since && last_count <= next_batch);
+		.is_none_or(in_window);
+
+	let send_thread_counts = thread_last_reads
+		.as_ref()
+		.is_none_or(|reads| reads.values().copied().any(in_window));
+
+	// Send room-level counts when either the main read cursor or any thread
+	// cursor advanced within the window. Thread-only resets do not bump the
+	// main cursor, so without the thread leg they would never reach the
+	// client.
+	let send_notification_counts = send_main_counts || send_thread_counts;
 
 	let send_notification_resets = last_notification_read
 		.flatten()
@@ -1010,7 +1028,7 @@ async fn load_joined_room(
 	let send_notification_count_filter =
 		|count: &UInt| *count != uint!(0) || send_notification_resets;
 
-	let notification_count = send_notification_counts.then_async(|| {
+	let notification_count = send_main_counts.then_async(|| {
 		services
 			.pusher
 			.notification_count(sender_user, room_id)
@@ -1018,7 +1036,7 @@ async fn load_joined_room(
 			.unwrap_or(uint!(0))
 	});
 
-	let highlight_count = send_notification_counts.then_async(|| {
+	let highlight_count = send_main_counts.then_async(|| {
 		services
 			.pusher
 			.highlight_count(sender_user, room_id)
@@ -1026,9 +1044,8 @@ async fn load_joined_room(
 			.unwrap_or(uint!(0))
 	});
 
-	// MSC3773: per-thread counts. Always queried so we can include them in
-	// the legacy `unread_notifications` totals when the client filter does
-	// not opt in to the partitioned `unread_thread_notifications` view.
+	// MSC3773: per-thread counts. Filtered downstream by per-thread last-read
+	// so quiet threads are omitted on rounds where the main cursor advanced.
 	let thread_counts = send_notification_counts.then_async(|| {
 		services
 			.pusher
@@ -1205,9 +1222,19 @@ async fn load_joined_room(
 			.filter(send_notification_count_filter),
 	};
 
+	// On quiet rounds (timeline empty) `thread_last_reads` is `Some`; emit
+	// only threads whose read cursor advanced within the window. When the
+	// timeline carried events `thread_last_reads` is `None`; emit all.
+	let advanced_in_window = |root: &EventId| {
+		thread_last_reads
+			.as_ref()
+			.is_none_or(|reads| reads.get(root).copied().is_some_and(in_window))
+	};
+
 	let unread_thread_notifications = thread_counts
 		.into_iter()
 		.filter(|_| want_thread_unread)
+		.filter(|(root, _)| advanced_in_window(root))
 		.map(|(root, (notifications, highlights))| {
 			let counts = UnreadNotificationsCount {
 				notification_count: UInt::try_from(notifications).ok(),
