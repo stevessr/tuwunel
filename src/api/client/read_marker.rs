@@ -30,9 +30,16 @@ pub(crate) async fn set_read_marker_route(
 	let sender_user = body.sender_user();
 
 	if body.private_read_receipt.is_some() || body.read_receipt.is_some() {
+		// Route through the dispatcher so per-thread counts are also cleared;
+		// `/read_markers` predates MSC3771 and carries no thread field.
 		services
 			.pusher
-			.reset_notification_counts(sender_user, &body.room_id);
+			.reset_notification_counts_for_thread(
+				sender_user,
+				&body.room_id,
+				&ReceiptThread::Unthreaded,
+			)
+			.await;
 	}
 
 	if let Some(event) = &body.fully_read {

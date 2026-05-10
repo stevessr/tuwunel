@@ -4,6 +4,7 @@ use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, EventId, UserId,
 	events::{
 		TimelineEventType,
+		receipt::ReceiptThread,
 		room::{
 			encrypted::Relation,
 			member::{MembershipState, RoomMemberEventContent},
@@ -160,14 +161,20 @@ where
 	let next_count2 = self.services.globals.next_count();
 
 	// Mark as read first so the sending client doesn't get a notification even if
-	// appending fails
+	// appending fails. Route through the dispatcher so per-thread counts are
+	// also cleared; the sender's own send subsumes any thread receipt.
 	self.services
 		.read_receipt
 		.private_read_set(pdu.room_id(), pdu.sender(), *next_count2);
 
 	self.services
 		.pusher
-		.reset_notification_counts(pdu.sender(), pdu.room_id());
+		.reset_notification_counts_for_thread(
+			pdu.sender(),
+			pdu.room_id(),
+			&ReceiptThread::Unthreaded,
+		)
+		.await;
 
 	let count = PduCount::Normal(*next_count1);
 	let pdu_id: RawPduId = PduId { shortroomid, count }.into();
