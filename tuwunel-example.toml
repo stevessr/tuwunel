@@ -445,17 +445,11 @@
 #client_shutdown_timeout = 10
 
 # Source of the client IP address for rate limiting, logging, and
-# security tooling. If tuwunel is behind a trusted reverse proxy
-# (nginx, Caddy, Traefik, Cloudflare, etc.), set this to match the
-# header your proxy populates; otherwise leave it unset.
+# security tooling.
 #
 # When unset (the default), the `ClientIp` extractor falls back to
-# `axum-client-ip`'s `InsecureClientIp` for backward compatibility.
-# That source tries `X-Forwarded-For`, `X-Real-Ip`, then `Forwarded`,
-# and only falls back to the TCP peer address if none are present.
-# Clients can spoof their address via those headers in this mode, and
-# if the proxy in front fails to set the expected header the proxy's
-# own address is logged in place of the real client.
+# `axum-client-ip`'s `InsecureClientIp` for backward compatibility;
+# clients can spoof their address via request headers in that mode.
 #
 # When set, tuwunel installs `SecureClientIpSource` with the selected
 # variant and `ClientIp` resolves exclusively from that source. The
@@ -472,9 +466,8 @@
 # - "fly_client_ip" - Fly.io
 # - "cloudfront_viewer_address" - AWS CloudFront
 #
-# On Unix-socket deployments, do not pick `"connect_info"`; that source
-# requires a TCP peer address. A header-based source still works fine
-# over Unix sockets and is the recommended choice there.
+# On Unix-socket deployments, leave this unset rather than setting
+# "connect_info"; that source requires a TCP peer address.
 #
 # WARNING: a header-based value without a trusted reverse proxy in
 # front of tuwunel allows clients to forge their IP. Changing this
@@ -2636,7 +2629,8 @@
 #
 #check_cookie = true
 
-# Extra query parameters appended to every authorization request sent to the identity provider.
+# Extra query parameters appended to every authorization request sent to
+# the identity provider.
 #
 # E.g. to force re-authentication even if IdP cookies are present:
 # ```toml
