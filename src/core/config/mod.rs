@@ -103,6 +103,7 @@ pub struct Config {
 	///
 	/// To disable, set this to "" (an empty string).
 	///
+	/// reloadable: yes
 	/// default: "💕"
 	#[serde(default = "default_new_user_displayname_suffix")]
 	pub new_user_displayname_suffix: String,
@@ -158,6 +159,7 @@ pub struct Config {
 	/// This is false by default to allow easier deprecation or removal of
 	/// config options in the future without breaking existing deployments. The
 	/// default behaviour is to simply warn on startup.
+	/// reloadable: yes
 	#[serde(default)]
 	pub error_on_unknown_config_opts: bool,
 
@@ -168,12 +170,14 @@ pub struct Config {
 	/// For more information, see:
 	/// https://tuwunel.chat/maintenance.html#backups
 	///
+	/// reloadable: yes
 	/// example: "/opt/tuwunel-db-backups"
 	pub database_backup_path: Option<PathBuf>,
 
 	/// The amount of online RocksDB database backups to keep/retain, if using
 	/// "database_backup_path", before deleting the oldest one.
 	///
+	/// reloadable: yes
 	/// default: 1
 	#[serde(default = "default_database_backups_to_keep")]
 	pub database_backups_to_keep: i16,
@@ -267,6 +271,7 @@ pub struct Config {
 	/// Minimum time-to-live in seconds for room summary entries in the spaces
 	/// cache.
 	///
+	/// reloadable: yes
 	/// default: 21600
 	#[serde(default = "default_spacehierarchy_cache_ttl_min")]
 	pub spacehierarchy_cache_ttl_min: u64,
@@ -274,6 +279,7 @@ pub struct Config {
 	/// Maximum time-to-live in seconds for room summary entries in the spaces
 	/// cache.
 	///
+	/// reloadable: yes
 	/// default: 129600
 	#[serde(default = "default_spacehierarchy_cache_ttl_max")]
 	pub spacehierarchy_cache_ttl_max: u64,
@@ -281,6 +287,7 @@ pub struct Config {
 	/// Minimum timeout a client can request for long-polling sync. Requests
 	/// will be clamped up to this value if smaller.
 	///
+	/// reloadable: yes
 	/// default: 5000
 	#[serde(default = "default_client_sync_timeout_min")]
 	pub client_sync_timeout_min: u64,
@@ -288,6 +295,7 @@ pub struct Config {
 	/// Default timeout for long-polling sync if a client does not request
 	/// another in their query-string.
 	///
+	/// reloadable: yes
 	/// default: 30000
 	#[serde(default = "default_client_sync_timeout_default")]
 	pub client_sync_timeout_default: u64,
@@ -295,6 +303,7 @@ pub struct Config {
 	/// Maximum timeout a client can request for long-polling sync. Requests
 	/// will be clamped down to this value if larger.
 	///
+	/// reloadable: yes
 	/// default: 90000
 	#[serde(default = "default_client_sync_timeout_max")]
 	pub client_sync_timeout_max: u64,
@@ -398,6 +407,7 @@ pub struct Config {
 	/// these specific properties. This path does not support federation or
 	/// general purposes.
 	///
+	/// reloadable: yes
 	/// example: ["*\.dns\.podman$"]
 	///
 	/// default: []
@@ -436,6 +446,7 @@ pub struct Config {
 	/// Maximum number of concurrently pending (asynchronous) media uploads a
 	/// user can have.
 	///
+	/// reloadable: yes
 	/// default: 5
 	#[serde(default = "default_max_pending_media_uploads")]
 	pub max_pending_media_uploads: usize,
@@ -443,6 +454,7 @@ pub struct Config {
 	/// The time in seconds before an unused pending MXC URI expires and is
 	/// removed.
 	///
+	/// reloadable: yes
 	/// default: 86400 (24 hours)
 	#[serde(default = "default_media_create_unused_expiration_time")]
 	pub media_create_unused_expiration_time: u64,
@@ -450,16 +462,19 @@ pub struct Config {
 	/// The maximum number of media create requests per second allowed from a
 	/// single user.
 	///
+	/// reloadable: yes
 	/// default: 10
 	#[serde(default = "default_media_rc_create_per_second")]
 	pub media_rc_create_per_second: u32,
 
 	/// The maximum burst count for media create requests from a single user.
 	///
+	/// reloadable: yes
 	/// default: 50
 	#[serde(default = "default_media_rc_create_burst_count")]
 	pub media_rc_create_burst_count: u32,
 
+	/// reloadable: yes
 	/// default: 192
 	#[serde(default = "default_max_fetch_prev_events")]
 	pub max_fetch_prev_events: u16,
@@ -551,6 +566,7 @@ pub struct Config {
 
 	/// Federation sender transaction retry backoff limit (seconds).
 	///
+	/// reloadable: yes
 	/// default: 86400
 	#[serde(default = "default_sender_retry_backoff_limit")]
 	pub sender_retry_backoff_limit: u64,
@@ -594,6 +610,7 @@ pub struct Config {
 
 	/// Grace period for clean shutdown of client requests (seconds).
 	///
+	/// reloadable: yes
 	/// default: 10
 	#[serde(default = "default_client_shutdown_timeout")]
 	pub client_shutdown_timeout: u64,
@@ -634,6 +651,7 @@ pub struct Config {
 
 	/// Grace period for clean shutdown of federation requests (seconds).
 	///
+	/// reloadable: yes
 	/// default: 5
 	#[serde(default = "default_sender_shutdown_timeout")]
 	pub sender_shutdown_timeout: u64,
@@ -647,11 +665,13 @@ pub struct Config {
 	///
 	/// If you would like registration only via token reg, please configure
 	/// `registration_token` or `registration_token_file`.
+	/// reloadable: yes
 	#[serde(default)]
 	pub allow_registration: bool,
 
 	/// Enabling this setting opens registration to anyone without restrictions.
 	/// This makes your server vulnerable to abuse
+	/// reloadable: yes
 	#[serde(default)]
 	pub yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse: bool,
 
@@ -663,6 +683,7 @@ pub struct Config {
 	///
 	/// YOU NEED TO EDIT THIS OR USE registration_token_file.
 	///
+	/// reloadable: yes
 	/// example: "o&^uCtes4HPf0Vu@F20jQeeWE7"
 	///
 	/// display: sensitive
@@ -674,10 +695,12 @@ pub struct Config {
 	///
 	/// tuwunel must be able to access the file, and it must not be empty
 	///
+	/// reloadable: yes
 	/// example: "/etc/tuwunel/.reg_token"
 	pub registration_token_file: Option<PathBuf>,
 
 	/// Controls whether encrypted rooms and events are allowed.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_encryption: bool,
 
@@ -691,6 +714,7 @@ pub struct Config {
 	/// - "none": Explicit value for no effect.
 	/// - Other values default to no effect.
 	///
+	/// reloadable: yes
 	/// default: "none"
 	#[serde(default)]
 	pub encryption_enabled_by_default_for_room_type: Option<String>,
@@ -708,6 +732,7 @@ pub struct Config {
 	///
 	/// Rooms are fixed to the setting at the time of their creation and can
 	/// never be changed; changing this value only affects new rooms.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub federate_created_rooms: bool,
 
@@ -716,11 +741,13 @@ pub struct Config {
 	/// This isn't intended and is very likely a bug if federation requests are
 	/// being sent to yourself. This currently mainly exists for development
 	/// purposes.
+	/// reloadable: yes
 	#[serde(default)]
 	pub federation_loopback: bool,
 
 	/// Always calls /forget on behalf of the user if leaving a room. This is a
 	/// part of MSC4267 "Automatically forgetting rooms on leave"
+	/// reloadable: yes
 	#[serde(default)]
 	pub forget_forced_upon_leave: bool,
 
@@ -729,6 +756,7 @@ pub struct Config {
 	/// "/_matrix/client/v3/profile/{userId}".
 	///
 	/// This can prevent profile scraping.
+	/// reloadable: yes
 	#[serde(default)]
 	pub require_auth_for_profile_requests: bool,
 
@@ -737,18 +765,21 @@ pub struct Config {
 	/// but will forbid external users from viewing your server's public room
 	/// directory. If federation is disabled entirely (`allow_federation`), this
 	/// is inherently false.
+	/// reloadable: yes
 	#[serde(default)]
 	pub allow_public_room_directory_over_federation: bool,
 
 	/// Set this to true to allow your server's public room directory to be
 	/// queried without client authentication (access token) through the Client
 	/// APIs. Set this to false to protect against /publicRooms spiders.
+	/// reloadable: yes
 	#[serde(default)]
 	pub allow_public_room_directory_without_auth: bool,
 
 	/// Allows room directory searches to match on partial room_id's when the
 	/// search term starts with '!'.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub allow_public_room_search_by_id: bool,
@@ -762,6 +793,7 @@ pub struct Config {
 	/// to prevent this feature from abuse, knowledge of several characters of
 	/// the room_id is required before any results are returned.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub allow_unlisted_room_search_by_id: bool,
@@ -770,6 +802,7 @@ pub struct Config {
 	/// users in public rooms or those that share a room with the user making
 	/// the search will be shown.
 	///
+	/// reloadable: yes
 	/// default: false
 	#[serde(default)]
 	pub show_all_local_users_in_user_directory: bool,
@@ -783,12 +816,14 @@ pub struct Config {
 	/// It is unlikely you need to enable this as all major clients support
 	/// authentication for this endpoint and prevents misuse of your TURN server
 	/// from potential bots.
+	/// reloadable: yes
 	#[serde(default)]
 	pub turn_allow_guests: bool,
 
 	/// Set this to true to lock down your server's public room directory and
 	/// only allow admins to publish rooms to the room directory. Unpublishing
 	/// is still allowed by all users with this enabled.
+	/// reloadable: yes
 	#[serde(default)]
 	pub lockdown_public_room_directory: bool,
 
@@ -796,6 +831,7 @@ pub struct Config {
 	/// external users to see your device display name. If federation is
 	/// disabled entirely (`allow_federation`), this is inherently false. For
 	/// privacy reasons, this is best left disabled.
+	/// reloadable: yes
 	#[serde(default)]
 	pub allow_device_name_federation: bool,
 
@@ -809,6 +845,7 @@ pub struct Config {
 	/// spiders.
 	///
 	/// This is inherently false if `allow_federation` is disabled
+	/// reloadable: yes
 	#[serde(
 		default = "true_fn",
 		alias = "allow_profile_lookup_federation_requests"
@@ -817,6 +854,7 @@ pub struct Config {
 
 	/// Allow standard users to create rooms. Appservices and admins are always
 	/// allowed to create rooms
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_room_creation: bool,
 
@@ -829,6 +867,7 @@ pub struct Config {
 	/// tuwunel officially supports room versions 6+. tuwunel has slightly
 	/// experimental (though works fine in practice) support for versions 3 - 5.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub allow_unstable_room_versions: bool,
@@ -839,6 +878,7 @@ pub struct Config {
 	/// development, protype spec-changes, or somehow present a serious risk to
 	/// the server's operation or database corruption. This is for developer use
 	/// only.
+	/// reloadable: yes
 	#[serde(default)]
 	pub allow_experimental_room_versions: bool,
 
@@ -849,6 +889,7 @@ pub struct Config {
 	/// timeout failures fail open with a warn log so a transient policy-server
 	/// outage does not silently take the room offline.
 	///
+	/// reloadable: yes
 	/// default: false
 	#[serde(default)]
 	pub enable_policy_servers: bool,
@@ -856,6 +897,7 @@ pub struct Config {
 	/// MSC4284: timeout (seconds) for requests to a room's policy server.
 	/// Applies to both outbound `/sign` calls and inbound signature-fetches.
 	///
+	/// reloadable: yes
 	/// default: 5
 	#[serde(default = "default_policy_server_request_timeout")]
 	pub policy_server_request_timeout: u64,
@@ -866,6 +908,7 @@ pub struct Config {
 	/// recommendation. To prevent stale documentation we no longer list it
 	/// here. It is only advised to override this if you know what you are
 	/// doing, and by doing so, updates with new versions are precluded.
+	/// reloadable: yes
 	#[serde(default = "default_default_room_version")]
 	pub default_room_version: RoomVersionId,
 
@@ -939,6 +982,7 @@ pub struct Config {
 	/// Currently, tuwunel doesn't support inbound batched key requests, so
 	/// this list should only contain other Synapse servers.
 	///
+	/// reloadable: yes
 	/// example: ["matrix.org", "tchncs.de"]
 	///
 	/// default: ["matrix.org"]
@@ -952,6 +996,7 @@ pub struct Config {
 	/// however other options exist to query trusted servers first under
 	/// specific high-load circumstances and should be evaluated before setting
 	/// this to true.
+	/// reloadable: yes
 	#[serde(default)]
 	pub query_trusted_key_servers_first: bool,
 
@@ -964,6 +1009,7 @@ pub struct Config {
 	/// to tolerate delays are advised to set this to false. Note that setting
 	/// query_trusted_key_servers_first to true causes this option to be
 	/// ignored.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub query_trusted_key_servers_first_on_join: bool,
 
@@ -972,11 +1018,13 @@ pub struct Config {
 	/// as forwarding-agents to cache and deduplicate requests. Notary servers
 	/// do not act as forwarding-agents by default, therefor do not enable this
 	/// unless you know exactly what you are doing.
+	/// reloadable: yes
 	#[serde(default)]
 	pub only_query_trusted_key_servers: bool,
 
 	/// Maximum number of keys to request in each trusted server batch query.
 	///
+	/// reloadable: yes
 	/// default: 192
 	#[serde(default = "default_trusted_server_batch_size")]
 	pub trusted_server_batch_size: usize,
@@ -984,6 +1032,7 @@ pub struct Config {
 	/// Maximum number of request batches in flight simultaneously when querying
 	/// a trusted server.
 	///
+	/// reloadable: yes
 	/// default: 2
 	#[serde(default = "default_trusted_server_batch_concurrency")]
 	pub trusted_server_batch_concurrency: usize,
@@ -1065,6 +1114,7 @@ pub struct Config {
 	/// integrations (e.g. Vector Integrations in Element), *not* OIDC/OpenID
 	/// Connect/etc.
 	///
+	/// reloadable: yes
 	/// default: 3600
 	#[serde(default = "default_openid_token_ttl")]
 	pub openid_token_ttl: u64,
@@ -1074,6 +1124,7 @@ pub struct Config {
 	/// as a malicious client could use the mechanism to spawn more than one
 	/// session. Enabled by default.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub login_via_existing_session: bool,
@@ -1087,6 +1138,7 @@ pub struct Config {
 	/// enabled while disabling the former to prevent clients from commanding
 	/// login token creation but without preventing the server from doing so.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub login_via_token: bool,
@@ -1097,6 +1149,7 @@ pub struct Config {
 	/// Set this option to false if you intend to allow logging in only using
 	/// other mechanisms, such as SSO.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub login_with_password: bool,
@@ -1107,6 +1160,7 @@ pub struct Config {
 	/// This is used to allow existing sessions to create new sessions.
 	/// see login_via_existing_session.
 	///
+	/// reloadable: yes
 	/// default: 120000
 	#[serde(default = "default_login_token_ttl")]
 	pub login_token_ttl: u64,
@@ -1117,6 +1171,7 @@ pub struct Config {
 	/// login will be invalidated after this amount of time and the client will
 	/// be soft-logged-out until refreshing it.
 	///
+	/// reloadable: yes
 	/// default: 604800
 	#[serde(default = "default_access_token_ttl")]
 	pub access_token_ttl: u64,
@@ -1124,6 +1179,7 @@ pub struct Config {
 	/// Static TURN username to provide the client if not using a shared secret
 	/// ("turn_secret"), It is recommended to use a shared secret over static
 	/// credentials.
+	/// reloadable: yes
 	#[serde(default)]
 	pub turn_username: String,
 
@@ -1132,6 +1188,7 @@ pub struct Config {
 	/// credentials.
 	///
 	/// display: sensitive
+	/// reloadable: yes
 	#[serde(default)]
 	pub turn_password: String,
 
@@ -1142,6 +1199,7 @@ pub struct Config {
 	/// "realm" config option. If using TURN over TLS, replace the URI prefix
 	/// "turn:" with "turns:".
 	///
+	/// reloadable: yes
 	/// example: ["turn:example.turn.uri?transport=udp",
 	/// "turn:example.turn.uri?transport=tcp"]
 	///
@@ -1169,6 +1227,7 @@ pub struct Config {
 
 	/// TURN TTL, in seconds.
 	///
+	/// reloadable: yes
 	/// default: 86400
 	#[serde(default = "default_turn_ttl")]
 	pub turn_ttl: u64,
@@ -1178,6 +1237,7 @@ pub struct Config {
 	/// registered users join. The rooms specified must be rooms that you have
 	/// joined at least once on the server, and must be public.
 	///
+	/// reloadable: yes
 	/// example: ["#tuwunel:grin.hu",
 	/// "!l2xV0sd51lraysuRcsWVECge4NULaH3g-ou95vgDgiM"]
 	///
@@ -1201,6 +1261,7 @@ pub struct Config {
 	///
 	/// Defaults to false as rooms can be banned for non-moderation-related
 	/// reasons and this performs a full user deactivation.
+	/// reloadable: yes
 	#[serde(default)]
 	pub auto_deactivate_banned_room_attempts: bool,
 
@@ -1499,6 +1560,7 @@ pub struct Config {
 	/// display: sensitive
 	pub emergency_password: Option<String>,
 
+	/// reloadable: yes
 	/// default: "/_matrix/push/v1/notify"
 	#[serde(default = "default_notification_push_path")]
 	pub notification_push_path: String,
@@ -1513,6 +1575,7 @@ pub struct Config {
 	///
 	/// Note that setting this option to true will not affect the record of
 	/// notifications found in the notifications pane.
+	/// reloadable: yes
 	#[serde(default)]
 	pub push_everything: bool,
 
@@ -1524,6 +1587,7 @@ pub struct Config {
 	/// This option is intended for custom software deployments seeking purely
 	/// to minimize unused resources; the overall savings are otherwise
 	/// negligible.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub calculate_heroes: bool,
 
@@ -1531,6 +1595,7 @@ pub struct Config {
 	///
 	/// Note that presence on tuwunel is very fast unlike Synapse's. If using
 	/// outgoing presence, this MUST be enabled.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_local_presence: bool,
 
@@ -1539,6 +1604,7 @@ pub struct Config {
 	/// This option receives presence updates from other servers, but does not
 	/// send any unless `allow_outgoing_presence` is true. Note that presence on
 	/// tuwunel is very fast unlike Synapse's.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_incoming_presence: bool,
 
@@ -1548,6 +1614,7 @@ pub struct Config {
 	/// receive any unless `allow_incoming_presence` is true. Note that presence
 	/// on tuwunel is very fast unlike Synapse's. If using outgoing presence,
 	/// you MUST enable `allow_local_presence` as well.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_outgoing_presence: bool,
 
@@ -1582,27 +1649,33 @@ pub struct Config {
 	/// on another client.
 	///
 	/// Disabled by default to preserve legacy behavior.
+	/// reloadable: yes
 	#[serde(default)]
 	pub suppress_push_when_active: bool,
 
 	/// Allow receiving incoming read receipts from remote servers.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_incoming_read_receipts: bool,
 
 	/// Allow sending read receipts to remote servers.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_outgoing_read_receipts: bool,
 
 	/// Allow outgoing typing updates to federation.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_outgoing_typing: bool,
 
 	/// Allow incoming typing updates from federation.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub allow_incoming_typing: bool,
 
 	/// Maximum time federation user can indicate typing.
 	///
+	/// reloadable: yes
 	/// default: 30
 	#[serde(default = "default_typing_federation_timeout_s")]
 	pub typing_federation_timeout_s: u64,
@@ -1611,12 +1684,14 @@ pub struct Config {
 	/// client's request to stop typing. It only enforces a minimum value in
 	/// case of no stop request.
 	///
+	/// reloadable: yes
 	/// default: 15
 	#[serde(default = "default_typing_client_timeout_min_s")]
 	pub typing_client_timeout_min_s: u64,
 
 	/// Maximum time local client can indicate typing.
 	///
+	/// reloadable: yes
 	/// default: 45
 	#[serde(default = "default_typing_client_timeout_max_s")]
 	pub typing_client_timeout_max_s: u64,
@@ -1653,16 +1728,19 @@ pub struct Config {
 
 	/// Set to true to allow user type "guest" registrations. Some clients like
 	/// Element attempt to register guest users automatically.
+	/// reloadable: yes
 	#[serde(default)]
 	pub allow_guest_registration: bool,
 
 	/// Set to true to log guest registrations in the admin room. Note that
 	/// these may be noisy or unnecessary if you're a public homeserver.
+	/// reloadable: yes
 	#[serde(default)]
 	pub log_guest_registrations: bool,
 
 	/// Set to true to allow guest registrations/users to auto join any rooms
 	/// specified in `auto_join_rooms`.
+	/// reloadable: yes
 	#[serde(default)]
 	pub allow_guests_auto_join_rooms: bool,
 
@@ -1683,9 +1761,11 @@ pub struct Config {
 	/// Fallback to requesting legacy unauthenticated media from remote servers.
 	/// Unauthenticated media was removed in ~2024Q3; enabling this adds
 	/// considerable federation requests which are unlikely to succeed.
+	/// reloadable: yes
 	#[serde(default)]
 	pub request_legacy_media: bool,
 
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub freeze_legacy_media: bool,
 
@@ -1743,6 +1823,7 @@ pub struct Config {
 	/// deployments are advised to continue listing "media" as a fallback along
 	/// with their new provider.
 	///
+	/// reloadable: yes
 	/// default: ["media"]
 	#[serde(default = "default_media_storage_providers")]
 	pub media_storage_providers: BTreeSet<String>,
@@ -1762,6 +1843,7 @@ pub struct Config {
 	///
 	/// Entries in this list must also be listed in `media_storage_providers`.
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub store_media_on_providers: BTreeSet<String>,
@@ -1769,6 +1851,7 @@ pub struct Config {
 	/// Vector list of regex patterns of server names that tuwunel will refuse
 	/// to download remote media from.
 	///
+	/// reloadable: yes
 	/// example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 	///
 	/// default: []
@@ -1785,6 +1868,7 @@ pub struct Config {
 	///
 	/// Basically "global" ACLs.
 	///
+	/// reloadable: yes
 	/// example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 	///
 	/// default: []
@@ -1806,6 +1890,7 @@ pub struct Config {
 	/// this is applied. This allows you to match e.g. "*\.example\.com" here
 	/// while still singling out "bad\.example\.com" for exclusion.
 	///
+	/// reloadable: yes
 	/// example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 	///
 	/// default: []
@@ -1816,6 +1901,7 @@ pub struct Config {
 	/// outgoing federated room directory requests for. Useful for preventing
 	/// our users from wandering into bad servers or spaces.
 	///
+	/// reloadable: yes
 	/// example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 	///
 	/// default: []
@@ -1868,6 +1954,7 @@ pub struct Config {
 	/// attack surface to your server, you are expected to be aware of the risks
 	/// by doing so.
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub url_preview_domain_contains_allowlist: Vec<String>,
@@ -1882,6 +1969,7 @@ pub struct Config {
 	/// attack surface to your server, you are expected to be aware of the risks
 	/// by doing so.
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub url_preview_domain_explicit_allowlist: Vec<String>,
@@ -1894,6 +1982,7 @@ pub struct Config {
 	/// "https://mymaliciousdomainexamplegoogle.com". The denylist is checked
 	/// first before allowlist. Setting this to "*" will not do anything.
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub url_preview_domain_explicit_denylist: Vec<String>,
@@ -1908,6 +1997,7 @@ pub struct Config {
 	/// attack surface to your server, you are expected to be aware of the risks
 	/// by doing so.
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub url_preview_url_contains_allowlist: Vec<String>,
@@ -1915,6 +2005,7 @@ pub struct Config {
 	/// Maximum body size allowed when spidering a URL for previews. Accepts an
 	/// integer byte count or a string with SI/IEC suffix such as "256 KB".
 	///
+	/// reloadable: yes
 	/// default: 256000
 	#[serde(
 		default = "default_url_preview_max_spider_size",
@@ -1932,6 +2023,7 @@ pub struct Config {
 	/// root domain is checked and matched. Useful if the domain contains
 	/// allowlist is still too broad for you but you still want to allow all the
 	/// subdomains under a root domain.
+	/// reloadable: yes
 	#[serde(default)]
 	pub url_preview_check_root_domain: bool,
 
@@ -1945,6 +2037,7 @@ pub struct Config {
 	/// used, and startup as warnings if any room aliases in your database have
 	/// a forbidden room alias/ID.
 	///
+	/// reloadable: yes
 	/// example: ["19dollarfortnitecards", "b[4a]droom", "badphrase"]
 	///
 	/// default: []
@@ -1960,6 +2053,7 @@ pub struct Config {
 	/// startup as warnings if any local users in your database have a forbidden
 	/// username.
 	///
+	/// reloadable: yes
 	/// example: ["administrator", "b[a4]dusernam[3e]", "badphrase"]
 	///
 	/// default: []
@@ -1974,6 +2068,7 @@ pub struct Config {
 	/// Useful for preventing failed joins due to timeouts
 	/// from a certain homeserver.
 	///
+	/// reloadable: yes
 	/// default: ["matrix\.org"]
 	#[serde(
 		default = "default_deprioritize_joins_through_servers",
@@ -1985,6 +2080,7 @@ pub struct Config {
 	/// attempt tries a different server, as each server is only tried once;
 	/// though retries can occur when the join request as a whole is retried.
 	///
+	/// reloadable: yes
 	/// default: 48
 	#[serde(default = "default_max_make_join_attempts_per_join_attempt")]
 	pub max_make_join_attempts_per_join_attempt: usize,
@@ -1997,6 +2093,7 @@ pub struct Config {
 	/// is greater than one, but less than excessively exceeding the client's
 	/// request timeout, though that may not be avoidable in some cases.
 	///
+	/// reloadable: yes
 	/// default: 3
 	#[serde(default = "default_max_join_attempts_per_join_request")]
 	pub max_join_attempts_per_join_request: usize,
@@ -2025,6 +2122,7 @@ pub struct Config {
 	/// remote), and block non-admin users from receiving remote room invites.
 	///
 	/// Admins are always allowed to send and receive all room invites.
+	/// reloadable: yes
 	#[serde(default)]
 	pub block_non_admin_invites: bool,
 
@@ -2033,6 +2131,7 @@ pub struct Config {
 	/// a normal tuwunel admin command. The reply will be publicly visible to
 	/// the room, originating from the sender.
 	///
+	/// reloadable: yes
 	/// example: \\!admin debug ping puppygock.gay
 	#[serde(default = "true_fn")]
 	pub admin_escape_commands: bool,
@@ -2062,6 +2161,7 @@ pub struct Config {
 	///
 	/// If false, tuwunel will error and fail to start if an admin execute
 	/// command (`--execute` / `admin_execute`) fails.
+	/// reloadable: yes
 	#[serde(default)]
 	pub admin_execute_errors_ignore: bool,
 
@@ -2070,6 +2170,7 @@ pub struct Config {
 	/// Similar to admin_execute, but these commands are executed when the
 	/// server receives SIGUSR2 on supporting platforms.
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub admin_signal_execute: Vec<String>,
@@ -2078,6 +2179,7 @@ pub struct Config {
 	/// generated from running admin commands). Defaults to "info" on release
 	/// builds, else "debug" on debug builds.
 	///
+	/// reloadable: yes
 	/// default: "info"
 	#[serde(default = "default_admin_log_capture")]
 	pub admin_log_capture: String,
@@ -2089,6 +2191,7 @@ pub struct Config {
 	/// admin room can be pinned here so you always have an easy-to-access
 	/// shortcut dedicated to your admin room.
 	///
+	/// reloadable: yes
 	/// default: "m.server_notice"
 	#[serde(default = "default_admin_room_tag")]
 	pub admin_room_tag: String,
@@ -2098,6 +2201,7 @@ pub struct Config {
 	/// when the admin room is empty (or only contains the server-user) is
 	/// granted, and only when the admin room is enabled.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub grant_admin_to_first_user: bool,
@@ -2201,6 +2305,7 @@ pub struct Config {
 	/// changes, account deactivations, room directory publications, etc will be
 	/// sent to the admin room. Update notices and normal admin command
 	/// responses will still be sent.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub admin_room_notices: bool,
 
@@ -2208,6 +2313,7 @@ pub struct Config {
 	///
 	/// They can be retrieved with `admin debug get-retained-pdu` or MSC2815.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub save_unredacted_events: bool,
@@ -2216,6 +2322,7 @@ pub struct Config {
 	///
 	/// By default the unredacted events are stored for 60 days.
 	///
+	/// reloadable: yes
 	/// default: 5184000
 	#[serde(default = "default_redaction_retention_seconds")]
 	pub redaction_retention_seconds: u64,
@@ -2226,6 +2333,7 @@ pub struct Config {
 	/// Server admins can request unredacted events regardless of the value of
 	/// this option.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub allow_room_admins_to_request_unredacted_events: bool,
@@ -2233,6 +2341,7 @@ pub struct Config {
 	/// Prevents local users from sending redactions.
 	///
 	/// This check does not apply to server admins.
+	/// reloadable: yes
 	#[serde(default)]
 	pub disable_local_redactions: bool,
 
@@ -2353,6 +2462,7 @@ pub struct Config {
 	/// Enables configuration reload when the server receives SIGUSR1 on
 	/// supporting platforms.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub config_reload_signal: bool,
@@ -2393,6 +2503,7 @@ pub struct Config {
 	///
 	/// This option exists for developer and debug use, and as a failsafe in
 	/// lieu of hardcoding it.
+	/// reloadable: yes
 	#[serde(default = "true_fn")]
 	pub hydra_backports: bool,
 
@@ -2405,6 +2516,7 @@ pub struct Config {
 	/// currently invoke this operation, so in some cases you may find the room
 	/// still exists.
 	///
+	/// reloadable: yes
 	/// default: false
 	#[serde(default)]
 	pub delete_rooms_after_leave: bool,
@@ -2415,6 +2527,7 @@ pub struct Config {
 	/// administrator to adjust this value; it is provided here rather than
 	/// hardcoding it.
 	///
+	/// reloadable: yes
 	/// default: 256
 	#[serde(default = "default_one_time_key_limit")]
 	pub one_time_key_limit: usize,
@@ -2434,6 +2547,7 @@ pub struct Config {
 	/// Note that fluffychat always displays a single button anyway. You do not
 	/// need to enable this to use fluffychat; instead we offer a
 	/// default-provider option, see `default` in the provider config section.
+	/// reloadable: yes
 	#[serde(default)]
 	pub single_sso: bool,
 
@@ -2447,6 +2561,7 @@ pub struct Config {
 	///
 	/// This option defaults to false, allowing the client to generate the list
 	/// of providers or hide all SSO-related options when none configured.
+	/// reloadable: yes
 	#[serde(default)]
 	pub sso_custom_providers_page: bool,
 
@@ -2454,6 +2569,7 @@ pub struct Config {
 	/// > If the client finds oauth_aware_preferred to be true then, assuming it
 	/// > supports that auth type, it should present this as the only
 	/// > login/registration method available to the user.
+	/// reloadable: yes
 	#[serde(default, alias = "sso_aware_preferred")]
 	pub oidc_aware_preferred: bool,
 
@@ -2502,6 +2618,7 @@ pub struct Config {
 	///
 	/// Setting this to true can help performance on very large homeservers,
 	/// but it may not be spec compliant and risky for client expectations.
+	/// reloadable: yes
 	#[serde(default)]
 	pub device_key_update_encrypted_rooms_only: bool,
 
@@ -2570,28 +2687,33 @@ pub struct WellKnownConfig {
 	/// well-known file will serve. This should contain a port at the end, and
 	/// should not be a URL.
 	///
+	/// reloadable: yes
 	/// example: "matrix.example.com:443"
 	pub server: Option<OwnedServerName>,
 
 	/// The URL of the support web page. This and the below generate the content
 	/// of `/.well-known/matrix/support`.
 	///
+	/// reloadable: yes
 	/// example: "https://example.com/support"
 	pub support_page: Option<Url>,
 
 	/// The name of the support role.
 	///
+	/// reloadable: yes
 	/// example: "m.role.admin"
 	pub support_role: Option<ContactRole>,
 
 	/// The email address for the above support role.
 	///
+	/// reloadable: yes
 	/// example: "admin@example.com"
 	pub support_email: Option<String>,
 
 	/// The Matrix User ID for the above support role.
 	///
 	/// example "@admin:example.com"
+	/// reloadable: yes
 	pub support_mxid: Option<OwnedUserId>,
 
 	/// LiveKit JWT endpoint.
@@ -2599,6 +2721,7 @@ pub struct WellKnownConfig {
 	///
 	/// Note: You must also set `client` above to your homeserver URL.
 	///
+	/// reloadable: yes
 	/// default: ""
 	#[serde(default)]
 	pub livekit_url: Option<String>,
@@ -2624,6 +2747,7 @@ pub struct WellKnownConfig {
 	/// livekit_service_url = "https://livekit.yourdomain.com"
 	/// ```
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub rtc_transports: Vec<serde_json::Value>,
@@ -2638,11 +2762,13 @@ pub struct WellKnownConfig {
 pub struct BlurhashConfig {
 	/// blurhashing x component, 4 is recommended by https://blurha.sh/
 	///
+	/// reloadable: yes
 	/// default: 4
 	#[serde(default = "default_blurhash_x_component")]
 	pub components_x: u32,
 	/// blurhashing y component, 3 is recommended by https://blurha.sh/
 	///
+	/// reloadable: yes
 	/// default: 3
 	#[serde(default = "default_blurhash_y_component")]
 	pub components_y: u32,
@@ -2653,6 +2779,7 @@ pub struct BlurhashConfig {
 	/// integer byte count or a string with SI/IEC suffix such as "32 MiB".
 	/// Setting it to 0 disables blurhashing.
 	///
+	/// reloadable: yes
 	/// default: 33554432
 	#[serde(
 		default = "default_blurhash_max_raw_size",
@@ -2666,17 +2793,20 @@ pub struct BlurhashConfig {
 pub struct LdapConfig {
 	/// Whether to enable LDAP login.
 	///
+	/// reloadable: yes
 	/// example: "true"
 	#[serde(default)]
 	pub enable: bool,
 
 	/// URI of the LDAP server.
 	///
+	/// reloadable: yes
 	/// example: "ldap://ldap.example.com:389"
 	pub uri: Option<Url>,
 
 	/// Root of the searches.
 	///
+	/// reloadable: yes
 	/// example: "ou=users,dc=example,dc=org"
 	///
 	/// default:
@@ -2691,6 +2821,7 @@ pub struct LdapConfig {
 	/// `bind_password_file`. Beware: automatically granting admin rights will
 	/// not work if you use this direct bind instead of a LDAP search.
 	///
+	/// reloadable: yes
 	/// example: "cn=ldap-reader,dc=example,dc=org" or
 	/// "cn={username},ou=users,dc=example,dc=org"
 	///
@@ -2703,6 +2834,7 @@ pub struct LdapConfig {
 	///
 	/// The server must be able to access the file, and it must not be empty.
 	///
+	/// reloadable: yes
 	/// default: ""
 	#[serde(default)]
 	pub bind_password_file: Option<PathBuf>,
@@ -2712,6 +2844,7 @@ pub struct LdapConfig {
 	/// You can use the variable `{username}` that will be replaced by the
 	/// entered username for more complex filters.
 	///
+	/// reloadable: yes
 	/// example: "(&(objectClass=person)(memberOf=matrix))"
 	///
 	/// default: "(objectClass=*)"
@@ -2720,6 +2853,7 @@ pub struct LdapConfig {
 
 	/// Attribute to use to uniquely identify the user.
 	///
+	/// reloadable: yes
 	/// example: "uid" or "cn"
 	///
 	/// default: "uid"
@@ -2728,6 +2862,7 @@ pub struct LdapConfig {
 
 	/// Attribute containing the distinguished name of the user.
 	///
+	/// reloadable: yes
 	/// example: "givenName" or "sn"
 	///
 	/// default: "givenName"
@@ -2738,6 +2873,7 @@ pub struct LdapConfig {
 	///
 	/// Defaults to `base_dn` if empty.
 	///
+	/// reloadable: yes
 	/// example: "ou=admins,dc=example,dc=org"
 	///
 	/// default:
@@ -2752,6 +2888,7 @@ pub struct LdapConfig {
 	/// You can use the variable `{username}` that will be replaced by the
 	/// entered username for more complex filters.
 	///
+	/// reloadable: yes
 	/// example: "(objectClass=tuwunelAdmin)" or "(uid={username})"
 	///
 	/// default:
@@ -2764,6 +2901,7 @@ pub struct LdapConfig {
 pub struct JwtConfig {
 	/// Enable JWT logins
 	///
+	/// reloadable: yes
 	/// default: false
 	#[serde(default)]
 	pub enable: bool,
@@ -2773,6 +2911,7 @@ pub struct JwtConfig {
 	/// is a plaintext shared-secret, so you should keep this value private.
 	///
 	/// display: sensitive
+	/// reloadable: yes
 	/// default:
 	#[serde(default, alias = "secret")]
 	pub key: String,
@@ -2785,6 +2924,7 @@ pub struct JwtConfig {
 	/// - ECDSA is a PEM-encoded public-key.
 	/// - EDDSA is a PEM-encoded Ed25519 public-key.
 	///
+	/// reloadable: yes
 	/// default: "HMAC"
 	#[serde(default = "default_jwt_format")]
 	pub format: String,
@@ -2792,12 +2932,14 @@ pub struct JwtConfig {
 	/// Automatically create new user from a valid claim, otherwise access is
 	/// denied for an unknown even with an authentic token.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub register_user: bool,
 
 	/// JWT algorithm
 	///
+	/// reloadable: yes
 	/// default: "HS256"
 	#[serde(default = "default_jwt_algorithm")]
 	pub algorithm: String,
@@ -2805,6 +2947,7 @@ pub struct JwtConfig {
 	/// Optional audience claim list. The token must claim one or more values
 	/// from this list when set.
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub audience: Vec<String>,
@@ -2812,6 +2955,7 @@ pub struct JwtConfig {
 	/// Optional issuer claim list. The token must claim one or more values
 	/// from this list when set.
 	///
+	/// reloadable: yes
 	/// default: []
 	#[serde(default)]
 	pub issuer: Vec<String>,
@@ -2819,6 +2963,7 @@ pub struct JwtConfig {
 	/// Require expiration claim in the token. This defaults to false for
 	/// synapse migration compatibility.
 	///
+	/// reloadable: yes
 	/// default: false
 	#[serde(default)]
 	pub require_exp: bool,
@@ -2826,6 +2971,7 @@ pub struct JwtConfig {
 	/// Require not-before claim in the token. This defaults to false for
 	/// synapse migration compatibility.
 	///
+	/// reloadable: yes
 	/// default: false
 	#[serde(default)]
 	pub require_nbf: bool,
@@ -2834,6 +2980,7 @@ pub struct JwtConfig {
 	/// required depends on require_exp, but when present this ensures the token
 	/// is not used after a time.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub validate_exp: bool,
@@ -2842,12 +2989,14 @@ pub struct JwtConfig {
 	/// required depends on require_nbf, but when present this ensures the token
 	/// is not used before a time.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub validate_nbf: bool,
 
 	/// Bypass validation for diagnostic/debug use only.
 	///
+	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
 	pub validate_signature: bool,

@@ -48,6 +48,8 @@
 #
 # To disable, set this to "" (an empty string).
 #
+# reloadable: yes
+#
 #new_user_displayname_suffix = "💕"
 
 # The default address (IPv4 or IPv6) tuwunel will listen on.
@@ -91,6 +93,7 @@
 # This is false by default to allow easier deprecation or removal of
 # config options in the future without breaking existing deployments. The
 # default behaviour is to simply warn on startup.
+# reloadable: yes
 #
 #error_on_unknown_config_opts = false
 
@@ -101,12 +104,15 @@
 # For more information, see:
 # https://tuwunel.chat/maintenance.html#backups
 #
+# reloadable: yes
 # example: "/opt/tuwunel-db-backups"
 #
 #database_backup_path =
 
 # The amount of online RocksDB database backups to keep/retain, if using
 # "database_backup_path", before deleting the oldest one.
+#
+# reloadable: yes
 #
 #database_backups_to_keep = 1
 
@@ -190,25 +196,35 @@
 # Minimum time-to-live in seconds for room summary entries in the spaces
 # cache.
 #
+# reloadable: yes
+#
 #spacehierarchy_cache_ttl_min = 21600
 
 # Maximum time-to-live in seconds for room summary entries in the spaces
 # cache.
+#
+# reloadable: yes
 #
 #spacehierarchy_cache_ttl_max = 129600
 
 # Minimum timeout a client can request for long-polling sync. Requests
 # will be clamped up to this value if smaller.
 #
+# reloadable: yes
+#
 #client_sync_timeout_min = 5000
 
 # Default timeout for long-polling sync if a client does not request
 # another in their query-string.
 #
+# reloadable: yes
+#
 #client_sync_timeout_default = 30000
 
 # Maximum timeout a client can request for long-polling sync. Requests
 # will be clamped down to this value if larger.
+#
+# reloadable: yes
 #
 #client_sync_timeout_max = 90000
 
@@ -299,6 +315,7 @@
 # these specific properties. This path does not support federation or
 # general purposes.
 #
+# reloadable: yes
 # example: ["*\.dns\.podman$"]
 #
 #dns_passthru_domains = []
@@ -330,23 +347,32 @@
 # Maximum number of concurrently pending (asynchronous) media uploads a
 # user can have.
 #
+# reloadable: yes
+#
 #max_pending_media_uploads = 5
 
 # The time in seconds before an unused pending MXC URI expires and is
 # removed.
+#
+# reloadable: yes
 #
 #media_create_unused_expiration_time = 86400 (24 hours)
 
 # The maximum number of media create requests per second allowed from a
 # single user.
 #
+# reloadable: yes
+#
 #media_rc_create_per_second = 10
 
 # The maximum burst count for media create requests from a single user.
 #
+# reloadable: yes
+#
 #media_rc_create_burst_count = 50
 
 # This item is undocumented. Please contribute documentation for it.
+# reloadable: yes
 #
 #max_fetch_prev_events = 192
 
@@ -413,6 +439,8 @@
 
 # Federation sender transaction retry backoff limit (seconds).
 #
+# reloadable: yes
+#
 #sender_retry_backoff_limit = 86400
 
 # Appservice URL request connection timeout. Defaults to 35 seconds as
@@ -441,6 +469,8 @@
 #client_response_timeout = 120
 
 # Grace period for clean shutdown of client requests (seconds).
+#
+# reloadable: yes
 #
 #client_shutdown_timeout = 10
 
@@ -477,6 +507,8 @@
 
 # Grace period for clean shutdown of federation requests (seconds).
 #
+# reloadable: yes
+#
 #sender_shutdown_timeout = 5
 
 # Enables registration. If set to false, no users can register on this
@@ -488,11 +520,13 @@
 #
 # If you would like registration only via token reg, please configure
 # `registration_token` or `registration_token_file`.
+# reloadable: yes
 #
 #allow_registration = false
 
 # Enabling this setting opens registration to anyone without restrictions.
 # This makes your server vulnerable to abuse
+# reloadable: yes
 #
 #yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = false
 
@@ -504,6 +538,7 @@
 #
 # YOU NEED TO EDIT THIS OR USE registration_token_file.
 #
+# reloadable: yes
 # example: "o&^uCtes4HPf0Vu@F20jQeeWE7"
 #
 #registration_token =
@@ -514,11 +549,13 @@
 #
 # tuwunel must be able to access the file, and it must not be empty
 #
+# reloadable: yes
 # example: "/etc/tuwunel/.reg_token"
 #
 #registration_token_file =
 
 # Controls whether encrypted rooms and events are allowed.
+# reloadable: yes
 #
 #allow_encryption = true
 
@@ -531,6 +568,8 @@
 #   `trusted_private_chat` presets.
 # - "none": Explicit value for no effect.
 # - Other values default to no effect.
+#
+# reloadable: yes
 #
 #encryption_enabled_by_default_for_room_type = "none"
 
@@ -547,6 +586,7 @@
 #
 # Rooms are fixed to the setting at the time of their creation and can
 # never be changed; changing this value only affects new rooms.
+# reloadable: yes
 #
 #federate_created_rooms = true
 
@@ -555,11 +595,13 @@
 # This isn't intended and is very likely a bug if federation requests are
 # being sent to yourself. This currently mainly exists for development
 # purposes.
+# reloadable: yes
 #
 #federation_loopback = false
 
 # Always calls /forget on behalf of the user if leaving a room. This is a
 # part of MSC4267 "Automatically forgetting rooms on leave"
+# reloadable: yes
 #
 #forget_forced_upon_leave = false
 
@@ -568,6 +610,7 @@
 # "/_matrix/client/v3/profile/{userId}".
 #
 # This can prevent profile scraping.
+# reloadable: yes
 #
 #require_auth_for_profile_requests = false
 
@@ -576,17 +619,21 @@
 # but will forbid external users from viewing your server's public room
 # directory. If federation is disabled entirely (`allow_federation`), this
 # is inherently false.
+# reloadable: yes
 #
 #allow_public_room_directory_over_federation = false
 
 # Set this to true to allow your server's public room directory to be
 # queried without client authentication (access token) through the Client
 # APIs. Set this to false to protect against /publicRooms spiders.
+# reloadable: yes
 #
 #allow_public_room_directory_without_auth = false
 
 # Allows room directory searches to match on partial room_id's when the
 # search term starts with '!'.
+#
+# reloadable: yes
 #
 #allow_public_room_search_by_id = true
 
@@ -599,11 +646,15 @@
 # to prevent this feature from abuse, knowledge of several characters of
 # the room_id is required before any results are returned.
 #
+# reloadable: yes
+#
 #allow_unlisted_room_search_by_id = true
 
 # Show all local users in user directory. With this set to false, only
 # users in public rooms or those that share a room with the user making
 # the search will be shown.
+#
+# reloadable: yes
 #
 #show_all_local_users_in_user_directory = false
 
@@ -616,12 +667,14 @@
 # It is unlikely you need to enable this as all major clients support
 # authentication for this endpoint and prevents misuse of your TURN server
 # from potential bots.
+# reloadable: yes
 #
 #turn_allow_guests = false
 
 # Set this to true to lock down your server's public room directory and
 # only allow admins to publish rooms to the room directory. Unpublishing
 # is still allowed by all users with this enabled.
+# reloadable: yes
 #
 #lockdown_public_room_directory = false
 
@@ -629,6 +682,7 @@
 # external users to see your device display name. If federation is
 # disabled entirely (`allow_federation`), this is inherently false. For
 # privacy reasons, this is best left disabled.
+# reloadable: yes
 #
 #allow_device_name_federation = false
 
@@ -642,11 +696,13 @@
 # spiders.
 #
 # This is inherently false if `allow_federation` is disabled
+# reloadable: yes
 #
 #allow_inbound_profile_lookup_federation_requests = true
 
 # Allow standard users to create rooms. Appservices and admins are always
 # allowed to create rooms
+# reloadable: yes
 #
 #allow_room_creation = true
 
@@ -659,6 +715,8 @@
 # tuwunel officially supports room versions 6+. tuwunel has slightly
 # experimental (though works fine in practice) support for versions 3 - 5.
 #
+# reloadable: yes
+#
 #allow_unstable_room_versions = true
 
 # Set to true to enable experimental room versions.
@@ -667,6 +725,7 @@
 # development, protype spec-changes, or somehow present a serious risk to
 # the server's operation or database corruption. This is for developer use
 # only.
+# reloadable: yes
 #
 #allow_experimental_room_versions = false
 
@@ -677,10 +736,14 @@
 # timeout failures fail open with a warn log so a transient policy-server
 # outage does not silently take the room offline.
 #
+# reloadable: yes
+#
 #enable_policy_servers = false
 
 # MSC4284: timeout (seconds) for requests to a room's policy server.
 # Applies to both outbound `/sign` calls and inbound signature-fetches.
+#
+# reloadable: yes
 #
 #policy_server_request_timeout = 5
 
@@ -690,6 +753,7 @@
 # recommendation. To prevent stale documentation we no longer list it
 # here. It is only advised to override this if you know what you are
 # doing, and by doing so, updates with new versions are precluded.
+# reloadable: yes
 #
 #default_room_version =
 
@@ -756,6 +820,7 @@
 # Currently, tuwunel doesn't support inbound batched key requests, so
 # this list should only contain other Synapse servers.
 #
+# reloadable: yes
 # example: ["matrix.org", "tchncs.de"]
 #
 #trusted_servers = ["matrix.org"]
@@ -767,6 +832,7 @@
 # however other options exist to query trusted servers first under
 # specific high-load circumstances and should be evaluated before setting
 # this to true.
+# reloadable: yes
 #
 #query_trusted_key_servers_first = false
 
@@ -779,6 +845,7 @@
 # to tolerate delays are advised to set this to false. Note that setting
 # query_trusted_key_servers_first to true causes this option to be
 # ignored.
+# reloadable: yes
 #
 #query_trusted_key_servers_first_on_join = true
 
@@ -787,15 +854,20 @@
 # as forwarding-agents to cache and deduplicate requests. Notary servers
 # do not act as forwarding-agents by default, therefor do not enable this
 # unless you know exactly what you are doing.
+# reloadable: yes
 #
 #only_query_trusted_key_servers = false
 
 # Maximum number of keys to request in each trusted server batch query.
 #
+# reloadable: yes
+#
 #trusted_server_batch_size = 192
 
 # Maximum number of request batches in flight simultaneously when querying
 # a trusted server.
+#
+# reloadable: yes
 #
 #trusted_server_batch_concurrency = 2
 
@@ -862,12 +934,16 @@
 # integrations (e.g. Vector Integrations in Element), *not* OIDC/OpenID
 # Connect/etc.
 #
+# reloadable: yes
+#
 #openid_token_ttl = 3600
 
 # Allow an existing session to mint a login token for another client.
 # This requires interactive authentication, but has security ramifications
 # as a malicious client could use the mechanism to spawn more than one
 # session. Enabled by default.
+#
+# reloadable: yes
 #
 #login_via_existing_session = true
 
@@ -880,6 +956,8 @@
 # enabled while disabling the former to prevent clients from commanding
 # login token creation but without preventing the server from doing so.
 #
+# reloadable: yes
+#
 #login_via_token = true
 
 # Whether to enable login using traditional user/password authorization
@@ -887,6 +965,8 @@
 #
 # Set this option to false if you intend to allow logging in only using
 # other mechanisms, such as SSO.
+#
+# reloadable: yes
 #
 #login_with_password = true
 
@@ -896,6 +976,8 @@
 # This is used to allow existing sessions to create new sessions.
 # see login_via_existing_session.
 #
+# reloadable: yes
+#
 #login_token_ttl = 120000
 
 # Access token TTL in seconds.
@@ -904,17 +986,22 @@
 # login will be invalidated after this amount of time and the client will
 # be soft-logged-out until refreshing it.
 #
+# reloadable: yes
+#
 #access_token_ttl = 604800
 
 # Static TURN username to provide the client if not using a shared secret
 # ("turn_secret"), It is recommended to use a shared secret over static
 # credentials.
+# reloadable: yes
 #
 #turn_username = false
 
 # Static TURN password to provide the client if not using a shared secret
 # ("turn_secret"). It is recommended to use a shared secret over static
 # credentials.
+#
+# reloadable: yes
 #
 #turn_password = false
 
@@ -924,6 +1011,7 @@
 # "realm" config option. If using TURN over TLS, replace the URI prefix
 # "turn:" with "turns:".
 #
+# reloadable: yes
 # example: ["turn:example.turn.uri?transport=udp",
 # "turn:example.turn.uri?transport=tcp"]
 #
@@ -948,12 +1036,15 @@
 
 # TURN TTL, in seconds.
 #
+# reloadable: yes
+#
 #turn_ttl = 86400
 
 # List/vector of room IDs or room aliases that tuwunel will make newly
 # registered users join. The rooms specified must be rooms that you have
 # joined at least once on the server, and must be public.
 #
+# reloadable: yes
 # example: ["#tuwunel:grin.hu",
 # "!l2xV0sd51lraysuRcsWVECge4NULaH3g-ou95vgDgiM"]
 #
@@ -975,6 +1066,7 @@
 #
 # Defaults to false as rooms can be banned for non-moderation-related
 # reasons and this performs a full user deactivation.
+# reloadable: yes
 #
 #auto_deactivate_banned_room_attempts = false
 
@@ -1247,6 +1339,7 @@
 #emergency_password =
 
 # This item is undocumented. Please contribute documentation for it.
+# reloadable: yes
 #
 #notification_push_path = "/_matrix/push/v1/notify"
 
@@ -1260,6 +1353,7 @@
 #
 # Note that setting this option to true will not affect the record of
 # notifications found in the notifications pane.
+# reloadable: yes
 #
 #push_everything = false
 
@@ -1271,6 +1365,7 @@
 # This option is intended for custom software deployments seeking purely
 # to minimize unused resources; the overall savings are otherwise
 # negligible.
+# reloadable: yes
 #
 #calculate_heroes = true
 
@@ -1278,6 +1373,7 @@
 #
 # Note that presence on tuwunel is very fast unlike Synapse's. If using
 # outgoing presence, this MUST be enabled.
+# reloadable: yes
 #
 #allow_local_presence = true
 
@@ -1286,6 +1382,7 @@
 # This option receives presence updates from other servers, but does not
 # send any unless `allow_outgoing_presence` is true. Note that presence on
 # tuwunel is very fast unlike Synapse's.
+# reloadable: yes
 #
 #allow_incoming_presence = true
 
@@ -1295,6 +1392,7 @@
 # receive any unless `allow_incoming_presence` is true. Note that presence
 # on tuwunel is very fast unlike Synapse's. If using outgoing presence,
 # you MUST enable `allow_local_presence` as well.
+# reloadable: yes
 #
 #allow_outgoing_presence = true
 
@@ -1325,26 +1423,33 @@
 # on another client.
 #
 # Disabled by default to preserve legacy behavior.
+# reloadable: yes
 #
 #suppress_push_when_active = false
 
 # Allow receiving incoming read receipts from remote servers.
+# reloadable: yes
 #
 #allow_incoming_read_receipts = true
 
 # Allow sending read receipts to remote servers.
+# reloadable: yes
 #
 #allow_outgoing_read_receipts = true
 
 # Allow outgoing typing updates to federation.
+# reloadable: yes
 #
 #allow_outgoing_typing = true
 
 # Allow incoming typing updates from federation.
+# reloadable: yes
 #
 #allow_incoming_typing = true
 
 # Maximum time federation user can indicate typing.
+#
+# reloadable: yes
 #
 #typing_federation_timeout_s = 30
 
@@ -1352,9 +1457,13 @@
 # client's request to stop typing. It only enforces a minimum value in
 # case of no stop request.
 #
+# reloadable: yes
+#
 #typing_client_timeout_min_s = 15
 
 # Maximum time local client can indicate typing.
+#
+# reloadable: yes
 #
 #typing_client_timeout_max_s = 45
 
@@ -1390,16 +1499,19 @@
 
 # Set to true to allow user type "guest" registrations. Some clients like
 # Element attempt to register guest users automatically.
+# reloadable: yes
 #
 #allow_guest_registration = false
 
 # Set to true to log guest registrations in the admin room. Note that
 # these may be noisy or unnecessary if you're a public homeserver.
+# reloadable: yes
 #
 #log_guest_registrations = false
 
 # Set to true to allow guest registrations/users to auto join any rooms
 # specified in `auto_join_rooms`.
+# reloadable: yes
 #
 #allow_guests_auto_join_rooms = false
 
@@ -1420,10 +1532,12 @@
 # Fallback to requesting legacy unauthenticated media from remote servers.
 # Unauthenticated media was removed in ~2024Q3; enabling this adds
 # considerable federation requests which are unlikely to succeed.
+# reloadable: yes
 #
 #request_legacy_media = false
 
 # This item is undocumented. Please contribute documentation for it.
+# reloadable: yes
 #
 #freeze_legacy_media = true
 
@@ -1481,6 +1595,8 @@
 # deployments are advised to continue listing "media" as a fallback along
 # with their new provider.
 #
+# reloadable: yes
+#
 #media_storage_providers = ["media"]
 
 # List of configured storage providers where new media will be sent. When
@@ -1498,11 +1614,14 @@
 #
 # Entries in this list must also be listed in `media_storage_providers`.
 #
+# reloadable: yes
+#
 #store_media_on_providers = []
 
 # Vector list of regex patterns of server names that tuwunel will refuse
 # to download remote media from.
 #
+# reloadable: yes
 # example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 #
 #prevent_media_downloads_from = []
@@ -1517,6 +1636,7 @@
 #
 # Basically "global" ACLs.
 #
+# reloadable: yes
 # example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 #
 #forbidden_remote_server_names = []
@@ -1536,6 +1656,7 @@
 # this is applied. This allows you to match e.g. "*\.example\.com" here
 # while still singling out "bad\.example\.com" for exclusion.
 #
+# reloadable: yes
 # example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 #
 #allowed_remote_server_names_experimental = []
@@ -1544,6 +1665,7 @@
 # outgoing federated room directory requests for. Useful for preventing
 # our users from wandering into bad servers or spaces.
 #
+# reloadable: yes
 # example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 #
 #forbidden_remote_room_directory_server_names = []
@@ -1591,6 +1713,8 @@
 # attack surface to your server, you are expected to be aware of the risks
 # by doing so.
 #
+# reloadable: yes
+#
 #url_preview_domain_contains_allowlist = []
 
 # Vector list of explicit domains allowed to send requests to for URL
@@ -1603,6 +1727,8 @@
 # attack surface to your server, you are expected to be aware of the risks
 # by doing so.
 #
+# reloadable: yes
+#
 #url_preview_domain_explicit_allowlist = []
 
 # Vector list of explicit domains not allowed to send requests to for URL
@@ -1612,6 +1738,8 @@
 # will match "https://google.com", "http://google.com", but not
 # "https://mymaliciousdomainexamplegoogle.com". The denylist is checked
 # first before allowlist. Setting this to "*" will not do anything.
+#
+# reloadable: yes
 #
 #url_preview_domain_explicit_denylist = []
 
@@ -1625,10 +1753,14 @@
 # attack surface to your server, you are expected to be aware of the risks
 # by doing so.
 #
+# reloadable: yes
+#
 #url_preview_url_contains_allowlist = []
 
 # Maximum body size allowed when spidering a URL for previews. Accepts an
 # integer byte count or a string with SI/IEC suffix such as "256 KB".
+#
+# reloadable: yes
 #
 #url_preview_max_spider_size = 256000
 
@@ -1642,6 +1774,7 @@
 # root domain is checked and matched. Useful if the domain contains
 # allowlist is still too broad for you but you still want to allow all the
 # subdomains under a root domain.
+# reloadable: yes
 #
 #url_preview_check_root_domain = false
 
@@ -1655,6 +1788,7 @@
 # used, and startup as warnings if any room aliases in your database have
 # a forbidden room alias/ID.
 #
+# reloadable: yes
 # example: ["19dollarfortnitecards", "b[4a]droom", "badphrase"]
 #
 #forbidden_alias_names = []
@@ -1668,6 +1802,7 @@
 # startup as warnings if any local users in your database have a forbidden
 # username.
 #
+# reloadable: yes
 # example: ["administrator", "b[a4]dusernam[3e]", "badphrase"]
 #
 #forbidden_usernames = []
@@ -1680,11 +1815,15 @@
 # Useful for preventing failed joins due to timeouts
 # from a certain homeserver.
 #
+# reloadable: yes
+#
 #deprioritize_joins_through_servers = ["matrix\.org"]
 
 # Maximum make_join requests to attempt within each join attempt. Each
 # attempt tries a different server, as each server is only tried once;
 # though retries can occur when the join request as a whole is retried.
+#
+# reloadable: yes
 #
 #max_make_join_attempts_per_join_attempt = 48
 
@@ -1695,6 +1834,8 @@
 # client, which can be frustrating for users. Therefor the default value
 # is greater than one, but less than excessively exceeding the client's
 # request timeout, though that may not be avoidable in some cases.
+#
+# reloadable: yes
 #
 #max_join_attempts_per_join_request = 3
 
@@ -1720,6 +1861,7 @@
 # remote), and block non-admin users from receiving remote room invites.
 #
 # Admins are always allowed to send and receive all room invites.
+# reloadable: yes
 #
 #block_non_admin_invites = false
 
@@ -1728,6 +1870,7 @@
 # a normal tuwunel admin command. The reply will be publicly visible to
 # the room, originating from the sender.
 #
+# reloadable: yes
 # example: \\!admin debug ping puppygock.gay
 #
 #admin_escape_commands = true
@@ -1754,6 +1897,7 @@
 #
 # If false, tuwunel will error and fail to start if an admin execute
 # command (`--execute` / `admin_execute`) fails.
+# reloadable: yes
 #
 #admin_execute_errors_ignore = false
 
@@ -1762,11 +1906,15 @@
 # Similar to admin_execute, but these commands are executed when the
 # server receives SIGUSR2 on supporting platforms.
 #
+# reloadable: yes
+#
 #admin_signal_execute = []
 
 # Controls the max log level for admin command log captures (logs
 # generated from running admin commands). Defaults to "info" on release
 # builds, else "debug" on debug builds.
+#
+# reloadable: yes
 #
 #admin_log_capture = "info"
 
@@ -1777,12 +1925,16 @@
 # admin room can be pinned here so you always have an easy-to-access
 # shortcut dedicated to your admin room.
 #
+# reloadable: yes
+#
 #admin_room_tag = "m.server_notice"
 
 # Whether to grant the first user to register admin privileges by joining
 # them to the admin room. Note that technically the next user to register
 # when the admin room is empty (or only contains the server-user) is
 # granted, and only when the admin room is enabled.
+#
+# reloadable: yes
 #
 #grant_admin_to_first_user = true
 
@@ -1870,6 +2022,7 @@
 # changes, account deactivations, room directory publications, etc will be
 # sent to the admin room. Update notices and normal admin command
 # responses will still be sent.
+# reloadable: yes
 #
 #admin_room_notices = true
 
@@ -1877,11 +2030,15 @@
 #
 # They can be retrieved with `admin debug get-retained-pdu` or MSC2815.
 #
+# reloadable: yes
+#
 #save_unredacted_events = true
 
 # Redaction retention period in seconds.
 #
 # By default the unredacted events are stored for 60 days.
+#
+# reloadable: yes
 #
 #redaction_retention_seconds = 5184000
 
@@ -1891,11 +2048,14 @@
 # Server admins can request unredacted events regardless of the value of
 # this option.
 #
+# reloadable: yes
+#
 #allow_room_admins_to_request_unredacted_events = true
 
 # Prevents local users from sending redactions.
 #
 # This check does not apply to server admins.
+# reloadable: yes
 #
 #disable_local_redactions = false
 
@@ -1998,6 +2158,8 @@
 # Enables configuration reload when the server receives SIGUSR1 on
 # supporting platforms.
 #
+# reloadable: yes
+#
 #config_reload_signal = true
 
 # Sets the `Access-Control-Allow-Origin` header included by this server in
@@ -2025,6 +2187,7 @@
 #
 # This option exists for developer and debug use, and as a failsafe in
 # lieu of hardcoding it.
+# reloadable: yes
 #
 #hydra_backports = true
 
@@ -2037,6 +2200,8 @@
 # currently invoke this operation, so in some cases you may find the room
 # still exists.
 #
+# reloadable: yes
+#
 #delete_rooms_after_leave = false
 
 # Limits the number of One Time Keys per device (not per-algorithm). The
@@ -2044,6 +2209,8 @@
 # our default is at least five times that. There is no known reason for an
 # administrator to adjust this value; it is provided here rather than
 # hardcoding it.
+#
+# reloadable: yes
 #
 #one_time_key_limit = 256
 
@@ -2062,6 +2229,7 @@
 # Note that fluffychat always displays a single button anyway. You do not
 # need to enable this to use fluffychat; instead we offer a
 # default-provider option, see `default` in the provider config section.
+# reloadable: yes
 #
 #single_sso = false
 
@@ -2075,6 +2243,7 @@
 #
 # This option defaults to false, allowing the client to generate the list
 # of providers or hide all SSO-related options when none configured.
+# reloadable: yes
 #
 #sso_custom_providers_page = false
 
@@ -2082,6 +2251,7 @@
 # > If the client finds oauth_aware_preferred to be true then, assuming it
 # > supports that auth type, it should present this as the only
 # > login/registration method available to the user.
+# reloadable: yes
 #
 #oidc_aware_preferred = false
 
@@ -2128,6 +2298,7 @@
 #
 # Setting this to true can help performance on very large homeservers,
 # but it may not be spec compliant and risky for client expectations.
+# reloadable: yes
 #
 #device_key_update_encrypted_rooms_only = false
 
@@ -2166,6 +2337,7 @@
 # well-known file will serve. This should contain a port at the end, and
 # should not be a URL.
 #
+# reloadable: yes
 # example: "matrix.example.com:443"
 #
 #server =
@@ -2173,18 +2345,21 @@
 # The URL of the support web page. This and the below generate the content
 # of `/.well-known/matrix/support`.
 #
+# reloadable: yes
 # example: "https://example.com/support"
 #
 #support_page =
 
 # The name of the support role.
 #
+# reloadable: yes
 # example: "m.role.admin"
 #
 #support_role =
 
 # The email address for the above support role.
 #
+# reloadable: yes
 # example: "admin@example.com"
 #
 #support_email =
@@ -2192,6 +2367,7 @@
 # The Matrix User ID for the above support role.
 #
 # example "@admin:example.com"
+# reloadable: yes
 #
 #support_mxid =
 
@@ -2199,6 +2375,8 @@
 # Required for Element Call / MatrixRTC (MSC4143).
 #
 # Note: You must also set `client` above to your homeserver URL.
+#
+# reloadable: yes
 #
 #livekit_url = ""
 
@@ -2223,6 +2401,8 @@
 # livekit_service_url = "https://livekit.yourdomain.com"
 # ```
 #
+# reloadable: yes
+#
 #rtc_transports = []
 
 
@@ -2231,9 +2411,13 @@
 
 # blurhashing x component, 4 is recommended by https://blurha.sh/
 #
+# reloadable: yes
+#
 #components_x = 4
 
 # blurhashing y component, 3 is recommended by https://blurha.sh/
+#
+# reloadable: yes
 #
 #components_y = 3
 
@@ -2244,6 +2428,8 @@
 # integer byte count or a string with SI/IEC suffix such as "32 MiB".
 # Setting it to 0 disables blurhashing.
 #
+# reloadable: yes
+#
 #blurhash_max_raw_size = 33554432
 
 
@@ -2252,18 +2438,21 @@
 
 # Whether to enable LDAP login.
 #
+# reloadable: yes
 # example: "true"
 #
 #enable = false
 
 # URI of the LDAP server.
 #
+# reloadable: yes
 # example: "ldap://ldap.example.com:389"
 #
 #uri =
 
 # Root of the searches.
 #
+# reloadable: yes
 # example: "ou=users,dc=example,dc=org"
 #
 #base_dn =
@@ -2276,6 +2465,7 @@
 # `bind_password_file`. Beware: automatically granting admin rights will
 # not work if you use this direct bind instead of a LDAP search.
 #
+# reloadable: yes
 # example: "cn=ldap-reader,dc=example,dc=org" or
 # "cn={username},ou=users,dc=example,dc=org"
 #
@@ -2286,6 +2476,8 @@
 #
 # The server must be able to access the file, and it must not be empty.
 #
+# reloadable: yes
+#
 #bind_password_file = ""
 
 # Search filter to limit user searches.
@@ -2293,18 +2485,21 @@
 # You can use the variable `{username}` that will be replaced by the
 # entered username for more complex filters.
 #
+# reloadable: yes
 # example: "(&(objectClass=person)(memberOf=matrix))"
 #
 #filter = "(objectClass=*)"
 
 # Attribute to use to uniquely identify the user.
 #
+# reloadable: yes
 # example: "uid" or "cn"
 #
 #uid_attribute = "uid"
 
 # Attribute containing the distinguished name of the user.
 #
+# reloadable: yes
 # example: "givenName" or "sn"
 #
 #name_attribute = "givenName"
@@ -2313,6 +2508,7 @@
 #
 # Defaults to `base_dn` if empty.
 #
+# reloadable: yes
 # example: "ou=admins,dc=example,dc=org"
 #
 #admin_base_dn =
@@ -2325,6 +2521,7 @@
 # You can use the variable `{username}` that will be replaced by the
 # entered username for more complex filters.
 #
+# reloadable: yes
 # example: "(objectClass=tuwunelAdmin)" or "(uid={username})"
 #
 #admin_filter =
@@ -2335,11 +2532,15 @@
 
 # Enable JWT logins
 #
+# reloadable: yes
+#
 #enable = false
 
 # Validation key, also called 'secret' in Synapse config. The type of key
 # can be configured in 'format', but defaults to the common HMAC which
 # is a plaintext shared-secret, so you should keep this value private.
+#
+# reloadable: yes
 #
 #key =
 
@@ -2351,34 +2552,48 @@
 # - ECDSA is a PEM-encoded public-key.
 # - EDDSA is a PEM-encoded Ed25519 public-key.
 #
+# reloadable: yes
+#
 #format = "HMAC"
 
 # Automatically create new user from a valid claim, otherwise access is
 # denied for an unknown even with an authentic token.
 #
+# reloadable: yes
+#
 #register_user = true
 
 # JWT algorithm
+#
+# reloadable: yes
 #
 #algorithm = "HS256"
 
 # Optional audience claim list. The token must claim one or more values
 # from this list when set.
 #
+# reloadable: yes
+#
 #audience = []
 
 # Optional issuer claim list. The token must claim one or more values
 # from this list when set.
+#
+# reloadable: yes
 #
 #issuer = []
 
 # Require expiration claim in the token. This defaults to false for
 # synapse migration compatibility.
 #
+# reloadable: yes
+#
 #require_exp = false
 
 # Require not-before claim in the token. This defaults to false for
 # synapse migration compatibility.
+#
+# reloadable: yes
 #
 #require_nbf = false
 
@@ -2386,15 +2601,21 @@
 # required depends on require_exp, but when present this ensures the token
 # is not used after a time.
 #
+# reloadable: yes
+#
 #validate_exp = true
 
 # Validate not-before time of the token when present. Whether or not it is
 # required depends on require_nbf, but when present this ensures the token
 # is not used before a time.
 #
+# reloadable: yes
+#
 #validate_nbf = true
 
 # Bypass validation for diagnostic/debug use only.
+#
+# reloadable: yes
 #
 #validate_signature = true
 

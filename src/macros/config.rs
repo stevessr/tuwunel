@@ -101,6 +101,17 @@ fn generate_example(input: &ItemStruct, args: &[Meta], emit: bool) -> Result<Tok
 				.trim_end()
 				.to_owned();
 
+			// A `reloadable:` directive alone does not satisfy the documentation
+			// request; prepend the undocumented placeholder when prose is absent.
+			let doc = if doc.lines().all(|line| {
+				let body = line.trim_start_matches('#').trim();
+				body.is_empty() || body.starts_with("reloadable:")
+			}) {
+				format!("{undocumented}\n{doc}")
+			} else {
+				doc
+			};
+
 			let doc = if doc.ends_with('#') {
 				format!("{doc}\n")
 			} else {
