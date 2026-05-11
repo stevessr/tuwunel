@@ -1,5 +1,5 @@
 use axum::extract::State;
-use futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt};
+use futures::{FutureExt, TryFutureExt, TryStreamExt};
 use ruma::{
 	OwnedEventId, OwnedRoomAliasId, RoomId, UserId,
 	api::client::state::{
@@ -22,7 +22,7 @@ use serde_json::json;
 use tuwunel_core::{
 	Err, Result, err, is_false,
 	matrix::{Event, pdu::PduBuilder},
-	utils::{BoolExt, IterStream, stream::WidebandExt},
+	utils::{BoolExt, stream::TryBroadbandExt},
 };
 use tuwunel_service::Services;
 
@@ -97,14 +97,12 @@ pub(crate) async fn get_state_events_route(
 		.state_accessor
 		.room_state_full_pdus(&body.room_id)
 		.map_ok(Event::into_pdu)
-		.try_collect::<Vec<_>>()
-		.await?
-		.into_iter()
-		.stream()
-		.wide_then(|pdu| with_membership(&services, pdu, sender_user, encrypted))
-		.map(Event::into_format)
-		.collect()
-		.await;
+		.broad_and_then(async |pdu| {
+			Ok(with_membership(&services, pdu, sender_user, encrypted).await)
+		})
+		.map_ok(Event::into_format)
+		.try_collect()
+		.await?;
 
 	Ok(get_state_events::v3::Response { room_state })
 }

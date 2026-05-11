@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
-use ruma::{MilliSecondsSinceUnixEpoch, events::room::member::MembershipState};
+use ruma::{MilliSecondsSinceUnixEpoch, events::room::member::MembershipState, serde::Raw};
+use serde::Serialize;
 use serde_json::value::{RawValue as RawJsonValue, Value as JsonValue, to_raw_value};
 
 use super::Pdu;
@@ -14,7 +15,7 @@ pub fn remove_transaction_id(&mut self) -> Result {
 		return Ok(());
 	};
 
-	let mut unsigned: Map<&str, Box<RawJsonValue>> = serde_json::from_str(unsigned.get())
+	let mut unsigned: Map<&str, Raw<JsonValue>> = serde_json::from_str(unsigned.get())
 		.map_err(|e| err!(Database("Invalid unsigned in pdu event: {e}")))?;
 
 	unsigned.remove("transaction_id");
@@ -29,7 +30,7 @@ pub fn remove_transaction_id(&mut self) -> Result {
 pub fn add_age(&mut self) -> Result {
 	use BTreeMap as Map;
 
-	let mut unsigned: Map<&str, Box<RawJsonValue>> = self
+	let mut unsigned: Map<&str, Raw<JsonValue>> = self
 		.unsigned
 		.as_deref()
 		.map(RawJsonValue::get)
@@ -41,7 +42,7 @@ pub fn add_age(&mut self) -> Result {
 	let then: i128 = self.origin_server_ts.into();
 	let this_age = now.saturating_sub(then);
 
-	unsigned.insert("age", to_raw_value(&this_age)?);
+	unsigned.insert("age", raw_of(&this_age)?);
 	self.unsigned = Some(to_raw_value(&unsigned)?);
 
 	Ok(())
@@ -53,14 +54,14 @@ pub fn add_age(&mut self) -> Result {
 pub fn add_membership(&mut self, membership: &MembershipState) -> Result {
 	use BTreeMap as Map;
 
-	let mut unsigned: Map<&str, Box<RawJsonValue>> = self
+	let mut unsigned: Map<&str, Raw<JsonValue>> = self
 		.unsigned
 		.as_deref()
 		.map(RawJsonValue::get)
 		.map_or_else(|| Ok(Map::new()), serde_json::from_str)
 		.map_err(|e| err!(Database("Invalid unsigned in pdu event: {e}")))?;
 
-	unsigned.insert("membership", to_raw_value(membership)?);
+	unsigned.insert("membership", raw_of(membership)?);
 	self.unsigned = Some(to_raw_value(&unsigned)?);
 
 	Ok(())
@@ -91,4 +92,9 @@ pub fn add_relation(&mut self, name: &str, pdu: Option<&Pdu>) -> Result {
 	self.unsigned = Some(to_raw_value(&unsigned)?);
 
 	Ok(())
+}
+
+#[inline]
+fn raw_of<T: Serialize>(value: &T) -> Result<Raw<JsonValue>> {
+	Ok(Raw::from_raw_value(&to_raw_value(value)?))
 }
