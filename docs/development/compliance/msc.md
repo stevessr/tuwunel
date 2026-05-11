@@ -18,16 +18,16 @@
 
 ## Counts
 
-- ✅ `yes`: 209
+- ✅ `yes`: 210
 - 🟨 `partial`: 59
-- ❌ `no`: 450
+- ❌ `no`: 449
 - ⬛ `n/a`: 292
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 149 | 30 | 13 | 64 | 256 |
+| merged | 150 | 30 | 12 | 64 | 256 |
 | open | 52 | 28 | 400 | 176 | 656 |
 | closed | 8 | 1 | 37 | 52 | 98 |
 
@@ -136,7 +136,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3375 | ✅ ● | 100/100 | Room Version 9 | room v9 stable; redaction keeps join_authorised_via_users_server |
 | MSC3316 | ✅ ● | 100/100 | Proposal to add timestamp massaging to the spec | appservice ts honored on /send and /state |
 | MSC3289 | ✅ ● | 100/100 | Room Version 8 | room v8 listed stable; restricted join rule auth implemented |
-| MSC3283 | ❌ ◐ | 20/30 | Expose enable_set_displayname, enable_set_avatar_url and enable_3pid_changes ... | only m.3pid_changes capability set; set_displayname/set_avatar_url absent |
+| MSC3283 | ✅ ● | 100/100 | Expose enable_set_displayname, enable_set_avatar_url and enable_3pid_changes ... | src/api/client/capabilities.rs explicitly emits m.set_displayname, m.set_avat... |
 | MSC3267 | 🟨 ◐ | 50/50 | reference relationships | reference relations queryable via /relations; no m.relations bundling |
 | MSC3266 | ✅ ● | 100/100 | Room Summary API | summary endpoint routed at unstable and (via Ruma) stable paths |
 | MSC3231 | ✅ ● | 100/100 | Token Authenticated Registration | registration token UIA + validity endpoint implemented |
@@ -269,7 +269,6 @@ for spec compliance.
 | MSC3381 | 🟨 ◐ | 0/? | Chat Polls | complement: 0p/2f |
 | MSC3930 | 🟨 ◐ | 0/? | Polls push rules/notifications | complement: 0p/2f |
 | MSC4311 | 🟨 ◐ | 0/? | Ensuring the create event is available on invites | complement: 0p/1f |
-| MSC3283 | ❌ ◐ | 20/30 | Expose enable_set_displayname, enable_set_avatar_url and enable_3pid_changes ... | only m.3pid_changes capability set; set_displayname/set_avatar_url absent |
 | MSC3860 | ❌ ◐ | 20/20 | Media Download Redirects | forwards allow_redirect to remote fetch but does not emit own redirect |
 | MSC1759 | ❌ ◐ | 10/20 | MSC 1759 - Rooms V2 | v2 algorithm in use for v3+; v2 itself not in supported_room_versions |
 | MSC3816 | ❌ ◐ | 10/10 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |

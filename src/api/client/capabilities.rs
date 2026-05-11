@@ -1,6 +1,10 @@
 use std::collections::BTreeMap;
 
 use axum::extract::State;
+#[allow(deprecated)]
+use ruma::api::client::discovery::get_capabilities::v3::{
+	SetAvatarUrlCapability, SetDisplayNameCapability,
+};
 use ruma::{
 	RoomVersionId,
 	api::client::discovery::{
@@ -21,6 +25,7 @@ use crate::Ruma;
 ///
 /// Get information on the supported feature set and other relevant capabilities
 /// of this server.
+#[allow(deprecated)]
 pub(crate) async fn get_capabilities_route(
 	State(services): State<crate::State>,
 	body: Ruma<get_capabilities::v3::Request>,
@@ -39,6 +44,10 @@ pub(crate) async fn get_capabilities_route(
 			.default_room_version
 			.clone(),
 	};
+
+	// MSC3283: deprecated displayname/avatar capabilities for pre-1.16 clients.
+	capabilities.set_displayname = SetDisplayNameCapability::new(true);
+	capabilities.set_avatar_url = SetAvatarUrlCapability::new(true);
 
 	// we do not implement 3PID stuff
 	capabilities.thirdparty_id_changes = ThirdPartyIdChangesCapability { enabled: false };
