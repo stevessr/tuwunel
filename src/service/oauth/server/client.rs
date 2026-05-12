@@ -1,10 +1,14 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD as b64};
 use serde::{Deserialize, Serialize};
 use tuwunel_core::{
-	Result, err, implement,
+	Err, Result, err, implement,
 	utils::{hash::sha256, time::now_secs},
 };
 use tuwunel_database::{Cbor, Deserialized};
+
+// Bounds the per-row footprint so an unauthenticated DCR endpoint cannot
+// evict every other client from the FIFO cache with one huge record.
+const MAX_REGISTRATION_BYTES: usize = 4096;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DcrRequest {
@@ -46,7 +50,15 @@ pub struct ClientRegistration {
 #[implement(super::Server)]
 pub async fn register_client(&self, request: DcrRequest) -> Result<ClientRegistration> {
 	let request = normalize(request);
-	let client_id = derive_client_id(&request);
+	let serialized = serde_json::to_vec(&request).expect("DcrRequest is always serializable");
+
+	if serialized.len() > MAX_REGISTRATION_BYTES {
+		return Err!(Request(TooLarge(
+			"Client registration exceeds {MAX_REGISTRATION_BYTES} byte limit"
+		)));
+	}
+
+	let client_id = b64.encode(sha256::hash(&serialized));
 
 	if let Ok(existing) = self.get_client(&client_id).await {
 		return Ok(existing);
@@ -113,10 +125,4 @@ fn normalize(mut request: DcrRequest) -> DcrRequest {
 		.for_each(|v| v.sort());
 
 	request
-}
-
-fn derive_client_id(request: &DcrRequest) -> String {
-	let json = serde_json::to_vec(request).expect("DcrRequest is always serializable");
-
-	b64.encode(sha256::hash(json))
 }
