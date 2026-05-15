@@ -195,6 +195,19 @@ pub fn check(config: &Config) -> Result {
 		));
 	}
 
+	if !config.turn_uris.is_empty()
+		&& config.turn_secret.is_none()
+		&& config.turn_secret_file.is_none()
+		&& config.turn_username.is_empty()
+		&& config.turn_password.is_empty()
+	{
+		warn!(
+			"turn_uris is configured but no credential source is set; the endpoint \
+			 /_matrix/client/v3/voip/turnServer will return empty username and password. Set \
+			 turn_secret, turn_secret_file, or both turn_username and turn_password."
+		);
+	}
+
 	if config.max_request_size < 10_000_000 {
 		return Err!(Config(
 			"max_request_size",
