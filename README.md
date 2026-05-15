@@ -42,6 +42,7 @@ Switzerland 🇨🇭 where it is currently deployed for citizens.
 - Arch package available as [tuwunel](https://aur.archlinux.org/packages/tuwunel).
 - Nix package available as [`matrix-tuwunel`](https://search.nixos.org/packages?query=matrix-tuwunel) and NixOS module available as [`services.matrix-tuwunel`](https://search.nixos.org/options?query=services.matrix-tuwunel).
 - Alpine package available as [tuwunel](https://pkgs.alpinelinux.org/package/edge/testing/x86_64/tuwunel).
+- Gentoo ebuild available in Guru as [net-im/tuwunel](https://gitweb.gentoo.org/repo/proj/guru.git/tree/net-im/tuwunel).
 - Ansible playbook available as [matrix-docker-ansible-deploy](https://github.com/spantaleev/matrix-docker-ansible-deploy/blob/master/docs/configuring-playbook-tuwunel.md).
 
 **1.** [Configure](https://matrix-construct.github.io/tuwunel/configuration.html) by
