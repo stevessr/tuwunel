@@ -316,7 +316,7 @@ http:
         matrixrtcjwt:
             entryPoints:
                 - "websecure"
-            rule: "Host(`matrix-rtc.yourdomain.com`) && PathPrefix(`/sfu/get`) || PathPrefix(`/healthz`)"
+            rule: "Host(`matrix-rtc.yourdomain.com`) && (PathPrefix(`/sfu/get`) || PathPrefix(`/healthz`) || PathPrefix(`/get_token`))"
             tls:
                 certResolver: "yourcertresolver" # change to your cert resolver's name
             service: matrixrtcjwt
