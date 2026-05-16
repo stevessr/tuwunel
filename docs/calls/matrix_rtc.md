@@ -288,7 +288,7 @@ services:
     labels:
         - "traefik.enable=true"
         - "traefik.http.routers.matrixrtcjwt.entrypoints=websecure"
-        - "traefik.http.routers.matrixrtcjwt.rule=Host(`matrix-rtc.yourdomain.com`) && PathPrefix(`/sfu/get`) || PathPrefix(`/healthz`)"
+        - "traefik.http.routers.matrixrtcjwt.rule=Host(`matrix-rtc.yourdomain.com`) && (PathPrefix(`/sfu/get`) || PathPrefix(`/healthz`) || PathPrefix(`/get_token`))"
         - "traefik.http.routers.matrixrtcjwt.tls=true"
         - "traefik.http.routers.matrixrtcjwt.service=matrixrtcjwt"
         - "traefik.http.services.matrixrtcjwt.loadbalancer.server.port=8081"
