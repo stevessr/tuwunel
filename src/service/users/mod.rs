@@ -22,7 +22,10 @@ use tuwunel_core::{
 	Err, Result, debug_warn, err, is_equal_to,
 	pdu::PduBuilder,
 	trace,
-	utils::{self, ReadyExt, stream::TryIgnore},
+	utils::{
+		self, ReadyExt,
+		stream::{TryIgnore, automatic_width},
+	},
 	warn,
 };
 use tuwunel_database::{Deserialized, Json, Map};
@@ -519,17 +522,27 @@ impl Service {
 		Err!(FeatureDisabled("ldap"))
 	}
 
-	async fn update_all_rooms(&self, user_id: &UserId, rooms: Vec<(PduBuilder, &OwnedRoomId)>) {
-		for (pdu_builder, room_id) in rooms {
-			let state_lock = self.services.state.mutex.lock(room_id).await;
-			if let Err(e) = self
-				.services
-				.timeline
-				.build_and_append_pdu(pdu_builder, user_id, room_id, &state_lock)
-				.await
-			{
-				warn!(%user_id, %room_id, "Failed to update/send new profile join membership update in room: {e}");
-			}
-		}
+	async fn update_all_rooms<'a, S>(&self, user_id: &UserId, rooms: S)
+	where
+		S: Stream<Item = (PduBuilder, &'a OwnedRoomId)> + Send,
+	{
+		rooms
+			.for_each_concurrent(automatic_width(), async |(pdu_builder, room_id)| {
+				let state_lock = self.services.state.mutex.lock(room_id).await;
+				if let Err(e) = self
+					.services
+					.timeline
+					.build_and_append_pdu(pdu_builder, user_id, room_id, &state_lock)
+					.await
+				{
+					warn!(
+						%user_id,
+						%room_id,
+						%e,
+						"Failed to update/send new profile join membership update in room",
+					);
+				}
+			})
+			.await;
 	}
 }

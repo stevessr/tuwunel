@@ -41,7 +41,7 @@ pub async fn update_displayname(
 	let avatar_url = &current_avatar_url;
 	let blurhash = &current_blurhash;
 	let displayname = &displayname;
-	let rooms: Vec<_> = rooms
+	let rooms = rooms
 		.iter()
 		.try_stream()
 		.and_then(async |room_id: &OwnedRoomId| {
@@ -58,9 +58,7 @@ pub async fn update_displayname(
 
 			Ok((pdu, room_id))
 		})
-		.ignore_err()
-		.collect()
-		.await;
+		.ignore_err();
 
 	self.update_all_rooms(user_id, rooms)
 		.boxed()
@@ -117,7 +115,7 @@ pub async fn update_avatar_url(
 		.set_blurhash(user_id, blurhash);
 
 	// Send a new join membership event into rooms
-	let rooms: Vec<_> = rooms
+	let rooms = rooms
 		.iter()
 		.try_stream()
 		.and_then(async |room_id: &OwnedRoomId| {
@@ -134,9 +132,7 @@ pub async fn update_avatar_url(
 
 			Ok((pdu, room_id))
 		})
-		.ignore_err()
-		.collect()
-		.await;
+		.ignore_err();
 
 	self.update_all_rooms(user_id, rooms)
 		.boxed()
