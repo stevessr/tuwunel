@@ -11,7 +11,14 @@ use http::{
 use ruma::OwnedDeviceId;
 use serde::Deserialize;
 use serde_json::json;
-use tuwunel_core::{Error, Result, err, info, utils::time::now};
+use tuwunel_core::{
+	Err, Error, Result, err, info,
+	utils::{
+		BoolExt,
+		future::OptionFutureExt,
+		time::{now, timepoint_has_passed},
+	},
+};
 use tuwunel_service::{
 	Services,
 	oauth::server::{IdTokenClaims, Server, extract_device_id},
@@ -166,11 +173,29 @@ async fn token_refresh(services: &Services, body: &TokenRequest) -> Result<Respo
 		.as_deref()
 		.ok_or_else(|| err!(Request(InvalidParam("refresh_token is required"))))?;
 
-	let (user_id, device_id, _) = services
+	let (user_id, device_id, expires_at) = services
 		.users
 		.find_from_token(refresh_token)
 		.await
 		.map_err(|_| err!(Request(Forbidden("Invalid refresh token"))))?;
+
+	if expires_at.is_some_and(timepoint_has_passed) {
+		services
+			.server
+			.config
+			.refresh_token_hard_logout
+			.then_async(|| services.users.remove_device(&user_id, &device_id))
+			.unwrap_or_else_async(async || {
+				services
+					.users
+					.remove_refresh_token(&user_id, &device_id)
+					.await
+					.ok();
+			})
+			.await;
+
+		return Err!(Request(Forbidden("Refresh token has expired")));
+	}
 
 	let (new_access_token, expires_in) = services.users.generate_access_token(true);
 	let new_refresh_token = generate_refresh_token();

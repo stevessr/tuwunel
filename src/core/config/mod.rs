@@ -1176,6 +1176,53 @@ pub struct Config {
 	#[serde(default = "default_access_token_ttl")]
 	pub access_token_ttl: u64,
 
+	/// Refresh token TTL in seconds.
+	///
+	/// Refresh tokens are rejected once this lifetime elapses. Whether the
+	/// deadline slides forward on each use or stays fixed at issuance is
+	/// controlled by `refresh_token_idle_only`. The default of `0` disables
+	/// refresh-token expiry entirely; a typical enabled value is `259200`
+	/// (three days).
+	///
+	/// reloadable: yes
+	/// default: 0
+	#[serde(default)]
+	pub refresh_token_ttl: u64,
+
+	/// Whether `refresh_token_ttl` acts as an idle timeout or an absolute
+	/// session lifetime.
+	///
+	/// When `true` (default), each successful refresh resets the deadline to
+	/// `now + refresh_token_ttl`. A session in continuous use never expires.
+	/// When `false`, the deadline is fixed at first issuance and rotation
+	/// carries it forward, forcing re-auth after `refresh_token_ttl`
+	/// regardless of activity.
+	///
+	/// reloadable: yes
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub refresh_token_idle_only: bool,
+
+	/// Whether refresh-token expiry triggers a hard logout instead of a soft
+	/// one.
+	///
+	/// When `false` (default), an expired refresh token is rejected with
+	/// `M_UNKNOWN_TOKEN` carrying `soft_logout: true`. The client can preserve
+	/// E2EE keys and local state, then re-authenticate to resume the same
+	/// device.
+	///
+	/// When `true`, the device is removed entirely on expiry: the access
+	/// token is invalidated, the device record is deleted, and the client is
+	/// signalled with `soft_logout: false`. The next session is a brand-new
+	/// device, so the client cannot recover E2EE history from local state
+	/// alone; this is the CWE-613 stance and trades usability for that
+	/// guarantee.
+	///
+	/// reloadable: yes
+	/// default: false
+	#[serde(default)]
+	pub refresh_token_hard_logout: bool,
+
 	/// Static TURN username to provide the client if not using a shared secret
 	/// ("turn_secret"), It is recommended to use a shared secret over static
 	/// credentials.

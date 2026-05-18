@@ -13,7 +13,7 @@ use serde_json::json;
 use tuwunel_core::{
 	Err, Result, at, implement,
 	utils::{
-		self, ReadyExt,
+		self, BoolExt, ReadyExt,
 		stream::{IterStream, TryIgnore},
 		string::to_small_string,
 		time::{
@@ -265,20 +265,74 @@ pub async fn set_refresh_token(
 ) -> Result {
 	debug_assert!(refresh_token.starts_with("refresh_"), "refresh_token missing prefix");
 
+	let config = &self.services.server.config;
+	let ttl = config.refresh_token_ttl;
+	let idle_only = config.refresh_token_idle_only;
+
+	// Absolute mode carries the prior deadline forward instead of sliding it.
+	let prior_expires_at: Option<SystemTime> = (ttl != 0 && !idle_only)
+		.then_async(|| self.find_refresh_token_expires_at(user_id, device_id))
+		.await
+		.flatten();
+
 	// Remove old token
 	self.remove_refresh_token(user_id, device_id)
 		.await
 		.ok();
 
+	let expires_at = match (ttl, prior_expires_at) {
+		| (0, _) => None,
+		| (_, Some(prior)) => Some(prior),
+		| (ttl, None) => Some(timepoint_from_now(Duration::from_secs(ttl))?),
+	};
+
+	let expires_at_secs = expires_at
+		.map(duration_since_epoch)
+		.as_ref()
+		.map(Duration::as_secs);
+
 	let userdeviceid = (user_id, device_id);
+	let value = (user_id, device_id, expires_at_secs);
 	self.db
 		.token_userdeviceid
-		.raw_put(refresh_token, userdeviceid);
+		.raw_put(refresh_token, value);
 	self.db
 		.userdeviceid_refresh
 		.put_raw(userdeviceid, refresh_token);
 
 	Ok(())
+}
+
+/// Look up the expiry stored alongside the current refresh token for this
+/// device, if one is recorded. Pre-rotation entries carry no expiry and
+/// return `None`.
+#[implement(super::Service)]
+async fn find_refresh_token_expires_at(
+	&self,
+	user_id: &UserId,
+	device_id: &DeviceId,
+) -> Option<SystemTime> {
+	let userdeviceid = (user_id, device_id);
+	let old_token: String = self
+		.db
+		.userdeviceid_refresh
+		.qry(&userdeviceid)
+		.await
+		.deserialized()
+		.ok()?;
+
+	let (_, _, expires_at_secs): (Ignore, Ignore, Option<u64>) = self
+		.db
+		.token_userdeviceid
+		.get(&old_token)
+		.await
+		.deserialized()
+		.ok()?;
+
+	expires_at_secs
+		.map(Duration::from_secs)
+		.map(timepoint_from_epoch)?
+		.ok()
 }
 
 /// Revoke the refresh token without deleting the device. Take care to not leave
