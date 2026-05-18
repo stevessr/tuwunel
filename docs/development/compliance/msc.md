@@ -18,9 +18,9 @@
 
 ## Counts
 
-- ✅ `yes`: 210
+- ✅ `yes`: 211
 - 🟨 `partial`: 59
-- ❌ `no`: 449
+- ❌ `no`: 448
 - ⬛ `n/a`: 292
 
 ### Status by inventory bucket
@@ -28,7 +28,7 @@
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
 | merged | 150 | 30 | 12 | 64 | 256 |
-| open | 52 | 28 | 400 | 176 | 656 |
+| open | 53 | 28 | 399 | 176 | 656 |
 | closed | 8 | 1 | 37 | 52 | 98 |
 
 ## Merged
@@ -294,7 +294,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4458 | ✅ ◐ | 80/80 | Handling incoming JSON in the server-server API | Incoming PDUs deserialized via serde_json into CanonicalJsonObject |
 | MSC4457 | ❌ ● | 0/0 | Generic reporting API | No /_matrix/client/v1/safety/report endpoint |
 | MSC4453 | ❌ ● | 0/0 | Deprecate old room versions | v3-v5 marked unstable; v6-v9 still stable; create/upgrade not gated |
-| MSC4452 | ❌ ● | 0/0 | Preview URL capabilities API | No m.preview_url or io.element.msc4452.preview_url capability |
+| MSC4452 | ✅ ● | 100/100 | Preview URL capabilities API | src/api/client/capabilities.rs:85; enabled from preview allowlist gate |
 | MSC4450 | ❌ ● | 0/0 | Identity Provider selection for User-Interactive Authentication with Legacy S... | UIAA SSO fallback derives idp from session, not idp_id query |
 | MSC4449 | ❌ ● | 0/0 | Updated /members filtering | Single membership filter only; no array support, no mutual-exclusion error |
 | MSC4448 | ❌ ● | 0/0 | Preview URL Site Logos | No matrix:site_logo or msc4448:site_logo in preview_url response |

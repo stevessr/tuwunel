@@ -67,6 +67,23 @@ pub(crate) async fn get_capabilities_route(
 		json!({"enabled": services.config.forget_forced_upon_leave}),
 	)?;
 
+	// MSC4452: enabled mirrors the per-URL gate; empty allowlists 403 every URL.
+	let preview_url_enabled = !services
+		.config
+		.url_preview_domain_contains_allowlist
+		.is_empty()
+		|| !services
+			.config
+			.url_preview_domain_explicit_allowlist
+			.is_empty()
+		|| !services
+			.config
+			.url_preview_url_contains_allowlist
+			.is_empty();
+
+	capabilities
+		.set("io.element.msc4452.preview_url", json!({"enabled": preview_url_enabled}))?;
+
 	// MSC4323: advertise admin moderation only to admins; absence implies
 	// neither suspend nor lock is available to the caller.
 	if services
