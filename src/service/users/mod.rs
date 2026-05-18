@@ -30,7 +30,11 @@ use tuwunel_core::{
 };
 use tuwunel_database::{Deserialized, Json, Map};
 
-pub use self::{keys::parse_master_key, register::Register};
+pub use self::{
+	keys::parse_master_key,
+	profile::{Propagation, propagation_default},
+	register::Register,
+};
 
 pub const PASSWORD_SENTINEL: &str = "*";
 pub const PASSWORD_DISABLED: &str = "";

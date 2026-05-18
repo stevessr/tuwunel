@@ -13,6 +13,7 @@ use ruma::{
 	profile::{ProfileFieldName, ProfileFieldValue},
 };
 use tuwunel_core::{Err, Result, err};
+use tuwunel_service::users::propagation_default;
 
 use super::profile::{profile_mxc, profile_str};
 use crate::{ClientIp, Ruma};
@@ -83,6 +84,13 @@ pub(crate) async fn set_profile_field_route(
 		return Err!(Request(BadJson("Key names cannot be longer than 128 bytes")));
 	}
 
+	let propagation = propagation_default(
+		services
+			.server
+			.config
+			.preserve_room_profile_overrides,
+	);
+
 	match &body.value {
 		| ProfileFieldValue::DisplayName(displayname) => {
 			let all_joined_rooms: Vec<OwnedRoomId> = services
@@ -94,7 +102,12 @@ pub(crate) async fn set_profile_field_route(
 
 			services
 				.users
-				.update_displayname(&body.user_id, Some(displayname), &all_joined_rooms)
+				.update_displayname(
+					&body.user_id,
+					Some(displayname),
+					&all_joined_rooms,
+					propagation,
+				)
 				.await;
 		},
 		| ProfileFieldValue::AvatarUrl(avatar_url) => {
@@ -107,7 +120,13 @@ pub(crate) async fn set_profile_field_route(
 
 			services
 				.users
-				.update_avatar_url(&body.user_id, Some(avatar_url), None, &all_joined_rooms)
+				.update_avatar_url(
+					&body.user_id,
+					Some(avatar_url),
+					None,
+					&all_joined_rooms,
+					propagation,
+				)
 				.await;
 		},
 		| _ => {
@@ -157,6 +176,13 @@ pub(crate) async fn delete_profile_field_route(
 		return Err!(Request(UserSuspended("Account is suspended.")));
 	}
 
+	let propagation = propagation_default(
+		services
+			.server
+			.config
+			.preserve_room_profile_overrides,
+	);
+
 	match body.field {
 		| ProfileFieldName::DisplayName => {
 			let all_joined_rooms: Vec<OwnedRoomId> = services
@@ -168,7 +194,7 @@ pub(crate) async fn delete_profile_field_route(
 
 			services
 				.users
-				.update_displayname(&body.user_id, None, &all_joined_rooms)
+				.update_displayname(&body.user_id, None, &all_joined_rooms, propagation)
 				.await;
 		},
 		| ProfileFieldName::AvatarUrl => {
@@ -181,7 +207,7 @@ pub(crate) async fn delete_profile_field_route(
 
 			services
 				.users
-				.update_avatar_url(&body.user_id, None, None, &all_joined_rooms)
+				.update_avatar_url(&body.user_id, None, None, &all_joined_rooms, propagation)
 				.await;
 		},
 		| _ => {

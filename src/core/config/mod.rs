@@ -760,6 +760,24 @@ pub struct Config {
 	#[serde(default)]
 	pub require_auth_for_profile_requests: bool,
 
+	/// Preserve per-room profile overrides during a global profile update.
+	///
+	/// When `true` (default), a profile change (displayname or avatar_url)
+	/// arriving via the profile endpoints skips rooms whose current
+	/// `m.room.member` already differs from the user's prior global
+	/// profile. This is the natural behavior users expect after setting a
+	/// per-room nickname or avatar with a client's `/myroomnick`-style
+	/// command: a subsequent global change does not clobber the override.
+	///
+	/// Set to `false` to always rewrite every joined room's member event
+	/// to match the new global profile. That matches the literal spec
+	/// reading.
+	///
+	/// reloadable: yes
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub preserve_room_profile_overrides: bool,
+
 	/// Set this to true to allow your server's public room directory to be
 	/// federated. Set this to false to protect against /publicRooms spiders,
 	/// but will forbid external users from viewing your server's public room

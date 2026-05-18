@@ -38,7 +38,7 @@ use tuwunel_service::{
 	oauth::{
 		CODE_VERIFIER_LENGTH, Provider, SESSION_ID_LENGTH, Session, UserInfo, unique_id_sub,
 	},
-	users::{PASSWORD_SENTINEL, Register},
+	users::{PASSWORD_SENTINEL, Register, propagation_default},
 };
 use url::Url;
 
@@ -647,7 +647,18 @@ async fn set_avatar(
 	let mxc_uri: OwnedMxcUri = mxc.to_string().into();
 	services
 		.users
-		.update_avatar_url(user_id, Some(&mxc_uri), None, &all_joined_rooms)
+		.update_avatar_url(
+			user_id,
+			Some(&mxc_uri),
+			None,
+			&all_joined_rooms,
+			propagation_default(
+				services
+					.server
+					.config
+					.preserve_room_profile_overrides,
+			),
+		)
 		.await;
 
 	Ok(())

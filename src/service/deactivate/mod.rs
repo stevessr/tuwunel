@@ -7,6 +7,8 @@ use ruma::{
 };
 use tuwunel_core::{Event, Result, info, pdu::PduBuilder, utils::ReadyExt, warn};
 
+use crate::users::Propagation;
+
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
 }
@@ -46,11 +48,11 @@ impl Service {
 
 		self.services
 			.users
-			.update_displayname(user_id, None, &all_joined_rooms)
+			.update_displayname(user_id, None, &all_joined_rooms, Propagation::All)
 			.await;
 		self.services
 			.users
-			.update_avatar_url(user_id, None, None, &all_joined_rooms)
+			.update_avatar_url(user_id, None, None, &all_joined_rooms, Propagation::All)
 			.await;
 
 		self.services

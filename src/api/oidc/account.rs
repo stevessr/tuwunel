@@ -19,7 +19,7 @@ use tuwunel_core::{
 	Err, Error, Result, err,
 	utils::{BoolExt, html::escape as html_escape},
 };
-use tuwunel_service::Services;
+use tuwunel_service::{Services, users::propagation_default};
 use url::Url;
 
 use self::{
@@ -223,7 +223,17 @@ async fn handle_account_callback(
 
 			services
 				.users
-				.update_displayname(&user_id, displayname, &all_joined_rooms)
+				.update_displayname(
+					&user_id,
+					displayname,
+					&all_joined_rooms,
+					propagation_default(
+						services
+							.server
+							.config
+							.preserve_room_profile_overrides,
+					),
+				)
 				.await;
 
 			profile_saved_html(&user_id, displayname).await

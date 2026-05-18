@@ -17,6 +17,7 @@ use ruma::{
 };
 use serde_json::Value as JsonValue;
 use tuwunel_core::{Err, Result, utils::future::TryExtExt};
+use tuwunel_service::users::propagation_default;
 
 use crate::{ClientIp, Ruma};
 
@@ -58,7 +59,17 @@ pub(crate) async fn set_displayname_route(
 
 	services
 		.users
-		.update_displayname(&body.user_id, body.displayname.as_deref(), &all_joined_rooms)
+		.update_displayname(
+			&body.user_id,
+			body.displayname.as_deref(),
+			&all_joined_rooms,
+			propagation_default(
+				services
+					.server
+					.config
+					.preserve_room_profile_overrides,
+			),
+		)
 		.await;
 
 	// Presence update
@@ -164,6 +175,12 @@ pub(crate) async fn set_avatar_url_route(
 			body.avatar_url.as_deref(),
 			body.blurhash.as_deref(),
 			&all_joined_rooms,
+			propagation_default(
+				services
+					.server
+					.config
+					.preserve_room_profile_overrides,
+			),
 		)
 		.await;
 

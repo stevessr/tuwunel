@@ -1,6 +1,6 @@
 use futures::{FutureExt, Stream, StreamExt, TryFutureExt, TryStreamExt, future::join3};
 use ruma::{
-	MxcUri, OwnedMxcUri, OwnedRoomId, UserId,
+	MxcUri, OwnedMxcUri, OwnedRoomId, RoomId, UserId,
 	events::room::member::{MembershipState, RoomMemberEventContent},
 	profile::ProfileFieldValue,
 	serde::Raw,
@@ -15,12 +15,39 @@ use tuwunel_core::{
 };
 use tuwunel_database::{Deserialized, Ignore, Interfix, Json};
 
+/// Per-update policy for fanning a global profile change out to each of
+/// the user's joined rooms as a fresh `m.room.member` event.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum Propagation {
+	/// Send a member event to every joined room.
+	All,
+
+	/// Send a member event only to rooms whose current per-room value
+	/// matches the user's prior global value; rooms with a per-room
+	/// override (e.g. set via `/myroomnick`) are skipped.
+	Unchanged,
+}
+
+/// Server-default propagation derived from the
+/// `preserve_room_profile_overrides` config: `Unchanged` when overrides
+/// should be preserved, `All` for legacy clobber-every-room behavior.
+#[inline]
+#[must_use]
+pub fn propagation_default(preserve_room_profile_overrides: bool) -> Propagation {
+	if preserve_room_profile_overrides {
+		Propagation::Unchanged
+	} else {
+		Propagation::All
+	}
+}
+
 #[implement(super::Service)]
 pub async fn update_displayname(
 	&self,
 	user_id: &UserId,
 	displayname: Option<&str>,
 	rooms: &[OwnedRoomId],
+	propagation: Propagation,
 ) {
 	let (current_avatar_url, current_blurhash, current_displayname) = join3(
 		self.services.users.avatar_url(user_id).ok(),
@@ -37,27 +64,32 @@ pub async fn update_displayname(
 		.users
 		.set_displayname(user_id, displayname);
 
-	// Send a new join membership event into rooms
-	let avatar_url = &current_avatar_url;
-	let blurhash = &current_blurhash;
-	let displayname = &displayname;
+	let make_pdu = || {
+		PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
+			displayname: displayname.map(ToOwned::to_owned),
+			membership: MembershipState::Join,
+			avatar_url: current_avatar_url.clone(),
+			blurhash: current_blurhash.clone(),
+			join_authorized_via_users_server: None,
+			reason: None,
+			is_direct: None,
+			third_party_invite: None,
+		})
+	};
+
+	let keep = async |room_id: &RoomId| match propagation {
+		| Propagation::All => true,
+		| Propagation::Unchanged =>
+			self.member_displayname(room_id, user_id)
+				.await
+				.as_deref() == current_displayname.as_deref(),
+	};
+
 	let rooms = rooms
 		.iter()
 		.try_stream()
-		.and_then(async |room_id: &OwnedRoomId| {
-			let pdu = PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-				displayname: displayname.map(ToOwned::to_owned),
-				membership: MembershipState::Join,
-				avatar_url: avatar_url.clone(),
-				blurhash: blurhash.clone(),
-				join_authorized_via_users_server: None,
-				reason: None,
-				is_direct: None,
-				third_party_invite: None,
-			});
-
-			Ok((pdu, room_id))
-		})
+		.try_filter(|room_id: &&OwnedRoomId| keep(room_id))
+		.and_then(async |room_id: &OwnedRoomId| Ok((make_pdu(), room_id)))
 		.ignore_err();
 
 	self.update_all_rooms(user_id, rooms)
@@ -95,6 +127,7 @@ pub async fn update_avatar_url(
 	avatar_url: Option<&MxcUri>,
 	blurhash: Option<&str>,
 	rooms: &[OwnedRoomId],
+	propagation: Propagation,
 ) {
 	let (current_avatar_url, current_blurhash, current_displayname) = join3(
 		self.services.users.avatar_url(user_id).ok(),
@@ -114,24 +147,32 @@ pub async fn update_avatar_url(
 		.users
 		.set_blurhash(user_id, blurhash);
 
-	// Send a new join membership event into rooms
+	let make_pdu = || {
+		PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
+			avatar_url: avatar_url.map(ToOwned::to_owned),
+			blurhash: blurhash.map(ToOwned::to_owned),
+			membership: MembershipState::Join,
+			displayname: current_displayname.clone(),
+			join_authorized_via_users_server: None,
+			reason: None,
+			is_direct: None,
+			third_party_invite: None,
+		})
+	};
+
+	let keep = async |room_id: &RoomId| match propagation {
+		| Propagation::All => true,
+		| Propagation::Unchanged =>
+			self.member_avatar_url(room_id, user_id)
+				.await
+				.as_deref() == current_avatar_url.as_deref(),
+	};
+
 	let rooms = rooms
 		.iter()
 		.try_stream()
-		.and_then(async |room_id: &OwnedRoomId| {
-			let pdu = PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
-				avatar_url: avatar_url.map(ToOwned::to_owned),
-				blurhash: blurhash.map(ToOwned::to_owned),
-				membership: MembershipState::Join,
-				displayname: current_displayname.clone(),
-				join_authorized_via_users_server: None,
-				reason: None,
-				is_direct: None,
-				third_party_invite: None,
-			});
-
-			Ok((pdu, room_id))
-		})
+		.try_filter(|room_id: &&OwnedRoomId| keep(room_id))
+		.and_then(async |room_id: &OwnedRoomId| Ok((make_pdu(), room_id)))
 		.ignore_err();
 
 	self.update_all_rooms(user_id, rooms)
@@ -258,4 +299,28 @@ pub async fn profile_key(
 		.qry(&key)
 		.await
 		.deserialized()
+}
+
+/// Current per-room displayname for the user, or `None` if the room has
+/// no member event for them.
+#[implement(super::Service)]
+async fn member_displayname(&self, room_id: &RoomId, user_id: &UserId) -> Option<String> {
+	self.services
+		.state_accessor
+		.get_member(room_id, user_id)
+		.await
+		.ok()
+		.and_then(|m: RoomMemberEventContent| m.displayname)
+}
+
+/// Current per-room avatar_url for the user, or `None` if the room has
+/// no member event for them.
+#[implement(super::Service)]
+async fn member_avatar_url(&self, room_id: &RoomId, user_id: &UserId) -> Option<OwnedMxcUri> {
+	self.services
+		.state_accessor
+		.get_member(room_id, user_id)
+		.await
+		.ok()
+		.and_then(|m: RoomMemberEventContent| m.avatar_url)
 }
