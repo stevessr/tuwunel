@@ -9,7 +9,8 @@ use ruma::{
 	MxcUri, OwnedRoomId,
 	api::{
 		client::profile::{
-			get_avatar_url, get_display_name, get_profile, set_avatar_url, set_display_name,
+			PropagateTo, get_avatar_url, get_display_name, get_profile, set_avatar_url,
+			set_display_name,
 		},
 		federation::query::get_profile_information,
 	},
@@ -17,7 +18,7 @@ use ruma::{
 };
 use serde_json::Value as JsonValue;
 use tuwunel_core::{Err, Result, utils::future::TryExtExt};
-use tuwunel_service::users::propagation_default;
+use tuwunel_service::users::{Propagation, propagation_default};
 
 use crate::{ClientIp, Ruma};
 
@@ -32,6 +33,22 @@ pub(super) fn profile_str<'a>(resp: &'a ProfileResponse, field: &str) -> Option<
 
 pub(super) fn profile_mxc<'a>(resp: &'a ProfileResponse, field: &str) -> Option<&'a MxcUri> {
 	profile_str(resp, field).map(<&MxcUri>::from)
+}
+
+/// Resolve a `PropagateTo` request value against the server default.
+///
+/// MSC4466's `_Custom` variant is treated as the server default so
+/// unknown values do not silently change behavior.
+pub(super) fn resolve_propagation(
+	propagate_to: &PropagateTo,
+	server_default: Propagation,
+) -> Propagation {
+	match propagate_to {
+		| PropagateTo::All => Propagation::All,
+		| PropagateTo::Unchanged => Propagation::Unchanged,
+		| PropagateTo::None => Propagation::None,
+		| _ => server_default,
+	}
 }
 
 /// # `PUT /_matrix/client/r0/profile/{userId}/displayname`
@@ -57,18 +74,23 @@ pub(crate) async fn set_displayname_route(
 		.collect()
 		.await;
 
+	let propagation = resolve_propagation(
+		&body.propagate_to,
+		propagation_default(
+			services
+				.server
+				.config
+				.preserve_room_profile_overrides,
+		),
+	);
+
 	services
 		.users
 		.update_displayname(
 			&body.user_id,
 			body.displayname.as_deref(),
 			&all_joined_rooms,
-			propagation_default(
-				services
-					.server
-					.config
-					.preserve_room_profile_overrides,
-			),
+			propagation,
 		)
 		.await;
 
@@ -168,6 +190,16 @@ pub(crate) async fn set_avatar_url_route(
 		.collect()
 		.await;
 
+	let propagation = resolve_propagation(
+		&body.propagate_to,
+		propagation_default(
+			services
+				.server
+				.config
+				.preserve_room_profile_overrides,
+		),
+	);
+
 	services
 		.users
 		.update_avatar_url(
@@ -175,12 +207,7 @@ pub(crate) async fn set_avatar_url_route(
 			body.avatar_url.as_deref(),
 			body.blurhash.as_deref(),
 			&all_joined_rooms,
-			propagation_default(
-				services
-					.server
-					.config
-					.preserve_room_profile_overrides,
-			),
+			propagation,
 		)
 		.await;
 

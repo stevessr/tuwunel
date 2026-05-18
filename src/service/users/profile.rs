@@ -16,7 +16,8 @@ use tuwunel_core::{
 use tuwunel_database::{Deserialized, Ignore, Interfix, Json};
 
 /// Per-update policy for fanning a global profile change out to each of
-/// the user's joined rooms as a fresh `m.room.member` event.
+/// the user's joined rooms as a fresh `m.room.member` event. Mirrors the
+/// MSC4466 `propagate_to` axis.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Propagation {
 	/// Send a member event to every joined room.
@@ -26,11 +27,14 @@ pub enum Propagation {
 	/// matches the user's prior global value; rooms with a per-room
 	/// override (e.g. set via `/myroomnick`) are skipped.
 	Unchanged,
+
+	/// Send no member events; update the global profile only.
+	None,
 }
 
-/// Server-default propagation derived from the
-/// `preserve_room_profile_overrides` config: `Unchanged` when overrides
-/// should be preserved, `All` for legacy clobber-every-room behavior.
+/// Server-default propagation when a request does not carry an explicit
+/// MSC4466 `propagate_to`. `Unchanged` when overrides should be
+/// preserved, `All` for legacy clobber-every-room behavior.
 #[inline]
 #[must_use]
 pub fn propagation_default(preserve_room_profile_overrides: bool) -> Propagation {
@@ -64,6 +68,10 @@ pub async fn update_displayname(
 		.users
 		.set_displayname(user_id, displayname);
 
+	if matches!(propagation, Propagation::None) {
+		return;
+	}
+
 	let make_pdu = || {
 		PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
 			displayname: displayname.map(ToOwned::to_owned),
@@ -79,6 +87,7 @@ pub async fn update_displayname(
 
 	let keep = async |room_id: &RoomId| match propagation {
 		| Propagation::All => true,
+		| Propagation::None => false,
 		| Propagation::Unchanged =>
 			self.member_displayname(room_id, user_id)
 				.await
@@ -147,6 +156,10 @@ pub async fn update_avatar_url(
 		.users
 		.set_blurhash(user_id, blurhash);
 
+	if matches!(propagation, Propagation::None) {
+		return;
+	}
+
 	let make_pdu = || {
 		PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
 			avatar_url: avatar_url.map(ToOwned::to_owned),
@@ -162,6 +175,7 @@ pub async fn update_avatar_url(
 
 	let keep = async |room_id: &RoomId| match propagation {
 		| Propagation::All => true,
+		| Propagation::None => false,
 		| Propagation::Unchanged =>
 			self.member_avatar_url(room_id, user_id)
 				.await

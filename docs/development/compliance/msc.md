@@ -18,7 +18,7 @@
 
 ## Counts
 
-- ✅ `yes`: 211
+- ✅ `yes`: 212
 - 🟨 `partial`: 59
 - ❌ `no`: 448
 - ⬛ `n/a`: 292
@@ -28,7 +28,7 @@
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
 | merged | 150 | 30 | 12 | 64 | 256 |
-| open | 53 | 28 | 399 | 176 | 656 |
+| open | 54 | 28 | 399 | 176 | 657 |
 | closed | 8 | 1 | 37 | 52 | 98 |
 
 ## Merged
@@ -289,6 +289,7 @@ in the [Out of scope](#out-of-scope) section.
 
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
+| MSC4466 | ✅ ● | 100/100 | Altering profile change propagation | propagate_to query param honored on set/delete_displayname, set/delete_avatar... |
 | MSC4460 | ❌ ● | 0/0 | Extensible Events - Alternative unstable support | Client-side hybrid extensible-events rendering rules; no Tuwunel dispatch. |
 | MSC4459 | ❌ ● | 0/0 | Image pack references | Client-side image pack reference field; homeserver passes events through tran... |
 | MSC4458 | ✅ ◐ | 80/80 | Handling incoming JSON in the server-server API | Incoming PDUs deserialized via serde_json into CanonicalJsonObject |

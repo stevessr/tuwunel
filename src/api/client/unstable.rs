@@ -15,7 +15,7 @@ use ruma::{
 use tuwunel_core::{Err, Result, err};
 use tuwunel_service::users::propagation_default;
 
-use super::profile::{profile_mxc, profile_str};
+use super::profile::{profile_mxc, profile_str, resolve_propagation};
 use crate::{ClientIp, Ruma};
 
 /// # `GET /_matrix/client/unstable/uk.half-shot.msc2666/user/mutual_rooms`
@@ -84,11 +84,14 @@ pub(crate) async fn set_profile_field_route(
 		return Err!(Request(BadJson("Key names cannot be longer than 128 bytes")));
 	}
 
-	let propagation = propagation_default(
-		services
-			.server
-			.config
-			.preserve_room_profile_overrides,
+	let propagation = resolve_propagation(
+		&body.propagate_to,
+		propagation_default(
+			services
+				.server
+				.config
+				.preserve_room_profile_overrides,
+		),
 	);
 
 	match &body.value {
@@ -176,11 +179,14 @@ pub(crate) async fn delete_profile_field_route(
 		return Err!(Request(UserSuspended("Account is suspended.")));
 	}
 
-	let propagation = propagation_default(
-		services
-			.server
-			.config
-			.preserve_room_profile_overrides,
+	let propagation = resolve_propagation(
+		&body.propagate_to,
+		propagation_default(
+			services
+				.server
+				.config
+				.preserve_room_profile_overrides,
+		),
 	);
 
 	match body.field {

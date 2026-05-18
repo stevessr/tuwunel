@@ -773,6 +773,11 @@ pub struct Config {
 	/// to match the new global profile. That matches the literal spec
 	/// reading.
 	///
+	/// MSC4466 lets clients pick this per request via the
+	/// `org.matrix.msc4466.propagate_to` query parameter
+	/// (`all` / `unchanged` / `none`); an explicit value overrides this
+	/// default in either direction.
+	///
 	/// reloadable: yes
 	/// default: true
 	#[serde(default = "true_fn")]
