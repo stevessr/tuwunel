@@ -57,7 +57,10 @@ impl crate::Service for Service {
 		}))
 	}
 
-	async fn clear_cache(&self) { self.db.authchainkey_authchain.clear().await; }
+	async fn clear_cache(&self) {
+		self.db.authchainkey_authchain.clear().await;
+		self.db.shorteventid_authchain.clear().await;
+	}
 
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }
@@ -335,12 +338,6 @@ where
 	self.db
 		.authchainkey_authchain
 		.put(key.as_slice(), auth_chain);
-
-	if key.len() == 1 {
-		self.db
-			.shorteventid_authchain
-			.put(key, auth_chain);
-	}
 }
 
 #[implement(Service)]
@@ -363,7 +360,7 @@ where
 		return Ok(Vec::new());
 	}
 
-	// Check cache. On miss, check first-order table for single-event keys.
+	// On miss, fall back to the single-event legacy table for older entries.
 	let chain = self
 		.db
 		.authchainkey_authchain
