@@ -39,6 +39,7 @@ pub(super) static MAPS: &[Descriptor] = &[
 		name: "authchainkey_authchain",
 		cache_disp: CacheDisp::SharedWith("shorteventid_authchain"),
 		compression: CompressionType::None,
+		cache_shards: 32,
 		index_size: 1024,
 		block_size: 4096,
 		key_size_hint: Some(8), // intentionally match shorteventid_authchain
