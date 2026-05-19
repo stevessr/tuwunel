@@ -18,9 +18,9 @@
 
 ## Counts
 
-- ✅ `yes`: 212
+- ✅ `yes`: 216
 - 🟨 `partial`: 59
-- ❌ `no`: 448
+- ❌ `no`: 457
 - ⬛ `n/a`: 292
 
 ### Status by inventory bucket
@@ -28,8 +28,8 @@
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
 | merged | 150 | 30 | 12 | 64 | 256 |
-| open | 54 | 28 | 399 | 176 | 657 |
-| closed | 8 | 1 | 37 | 52 | 98 |
+| open | 58 | 28 | 406 | 176 | 668 |
+| closed | 8 | 1 | 39 | 52 | 100 |
 
 ## Merged
 
@@ -289,7 +289,18 @@ in the [Out of scope](#out-of-scope) section.
 
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
+| MSC4474 | ✅ ○ | 100/100 | Clarify usage of content blocks in Extensible Events | Spec clarification for MSC1767; HS does opaque content passthrough. |
+| MSC4473 | ❌ ● | 0/0 | Proxied room alias resolution | No federation v2 query/directory; no signing/proxy logic. |
+| MSC4472 | ❌ ● | 0/0 | Deprecated room version kind | No `deprecated` stability kind in room_versions capability. |
+| MSC4471 | ✅ ● | 100/100 | Streaming ephemeral event updates for room events | MSC explicitly requires no HS work; to-device transport suffices. |
+| MSC4470 | ❌ ● | 0/0 | Routing reports to non-local destinations | `/report` does not accept `must_send_to`; no fan-out. |
+| MSC4469 | ❌ ● | 0/0 | Reporting to remote servers (EDU approach) | `m.report` EDU not defined or routed. |
+| MSC4468 | ✅ ◐ | 90/90 | Reporting to communities (via to-device) | Pure state-event plus to-device passthrough; no HS-specific work. |
+| MSC4467 | ❌ ● | 0/0 | Improved Room Upgrade API | v3 upgrade only; no v4 endpoint, capability, or migration_schema. |
 | MSC4466 | ✅ ● | 100/100 | Altering profile change propagation | propagate_to query param honored on set/delete_displayname, set/delete_avatar... |
+| MSC4464 | ❌ ● | 0/0 | verifiable links in profile | No `/verify_profile_connection` endpoint or verification backend. |
+| MSC4462 | ❌ ◐ | 10/10 | Links in Profile | Incidental MSC4133 passthrough; no m.connections parsing. |
+| MSC4461 | ✅ ◐ | 100/100 | Storing per-message profiles for users | Pure account data passthrough; generic CS account-data covers it. |
 | MSC4460 | ❌ ● | 0/0 | Extensible Events - Alternative unstable support | Client-side hybrid extensible-events rendering rules; no Tuwunel dispatch. |
 | MSC4459 | ❌ ● | 0/0 | Image pack references | Client-side image pack reference field; homeserver passes events through tran... |
 | MSC4458 | ✅ ◐ | 80/80 | Handling incoming JSON in the server-server API | Incoming PDUs deserialized via serde_json into CanonicalJsonObject |
@@ -778,6 +789,8 @@ in the [Out of scope](#out-of-scope) section.
 
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
+| MSC4465 | ❌ ● | 0/0 | On-Demand Fetch for Missing Events | GET /event/{eventId} returns M_NOT_FOUND; no federation fallback. |
+| MSC4463 | ❌ ◐ | 0/0 | Backfilling Pinned Events | No pinned-events backfill on join or on pinned_events update. |
 | MSC4317 | ❌ ● | 0/0 | Signed profile data | signed profile data; no `m.signed` profile field handling |
 | MSC4316 | ❌ ● | 0/0 | External cross-signing signatures with X.509 certificates and (semi-)automate... | X.509 cross-signing; no `external` signature support |
 | MSC4294 | ❌ ● | 0/0 | Ignore and mass ignore invites | no ignored_inviters list, no auto invite cleanup |
