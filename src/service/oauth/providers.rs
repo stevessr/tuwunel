@@ -147,18 +147,11 @@ async fn configure(&self, mut provider: Provider) -> Result<Provider> {
 		_ = provider
 			.issuer_url
 			.replace(match provider.brand.as_str() {
-				| "github" => "https://github.com".try_into()?,
+				| "github" => "https://github.com/login/oauth".try_into()?,
 				| "gitlab" => "https://gitlab.com".try_into()?,
 				| "google" => "https://accounts.google.com".try_into()?,
 				| _ => return Err!(Config("issuer_url", "Required for this provider.")),
 			});
-	}
-
-	if provider.base_path.is_none() {
-		provider.base_path = match provider.brand.as_str() {
-			| "github" => Some("login/oauth/".to_owned()),
-			| _ => None,
-		};
 	}
 
 	let response = self

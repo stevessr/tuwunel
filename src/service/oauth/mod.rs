@@ -315,10 +315,7 @@ pub fn unique_id_iss_sub((iss, sub): (&str, &str)) -> Result<String> {
 fn unique_id_parts<'a>(
 	(provider, session): (&'a Provider, &'a Session),
 ) -> Result<(&'a str, &'a str)> {
-	provider
-		.issuer_url
-		.as_ref()
-		.map(Url::as_str)
+	identity_issuer(provider)
 		.ok_or_else(|| err!(Config("issuer_url", "issuer_url not found for this provider.")))
 		.and_then(|iss| unique_id_iss_parts((iss, session)))
 }
@@ -326,12 +323,19 @@ fn unique_id_parts<'a>(
 fn unique_id_sub_parts<'a>(
 	(provider, sub): (&'a Provider, &'a str),
 ) -> Result<(&'a str, &'a str)> {
-	provider
-		.issuer_url
-		.as_ref()
-		.map(Url::as_str)
+	identity_issuer(provider)
 		.ok_or_else(|| err!(Config("issuer_url", "issuer_url not found for this provider.")))
 		.map(|iss| (iss, sub))
+}
+
+/// Issuer string used as input to the identity hash. Pinned per-brand for
+/// providers whose published issuer has changed under us, so existing account
+/// associations survive the change.
+fn identity_issuer(provider: &Provider) -> Option<&str> {
+	match provider.brand.as_str() {
+		| "github" => Some("https://github.com"),
+		| _ => provider.issuer_url.as_ref().map(Url::as_str),
+	}
 }
 
 fn unique_id_iss_parts<'a>((iss, session): (&'a str, &'a Session)) -> Result<(&'a str, &'a str)> {
