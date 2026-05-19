@@ -13,14 +13,35 @@ use tuwunel_core::{
 
 use crate::{or_else, pool::Pool};
 
+/// Name under which the shared block cache (every CF with
+/// `CacheDisp::Shared`) is registered in [`Context::col_cache`].
+pub(crate) const SHARED_POOL: &str = "Shared";
+
+/// One block-cache pool, plus the column families participating in it.
+///
+/// Pools may be shared by multiple CFs (`SHARED_POOL`, symmetric
+/// `CacheDisp::SharedWith` pairs); the participant list lets the admin
+/// surface name them.
+pub(crate) struct ColCache {
+	pub(crate) cache: Cache,
+	pub(crate) participants: Vec<&'static str>,
+}
+
+/// Map of block-cache pools keyed by pool name. The pool name is either
+/// `SHARED_POOL` or the first-arrival CF that created it.
+pub(crate) type ColCaches = BTreeMap<&'static str, ColCache>;
+
 /// Some components are constructed prior to opening the database and must
 /// outlive the database. These can also be shared between database instances
 /// though at the time of this comment we only open one database per process.
 /// These assets are housed in the shared Context.
 pub(crate) struct Context {
 	pub(crate) pool: Arc<Pool>,
-	pub(crate) col_cache: Mutex<BTreeMap<String, Cache>>,
+	pub(crate) col_cache: Mutex<ColCaches>,
 	pub(crate) row_cache: Mutex<Cache>,
+	/// Retained because rust-rocksdb's `Cache` binding lacks `get_capacity`;
+	/// needed for the admin renderer's row-cache util%.
+	pub(crate) row_cache_capacity: usize,
 	pub(crate) env: Mutex<Env>,
 	pub(crate) server: Arc<Server>,
 }
@@ -45,7 +66,11 @@ impl Context {
 		col_cache_opts.set_num_shard_bits(col_shard_bits);
 		col_cache_opts.set_capacity(col_cache_capacity_bytes);
 		let col_cache = Cache::new_lru_cache_opts(&col_cache_opts);
-		let col_cache: BTreeMap<_, _> = [("Shared".to_owned(), col_cache)].into();
+		let shared = ColCache {
+			cache: col_cache,
+			participants: Vec::new(),
+		};
+		let col_cache: ColCaches = [(SHARED_POOL, shared)].into();
 
 		let mut env = Env::new().or_else(or_else)?;
 
@@ -61,6 +86,7 @@ impl Context {
 			pool: Pool::new(server)?,
 			col_cache: col_cache.into(),
 			row_cache: row_cache.into(),
+			row_cache_capacity: row_cache_capacity_bytes,
 			env: env.into(),
 			server: server.clone(),
 		}))

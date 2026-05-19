@@ -9,6 +9,8 @@ mod logger;
 mod memory_usage;
 mod open;
 mod repair;
+#[cfg(test)]
+mod tests;
 
 use std::{
 	ffi::CStr,

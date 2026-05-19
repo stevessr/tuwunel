@@ -5,7 +5,10 @@ use rocksdb::{
 };
 use tuwunel_core::{Config, Result, err, utils::math::Expected};
 
-use super::descriptor::{CacheDisp, Descriptor};
+use super::{
+	context::{ColCache, ColCaches, SHARED_POOL},
+	descriptor::{CacheDisp, Descriptor},
+};
 use crate::{Context, util::map_err};
 
 pub(super) const SENTINEL_COMPRESSION_LEVEL: i32 = 32767;
@@ -236,33 +239,52 @@ fn get_cache(ctx: &Context, desc: &Descriptor) -> Option<Cache> {
 	cache_opts.set_capacity(size);
 
 	let mut caches = ctx.col_cache.lock().expect("locked");
+	register_pool(&mut caches, desc, || Cache::new_lru_cache_opts(&cache_opts))
+}
+
+/// Returns the cache for `desc`'s pool; `build_cache` is invoked only when a
+/// new pool must be created.
+pub(crate) fn register_pool(
+	caches: &mut ColCaches,
+	desc: &Descriptor,
+	build_cache: impl FnOnce() -> Cache,
+) -> Option<Cache> {
 	match desc.cache_disp {
 		| CacheDisp::Unique if desc.cache_size == 0 => None,
 		| CacheDisp::Unique => {
-			let cache = Cache::new_lru_cache_opts(&cache_opts);
-			caches.insert(desc.name.into(), cache.clone());
+			let cache = build_cache();
+			caches.insert(desc.name, ColCache {
+				cache: cache.clone(),
+				participants: vec![desc.name],
+			});
+
 			Some(cache)
 		},
 
-		| CacheDisp::SharedWith(other) if !caches.contains_key(other) => {
-			let cache = Cache::new_lru_cache_opts(&cache_opts);
-			caches.insert(desc.name.into(), cache.clone());
-			Some(cache)
+		| CacheDisp::SharedWith(other) => Some(match caches.get_mut(other) {
+			| Some(pool) => {
+				pool.participants.push(desc.name);
+				pool.cache.clone()
+			},
+			| None => {
+				let new = build_cache();
+				caches.insert(desc.name, ColCache {
+					cache: new.clone(),
+					participants: vec![desc.name],
+				});
+
+				new
+			},
+		}),
+
+		| CacheDisp::Shared => {
+			let pool = caches
+				.get_mut(SHARED_POOL)
+				.expect("shared cache must already exist");
+
+			pool.participants.push(desc.name);
+			Some(pool.cache.clone())
 		},
-
-		| CacheDisp::SharedWith(other) => Some(
-			caches
-				.get(other)
-				.cloned()
-				.expect("caches.contains_key(other) must be true"),
-		),
-
-		| CacheDisp::Shared => Some(
-			caches
-				.get("Shared")
-				.cloned()
-				.expect("shared cache must already exist"),
-		),
 	}
 }
 
