@@ -97,7 +97,7 @@ impl crate::Service for Service {
 
 	async fn memory_usage(&self, out: &mut (dyn Write + Send)) -> Result {
 		let mutex_insert = self.mutex_insert.len();
-		writeln!(out, "insert_mutex: {mutex_insert}")?;
+		writeln!(out, "- insert_mutex: {mutex_insert}")?;
 
 		Ok(())
 	}

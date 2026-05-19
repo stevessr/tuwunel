@@ -98,7 +98,7 @@ impl crate::Service for Service {
 			.fold(0_usize, usize::saturating_add);
 
 		let bytes = bytes::pretty(bytes);
-		writeln!(out, "stateinfo_cache: {cache_len} {ents_len} ({bytes})")?;
+		writeln!(out, "- stateinfo_cache: {cache_len} entries, {ents_len} states ({bytes})")?;
 
 		Ok(())
 	}

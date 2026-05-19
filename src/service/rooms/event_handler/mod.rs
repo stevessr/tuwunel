@@ -57,7 +57,7 @@ impl crate::Service for Service {
 
 	async fn memory_usage(&self, out: &mut (dyn Write + Send)) -> Result {
 		let mutex_federation = self.mutex_federation.len();
-		writeln!(out, "federation_mutex: {mutex_federation}")?;
+		writeln!(out, "- federation_mutex: {mutex_federation}")?;
 
 		let (ber_count, ber_bytes) = self.bad_event_ratelimiter.read()?.iter().fold(
 			(0_usize, 0_usize),
@@ -69,7 +69,7 @@ impl crate::Service for Service {
 			},
 		);
 
-		writeln!(out, "bad_event_ratelimiter: {ber_count} ({})", pretty(ber_bytes))?;
+		writeln!(out, "- bad_event_ratelimiter: {ber_count} entries ({})", pretty(ber_bytes))?;
 
 		Ok(())
 	}
