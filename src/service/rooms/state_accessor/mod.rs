@@ -50,7 +50,7 @@ impl crate::Service for Service {
 
 impl Service {
 	/// Gets the effective power levels of a room, regardless of if there is an
-	/// `m.rooms.power_levels` state.
+	/// `m.room.power_levels` state.
 	pub async fn get_power_levels(&self, room_id: &RoomId) -> Result<RoomPowerLevels> {
 		let create = self.get_create(room_id);
 		let power_levels = self

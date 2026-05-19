@@ -8,7 +8,7 @@ use crate::{admin_command, admin_command_dispatch};
 
 #[admin_command_dispatch]
 #[derive(Debug, Subcommand)]
-/// All the getters and iterators from src/database/key_value/account_data.rs
+/// All the getters and iterators from src/service/account_data/
 pub(crate) enum AccountDataCommand {
 	/// - Returns all changes to the account data that happened after `since`.
 	ChangesSince {

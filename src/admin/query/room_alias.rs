@@ -6,7 +6,7 @@ use tuwunel_core::Result;
 use crate::Context;
 
 #[derive(Debug, Subcommand)]
-/// All the getters and iterators from src/database/key_value/rooms/alias.rs
+/// All the getters and iterators from src/service/rooms/alias/
 pub(crate) enum RoomAliasCommand {
 	/// - Resolve any local or remote alias.
 	ResolveAlias {
@@ -30,7 +30,7 @@ pub(crate) enum RoomAliasCommand {
 	AllLocalAliases,
 }
 
-/// All the getters and iterators in src/database/key_value/rooms/alias.rs
+/// All the getters and iterators from src/service/rooms/alias/
 pub(super) async fn process(subcommand: RoomAliasCommand, context: &Context<'_>) -> Result {
 	let services = context.services;
 

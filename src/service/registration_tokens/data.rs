@@ -28,8 +28,9 @@ impl DatabaseTokenInfo {
 	pub(super) fn new(expires: TokenExpires) -> Self { Self { uses: 0, expires } }
 
 	/// Determine whether this token info represents a valid token, i.e. one
-	/// that has not expired according to its [`Self::expires`] property. If
-	/// [`Self::expires`] is [`None`], this function will always return `true`.
+	/// that has not exhausted its `max_uses` or passed its `max_age`. When
+	/// both `expires.max_uses` and `expires.max_age` are `None`, this always
+	/// returns `true`.
 	#[must_use]
 	pub fn is_valid(&self) -> bool {
 		if let Some(max_uses) = self.expires.max_uses

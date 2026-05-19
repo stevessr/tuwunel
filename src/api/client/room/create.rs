@@ -670,10 +670,8 @@ fn default_power_levels_content(
 	power_levels_content["events"]["org.matrix.msc3381.poll.response"] = json!(0);
 	power_levels_content["events"]["m.poll.response"] = json!(0);
 
-	// Match Synapse: lock invites and call setup behind power level 50 for the
-	// public_chat preset. Gating on preset (not body.visibility) is what Synapse
-	// does and what the ecosystem expects; visibility=Public alone defaults to
-	// public_chat via the fallback above, so this still covers that case.
+	// public_chat: pin invite and call-setup events at PL 50. Synapse pins
+	// invite and m.call.invite here; the MSC3401 entries are tuwunel-only.
 	if *preset == RoomPreset::PublicChat {
 		power_levels_content["invite"] = json!(50);
 		power_levels_content["events"]["m.call.invite"] = json!(50);

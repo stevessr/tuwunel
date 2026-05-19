@@ -5,7 +5,7 @@ use tuwunel_core::Result;
 use crate::Context;
 
 #[derive(Debug, Subcommand)]
-/// All the getters and iterators from src/database/key_value/appservice.rs
+/// All the getters and iterators from src/service/appservice/
 pub(crate) enum AppserviceCommand {
 	/// - Gets the appservice registration info/details from the ID as a string
 	GetRegistration {
@@ -17,7 +17,7 @@ pub(crate) enum AppserviceCommand {
 	All,
 }
 
-/// All the getters and iterators from src/database/key_value/appservice.rs
+/// All the getters and iterators from src/service/appservice/
 pub(super) async fn process(subcommand: AppserviceCommand, context: &Context<'_>) -> Result {
 	let services = context.services;
 

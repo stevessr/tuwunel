@@ -55,8 +55,7 @@ static VERSIONS: [&str; 17] = [
 	"v1.5",   /* Stable; Tested */
 	"v1.10",  /* Tested; relations recursion */
 	"v1.11",  /* Tested; authenticated media */
-	"v1.12",  /* m.tz */
-	"v1.15",  /* custom profile fields */
+	"v1.12", "v1.15",
 ];
 
 static UNSTABLE_FEATURES: [&str; 34] = [

@@ -288,7 +288,6 @@ pub fn set_profile_key(
 	profile_key: &str,
 	profile_key_value: Option<&serde_json::Value>,
 ) {
-	// TODO: insert to the stable MSC4175 key when it's stable
 	let key = (user_id, profile_key);
 
 	if let Some(value) = profile_key_value {

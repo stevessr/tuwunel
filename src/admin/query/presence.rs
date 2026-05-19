@@ -6,7 +6,7 @@ use tuwunel_core::Result;
 use crate::Context;
 
 #[derive(Debug, Subcommand)]
-/// All the getters and iterators from src/database/key_value/presence.rs
+/// All the getters and iterators from src/service/presence/
 pub(crate) enum PresenceCommand {
 	/// - Returns the latest presence event for the given user.
 	GetPresence {
@@ -25,7 +25,7 @@ pub(crate) enum PresenceCommand {
 	},
 }
 
-/// All the getters and iterators in key_value/presence.rs
+/// All the getters and iterators from src/service/presence/
 pub(super) async fn process(subcommand: PresenceCommand, context: &Context<'_>) -> Result {
 	let services = context.services;
 

@@ -1,6 +1,6 @@
-//! Indicate a branch which will never be taken. This induces optimal codegen in
-//! release-mode by emitting unsafe unreachable_unchecked(). In debug-mode it
-//! emits unimplemented() to panic on misplacement.
+//! Indicate a branch which will never be taken. Currently expands to
+//! `unimplemented!()` in every build; the `unreachable_unchecked()` arm below
+//! is parked behind `#[cfg(disable)]` until callsites are vetted.
 
 #[cfg(disable)] // activate when more stable and callsites are vetted.
 // #[cfg(not(debug_assertions))]

@@ -7,7 +7,7 @@ use tuwunel_service::sending::Destination;
 use crate::Context;
 
 #[derive(Debug, Subcommand)]
-/// All the getters and iterators from src/database/key_value/sending.rs
+/// All the getters and iterators from src/service/sending/
 pub(crate) enum SendingCommand {
 	/// - Queries database for all `servercurrentevent_data`
 	ActiveRequests,
@@ -21,7 +21,7 @@ pub(crate) enum SendingCommand {
 	/// server_name
 	/// user_id AND push_key
 	///
-	/// See src/service/sending/mod.rs for the definition of the `Destination`
+	/// See src/service/sending/dest.rs for the definition of the `Destination`
 	/// enum
 	ActiveRequestsFor {
 		#[arg(short, long)]
@@ -43,7 +43,7 @@ pub(crate) enum SendingCommand {
 	/// server_name
 	/// user_id AND push_key
 	///
-	/// See src/service/sending/mod.rs for the definition of the `Destination`
+	/// See src/service/sending/dest.rs for the definition of the `Destination`
 	/// enum
 	QueuedRequests {
 		#[arg(short, long)]
@@ -61,7 +61,7 @@ pub(crate) enum SendingCommand {
 	},
 }
 
-/// All the getters and iterators in key_value/sending.rs
+/// All the getters and iterators from src/service/sending/
 pub(super) async fn process(subcommand: SendingCommand, context: &Context<'_>) -> Result {
 	let services = context.services;
 

@@ -12,7 +12,7 @@
 //! To respect the Matrix specification, the following functions should be
 //! called for a PDU:
 //!
-//! 1. `check_pdu_format()` - The event should be dropped on error.
+//! 1. `check_rules()` - The event should be dropped on error.
 //! 2. `ruma_signatures::verify_event()` - The event should be dropped on error.
 //!    The PDU should be redacted before checking the authorization rules if the
 //!    result is `Verified::Signatures`.
