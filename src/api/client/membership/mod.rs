@@ -29,7 +29,7 @@ pub(crate) use self::{
 };
 use crate::Ruma;
 
-/// # `POST /_matrix/client/r0/joined_rooms`
+/// # `GET /_matrix/client/r0/joined_rooms`
 ///
 /// Lists all rooms the user has joined.
 pub(crate) async fn joined_rooms_route(
