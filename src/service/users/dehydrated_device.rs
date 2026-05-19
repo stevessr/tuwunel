@@ -83,6 +83,18 @@ pub async fn set_dehydrated_device(&self, user_id: &UserId, request: Request) ->
 	)
 	.await?;
 
+	// MSC3814: dehydrated device MUST be cross-signed and have a fallback key.
+	trace!(fallback_keys = ?request.fallback_keys);
+	self.add_fallback_keys(
+		user_id,
+		&request.device_id,
+		request
+			.fallback_keys
+			.iter()
+			.map(|(id, key)| (id.as_ref(), key)),
+	)
+	.await?;
+
 	Ok(())
 }
 
