@@ -333,7 +333,7 @@ fn unique_id_sub_parts<'a>(
 /// associations survive the change.
 fn identity_issuer(provider: &Provider) -> Option<&str> {
 	match provider.brand.as_str() {
-		| "github" => Some("https://github.com"),
+		| "github" => Some("https://github.com/"),
 		| _ => provider.issuer_url.as_ref().map(Url::as_str),
 	}
 }
