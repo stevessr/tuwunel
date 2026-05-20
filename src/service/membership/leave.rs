@@ -15,7 +15,7 @@ use ruma::{
 	},
 };
 use tuwunel_core::{
-	Err, Result, debug_info, debug_warn, err, implement,
+	Err, Error, Result, debug_info, debug_warn, err, implement,
 	matrix::{PduCount, pdu::check_rules, room_version},
 	pdu::PduBuilder,
 	utils::{
@@ -145,14 +145,9 @@ pub async fn leave(
 			)
 			.await?;
 	} else {
-		let Ok(event) = member_event else {
-			debug_warn!(
-				"Trying to leave a room you are not a member of, marking room as left locally."
-			);
-
+		let clear_local = async || {
 			let count = self.services.globals.next_count();
-			return self
-				.services
+			self.services
 				.state_cache
 				.update_membership(
 					room_id,
@@ -164,10 +159,30 @@ pub async fn leave(
 					true,
 					PduCount::Normal(*count),
 				)
-				.await;
+				.await
 		};
 
-		self.services
+		let Ok(event) = member_event else {
+			debug_warn!(
+				"Trying to leave a room you are not a member of, marking room as left locally."
+			);
+
+			return clear_local().await;
+		};
+
+		// Stale Leave/Ban in room state would make a self-leave PDU fail auth; clear
+		// caches instead.
+		if !is_leaveable(&event.membership) {
+			debug_warn!(
+				current = ?event.membership,
+				"Room state shows non-leaveable membership; clearing local caches.",
+			);
+
+			return clear_local().await;
+		}
+
+		let build_result = self
+			.services
 			.timeline
 			.build_and_append_pdu(
 				PduBuilder::state(user_id.to_string(), &RoomMemberEventContent {
@@ -181,7 +196,42 @@ pub async fn leave(
 				room_id,
 				state_lock,
 			)
-			.await?;
+			.await;
+
+		// On state-res auth-check rejection, re-read membership. The pre-check above
+		// and the auth_check inside build_and_append_pdu both run under state_lock,
+		// so they observe the same state; re-reading here narrows the swallow to
+		// non-leaveable membership (Leave/Ban/_Custom), which is the stale-state
+		// population this branch targets. Genuine auth_check rejections against
+		// fresh Invite/Join/Knock state propagate unchanged.
+		match build_result {
+			| Ok(_) => {},
+			| Err(Error::AuthCheck(inner)) => {
+				let current = self
+					.services
+					.state_accessor
+					.room_state_get_content::<RoomMemberEventContent>(
+						room_id,
+						&StateEventType::RoomMember,
+						user_id.as_str(),
+					)
+					.await
+					.map(|c| c.membership);
+
+				if current.as_ref().is_ok_and(is_leaveable) {
+					return Err(Error::AuthCheck(inner));
+				}
+
+				warn!(
+					error = %inner,
+					?current,
+					"Auth refused self-leave PDU; clearing local caches.",
+				);
+
+				clear_local().await?;
+			},
+			| Err(e) => return Err(e),
+		}
 	}
 
 	Ok(())
@@ -369,4 +419,11 @@ async fn remote_leave(
 		.await?;
 
 	Ok(())
+}
+
+/// Membership states permitted to transition to `Leave` via a self-leave PDU.
+/// ruma's `MembershipState` is `#[non_exhaustive]`; future variants are
+/// conservatively treated as non-leaveable.
+fn is_leaveable(state: &MembershipState) -> bool {
+	matches!(state, MembershipState::Invite | MembershipState::Join | MembershipState::Knock,)
 }

@@ -61,7 +61,7 @@ where
 
 	match try_join(independent, dependent).await {
 		| Err(e) if matches!(e, Error::Request(InvalidParam, ..)) => Err(e),
-		| Err(e) => Err!(Request(Forbidden("Auth check failed: {e}"))),
+		| Err(e) => Err(Error::AuthCheck(Box::new(e))),
 		| Ok(_) => Ok(()),
 	}
 }

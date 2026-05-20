@@ -17,11 +17,12 @@ use ruma::{
 	serde::JsonObject,
 };
 use tuwunel_core::{
-	Err, Error, Result, err, extract_variant,
+	Err, Error, Result, debug_warn, err, extract_variant,
 	matrix::{Event, PduCount, PduEvent, event::gen_event_id},
 	utils,
 	utils::hash::sha256,
 };
+use tuwunel_service::Services;
 
 use crate::{ClientIp, Ruma};
 
@@ -195,6 +196,25 @@ pub(crate) async fn create_invite_route(
 		.server_in_room(services.globals.server_name(), &body.room_id)
 		.await
 	{
+		// Synapse and Dendrite both accept re-invites over local stale state because
+		// we may not have received the unban PDU.
+		if services
+			.state_accessor
+			.room_state_get_content::<RoomMemberEventContent>(
+				&body.room_id,
+				&StateEventType::RoomMember,
+				invited_user.as_str(),
+			)
+			.await
+			.is_ok_and(|content| content.membership == MembershipState::Ban)
+		{
+			debug_warn!(
+				room_id = %body.room_id,
+				user_id = %invited_user,
+				"Recording invite while local room state shows banned membership.",
+			);
+		}
+
 		let count = services.globals.next_count();
 		services
 			.state_cache
@@ -211,35 +231,7 @@ pub(crate) async fn create_invite_route(
 			.await?;
 		drop(count);
 
-		services
-			.pusher
-			.get_pushkeys(&invited_user)
-			.map(ToOwned::to_owned)
-			.for_each(async |pushkey| {
-				let Ok(pusher) = services
-					.pusher
-					.get_pusher(&invited_user, &pushkey)
-					.await
-				else {
-					return;
-				};
-
-				let ruleset = services
-					.account_data
-					.get_global(&invited_user, GlobalAccountDataEventType::PushRules)
-					.await
-					.map_or_else(
-						|_| push::Ruleset::server_default(&invited_user),
-						|ev: PushRulesEvent| ev.content.global,
-					);
-
-				services
-					.pusher
-					.send_push_notice(&invited_user, &pusher, &ruleset, &pdu)
-					.await
-					.ok();
-			})
-			.await;
+		notify_pushers(&services, &invited_user, &pdu).await;
 
 		for appservice in services.appservice.read().await.values() {
 			if appservice.is_user_match(&invited_user) {
@@ -264,4 +256,36 @@ pub(crate) async fn create_invite_route(
 			.format_pdu_into(signed_event, Some(&body.room_version))
 			.await,
 	})
+}
+
+async fn notify_pushers(services: &Services, invited_user: &UserId, pdu: &PduEvent) {
+	services
+		.pusher
+		.get_pushkeys(invited_user)
+		.map(ToOwned::to_owned)
+		.for_each(async |pushkey| {
+			let Ok(pusher) = services
+				.pusher
+				.get_pusher(invited_user, &pushkey)
+				.await
+			else {
+				return;
+			};
+
+			let ruleset = services
+				.account_data
+				.get_global(invited_user, GlobalAccountDataEventType::PushRules)
+				.await
+				.map_or_else(
+					|_| push::Ruleset::server_default(invited_user),
+					|ev: PushRulesEvent| ev.content.global,
+				);
+
+			services
+				.pusher
+				.send_push_notice(invited_user, &pusher, &ruleset, pdu)
+				.await
+				.ok();
+		})
+		.await;
 }
