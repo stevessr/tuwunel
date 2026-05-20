@@ -1,3 +1,4 @@
+use futures::future::join;
 use ipaddress::IPAddress;
 use ruma::{
 	UInt, UserId,
@@ -61,11 +62,24 @@ where
 	}
 
 	if notify == Some(true) || self.services.config.push_everything {
-		let unread: UInt = self
-			.services
-			.pusher
-			.notification_count(user_id, event.room_id())
-			.await
+		// MSC3771/MSC3773: badge count merges main and per-thread notifications.
+		let (main, threads) = join(
+			self.services
+				.pusher
+				.notification_count(user_id, event.room_id()),
+			self.services
+				.pusher
+				.thread_notification_counts(user_id, event.room_id()),
+		)
+		.await;
+
+		let thread_total: u64 = threads
+			.values()
+			.map(|(notifications, _)| *notifications)
+			.sum();
+
+		let unread: UInt = main
+			.saturating_add(thread_total)
 			.try_into()
 			.unwrap_or_else(|_| uint!(1));
 
