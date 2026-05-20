@@ -55,6 +55,10 @@ pub async fn add_one_time_key(
 	one_time_key_key: &KeyId<OneTimeKeyAlgorithm, OneTimeKeyName>,
 	one_time_key_value: &Raw<OneTimeKey>,
 ) -> Result {
+	let Some(otk) = self.db.onetimekeyid4225_otk.as_ref() else {
+		return Err!(Database("one-time-key column unavailable"));
+	};
+
 	if !self.device_exists(user_id, device_id).await {
 		return Err!(Database(error!(
 			?user_id,
@@ -79,9 +83,7 @@ pub async fn add_one_time_key(
 	// Racy dedup: two concurrent uploads of the same id can both pass this
 	// check and produce duplicate rows that persist until aged out by prune.
 	let prefix = (user_id, device_id, Interfix);
-	let already_present = self
-		.db
-		.onetimekeyid4225_otk
+	let already_present = otk
 		.keys_prefix(&prefix)
 		.ignore_err()
 		.ready_any(|(.., id): OtkRowKey<'_>| id == one_time_key_key)
@@ -95,7 +97,7 @@ pub async fn add_one_time_key(
 
 	// MSC4225: RocksDB iterates the (user, device) prefix in count_be ascending
 	// order, so /keys/claim issues one-time keys in the order they were uploaded.
-	self.db.onetimekeyid4225_otk.put(
+	otk.put(
 		(user_id, device_id, *count, one_time_key_key.as_str()),
 		Json(one_time_key_value),
 	);
@@ -234,15 +236,17 @@ pub async fn take_one_time_key(
 	device_id: &DeviceId,
 	key_algorithm: &OneTimeKeyAlgorithm,
 ) -> Result<(OwnedKeyId<OneTimeKeyAlgorithm, OneTimeKeyName>, Raw<OneTimeKey>)> {
+	let Some(otk) = self.db.onetimekeyid4225_otk.as_ref() else {
+		return Err!(Request(NotFound("No one-time-key found")));
+	};
+
 	let update_count = self.services.globals.next_count();
 	self.db
 		.userid_lastonetimekeyupdate
 		.insert(user_id, update_count.to_be_bytes());
 
 	let prefix = (user_id, device_id, Interfix);
-	let one_time_keys = self
-		.db
-		.onetimekeyid4225_otk
+	let one_time_keys = otk
 		.stream_prefix(&prefix)
 		.ignore_err()
 		.ready_filter(|(row, _): &(OtkRowKey<'_>, &[u8])| row.3.algorithm() == *key_algorithm);
@@ -253,9 +257,7 @@ pub async fn take_one_time_key(
 		.await
 		.ok_or_else(|| err!(Request(NotFound("No one-time-key found"))))?;
 
-	self.db
-		.onetimekeyid4225_otk
-		.del((user_id, device_id, count, id));
+	otk.del((user_id, device_id, count, id));
 
 	Ok((id.into(), serde_json::from_slice(val)?))
 }
@@ -266,10 +268,12 @@ pub async fn count_one_time_keys(
 	user_id: &UserId,
 	device_id: &DeviceId,
 ) -> BTreeMap<OneTimeKeyAlgorithm, UInt> {
+	let Some(otk) = self.db.onetimekeyid4225_otk.as_ref() else {
+		return BTreeMap::new();
+	};
+
 	let prefix = (user_id, device_id, Interfix);
-	let algorithm_counts: BTreeMap<OneTimeKeyAlgorithm, UInt> = self
-		.db
-		.onetimekeyid4225_otk
+	let algorithm_counts: BTreeMap<OneTimeKeyAlgorithm, UInt> = otk
 		.keys_prefix(&prefix)
 		.ignore_err()
 		.ready_fold(BTreeMap::new(), |mut acc, (.., id): OtkRowKey<'_>| {
@@ -300,14 +304,16 @@ pub async fn count_one_time_keys(
 /// `take(excess)` yields the earliest-uploaded rows.
 #[implement(super::Service)]
 pub async fn prune_one_time_keys(&self, user_id: &UserId, device_id: &DeviceId, excess: usize) {
+	let Some(otk) = self.db.onetimekeyid4225_otk.as_ref() else {
+		return;
+	};
+
 	let prefix = (user_id, device_id, Interfix);
-	self.db
-		.onetimekeyid4225_otk
-		.keys_prefix(&prefix)
+	otk.keys_prefix(&prefix)
 		.ignore_err()
 		.take(excess)
 		.ready_for_each(|row: OtkRowKey<'_>| {
-			self.db.onetimekeyid4225_otk.del(row);
+			otk.del(row);
 		})
 		.await;
 }

@@ -56,7 +56,7 @@ pub struct Service {
 struct Data {
 	keychangeid_userid: Arc<Map>,
 	keyid_key: Arc<Map>,
-	onetimekeyid4225_otk: Arc<Map>,
+	onetimekeyid4225_otk: Option<Arc<Map>>,
 	openidtoken_expiresatuserid: Arc<Map>,
 	logintoken_expiresatuserid: Arc<Map>,
 	todeviceid_events: Arc<Map>,
@@ -91,7 +91,7 @@ impl crate::Service for Service {
 			db: Data {
 				keychangeid_userid: args.db["keychangeid_userid"].clone(),
 				keyid_key: args.db["keyid_key"].clone(),
-				onetimekeyid4225_otk: args.db["onetimekeyid4225_otk"].clone(),
+				onetimekeyid4225_otk: args.db.get("onetimekeyid4225_otk").ok().cloned(),
 				openidtoken_expiresatuserid: args.db["openidtoken_expiresatuserid"].clone(),
 				logintoken_expiresatuserid: args.db["logintoken_expiresatuserid"].clone(),
 				oidcdevice_userdeviceid: args.db["oidcdevice_userdeviceid"].clone(),
