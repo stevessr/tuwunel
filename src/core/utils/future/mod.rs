@@ -15,3 +15,14 @@ pub use self::{
 	ready_eq_ext::ReadyEqExt,
 	try_ext_ext::TryExtExt,
 };
+
+#[macro_export]
+macro_rules! ready_some {
+	($e:expr) => {
+		match $e {
+			| std::task::Poll::Ready(Some(v)) => v,
+			| std::task::Poll::Ready(None) => return std::task::Poll::Ready(None),
+			| std::task::Poll::Pending => return std::task::Poll::Pending,
+		}
+	};
+}

@@ -196,8 +196,8 @@ pub fn get_shared_rooms<'a>(
 	user_a: &'a UserId,
 	user_b: &'a UserId,
 ) -> impl Stream<Item = &RoomId> + Send + 'a {
-	let a = self.rooms_joined(user_a).boxed();
-	let b = self.rooms_joined(user_b).boxed();
+	let a = self.rooms_joined(user_a);
+	let b = self.rooms_joined(user_b);
 
 	utils::set::intersection_sorted_stream2(a, b)
 }
