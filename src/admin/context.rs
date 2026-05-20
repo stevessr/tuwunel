@@ -1,4 +1,4 @@
-use std::{fmt, time::SystemTime};
+use std::{fmt, fmt::Debug, time::SystemTime};
 
 use futures::{
 	Future, FutureExt, TryFutureExt,
@@ -6,6 +6,7 @@ use futures::{
 	lock::Mutex,
 };
 use ruma::EventId;
+use tokio::time::Instant;
 use tuwunel_core::Result;
 use tuwunel_service::Services;
 
@@ -39,5 +40,20 @@ impl Context<'_> {
 				.map_err(Into::into)
 				.await
 		})
+	}
+
+	pub(crate) async fn write_timed_query<F, T>(&self, query: F) -> Result
+	where
+		F: Future<Output = T>,
+		T: Debug,
+	{
+		let timer = Instant::now();
+		let result = query.await;
+		let query_time = timer.elapsed();
+
+		self.write_string(format!(
+			"Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"
+		))
+		.await
 	}
 }

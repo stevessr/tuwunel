@@ -4,7 +4,7 @@ use axum::extract::State;
 use futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt, future::try_join4};
 use ruma::{
 	CanonicalJsonObject, OwnedEventId, OwnedRoomId, OwnedServerName, OwnedUserId, RoomId,
-	ServerName,
+	RoomVersionId, ServerName, UserId,
 	api::federation::membership::create_join_event,
 	events::{
 		StateEventType,
@@ -110,122 +110,18 @@ async fn create_join_event(
 		return Err!(Request(BadJson("Could not convert event to canonical json.")));
 	};
 
-	let event_room_id: OwnedRoomId = serde_json::from_value(
-		value
-			.get("room_id")
-			.ok_or_else(|| err!(Request(BadJson("Event missing room_id property."))))?
-			.clone()
-			.into(),
-	)
-	.map_err(|e| err!(Request(BadJson(warn!("room_id field is not a valid room ID: {e}")))))?;
-
-	if event_room_id != room_id {
-		return Err!(Request(BadJson("Event room_id does not match request path room ID.")));
-	}
-
-	let event_type: StateEventType = serde_json::from_value(
-		value
-			.get("type")
-			.ok_or_else(|| err!(Request(BadJson("Event missing type property."))))?
-			.clone()
-			.into(),
-	)
-	.map_err(|e| err!(Request(BadJson(warn!("Event has invalid state event type: {e}")))))?;
-
-	if event_type != StateEventType::RoomMember {
-		return Err!(Request(BadJson(
-			"Not allowed to send non-membership state event to join endpoint."
-		)));
-	}
-
-	let content: RoomMemberEventContent = serde_json::from_value(
-		value
-			.get("content")
-			.ok_or_else(|| err!(Request(BadJson("Event missing content property"))))?
-			.clone()
-			.into(),
-	)
-	.map_err(|e| err!(Request(BadJson(warn!("Event content is empty or invalid: {e}")))))?;
-
-	if content.membership != MembershipState::Join {
-		return Err!(Request(BadJson(
-			"Not allowed to send a non-join membership event to join endpoint."
-		)));
-	}
-
-	// ACL check sender user server name
-	let sender: OwnedUserId = serde_json::from_value(
-		value
-			.get("sender")
-			.ok_or_else(|| err!(Request(BadJson("Event missing sender property."))))?
-			.clone()
-			.into(),
-	)
-	.map_err(|e| err!(Request(BadJson(warn!("sender property is not a valid user ID: {e}")))))?;
-
-	services
-		.event_handler
-		.acl_check(sender.server_name(), room_id)
-		.await?;
-
-	// check if origin server is trying to send for another server
-	if sender.server_name() != origin {
-		return Err!(Request(Forbidden("Not allowed to join on behalf of another server.")));
-	}
-
-	let joining_user: OwnedUserId = serde_json::from_value(
-		value
-			.get("state_key")
-			.ok_or_else(|| err!(Request(BadJson("Event missing state_key property."))))?
-			.clone()
-			.into(),
-	)
-	.map_err(|e| err!(Request(BadJson(warn!("State key is not a valid user ID: {e}")))))?;
-
-	if joining_user != sender {
-		return Err!(Request(BadJson("State key does not match sender user.")));
-	}
+	let (content, joining_user) =
+		validate_join_event_shape(services, &value, origin, room_id).await?;
 
 	if let Some(authorising_user) = content.join_authorized_via_users_server {
-		use ruma::RoomVersionId::*;
-
-		if matches!(room_version, V1 | V2 | V3 | V4 | V5 | V6 | V7) {
-			return Err!(Request(InvalidParam(
-				"Room version {room_version} does not support restricted rooms but \
-				 join_authorised_via_users_server ({authorising_user}) was found in the event."
-			)));
-		}
-
-		if !services.globals.user_is_local(&authorising_user) {
-			return Err!(Request(InvalidParam(
-				"Cannot authorise membership event through {authorising_user} as they do not \
-				 belong to this homeserver"
-			)));
-		}
-
-		if !services
-			.state_cache
-			.is_joined(&authorising_user, room_id)
-			.await
-		{
-			return Err!(Request(InvalidParam(
-				"Authorising user {authorising_user} is not in the room you are trying to join, \
-				 they cannot authorise your join."
-			)));
-		}
-
-		if !super::user_can_perform_restricted_join(
+		validate_restricted_join(
 			services,
+			&authorising_user,
 			&joining_user,
 			room_id,
 			&room_version,
 		)
-		.await?
-		{
-			return Err!(Request(UnableToAuthorizeJoin(
-				"Joining user did not pass restricted room's rules."
-			)));
-		}
+		.await?;
 	}
 
 	services
@@ -371,4 +267,134 @@ async fn create_join_event(
 		event,
 		..Default::default()
 	})
+}
+
+async fn validate_join_event_shape(
+	services: &Services,
+	value: &CanonicalJsonObject,
+	origin: &ServerName,
+	room_id: &RoomId,
+) -> Result<(RoomMemberEventContent, OwnedUserId)> {
+	let event_room_id: OwnedRoomId = serde_json::from_value(
+		value
+			.get("room_id")
+			.ok_or_else(|| err!(Request(BadJson("Event missing room_id property."))))?
+			.clone()
+			.into(),
+	)
+	.map_err(|e| err!(Request(BadJson(warn!("room_id field is not a valid room ID: {e}")))))?;
+
+	if event_room_id != room_id {
+		return Err!(Request(BadJson("Event room_id does not match request path room ID.")));
+	}
+
+	let event_type: StateEventType = serde_json::from_value(
+		value
+			.get("type")
+			.ok_or_else(|| err!(Request(BadJson("Event missing type property."))))?
+			.clone()
+			.into(),
+	)
+	.map_err(|e| err!(Request(BadJson(warn!("Event has invalid state event type: {e}")))))?;
+
+	if event_type != StateEventType::RoomMember {
+		return Err!(Request(BadJson(
+			"Not allowed to send non-membership state event to join endpoint."
+		)));
+	}
+
+	let content: RoomMemberEventContent = serde_json::from_value(
+		value
+			.get("content")
+			.ok_or_else(|| err!(Request(BadJson("Event missing content property"))))?
+			.clone()
+			.into(),
+	)
+	.map_err(|e| err!(Request(BadJson(warn!("Event content is empty or invalid: {e}")))))?;
+
+	if content.membership != MembershipState::Join {
+		return Err!(Request(BadJson(
+			"Not allowed to send a non-join membership event to join endpoint."
+		)));
+	}
+
+	// ACL check sender user server name
+	let sender: OwnedUserId = serde_json::from_value(
+		value
+			.get("sender")
+			.ok_or_else(|| err!(Request(BadJson("Event missing sender property."))))?
+			.clone()
+			.into(),
+	)
+	.map_err(|e| err!(Request(BadJson(warn!("sender property is not a valid user ID: {e}")))))?;
+
+	services
+		.event_handler
+		.acl_check(sender.server_name(), room_id)
+		.await?;
+
+	// check if origin server is trying to send for another server
+	if sender.server_name() != origin {
+		return Err!(Request(Forbidden("Not allowed to join on behalf of another server.")));
+	}
+
+	let joining_user: OwnedUserId = serde_json::from_value(
+		value
+			.get("state_key")
+			.ok_or_else(|| err!(Request(BadJson("Event missing state_key property."))))?
+			.clone()
+			.into(),
+	)
+	.map_err(|e| err!(Request(BadJson(warn!("State key is not a valid user ID: {e}")))))?;
+
+	if joining_user != sender {
+		return Err!(Request(BadJson("State key does not match sender user.")));
+	}
+
+	Ok((content, joining_user))
+}
+
+async fn validate_restricted_join(
+	services: &Services,
+	authorising_user: &UserId,
+	joining_user: &UserId,
+	room_id: &RoomId,
+	room_version: &RoomVersionId,
+) -> Result {
+	use RoomVersionId::*;
+
+	if matches!(room_version, V1 | V2 | V3 | V4 | V5 | V6 | V7) {
+		return Err!(Request(InvalidParam(
+			"Room version {room_version} does not support restricted rooms but \
+			 join_authorised_via_users_server ({authorising_user}) was found in the event."
+		)));
+	}
+
+	if !services.globals.user_is_local(authorising_user) {
+		return Err!(Request(InvalidParam(
+			"Cannot authorise membership event through {authorising_user} as they do not belong \
+			 to this homeserver"
+		)));
+	}
+
+	if !services
+		.state_cache
+		.is_joined(authorising_user, room_id)
+		.await
+	{
+		return Err!(Request(InvalidParam(
+			"Authorising user {authorising_user} is not in the room you are trying to join, \
+			 they cannot authorise your join."
+		)));
+	}
+
+	if !super::user_can_perform_restricted_join(services, joining_user, room_id, room_version)
+		.await?
+	{
+		return Err!(Request(UnableToAuthorizeJoin(
+			"Joining user did not pass restricted room's rules."
+		)));
+	}
+
+	Ok(())
 }

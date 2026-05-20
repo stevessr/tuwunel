@@ -10,7 +10,7 @@ use futures::{
 	pin_mut,
 };
 use ruma::{
-	DeviceId, EventId, OwnedRoomId, OwnedUserId, RoomId, UInt, UserId,
+	DeviceId, EventId, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt, UserId,
 	api::client::{
 		filter::FilterDefinition,
 		sync::sync_events::{
@@ -23,8 +23,8 @@ use ruma::{
 		},
 	},
 	events::{
-		AnyRawAccountDataEvent, AnySyncEphemeralRoomEvent, StateEventType,
-		SyncEphemeralRoomEvent,
+		AnyRawAccountDataEvent, AnyRoomAccountDataEvent, AnySyncEphemeralRoomEvent,
+		AnySyncStateEvent, StateEventType, SyncEphemeralRoomEvent,
 		TimelineEventType::*,
 		presence::{PresenceEvent, PresenceEventContent},
 		room::member::{MembershipState, RoomMemberEventContent},
@@ -62,6 +62,7 @@ use tuwunel_service::{
 	rooms::{
 		lazy_loading,
 		lazy_loading::{Options, Witness},
+		read_receipt::PrivateReadEvents,
 		short::{ShortEventId, ShortStateHash, ShortStateKey},
 	},
 };
@@ -81,6 +82,47 @@ struct StateChanges {
 }
 
 type PresenceUpdates = HashMap<OwnedUserId, PresenceEventContent>;
+
+struct RoomMetadata {
+	since_shortstatehash: Option<ShortStateHash>,
+	horizon_shortstatehash: Option<ShortStateHash>,
+	after_shortstatehash: Option<ShortStateHash>,
+	current_shortstatehash: Option<ShortStateHash>,
+	receipt_events: Vec<(OwnedUserId, Raw<AnySyncEphemeralRoomEvent>)>,
+	encrypted_room: Option<bool>,
+}
+
+struct UserMetadata {
+	witness: Option<Witness>,
+	#[expect(clippy::option_option)]
+	last_notification_read: Option<Option<u64>>,
+	thread_last_reads: Option<BTreeMap<OwnedEventId, u64>>,
+	last_privateread_update: u64,
+	joined_since_last_sync: bool,
+}
+
+struct NotificationGates<F> {
+	send_notification_counts: bool,
+	send_notification_count_filter: F,
+}
+
+struct BuildJoinedRoom {
+	receipt_events: Vec<(OwnedUserId, Raw<AnySyncEphemeralRoomEvent>)>,
+	typing_events: Vec<Raw<AnySyncEphemeralRoomEvent>>,
+	private_read_events: Option<PrivateReadEvents>,
+	state_events: Vec<Raw<AnySyncStateEvent>>,
+	account_data_events: Vec<Raw<AnyRoomAccountDataEvent>>,
+	room_events: Vec<PduEvent>,
+	heroes: Option<Vec<OwnedUserId>>,
+	joined_member_count: Option<u64>,
+	invited_member_count: Option<u64>,
+	unread_notifications: UnreadNotificationsCount,
+	unread_thread_notifications: BTreeMap<OwnedEventId, UnreadNotificationsCount>,
+	use_state_after: bool,
+	limited: bool,
+	joined_since_last_sync: bool,
+	prev_batch: Option<PduCount>,
+}
 
 /// # `GET /_matrix/client/r0/sync`
 ///
@@ -880,6 +922,278 @@ async fn load_joined_room(
 		"if timeline events, last_timeline_count must be in the since window."
 	);
 
+	let RoomMetadata {
+		since_shortstatehash,
+		horizon_shortstatehash,
+		after_shortstatehash,
+		current_shortstatehash,
+		receipt_events,
+		encrypted_room,
+	} = gather_room_metadata(
+		services,
+		sender_user,
+		room_id,
+		since,
+		next_batch,
+		&timeline_pdus,
+		last_timeline_count,
+		timeline_changed,
+		use_state_after,
+	)
+	.boxed()
+	.await?;
+
+	let UserMetadata {
+		witness,
+		last_notification_read,
+		thread_last_reads,
+		last_privateread_update,
+		joined_since_last_sync,
+	} = gather_user_metadata(
+		services,
+		sender_user,
+		sender_device,
+		room_id,
+		filter,
+		&timeline_pdus,
+		&receipt_events,
+		since,
+		initial,
+		timeline_changed,
+		encrypted_room,
+		since_shortstatehash,
+	)
+	.boxed()
+	.await;
+
+	let StateChanges {
+		heroes,
+		joined_member_count,
+		invited_member_count,
+		mut state_events,
+	} = current_shortstatehash
+		.map_async(|current_shortstatehash| {
+			calculate_state_changes(
+				services,
+				sender_user,
+				room_id,
+				full_state || initial,
+				use_state_after,
+				since_shortstatehash,
+				horizon_shortstatehash,
+				after_shortstatehash,
+				current_shortstatehash,
+				joined_since_last_sync,
+				witness.as_ref(),
+			)
+		})
+		.await
+		.transpose()?
+		.unwrap_or_default();
+
+	let joined_sender_member = take_sender_membership_for_join(
+		&mut state_events,
+		sender_user,
+		joined_since_last_sync,
+		timeline_pdus.is_empty(),
+		initial,
+	);
+
+	let prev_batch = timeline_pdus.first().map(at!(0)).or_else(|| {
+		joined_sender_member
+			.is_some()
+			.then_some(since)
+			.map(Into::into)
+	});
+
+	let in_window = |count: u64| count > since && count <= next_batch;
+
+	let NotificationGates {
+		send_notification_counts,
+		send_notification_count_filter,
+	} = compute_notification_gates(
+		last_notification_read,
+		thread_last_reads.as_ref(),
+		since,
+		in_window,
+	);
+
+	let (notification_count, highlight_count, thread_counts) =
+		notification_count_futures(services, sender_user, room_id, send_notification_counts);
+
+	let private_read_events = last_privateread_update.gt(&since).then_async(|| {
+		services
+			.read_receipt
+			.private_read_get(room_id, sender_user)
+			.unwrap_or_default()
+	});
+
+	let typing_events = gather_typing_events(services, room_id, sender_user, since);
+
+	let device_list_updates = gather_device_list_updates(
+		services,
+		sender_user,
+		room_id,
+		timeline_membership_changes(&timeline_pdus, initial),
+		&state_events,
+		initial,
+		since,
+		next_batch,
+	);
+
+	// `encrypted_room` is `Some` whenever timeline or state events are emitted.
+	let encrypted = encrypted_room.unwrap_or(false);
+
+	let room_events = collect_room_events(
+		services,
+		sender_user,
+		timeline_pdus,
+		joined_sender_member,
+		encrypted,
+		filter,
+	);
+
+	let account_data_events = collect_room_account_data(services, sender_user, room_id, since);
+
+	let (
+		(room_events, account_data_events),
+		(typing_events, private_read_events),
+		(notification_count, highlight_count, thread_counts),
+		(device_list_updates, left_encrypted_users),
+	) = join4(
+		join(room_events, account_data_events),
+		join(typing_events, private_read_events),
+		join3(notification_count, highlight_count, thread_counts),
+		device_list_updates,
+	)
+	.boxed()
+	.await;
+
+	let is_in_timeline = |event: &PduEvent| {
+		room_events
+			.iter()
+			.map(Event::event_id)
+			.any(is_equal_to!(event.event_id()))
+	};
+
+	// MSC4222: when the client opts into `state_after`, state events that
+	// took effect within the timeline appear in both the timeline and the
+	// state section, so the in-timeline exclusion is bypassed.
+	let include_in_state = |event: &PduEvent| {
+		let filter = &filter.room.state;
+		filter.matches(event) && (full_state || use_state_after || !is_in_timeline(event))
+	};
+
+	let state_events =
+		assemble_state_events(services, state_events, sender_user, encrypted, include_in_state)
+			.await;
+
+	let (unread_notifications, unread_thread_notifications) = assemble_unread_notifications(
+		notification_count,
+		highlight_count,
+		thread_counts,
+		thread_last_reads.as_ref(),
+		send_notification_count_filter,
+		filter.room.timeline.unread_thread_notifications,
+		initial,
+		in_window,
+	);
+
+	let joined_room = build_joined_room(BuildJoinedRoom {
+		receipt_events,
+		typing_events,
+		private_read_events,
+		state_events,
+		account_data_events,
+		room_events,
+		heroes,
+		joined_member_count,
+		invited_member_count,
+		unread_notifications,
+		unread_thread_notifications,
+		use_state_after,
+		limited,
+		joined_since_last_sync,
+		prev_batch,
+	});
+
+	Ok((joined_room, device_list_updates, left_encrypted_users))
+}
+
+fn build_joined_room(args: BuildJoinedRoom) -> JoinedRoom {
+	let BuildJoinedRoom {
+		receipt_events,
+		typing_events,
+		private_read_events,
+		state_events,
+		account_data_events,
+		room_events,
+		heroes,
+		joined_member_count,
+		invited_member_count,
+		unread_notifications,
+		unread_thread_notifications,
+		use_state_after,
+		limited,
+		joined_since_last_sync,
+		prev_batch,
+	} = args;
+
+	let edus: Vec<Raw<AnySyncEphemeralRoomEvent>> = receipt_events
+		.into_iter()
+		.map(at!(1))
+		.chain(typing_events)
+		.chain(private_read_events.into_iter().flatten())
+		.collect();
+
+	let state = StateEvents { events: state_events };
+	let state = if use_state_after {
+		RoomState::After(state)
+	} else {
+		RoomState::Before(state)
+	};
+
+	let heroes = heroes
+		.into_iter()
+		.flatten()
+		.map(TryInto::try_into)
+		.filter_map(Result::ok)
+		.collect();
+
+	JoinedRoom {
+		account_data: RoomAccountData { events: account_data_events },
+		ephemeral: Ephemeral { events: edus },
+		state,
+		summary: RoomSummary {
+			joined_member_count: joined_member_count.map(ruma_from_u64),
+			invited_member_count: invited_member_count.map(ruma_from_u64),
+			heroes,
+		},
+		timeline: Timeline {
+			limited: limited || joined_since_last_sync,
+			prev_batch: prev_batch.as_ref().map(ToString::to_string),
+			events: room_events
+				.into_iter()
+				.map(Event::into_format)
+				.collect(),
+		},
+		unread_notifications,
+		unread_thread_notifications,
+	}
+}
+
+#[expect(clippy::too_many_arguments)]
+async fn gather_room_metadata(
+	services: &Services,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	since: u64,
+	next_batch: u64,
+	timeline_pdus: &[(PduCount, PduEvent)],
+	last_timeline_count: PduCount,
+	timeline_changed: bool,
+	use_state_after: bool,
+) -> Result<RoomMetadata> {
 	let since_shortstatehash = timeline_changed.then_async(|| {
 		services
 			.timeline
@@ -952,16 +1266,130 @@ async fn load_joined_room(
 		receipt_events,
 		encrypted_room,
 	)
-	.map(|((since, horizon, after, current), receipt, encrypted_room)| -> Result<_> {
-		Ok((
-			(since.flatten(), horizon.flat_ok(), after.flat_ok(), current.transpose()?),
-			receipt,
-			encrypted_room,
-		))
-	})
 	.boxed()
-	.await?;
+	.await;
 
+	Ok(RoomMetadata {
+		since_shortstatehash: since_shortstatehash.flatten(),
+		horizon_shortstatehash: horizon_shortstatehash.flat_ok(),
+		after_shortstatehash: after_shortstatehash.flat_ok(),
+		current_shortstatehash: current_shortstatehash.transpose()?,
+		receipt_events,
+		encrypted_room,
+	})
+}
+
+fn collect_room_events<'a>(
+	services: &'a Services,
+	sender_user: &'a UserId,
+	timeline_pdus: Vec<(PduCount, PduEvent)>,
+	joined_sender_member: Option<PduEvent>,
+	encrypted: bool,
+	filter: &'a FilterDefinition,
+) -> impl Future<Output = Vec<PduEvent>> + Send + 'a {
+	let include_in_timeline = |event: &PduEvent| filter.room.timeline.matches(event);
+	timeline_pdus
+		.into_iter()
+		.stream()
+		.wide_filter_map(|item| ignored_filter(services, item, sender_user))
+		.map(at!(1))
+		.chain(joined_sender_member.into_iter().stream())
+		.ready_filter(include_in_timeline)
+		.wide_then(move |pdu| with_membership(services, pdu, sender_user, encrypted))
+		.collect::<Vec<_>>()
+}
+
+fn collect_room_account_data<'a>(
+	services: &'a Services,
+	sender_user: &'a UserId,
+	room_id: &'a RoomId,
+	since: u64,
+) -> impl Future<Output = Vec<Raw<AnyRoomAccountDataEvent>>> + Send + 'a {
+	services
+		.account_data
+		.changes_since(Some(room_id), sender_user, since, None)
+		.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Room))
+		.ready_filter(move |e| since != 0 || !is_empty_account_data_event(e))
+		.collect()
+}
+
+#[expect(clippy::type_complexity)]
+fn notification_count_futures<'a>(
+	services: &'a Services,
+	sender_user: &'a UserId,
+	room_id: &'a RoomId,
+	send: bool,
+) -> (
+	impl Future<Output = Option<UInt>> + Send + 'a,
+	impl Future<Output = Option<UInt>> + Send + 'a,
+	impl Future<Output = Option<BTreeMap<OwnedEventId, (u64, u64)>>> + Send + 'a,
+) {
+	let notification_count = send.then_async(move || {
+		services
+			.pusher
+			.notification_count(sender_user, room_id)
+			.map(TryInto::try_into)
+			.unwrap_or(uint!(0))
+	});
+
+	let highlight_count = send.then_async(move || {
+		services
+			.pusher
+			.highlight_count(sender_user, room_id)
+			.map(TryInto::try_into)
+			.unwrap_or(uint!(0))
+	});
+
+	// MSC3773: per-thread counts. Filtered downstream by per-thread last-read
+	// so quiet threads are omitted on rounds where the main cursor advanced.
+	let thread_counts = send.then_async(move || {
+		services
+			.pusher
+			.thread_notification_counts(sender_user, room_id)
+	});
+
+	(notification_count, highlight_count, thread_counts)
+}
+
+fn take_sender_membership_for_join(
+	state_events: &mut Vec<PduEvent>,
+	sender_user: &UserId,
+	joined_since_last_sync: bool,
+	timeline_empty: bool,
+	initial: bool,
+) -> Option<PduEvent> {
+	if !(joined_since_last_sync && timeline_empty && !initial) {
+		return None;
+	}
+
+	let is_sender_membership = |event: &PduEvent| {
+		*event.event_type() == StateEventType::RoomMember.into()
+			&& event
+				.state_key()
+				.is_some_and(is_equal_to!(sender_user.as_str()))
+	};
+
+	state_events
+		.iter()
+		.position(is_sender_membership)
+		.map(|pos| state_events.swap_remove(pos))
+}
+
+#[expect(clippy::too_many_arguments)]
+async fn gather_user_metadata(
+	services: &Services,
+	sender_user: &UserId,
+	sender_device: Option<&DeviceId>,
+	room_id: &RoomId,
+	filter: &FilterDefinition,
+	timeline_pdus: &[(PduCount, PduEvent)],
+	receipt_events: &[(OwnedUserId, Raw<AnySyncEphemeralRoomEvent>)],
+	since: u64,
+	initial: bool,
+	timeline_changed: bool,
+	encrypted_room: Option<bool>,
+	since_shortstatehash: Option<ShortStateHash>,
+) -> UserMetadata {
 	let lazy_load_options =
 		[&filter.room.state.lazy_load_options, &filter.room.timeline.lazy_load_options];
 
@@ -1044,65 +1472,28 @@ async fn load_joined_room(
 
 	let joined_since_last_sync = sender_joined_count.unwrap_or(0) > since;
 
-	let state_changes = current_shortstatehash.map_async(|current_shortstatehash| {
-		calculate_state_changes(
-			services,
-			sender_user,
-			room_id,
-			full_state || initial,
-			use_state_after,
-			since_shortstatehash,
-			horizon_shortstatehash,
-			after_shortstatehash,
-			current_shortstatehash,
-			joined_since_last_sync,
-			witness.as_ref(),
-		)
-	});
+	UserMetadata {
+		witness,
+		last_notification_read,
+		thread_last_reads,
+		last_privateread_update,
+		joined_since_last_sync,
+	}
+}
 
-	let StateChanges {
-		heroes,
-		joined_member_count,
-		invited_member_count,
-		mut state_events,
-	} = state_changes
-		.await
-		.transpose()?
-		.unwrap_or_default();
-
-	let is_sender_membership = |event: &PduEvent| {
-		*event.event_type() == StateEventType::RoomMember.into()
-			&& event
-				.state_key()
-				.is_some_and(is_equal_to!(sender_user.as_str()))
-	};
-
-	let joined_sender_member: Option<_> =
-		(joined_since_last_sync && timeline_pdus.is_empty() && !initial)
-			.then(|| {
-				state_events
-					.iter()
-					.position(is_sender_membership)
-					.map(|pos| state_events.swap_remove(pos))
-			})
-			.flatten();
-
-	let prev_batch = timeline_pdus.first().map(at!(0)).or_else(|| {
-		joined_sender_member
-			.is_some()
-			.then_some(since)
-			.map(Into::into)
-	});
-
-	let in_window = |count: u64| count > since && count <= next_batch;
-
+#[expect(clippy::option_option)]
+fn compute_notification_gates(
+	last_notification_read: Option<Option<u64>>,
+	thread_last_reads: Option<&BTreeMap<OwnedEventId, u64>>,
+	since: u64,
+	in_window: impl Fn(u64) -> bool,
+) -> NotificationGates<impl Fn(&UInt) -> bool> {
 	let send_main_counts = last_notification_read
 		.flatten()
-		.is_none_or(in_window);
+		.is_none_or(&in_window);
 
-	let send_thread_counts = thread_last_reads
-		.as_ref()
-		.is_none_or(|reads| reads.values().copied().any(in_window));
+	let send_thread_counts =
+		thread_last_reads.is_none_or(|reads| reads.values().copied().any(&in_window));
 
 	// Send room-level counts when either the main read cursor or any thread
 	// cursor advanced within the window. Thread-only resets do not bump the
@@ -1115,43 +1506,21 @@ async fn load_joined_room(
 		.is_some_and(|last_count| last_count > since);
 
 	let send_notification_count_filter =
-		|count: &UInt| *count != uint!(0) || send_notification_resets;
+		move |count: &UInt| *count != uint!(0) || send_notification_resets;
 
-	// Fetch main counts whenever either cursor advanced: a thread-only reset
-	// leaves the main count unchanged but still shifts the merged total that
-	// clients without `unread_thread_notifications` receive.
-	let notification_count = send_notification_counts.then_async(|| {
-		services
-			.pusher
-			.notification_count(sender_user, room_id)
-			.map(TryInto::try_into)
-			.unwrap_or(uint!(0))
-	});
+	NotificationGates {
+		send_notification_counts,
+		send_notification_count_filter,
+	}
+}
 
-	let highlight_count = send_notification_counts.then_async(|| {
-		services
-			.pusher
-			.highlight_count(sender_user, room_id)
-			.map(TryInto::try_into)
-			.unwrap_or(uint!(0))
-	});
-
-	// MSC3773: per-thread counts. Filtered downstream by per-thread last-read
-	// so quiet threads are omitted on rounds where the main cursor advanced.
-	let thread_counts = send_notification_counts.then_async(|| {
-		services
-			.pusher
-			.thread_notification_counts(sender_user, room_id)
-	});
-
-	let private_read_events = last_privateread_update.gt(&since).then_async(|| {
-		services
-			.read_receipt
-			.private_read_get(room_id, sender_user)
-			.unwrap_or_default()
-	});
-
-	let typing_events = services
+async fn gather_typing_events(
+	services: &Services,
+	room_id: &RoomId,
+	sender_user: &UserId,
+	since: u64,
+) -> Vec<Raw<AnySyncEphemeralRoomEvent>> {
+	services
 		.typing
 		.last_typing_update(room_id)
 		.and_then(async |count| {
@@ -1163,8 +1532,40 @@ async fn load_joined_room(
 
 			Ok(vec![serde_json::from_str(&serde_json::to_string(&typings)?)?])
 		})
-		.unwrap_or(Vec::new());
+		.unwrap_or(Vec::new())
+		.await
+}
 
+fn timeline_membership_changes(
+	timeline_pdus: &[(PduCount, PduEvent)],
+	initial: bool,
+) -> Vec<(MembershipState, OwnedUserId)> {
+	timeline_pdus
+		.iter()
+		.filter(|_| !initial)
+		.map(ref_at!(1))
+		.filter_map(extract_membership)
+		.collect::<Vec<_>>()
+}
+
+fn extract_membership(event: &PduEvent) -> Option<(MembershipState, OwnedUserId)> {
+	let content: RoomMemberEventContent = event.get_content().ok()?;
+	let user_id: OwnedUserId = event.state_key()?.parse().ok()?;
+
+	Some((content.membership, user_id))
+}
+
+#[expect(clippy::too_many_arguments)]
+async fn gather_device_list_updates(
+	services: &Services,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	timeline_membership_changes: Vec<(MembershipState, OwnedUserId)>,
+	state_events: &[PduEvent],
+	initial: bool,
+	since: u64,
+	next_batch: u64,
+) -> (HashSet<OwnedUserId>, HashSet<OwnedUserId>) {
 	let keys_changed = services
 		.users
 		.room_keys_changed(room_id, since, Some(next_batch))
@@ -1172,27 +1573,13 @@ async fn load_joined_room(
 		.map(ToOwned::to_owned)
 		.collect::<Vec<_>>();
 
-	let extract_membership = |event: &PduEvent| {
-		let content: RoomMemberEventContent = event.get_content().ok()?;
-		let user_id: OwnedUserId = event.state_key()?.parse().ok()?;
-
-		Some((content.membership, user_id))
-	};
-
-	let timeline_membership_changes = timeline_pdus
-		.iter()
-		.filter(|_| !initial)
-		.map(ref_at!(1))
-		.filter_map(extract_membership)
-		.collect::<Vec<_>>();
-
-	let device_list_updates = state_events
+	let (mut dlu, leu) = state_events
 		.iter()
 		.stream()
 		.ready_filter(|_| !initial)
 		.ready_filter(|state_event| *state_event.event_type() == RoomMember)
 		.ready_filter_map(extract_membership)
-		.chain(timeline_membership_changes.stream())
+		.chain(timeline_membership_changes.into_iter().stream())
 		.fold_default(async |(mut dlu, mut leu): pair_of!(HashSet<_>), (membership, user_id)| {
 			use MembershipState::*;
 
@@ -1208,88 +1595,40 @@ async fn load_joined_room(
 
 			(dlu, leu)
 		})
-		.then(async |(mut dlu, leu)| {
-			dlu.extend(keys_changed.await);
-			(dlu, leu)
-		});
+		.await;
 
-	let include_in_timeline = |event: &PduEvent| {
-		let filter = &filter.room.timeline;
-		filter.matches(event)
-	};
+	dlu.extend(keys_changed.await);
+	(dlu, leu)
+}
 
-	// `encrypted_room` is `Some` whenever timeline or state events are emitted.
-	let encrypted = encrypted_room.unwrap_or(false);
-
-	let room_events = timeline_pdus
-		.into_iter()
-		.stream()
-		.wide_filter_map(|item| ignored_filter(services, item, sender_user))
-		.map(at!(1))
-		.chain(joined_sender_member.into_iter().stream())
-		.ready_filter(include_in_timeline)
-		.wide_then(|pdu| with_membership(services, pdu, sender_user, encrypted))
-		.collect::<Vec<_>>();
-
-	let account_data_events = services
-		.account_data
-		.changes_since(Some(room_id), sender_user, since, None)
-		.ready_filter_map(|e| extract_variant!(e, AnyRawAccountDataEvent::Room))
-		.ready_filter(move |e| since != 0 || !is_empty_account_data_event(e))
-		.collect();
-
-	let (
-		(room_events, account_data_events),
-		(typing_events, private_read_events),
-		(notification_count, highlight_count, thread_counts),
-		(device_list_updates, left_encrypted_users),
-	) = join4(
-		join(room_events, account_data_events),
-		join(typing_events, private_read_events),
-		join3(notification_count, highlight_count, thread_counts),
-		device_list_updates,
-	)
-	.boxed()
-	.await;
-
-	let is_in_timeline = |event: &PduEvent| {
-		room_events
-			.iter()
-			.map(Event::event_id)
-			.any(is_equal_to!(event.event_id()))
-	};
-
-	// MSC4222: when the client opts into `state_after`, state events that
-	// took effect within the timeline appear in both the timeline and the
-	// state section, so the in-timeline exclusion is bypassed.
-	let include_in_state = |event: &PduEvent| {
-		let filter = &filter.room.state;
-		filter.matches(event) && (full_state || use_state_after || !is_in_timeline(event))
-	};
-
-	let state_events: Vec<_> = state_events
+async fn assemble_state_events(
+	services: &Services,
+	state_events: Vec<PduEvent>,
+	sender_user: &UserId,
+	encrypted: bool,
+	include_in_state: impl Fn(&PduEvent) -> bool + Send + Sync,
+) -> Vec<Raw<AnySyncStateEvent>> {
+	state_events
 		.into_iter()
 		.filter(include_in_state)
 		.stream()
 		.wide_then(|pdu| with_membership(services, pdu, sender_user, encrypted))
 		.map(Event::into_format)
 		.collect()
-		.await;
+		.await
+}
 
-	let heroes = heroes
-		.into_iter()
-		.flatten()
-		.map(TryInto::try_into)
-		.filter_map(Result::ok)
-		.collect();
-
-	let edus: Vec<Raw<AnySyncEphemeralRoomEvent>> = receipt_events
-		.into_iter()
-		.map(at!(1))
-		.chain(typing_events)
-		.chain(private_read_events.into_iter().flatten())
-		.collect();
-
+#[expect(clippy::too_many_arguments)]
+fn assemble_unread_notifications(
+	notification_count: Option<UInt>,
+	highlight_count: Option<UInt>,
+	thread_counts: Option<BTreeMap<OwnedEventId, (u64, u64)>>,
+	thread_last_reads: Option<&BTreeMap<OwnedEventId, u64>>,
+	send_notification_count_filter: impl Fn(&UInt) -> bool,
+	want_thread_unread: bool,
+	initial: bool,
+	in_window: impl Fn(u64) -> bool,
+) -> (UnreadNotificationsCount, BTreeMap<OwnedEventId, UnreadNotificationsCount>) {
 	let thread_counts = thread_counts.unwrap_or_default();
 
 	let (thread_total_notifications, thread_total_highlights) = thread_counts
@@ -1300,8 +1639,6 @@ async fn load_joined_room(
 
 	// MSC3773: when the client opts in via the timeline filter, partition
 	// notification counts per thread. Otherwise sum into the room total.
-	let want_thread_unread = filter.room.timeline.unread_thread_notifications;
-
 	let merge_total = |total: u64| {
 		move |count: UInt| {
 			want_thread_unread
@@ -1314,10 +1651,10 @@ async fn load_joined_room(
 	let unread_notifications = UnreadNotificationsCount {
 		highlight_count: highlight_count
 			.map(merge_total(thread_total_highlights))
-			.filter(send_notification_count_filter),
+			.filter(&send_notification_count_filter),
 		notification_count: notification_count
 			.map(merge_total(thread_total_notifications))
-			.filter(send_notification_count_filter),
+			.filter(&send_notification_count_filter),
 	};
 
 	// On quiet rounds (timeline empty) `thread_last_reads` is `Some`; emit
@@ -1328,8 +1665,7 @@ async fn load_joined_room(
 	let advanced_in_window = |root: &EventId| {
 		initial
 			|| thread_last_reads
-				.as_ref()
-				.is_none_or(|reads| reads.get(root).copied().is_some_and(in_window))
+				.is_none_or(|reads| reads.get(root).copied().is_some_and(&in_window))
 	};
 
 	let unread_thread_notifications = thread_counts
@@ -1346,36 +1682,7 @@ async fn load_joined_room(
 		})
 		.collect();
 
-	let state = StateEvents { events: state_events };
-
-	let state = if use_state_after {
-		RoomState::After(state)
-	} else {
-		RoomState::Before(state)
-	};
-
-	let joined_room = JoinedRoom {
-		account_data: RoomAccountData { events: account_data_events },
-		ephemeral: Ephemeral { events: edus },
-		state,
-		summary: RoomSummary {
-			joined_member_count: joined_member_count.map(ruma_from_u64),
-			invited_member_count: invited_member_count.map(ruma_from_u64),
-			heroes,
-		},
-		timeline: Timeline {
-			limited: limited || joined_since_last_sync,
-			prev_batch: prev_batch.as_ref().map(ToString::to_string),
-			events: room_events
-				.into_iter()
-				.map(Event::into_format)
-				.collect(),
-		},
-		unread_notifications,
-		unread_thread_notifications,
-	};
-
-	Ok((joined_room, device_list_updates, left_encrypted_users))
+	(unread_notifications, unread_thread_notifications)
 }
 
 #[tracing::instrument(

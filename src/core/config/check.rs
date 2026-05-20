@@ -1,4 +1,4 @@
-use std::env::consts::OS;
+use std::{env::consts::OS, net::SocketAddr};
 
 use either::Either;
 use itertools::Itertools;
@@ -36,13 +36,6 @@ pub fn check(config: &Config) -> Result {
 	warn_deprecated(config);
 	warn_unknown_key(config)?;
 
-	if config.sentry && config.sentry_endpoint.is_none() {
-		return Err!(Config(
-			"sentry_endpoint",
-			"Sentry cannot be enabled without an endpoint set"
-		));
-	}
-
 	#[cfg(all(
 		feature = "hardened_malloc",
 		feature = "jemalloc",
@@ -53,6 +46,31 @@ pub fn check(config: &Config) -> Result {
 		 jemalloc to be used."
 	);
 
+	check_observability(config)?;
+	check_network(config)?;
+	check_storage(config)?;
+	check_registration(config)?;
+	check_turn_and_media_misc(config)?;
+	check_url_previews(config)?;
+	check_room_version(config)?;
+	check_identity_providers(config)?;
+	check_media_providers(config)?;
+
+	Ok(())
+}
+
+fn check_observability(config: &Config) -> Result {
+	if config.sentry && config.sentry_endpoint.is_none() {
+		return Err!(Config(
+			"sentry_endpoint",
+			"Sentry cannot be enabled without an endpoint set"
+		));
+	}
+
+	Ok(())
+}
+
+fn check_network(config: &Config) -> Result {
 	#[cfg(not(unix))]
 	if config.unix_socket_path.is_some() {
 		return Err!(Config(
@@ -83,46 +101,63 @@ pub fn check(config: &Config) -> Result {
 	}
 
 	if config.unix_socket_path.is_none() {
-		config.get_bind_addrs().iter().for_each(|addr| {
-			use std::path::Path;
-
-			if addr.ip().is_loopback() {
-				debug_info!(
-					"Found loopback listening address {addr}, running checks if we're in a \
-					 container."
-				);
-
-				if Path::new("/proc/vz").exists() /* Guest */ && !Path::new("/proc/bz").exists()
-				/* Host */
-				{
-					error!(
-						"You are detected using OpenVZ with a loopback/localhost listening \
-						 address of {addr}. If you are using OpenVZ for containers and you use \
-						 NAT-based networking to communicate with the host and guest, this will \
-						 NOT work. Please change this to \"0.0.0.0\". If this is expected, you \
-						 can ignore.",
-					);
-				} else if Path::new("/.dockerenv").exists() {
-					error!(
-						"You are detected using Docker with a loopback/localhost listening \
-						 address of {addr}. If you are using a reverse proxy on the host and \
-						 require communication to tuwunel in the Docker container via NAT-based \
-						 networking, this will NOT work. Please change this to \"0.0.0.0\". If \
-						 this is expected, you can ignore.",
-					);
-				} else if Path::new("/run/.containerenv").exists() {
-					error!(
-						"You are detected using Podman with a loopback/localhost listening \
-						 address of {addr}. If you are using a reverse proxy on the host and \
-						 require communication to tuwunel in the Podman container via NAT-based \
-						 networking, this will NOT work. Please change this to \"0.0.0.0\". If \
-						 this is expected, you can ignore.",
-					);
-				}
-			}
-		});
+		config
+			.get_bind_addrs()
+			.iter()
+			.for_each(warn_loopback_in_container);
 	}
 
+	// check if user specified valid IP CIDR ranges on startup
+	for cidr in &config.ip_range_denylist {
+		if let Err(e) = ipaddress::IPAddress::parse(cidr) {
+			return Err!(Config(
+				"ip_range_denylist",
+				"Parsing specified IP CIDR range from string failed: {e}."
+			));
+		}
+	}
+
+	Ok(())
+}
+
+fn warn_loopback_in_container(addr: &SocketAddr) {
+	use std::path::Path;
+
+	if !addr.ip().is_loopback() {
+		return;
+	}
+
+	debug_info!(
+		"Found loopback listening address {addr}, running checks if we're in a container."
+	);
+
+	if Path::new("/proc/vz").exists() /* Guest */ && !Path::new("/proc/bz").exists()
+	/* Host */
+	{
+		error!(
+			"You are detected using OpenVZ with a loopback/localhost listening address of \
+			 {addr}. If you are using OpenVZ for containers and you use NAT-based networking to \
+			 communicate with the host and guest, this will NOT work. Please change this to \
+			 \"0.0.0.0\". If this is expected, you can ignore.",
+		);
+	} else if Path::new("/.dockerenv").exists() {
+		error!(
+			"You are detected using Docker with a loopback/localhost listening address of \
+			 {addr}. If you are using a reverse proxy on the host and require communication to \
+			 tuwunel in the Docker container via NAT-based networking, this will NOT work. \
+			 Please change this to \"0.0.0.0\". If this is expected, you can ignore.",
+		);
+	} else if Path::new("/run/.containerenv").exists() {
+		error!(
+			"You are detected using Podman with a loopback/localhost listening address of \
+			 {addr}. If you are using a reverse proxy on the host and require communication to \
+			 tuwunel in the Podman container via NAT-based networking, this will NOT work. \
+			 Please change this to \"0.0.0.0\". If this is expected, you can ignore.",
+		);
+	}
+}
+
+fn check_storage(config: &Config) -> Result {
 	// rocksdb does not allow max_log_files to be 0
 	if config.rocksdb_max_log_files == 0 {
 		return Err!(Config(
@@ -140,6 +175,10 @@ pub fn check(config: &Config) -> Result {
 		));
 	}
 
+	Ok(())
+}
+
+fn check_registration(config: &Config) -> Result {
 	if config
 		.emergency_password
 		.as_ref()
@@ -164,7 +203,6 @@ pub fn check(config: &Config) -> Result {
 		));
 	}
 
-	// check if the user specified a registration token as `""`
 	if config
 		.registration_token
 		.as_ref()
@@ -195,6 +233,42 @@ pub fn check(config: &Config) -> Result {
 		));
 	}
 
+	let no_token =
+		config.registration_token.is_none() && config.registration_token_file.is_none();
+
+	if config.allow_registration
+		&& no_token
+		&& !config.yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse
+	{
+		return Err!(Config(
+			"registration_token",
+			"!! You have `allow_registration` enabled without a token configured in your config \
+			 which means you are allowing ANYONE to register on your tuwunel instance without \
+			 any 2nd-step (e.g. registration token). If this is not the intended behaviour, \
+			 please set a registration token. For security and safety reasons, tuwunel will \
+			 shut down. If you are extra sure this is the desired behaviour you want, please \
+			 set the following config option to true:
+`yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse`"
+		));
+	}
+
+	if config.allow_registration
+		&& no_token
+		&& config.yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse
+	{
+		warn!(
+			"Open registration is enabled via setting \
+			 `yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse` and \
+			 `allow_registration` to true without a registration token configured. You are \
+			 expected to be aware of the risks now. If this is not the desired behaviour, \
+			 please set a registration token."
+		);
+	}
+
+	Ok(())
+}
+
+fn check_turn_and_media_misc(config: &Config) -> Result {
 	if !config.turn_uris.is_empty()
 		&& config.turn_secret.is_none()
 		&& config.turn_secret_file.is_none()
@@ -216,47 +290,6 @@ pub fn check(config: &Config) -> Result {
 		));
 	}
 
-	// check if user specified valid IP CIDR ranges on startup
-	for cidr in &config.ip_range_denylist {
-		if let Err(e) = ipaddress::IPAddress::parse(cidr) {
-			return Err!(Config(
-				"ip_range_denylist",
-				"Parsing specified IP CIDR range from string failed: {e}."
-			));
-		}
-	}
-
-	if config.allow_registration
-		&& !config.yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse
-		&& config.registration_token.is_none()
-		&& config.registration_token_file.is_none()
-	{
-		return Err!(Config(
-			"registration_token",
-			"!! You have `allow_registration` enabled without a token configured in your config \
-			 which means you are allowing ANYONE to register on your tuwunel instance without \
-			 any 2nd-step (e.g. registration token). If this is not the intended behaviour, \
-			 please set a registration token. For security and safety reasons, tuwunel will \
-			 shut down. If you are extra sure this is the desired behaviour you want, please \
-			 set the following config option to true:
-`yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse`"
-		));
-	}
-
-	if config.allow_registration
-		&& config.yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse
-		&& config.registration_token.is_none()
-		&& config.registration_token_file.is_none()
-	{
-		warn!(
-			"Open registration is enabled via setting \
-			 `yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse` and \
-			 `allow_registration` to true without a registration token configured. You are \
-			 expected to be aware of the risks now. If this is not the desired behaviour, \
-			 please set a registration token."
-		);
-	}
-
 	if config.allow_outgoing_presence && !config.allow_local_presence {
 		return Err!(Config(
 			"allow_local_presence",
@@ -272,37 +305,31 @@ pub fn check(config: &Config) -> Result {
 		);
 	}
 
-	if config
-		.url_preview_domain_contains_allowlist
-		.contains(&"*".to_owned())
-	{
-		warn!(
-			"All URLs are allowed for URL previews via setting \
-			 \"url_preview_domain_contains_allowlist\" to \"*\". This opens up significant \
-			 attack surface to your server. You are expected to be aware of the risks by doing \
-			 this."
-		);
-	}
-	if config
-		.url_preview_domain_explicit_allowlist
-		.contains(&"*".to_owned())
-	{
-		warn!(
-			"All URLs are allowed for URL previews via setting \
-			 \"url_preview_domain_explicit_allowlist\" to \"*\". This opens up significant \
-			 attack surface to your server. You are expected to be aware of the risks by doing \
-			 this."
-		);
-	}
-	if config
-		.url_preview_url_contains_allowlist
-		.contains(&"*".to_owned())
-	{
-		warn!(
-			"All URLs are allowed for URL previews via setting \
-			 \"url_preview_url_contains_allowlist\" to \"*\". This opens up significant attack \
-			 surface to your server. You are expected to be aware of the risks by doing this."
-		);
+	Ok(())
+}
+
+fn check_url_previews(config: &Config) -> Result {
+	let wildcard = "*".to_owned();
+	let url_preview_wildcards = [
+		(
+			"url_preview_domain_contains_allowlist",
+			&config.url_preview_domain_contains_allowlist,
+		),
+		(
+			"url_preview_domain_explicit_allowlist",
+			&config.url_preview_domain_explicit_allowlist,
+		),
+		("url_preview_url_contains_allowlist", &config.url_preview_url_contains_allowlist),
+	];
+
+	for (name, list) in url_preview_wildcards {
+		if list.contains(&wildcard) {
+			warn!(
+				"All URLs are allowed for URL previews via setting \"{name}\" to \"*\". This \
+				 opens up significant attack surface to your server. You are expected to be \
+				 aware of the risks by doing this."
+			);
+		}
 	}
 
 	if let Some(Either::Right(_)) = config.url_preview_bound_interface.as_ref()
@@ -314,6 +341,10 @@ pub fn check(config: &Config) -> Result {
 		));
 	}
 
+	Ok(())
+}
+
+fn check_room_version(config: &Config) -> Result {
 	if !config.supported_room_version(&config.default_room_version) {
 		return Err!(Config(
 			"default_room_version",
@@ -322,6 +353,10 @@ pub fn check(config: &Config) -> Result {
 		));
 	}
 
+	Ok(())
+}
+
+fn check_identity_providers(config: &Config) -> Result {
 	for a in config.identity_provider.values() {
 		let count = config
 			.identity_provider
@@ -340,32 +375,7 @@ pub fn check(config: &Config) -> Result {
 	}
 
 	for (i, provider) in &config.identity_provider {
-		if provider.client_secret.is_some() {
-			continue;
-		}
-
-		let Some(secret_path) = &provider.client_secret_file else {
-			return Err!(Config(
-				"client_secret",
-				"Either client secret or a client secret file must be set on identity provider \
-				 №{i}."
-			));
-		};
-
-		let Ok(secret) = std::fs::read_to_string(secret_path) else {
-			return Err!(Config(
-				"client_secret_file",
-				"Client secret file was specified but failed to be read at identity provider \
-				 №{i}"
-			));
-		};
-
-		if secret.is_empty() {
-			return Err!(Config(
-				"client_secret_file",
-				"Client secret file was specified but is empty on identity provider №{i}"
-			));
-		}
+		check_identity_provider_secret(i, provider)?;
 	}
 
 	if !config.sso_custom_providers_page
@@ -391,6 +401,39 @@ pub fn check(config: &Config) -> Result {
 		);
 	}
 
+	Ok(())
+}
+
+fn check_identity_provider_secret(i: &str, provider: &IdentityProvider) -> Result {
+	if provider.client_secret.is_some() {
+		return Ok(());
+	}
+
+	let Some(secret_path) = &provider.client_secret_file else {
+		return Err!(Config(
+			"client_secret",
+			"Either client secret or a client secret file must be set on identity provider №{i}."
+		));
+	};
+
+	let Ok(secret) = std::fs::read_to_string(secret_path) else {
+		return Err!(Config(
+			"client_secret_file",
+			"Client secret file was specified but failed to be read at identity provider №{i}"
+		));
+	};
+
+	if secret.is_empty() {
+		return Err!(Config(
+			"client_secret_file",
+			"Client secret file was specified but is empty on identity provider №{i}"
+		));
+	}
+
+	Ok(())
+}
+
+fn check_media_providers(config: &Config) -> Result {
 	for provider in &config.store_media_on_providers {
 		if !config.media_storage_providers.contains(provider) {
 			return Err!(Config(

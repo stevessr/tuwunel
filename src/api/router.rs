@@ -26,11 +26,22 @@ use crate::{client, oidc, server};
 
 pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 	let config = &server.config;
-	let mut router = router
-        .ruma_route(&client::get_profile_field_route)
-        .ruma_route(&client::set_profile_field_route)
-        .ruma_route(&client::delete_profile_field_route)
-        .ruma_route(&client::appservice_ping)
+	let router = register_client_auth_routes(router);
+	let router = register_client_profile_and_data_routes(router);
+	let router = register_client_keys_and_backup_routes(router);
+	let router = register_client_room_routes(router);
+	let router = register_client_state_and_sync_routes(router);
+	let router = register_client_media_and_device_routes(router);
+	let router = register_client_misc_routes(router);
+	let router = register_oidc_routes(router);
+	let router = register_server_misc_routes(router);
+	let router = register_federation_routes(router, config.allow_federation);
+
+	register_legacy_media_routes(router, config.allow_legacy_media)
+}
+
+fn register_client_auth_routes(router: Router<State>) -> Router<State> {
+	router
 		.ruma_route(&client::get_supported_versions_route)
 		.ruma_route(&client::get_register_available_route)
 		.ruma_route(&client::register_route)
@@ -51,8 +62,36 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::request_3pid_management_token_via_email_route)
 		.ruma_route(&client::request_3pid_management_token_via_msisdn_route)
 		.ruma_route(&client::check_registration_token_validity)
-		.ruma_route(&client::get_notifications_route)
-		.ruma_route(&client::get_capabilities_route)
+		.ruma_route(&client::create_openid_token_route)
+		.ruma_route(&client::is_user_suspended_route)
+		.ruma_route(&client::suspend_user_route)
+		.ruma_route(&client::is_user_locked_route)
+		.ruma_route(&client::lock_user_route)
+}
+
+fn register_client_profile_and_data_routes(router: Router<State>) -> Router<State> {
+	router
+		.ruma_route(&client::get_profile_field_route)
+		.ruma_route(&client::set_profile_field_route)
+		.ruma_route(&client::delete_profile_field_route)
+		.ruma_route(&client::set_displayname_route)
+		.ruma_route(&client::get_displayname_route)
+		.ruma_route(&client::set_avatar_url_route)
+		.ruma_route(&client::get_avatar_url_route)
+		.ruma_route(&client::get_profile_route)
+		.ruma_route(&client::set_presence_route)
+		.ruma_route(&client::get_presence_route)
+		.ruma_route(&client::get_filter_route)
+		.ruma_route(&client::create_filter_route)
+		.ruma_route(&client::set_global_account_data_route)
+		.ruma_route(&client::set_room_account_data_route)
+		.ruma_route(&client::get_global_account_data_route)
+		.ruma_route(&client::get_room_account_data_route)
+		.ruma_route(&client::delete_global_account_data_route)
+		.ruma_route(&client::delete_room_account_data_route)
+		.ruma_route(&client::get_tags_route)
+		.ruma_route(&client::update_tag_route)
+		.ruma_route(&client::delete_tag_route)
 		.ruma_route(&client::get_pushrules_all_route)
 		.ruma_route(&client::get_pushrules_global_route)
 		.ruma_route(&client::set_pushrule_route)
@@ -62,27 +101,20 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::get_pushrule_actions_route)
 		.ruma_route(&client::set_pushrule_actions_route)
 		.ruma_route(&client::delete_pushrule_route)
-		.ruma_route(&client::get_room_event_route)
-		.ruma_route(&client::get_room_aliases_route)
-		.ruma_route(&client::get_filter_route)
-		.ruma_route(&client::create_filter_route)
-		.ruma_route(&client::create_openid_token_route)
-		.ruma_route(&client::set_global_account_data_route)
-		.ruma_route(&client::set_room_account_data_route)
-		.ruma_route(&client::get_global_account_data_route)
-		.ruma_route(&client::get_room_account_data_route)
-		.ruma_route(&client::delete_global_account_data_route)
-		.ruma_route(&client::delete_room_account_data_route)
-		.ruma_route(&client::set_displayname_route)
-		.ruma_route(&client::get_displayname_route)
-		.ruma_route(&client::set_avatar_url_route)
-		.ruma_route(&client::get_avatar_url_route)
-		.ruma_route(&client::get_profile_route)
-		.ruma_route(&client::set_presence_route)
-		.ruma_route(&client::get_presence_route)
+		.ruma_route(&client::get_pushers_route)
+		.ruma_route(&client::set_pushers_route)
+		.ruma_route(&client::get_notifications_route)
+		.ruma_route(&client::get_capabilities_route)
+}
+
+fn register_client_keys_and_backup_routes(router: Router<State>) -> Router<State> {
+	router
 		.ruma_route(&client::upload_keys_route)
 		.ruma_route(&client::get_keys_route)
 		.ruma_route(&client::claim_keys_route)
+		.ruma_route(&client::upload_signing_keys_route)
+		.ruma_route(&client::upload_signatures_route)
+		.ruma_route(&client::get_key_changes_route)
 		.ruma_route(&client::create_backup_version_route)
 		.ruma_route(&client::update_backup_version_route)
 		.ruma_route(&client::delete_backup_version_route)
@@ -97,6 +129,11 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::get_backup_keys_for_room_route)
 		.ruma_route(&client::get_backup_keys_for_session_route)
 		.ruma_route(&client::get_backup_keys_route)
+}
+
+fn register_client_room_routes(router: Router<State>) -> Router<State> {
+	router
+		.ruma_route(&client::appservice_ping)
 		.ruma_route(&client::set_read_marker_route)
 		.ruma_route(&client::create_receipt_route)
 		.ruma_route(&client::create_typing_event_route)
@@ -105,10 +142,6 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::report_event_route)
 		.ruma_route(&client::report_room_route)
 		.ruma_route(&client::report_user_route)
-		.ruma_route(&client::is_user_suspended_route)
-		.ruma_route(&client::suspend_user_route)
-		.ruma_route(&client::is_user_locked_route)
-		.ruma_route(&client::lock_user_route)
 		.ruma_route(&client::create_alias_route)
 		.ruma_route(&client::delete_alias_route)
 		.ruma_route(&client::get_alias_route)
@@ -130,12 +163,27 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::search_users_route)
 		.ruma_route(&client::get_member_events_route)
 		.ruma_route(&client::get_protocols_route)
+		.ruma_route(&client::upgrade_room_route)
+		.ruma_route(&client::get_mutual_rooms_route)
+		.ruma_route(&client::get_room_summary)
+		.route(
+			"/_matrix/client/unstable/im.nheko.summary/rooms/{room_id_or_alias}/summary",
+			get(client::get_room_summary_legacy),
+		)
+		.ruma_route(&client::room_initial_sync_route)
+		.ruma_route(&client::get_room_event_route)
+		.ruma_route(&client::get_room_aliases_route)
+}
+
+fn register_client_state_and_sync_routes(router: Router<State>) -> Router<State> {
+	router
 		.ruma_route(&client::send_message_event_route)
 		.ruma_route(&client::send_state_event_for_key_route)
 		.ruma_route(&client::get_state_events_route)
 		.ruma_route(&client::get_state_events_for_key_route)
-		// Ruma doesn't have support for multiple paths for a single endpoint yet, and these routes
-		// share one Ruma request / response type pair with {get,send}_state_event_for_key_route
+		// Ruma doesn't have support for multiple paths for a single endpoint yet, and these
+		// routes share one Ruma request / response type pair with
+		// {get,send}_state_event_for_key_route
 		.route(
 			"/_matrix/client/r0/rooms/{room_id}/state/{event_type}",
 			get(client::get_state_events_for_empty_key_route)
@@ -164,8 +212,15 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::get_event_by_timestamp_route)
 		.ruma_route(&client::get_message_events_route)
 		.ruma_route(&client::search_events_route)
-		.ruma_route(&client::turn_server_route)
-		.ruma_route(&client::send_event_to_device_route)
+		.ruma_route(&client::get_threads_route)
+		.ruma_route(&client::get_relating_events_with_rel_type_and_event_type_route)
+		.ruma_route(&client::get_relating_events_with_rel_type_route)
+		.ruma_route(&client::get_relating_events_route)
+		.ruma_route(&client::get_hierarchy_route)
+}
+
+fn register_client_media_and_device_routes(router: Router<State>) -> Router<State> {
+	router
 		.ruma_route(&client::create_content_route)
 		.ruma_route(&client::create_mxc_uri_route)
 		.ruma_route(&client::create_content_async_route)
@@ -183,69 +238,58 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 		.ruma_route(&client::delete_dehydrated_device_route)
 		.ruma_route(&client::get_dehydrated_device_route)
 		.ruma_route(&client::get_dehydrated_events_route)
-		.ruma_route(&client::get_tags_route)
-		.ruma_route(&client::update_tag_route)
-		.ruma_route(&client::delete_tag_route)
-		.ruma_route(&client::upload_signing_keys_route)
-		.ruma_route(&client::upload_signatures_route)
-		.ruma_route(&client::get_key_changes_route)
-		.ruma_route(&client::get_pushers_route)
-		.ruma_route(&client::set_pushers_route)
-		.ruma_route(&client::upgrade_room_route)
-		.ruma_route(&client::get_threads_route)
-		.ruma_route(&client::get_relating_events_with_rel_type_and_event_type_route)
-		.ruma_route(&client::get_relating_events_with_rel_type_route)
-		.ruma_route(&client::get_relating_events_route)
+		.ruma_route(&client::send_event_to_device_route)
+}
+
+fn register_client_misc_routes(router: Router<State>) -> Router<State> {
+	router
+		.ruma_route(&client::turn_server_route)
 		.ruma_route(&client::get_transports_route)
-		.ruma_route(&client::get_hierarchy_route)
-		.ruma_route(&client::get_mutual_rooms_route)
-		.ruma_route(&client::get_room_summary)
-		.route(
-			"/_matrix/client/unstable/im.nheko.summary/rooms/{room_id_or_alias}/summary",
-			get(client::get_room_summary_legacy)
-		)
-		.ruma_route(&client::room_initial_sync_route)
+		.ruma_route(&client::well_known_support)
+		.ruma_route(&client::well_known_client)
 		.route("/_tuwunel/server_version", get(client::tuwunel_server_version))
-		// OIDC server endpoints (next-gen auth, MSC2965/2964/2966/2967)
+}
+
+fn register_oidc_routes(router: Router<State>) -> Router<State> {
+	// OIDC server endpoints (next-gen auth, MSC2965/2964/2966/2967)
+	router
 		.route("/_tuwunel/oidc/registration", post(oidc::registration_route))
 		.route("/_tuwunel/oidc/authorize", get(oidc::authorize_route))
 		.route("/_tuwunel/oidc/_complete", get(oidc::complete_route))
 		.route("/_tuwunel/oidc/token", post(oidc::token_route))
 		.route("/_tuwunel/oidc/revoke", post(oidc::revoke_route))
 		.route("/_tuwunel/oidc/jwks", get(oidc::jwks_route))
-		.route("/_tuwunel/oidc/userinfo",
-			get(oidc::userinfo_route)
-			.post(oidc::userinfo_route)
-		)
+		.route("/_tuwunel/oidc/userinfo", get(oidc::userinfo_route).post(oidc::userinfo_route))
 		.route("/_tuwunel/oidc/account.js", get(oidc::account_js_route))
 		.route("/_tuwunel/oidc/account.css", get(oidc::account_css_route))
 		.route(
 			"/_tuwunel/oidc/account_callback",
-			get(oidc::get_account_callback_route)
-			.post(oidc::post_account_callback_route),
+			get(oidc::get_account_callback_route).post(oidc::post_account_callback_route),
 		)
 		.route("/_tuwunel/oidc/account", get(oidc::get_account_route))
 		.route("/_matrix/client/v1/auth_issuer", get(oidc::auth_issuer_route))
 		.route("/_matrix/client/v1/auth_metadata", get(oidc::openid_configuration_route))
 		.route(
 			"/_matrix/client/unstable/org.matrix.msc2965/auth_issuer",
-			get(oidc::auth_issuer_route)
+			get(oidc::auth_issuer_route),
 		)
 		.route(
 			"/_matrix/client/unstable/org.matrix.msc2965/auth_metadata",
-			get(oidc::openid_configuration_route)
+			get(oidc::openid_configuration_route),
 		)
 		.route("/.well-known/openid-configuration", get(oidc::openid_configuration_route))
-		.ruma_route(&client::well_known_support)
-		.ruma_route(&client::well_known_client);
+}
 
+fn register_server_misc_routes(router: Router<State>) -> Router<State> {
 	// SS endpoints not related to federation
-	router = router
+	router
 		.ruma_route(&server::well_known_server)
-		.ruma_route(&server::get_openid_userinfo_route);
+		.ruma_route(&server::get_openid_userinfo_route)
+}
 
-	if config.allow_federation {
-		router = router
+fn register_federation_routes(router: Router<State>, allow_federation: bool) -> Router<State> {
+	if allow_federation {
+		router
 			.ruma_route(&server::get_server_version_route)
 			.route("/_matrix/key/v2/server", get(server::get_server_keys_route))
 			.route(
@@ -278,30 +322,33 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 			.ruma_route(&server::get_content_route)
 			.ruma_route(&server::get_content_thumbnail_route)
 			.route("/_matrix/federation/v1/query/edutypes", get(server::get_edu_types_route))
-			.route("/_tuwunel/local_user_count", get(client::tuwunel_local_user_count));
+			.route("/_tuwunel/local_user_count", get(client::tuwunel_local_user_count))
 	} else {
-		router = router
+		router
 			.route("/_matrix/federation/{*path}", any(federation_disabled))
 			.route("/_matrix/key/{*path}", any(federation_disabled))
-			.route("/_tuwunel/local_user_count", any(federation_disabled));
+			.route("/_tuwunel/local_user_count", any(federation_disabled))
 	}
+}
 
-	if config.allow_legacy_media {
-		router = router
+fn register_legacy_media_routes(
+	router: Router<State>,
+	allow_legacy_media: bool,
+) -> Router<State> {
+	if allow_legacy_media {
+		router
 			.ruma_route(&client::get_media_config_legacy_route)
 			.ruma_route(&client::get_media_preview_legacy_route)
 			.ruma_route(&client::get_content_legacy_route)
 			.ruma_route(&client::get_content_as_filename_legacy_route)
-			.ruma_route(&client::get_content_thumbnail_legacy_route);
+			.ruma_route(&client::get_content_thumbnail_legacy_route)
 	} else {
-		router = router
+		router
 			.route("/_matrix/media/v3/config", any(legacy_media_disabled))
 			.route("/_matrix/media/v3/download/{*path}", any(legacy_media_disabled))
 			.route("/_matrix/media/v3/thumbnail/{*path}", any(legacy_media_disabled))
-			.route("/_matrix/media/v3/preview_url", any(redirect_legacy_preview));
+			.route("/_matrix/media/v3/preview_url", any(redirect_legacy_preview))
 	}
-
-	router
 }
 
 async fn redirect_legacy_preview(uri: Uri) -> impl IntoResponse {

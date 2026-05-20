@@ -4,25 +4,31 @@ mod heroes;
 use std::collections::{BTreeMap, HashSet};
 
 use futures::{
-	FutureExt, StreamExt, TryFutureExt, TryStreamExt,
+	FutureExt, StreamExt, TryFutureExt,
 	future::{join, join3, join4},
 };
 use ruma::{
-	JsOption, OwnedRoomId, UserId,
+	JsOption, OwnedRoomId, RoomId, UserId,
 	api::client::sync::sync_events::{UnreadNotificationsCount, v5::response},
-	events::{StateEventType, TimelineEventType, room::member::MembershipState},
+	events::{
+		AnySyncStateEvent, StateEventType, TimelineEventType, room::member::MembershipState,
+	},
+	serde::Raw,
 };
 use tuwunel_core::{
 	Result, at, err, error, is_equal_to,
 	itertools::Itertools,
-	matrix::{Event, StateKey, pdu::PduCount},
+	matrix::{
+		Event, StateKey,
+		pdu::{PduCount, PduEvent},
+	},
 	ref_at,
 	utils::{
 		BoolExt, IterStream, ReadyExt, TryFutureExtExt, math::usize_from_ruma, result::FlatOk,
 		stream::BroadbandExt,
 	},
 };
-use tuwunel_service::sync::Room;
+use tuwunel_service::{Services, sync::Room};
 
 use self::{bump_stamp::room_bump_stamp, heroes::calculate_heroes};
 use super::{super::load_timeline, Connection, SyncInfo, Window, WindowRoom};
@@ -171,73 +177,14 @@ async fn handle_room(
 				.map(Result::ok)
 		});
 
-	let lazy = required_state
-		.iter()
-		.any(is_equal_to!(&(StateEventType::RoomMember, "$LAZY".into())));
-
-	let timeline_senders = timeline_pdus
-		.iter()
-		.filter(|_| lazy)
-		.map(ref_at!(1))
-		.map(Event::sender)
-		.map(UserId::as_str);
-
-	let timeline_member_targets = timeline_pdus
-		.iter()
-		.filter(|_| lazy)
-		.map(ref_at!(1))
-		.filter(|event| *event.event_type() == TimelineEventType::RoomMember)
-		.filter_map(Event::state_key);
-
-	let timeline_senders: Vec<_> = timeline_senders
-		.chain(timeline_member_targets)
-		.sorted_unstable()
-		.dedup()
-		.collect();
-
-	let timeline_senders = timeline_senders
-		.iter()
-		.map(|sender| (StateEventType::RoomMember, StateKey::from_str(sender)))
-		.stream();
-
-	let wildcard_state = required_state
-		.iter()
-		.filter(|(_, state_key)| state_key == "*")
-		.map(|(event_type, _)| {
-			services
-				.state_accessor
-				.room_state_keys(room_id, event_type)
-				.map_ok(|state_key| (event_type.clone(), state_key))
-				.ready_filter_map(Result::ok)
-		})
-		.stream()
-		.flatten();
-
-	let required_state = required_state
-		.iter()
-		.cloned()
-		.stream()
-		.chain(wildcard_state)
-		.chain(timeline_senders)
-		.broad_filter_map(async |state| {
-			let state_key: StateKey = match state.1.as_str() {
-				| "$LAZY" | "*" => return None,
-				| "$ME" => sender_user.as_str().into(),
-				| _ => state.1.clone(),
-			};
-
-			let mut pdu = services
-				.state_accessor
-				.room_state_get(room_id, &state.0, &state_key)
-				.map_ok(Event::into_pdu)
-				.ok()
-				.await?;
-
-			annotate_membership(services, &mut pdu, sender_user, encrypted).await;
-
-			Some(Event::into_format(pdu))
-		})
-		.collect();
+	let required_state = collect_required_state(
+		services,
+		sender_user,
+		room_id,
+		&required_state,
+		&timeline_pdus,
+		encrypted,
+	);
 
 	// TODO: figure out a timestamp we can use for remote invites
 	let invite_state = is_invite.then_async(|| {
@@ -353,4 +300,92 @@ async fn handle_room(
 		invited_count,
 		unread_notifications: UnreadNotificationsCount { highlight_count, notification_count },
 	})
+}
+
+async fn collect_required_state(
+	services: &Services,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	required_state: &[(StateEventType, StateKey)],
+	timeline_pdus: &[(PduCount, PduEvent)],
+	encrypted: bool,
+) -> Vec<Raw<AnySyncStateEvent>> {
+	let lazy = required_state
+		.iter()
+		.any(is_equal_to!(&(StateEventType::RoomMember, "$LAZY".into())));
+
+	let timeline_senders = timeline_pdus
+		.iter()
+		.filter(|_| lazy)
+		.map(ref_at!(1))
+		.map(Event::sender)
+		.map(UserId::as_str);
+
+	let timeline_member_targets = timeline_pdus
+		.iter()
+		.filter(|_| lazy)
+		.map(ref_at!(1))
+		.filter(|event| *event.event_type() == TimelineEventType::RoomMember)
+		.filter_map(Event::state_key);
+
+	let timeline_senders = timeline_senders
+		.chain(timeline_member_targets)
+		.sorted_unstable()
+		.dedup()
+		.map(|sender| (StateEventType::RoomMember, StateKey::from_str(sender)))
+		.collect::<Vec<_>>();
+
+	let wildcard_types: Vec<StateEventType> = required_state
+		.iter()
+		.filter(|(_, state_key)| state_key == "*")
+		.map(|(event_type, _)| event_type.clone())
+		.collect();
+
+	// Sequential await: per-event-type stream → Vec resolution. Stream form
+	// (.then + flatten) triggers an HRTB mismatch downstream against join4.
+	let mut wildcard_state: Vec<(StateEventType, StateKey)> = Vec::new();
+	for event_type in wildcard_types {
+		wildcard_state.extend(wildcard_state_keys(services, room_id, event_type).await);
+	}
+
+	required_state
+		.iter()
+		.cloned()
+		.stream()
+		.chain(wildcard_state.into_iter().stream())
+		.chain(timeline_senders.into_iter().stream())
+		.broad_filter_map(async |state| {
+			let state_key: StateKey = match state.1.as_str() {
+				| "$LAZY" | "*" => return None,
+				| "$ME" => sender_user.as_str().into(),
+				| _ => state.1.clone(),
+			};
+
+			let mut pdu = services
+				.state_accessor
+				.room_state_get(room_id, &state.0, &state_key)
+				.map_ok(Event::into_pdu)
+				.ok()
+				.await?;
+
+			annotate_membership(services, &mut pdu, sender_user, encrypted).await;
+
+			Some(Event::into_format(pdu))
+		})
+		.collect()
+		.await
+}
+
+async fn wildcard_state_keys(
+	services: &Services,
+	room_id: &RoomId,
+	event_type: StateEventType,
+) -> Vec<(StateEventType, StateKey)> {
+	services
+		.state_accessor
+		.room_state_keys(room_id, &event_type)
+		.ready_filter_map(Result::ok)
+		.map(|state_key| (event_type.clone(), state_key))
+		.collect()
+		.await
 }

@@ -5,7 +5,7 @@ use futures::FutureExt;
 use itertools::Itertools;
 use ruma::{
 	CanonicalJsonObject, EventEncryptionAlgorithm, Int, OwnedRoomAliasId, OwnedRoomId,
-	OwnedUserId, RoomId, RoomVersionId,
+	OwnedUserId, RoomAliasId, RoomId, RoomVersionId, UserId,
 	api::client::room::{
 		self,
 		create_room::{
@@ -216,6 +216,58 @@ pub(crate) async fn create_room_route(
 	}
 
 	// 5. Events set by preset
+	let initial_state =
+		apply_preset_state_pdus(&services, &body, &preset, sender_user, &room_id, &state_lock)
+			.boxed()
+			.await?;
+
+	// 6. Events listed in initial_state
+	apply_initial_state_pdus(
+		&services,
+		initial_state,
+		&preset,
+		sender_user,
+		&room_id,
+		&state_lock,
+	)
+	.boxed()
+	.await?;
+
+	// 7. Events implied by name and topic
+	apply_name_and_topic_pdus(&services, &body, sender_user, &room_id, &state_lock)
+		.boxed()
+		.await?;
+
+	drop(next_count);
+	drop(state_lock);
+
+	// if inviting anyone with room creation and invite check passes
+	if (!body.invite.is_empty() || !body.invite_3pid.is_empty())
+		&& invite_check(&services, sender_user, &room_id)
+			.await
+			.is_ok()
+	{
+		process_invites(&services, &body, sender_user, &room_id)
+			.boxed()
+			.await;
+	}
+
+	finalize_alias_and_directory(&services, &body, alias.as_deref(), sender_user, &room_id)
+		.await?;
+
+	info!("{sender_user} created a room with room ID {room_id}");
+
+	Ok(create_room::v3::Response::new(room_id))
+}
+
+async fn apply_preset_state_pdus(
+	services: &Services,
+	body: &Ruma<create_room::v3::Request>,
+	preset: &RoomPreset,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	state_lock: &RoomMutexGuard,
+) -> Result<Vec<InitialEvent>> {
 	let mut initial_state = body
 		.initial_state
 		.iter()
@@ -278,25 +330,35 @@ pub(crate) async fn create_room_route(
 	// 5.1 Join Rules
 	services
 		.timeline
-		.build_and_append_pdu(join_rule_pdubuilder, sender_user, &room_id, &state_lock)
+		.build_and_append_pdu(join_rule_pdubuilder, sender_user, room_id, state_lock)
 		.boxed()
 		.await?;
 
 	// 5.2 History Visibility
 	services
 		.timeline
-		.build_and_append_pdu(history_visibility_pdubuilder, sender_user, &room_id, &state_lock)
+		.build_and_append_pdu(history_visibility_pdubuilder, sender_user, room_id, state_lock)
 		.boxed()
 		.await?;
 
 	// 5.3 Guest Access
 	services
 		.timeline
-		.build_and_append_pdu(guest_access_pdubuilder, sender_user, &room_id, &state_lock)
+		.build_and_append_pdu(guest_access_pdubuilder, sender_user, room_id, state_lock)
 		.boxed()
 		.await?;
 
-	// 6. Events listed in initial_state
+	Ok(initial_state)
+}
+
+async fn apply_initial_state_pdus(
+	services: &Services,
+	initial_state: Vec<InitialEvent>,
+	preset: &RoomPreset,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	state_lock: &RoomMutexGuard,
+) -> Result {
 	let is_encrypted = initial_state
 		.iter()
 		.any(|event| event.event_type == StateEventType::RoomEncryption);
@@ -304,50 +366,62 @@ pub(crate) async fn create_room_route(
 	for event in initial_state {
 		services
 			.timeline
-			.build_and_append_pdu(event.into(), sender_user, &room_id, &state_lock)
+			.build_and_append_pdu(event.into(), sender_user, room_id, state_lock)
 			.boxed()
 			.await?;
 	}
 
-	if services.config.allow_encryption && !is_encrypted {
-		use RoomPreset::*;
-
-		let config = services
-			.config
-			.encryption_enabled_by_default_for_room_type
-			.as_deref();
-
-		let should_encrypt = match config {
-			| Some("all") => true,
-			| Some("invite") => matches!(preset, PrivateChat | TrustedPrivateChat),
-			| _ => false,
-		};
-
-		if should_encrypt {
-			let algorithm = EventEncryptionAlgorithm::MegolmV1AesSha2;
-			let content = RoomEncryptionEventContent::new(algorithm);
-			services
-				.timeline
-				.build_and_append_pdu(
-					PduBuilder::state(String::new(), &content),
-					sender_user,
-					&room_id,
-					&state_lock,
-				)
-				.boxed()
-				.await?;
-		}
+	if !services.config.allow_encryption || is_encrypted {
+		return Ok(());
 	}
 
-	// 7. Events implied by name and topic
+	let config = services
+		.config
+		.encryption_enabled_by_default_for_room_type
+		.as_deref();
+
+	let should_encrypt = match config {
+		| Some("all") => true,
+		| Some("invite") =>
+			matches!(preset, RoomPreset::PrivateChat | RoomPreset::TrustedPrivateChat),
+		| _ => false,
+	};
+
+	if !should_encrypt {
+		return Ok(());
+	}
+
+	let algorithm = EventEncryptionAlgorithm::MegolmV1AesSha2;
+	let content = RoomEncryptionEventContent::new(algorithm);
+	services
+		.timeline
+		.build_and_append_pdu(
+			PduBuilder::state(String::new(), &content),
+			sender_user,
+			room_id,
+			state_lock,
+		)
+		.boxed()
+		.await?;
+
+	Ok(())
+}
+
+async fn apply_name_and_topic_pdus(
+	services: &Services,
+	body: &Ruma<create_room::v3::Request>,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	state_lock: &RoomMutexGuard,
+) -> Result {
 	if let Some(name) = &body.name {
 		services
 			.timeline
 			.build_and_append_pdu(
 				PduBuilder::state(String::new(), &RoomNameEventContent::new(name.clone())),
 				sender_user,
-				&room_id,
-				&state_lock,
+				room_id,
+				state_lock,
 			)
 			.boxed()
 			.await?;
@@ -359,60 +433,66 @@ pub(crate) async fn create_room_route(
 			.build_and_append_pdu(
 				PduBuilder::state(String::new(), &RoomTopicEventContent::new(topic.clone())),
 				sender_user,
-				&room_id,
-				&state_lock,
+				room_id,
+				state_lock,
 			)
 			.boxed()
 			.await?;
 	}
 
-	drop(next_count);
-	drop(state_lock);
+	Ok(())
+}
 
-	// if inviting anyone with room creation and invite check passes
-	if (!body.invite.is_empty() || !body.invite_3pid.is_empty())
-		&& invite_check(&services, sender_user, &room_id)
+async fn process_invites(
+	services: &Services,
+	body: &Ruma<create_room::v3::Request>,
+	sender_user: &UserId,
+	room_id: &RoomId,
+) {
+	// 8. Events implied by invite (and TODO: invite_3pid)
+	for user_id in &body.invite {
+		if services
+			.users
+			.user_is_ignored(sender_user, user_id)
 			.await
-			.is_ok()
-	{
-		// 8. Events implied by invite (and TODO: invite_3pid)
-		for user_id in &body.invite {
-			if services
-				.users
-				.user_is_ignored(sender_user, user_id)
-				.await
-			{
-				continue;
-			} else if services
-				.users
-				.user_is_ignored(user_id, sender_user)
-				.await
-			{
-				// silently drop the invite to the recipient if they've been ignored by the
-				// sender, pretend it worked
-				continue;
-			}
+		{
+			continue;
+		} else if services
+			.users
+			.user_is_ignored(user_id, sender_user)
+			.await
+		{
+			// silently drop the invite to the recipient if they've been ignored by the
+			// sender, pretend it worked
+			continue;
+		}
 
-			if let Err(e) = services
-				.membership
-				.invite(sender_user, user_id, &room_id, None, body.is_direct)
-				.boxed()
-				.await
-			{
-				warn!(%e, "Failed to send invite");
-			}
+		if let Err(e) = services
+			.membership
+			.invite(sender_user, user_id, room_id, None, body.is_direct)
+			.boxed()
+			.await
+		{
+			warn!(%e, "Failed to send invite");
 		}
 	}
+}
 
-	// Homeserver specific stuff
+async fn finalize_alias_and_directory(
+	services: &Services,
+	body: &Ruma<create_room::v3::Request>,
+	alias: Option<&RoomAliasId>,
+	sender_user: &UserId,
+	room_id: &RoomId,
+) -> Result {
 	if let Some(alias) = alias {
 		services
 			.alias
-			.set_alias_by(&alias, &room_id, sender_user)?;
+			.set_alias_by(alias, room_id, sender_user)?;
 	}
 
 	if body.visibility == room::Visibility::Public {
-		services.directory.set_public(&room_id);
+		services.directory.set_public(room_id);
 
 		if services.server.config.admin_room_notices {
 			services
@@ -420,12 +500,10 @@ pub(crate) async fn create_room_route(
 				.send_text(&format!("{sender_user} made {room_id} public to the room directory"))
 				.await;
 		}
-		info!("{sender_user} made {0} public to the room directory", &room_id);
+		info!("{sender_user} made {0} public to the room directory", room_id);
 	}
 
-	info!("{sender_user} created a room with room ID {room_id}");
-
-	Ok(create_room::v3::Response::new(room_id))
+	Ok(())
 }
 
 async fn create_create_event(

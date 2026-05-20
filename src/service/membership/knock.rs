@@ -376,7 +376,7 @@ async fn knock_room_helper_remote(
 
 	info!("make_knock finished");
 
-	let room_version_id = make_knock_response.room_version;
+	let room_version_id = make_knock_response.room_version.clone();
 
 	if !self
 		.services
@@ -388,6 +388,90 @@ async fn knock_room_helper_remote(
 		));
 	}
 
+	let (knock_event, event_id) = self
+		.build_knock_event(sender_user, room_id, reason, &make_knock_response, &room_version_id)
+		.await?;
+
+	let send_knock_response = self
+		.execute_send_knock(&remote_server, room_id, &event_id, &knock_event, &room_version_id)
+		.await?;
+
+	self.services
+		.short
+		.get_or_create_shortroomid(room_id)
+		.await;
+
+	info!("Parsing knock event");
+	let parsed_knock_pdu = PduEvent::from_object_and_eventid(&event_id, knock_event.clone())
+		.map_err(|e| err!(BadServerResponse("Invalid knock event PDU: {e:?}")))?;
+
+	let state_map = self
+		.ingest_send_knock_state(&send_knock_response, &room_version_id)
+		.await?;
+
+	self.apply_send_knock_state(room_id, &state_map, state_lock)
+		.await?;
+
+	let statehash_after_knock = self
+		.services
+		.state
+		.append_to_state(&parsed_knock_pdu)
+		.await?;
+
+	info!("Updating membership locally to knock state with provided stripped state events");
+	let count = self.services.globals.next_count();
+	self.services
+		.state_cache
+		.update_membership(
+			room_id,
+			sender_user,
+			parsed_knock_pdu
+				.get_content::<RoomMemberEventContent>()
+				.expect("we just created this"),
+			sender_user,
+			Some(
+				send_knock_response
+					.knock_room_state
+					.into_iter()
+					.filter_map(|s| extract_variant!(s, RawStrippedState::Stripped))
+					.collect(),
+			),
+			None,
+			false,
+			PduCount::Normal(*count),
+		)
+		.await?;
+
+	info!("Appending room knock event locally");
+	self.services
+		.timeline
+		.append_pdu(
+			&parsed_knock_pdu,
+			knock_event,
+			once(parsed_knock_pdu.event_id.borrow()),
+			state_lock,
+		)
+		.await?;
+
+	info!("Setting final room state for new room");
+	// We set the room state after inserting the pdu, so that we never have a moment
+	// in time where events in the current room state do not exist
+	self.services
+		.state
+		.set_room_state(room_id, statehash_after_knock, state_lock);
+
+	Ok(())
+}
+
+#[implement(Service)]
+async fn build_knock_event(
+	&self,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	reason: Option<String>,
+	make_knock_response: &federation::membership::prepare_knock_event::v1::Response,
+	room_version_id: &RoomVersionId,
+) -> Result<(CanonicalJsonObject, OwnedEventId)> {
 	let mut knock_event_stub: CanonicalJsonObject =
 		serde_json::from_str(make_knock_response.event.get()).map_err(|e| {
 			err!(BadServerResponse("Invalid make_knock event json received from server: {e:?}"))
@@ -453,18 +537,25 @@ async fn knock_room_helper_remote(
 	// to be present
 	self.services
 		.server_keys
-		.hash_and_sign_event(&mut knock_event_stub, &room_version_id)?;
+		.hash_and_sign_event(&mut knock_event_stub, room_version_id)?;
 
-	// Generate event id
-	let event_id = gen_event_id(&knock_event_stub, &room_version_id)?;
+	let event_id = gen_event_id(&knock_event_stub, room_version_id)?;
 
-	// Add event_id
 	knock_event_stub
 		.insert("event_id".into(), CanonicalJsonValue::String(event_id.clone().into()));
 
-	// It has enough fields to be called a proper event now
-	let knock_event = knock_event_stub;
+	Ok((knock_event_stub, event_id))
+}
 
+#[implement(Service)]
+async fn execute_send_knock(
+	&self,
+	remote_server: &OwnedServerName,
+	room_id: &RoomId,
+	event_id: &OwnedEventId,
+	knock_event: &CanonicalJsonObject,
+	room_version_id: &RoomVersionId,
+) -> Result<federation::membership::create_knock_event::v1::Response> {
 	info!("Asking {remote_server} for send_knock in room {room_id}");
 	let send_knock_request = federation::membership::create_knock_event::v1::Request {
 		room_id: room_id.to_owned(),
@@ -472,27 +563,31 @@ async fn knock_room_helper_remote(
 		pdu: self
 			.services
 			.federation
-			.format_pdu_into(knock_event.clone(), Some(&room_version_id))
+			.format_pdu_into(knock_event.clone(), Some(room_version_id))
 			.await,
 	};
 
-	let send_knock_response = self
+	let response = self
 		.services
 		.federation
-		.execute(&remote_server, send_knock_request)
+		.execute(remote_server, send_knock_request)
 		.await?;
 
 	info!("send_knock finished");
+	Ok(response)
+}
 
-	self.services
-		.short
-		.get_or_create_shortroomid(room_id)
-		.await;
-
-	info!("Parsing knock event");
-	let parsed_knock_pdu = PduEvent::from_object_and_eventid(&event_id, knock_event.clone())
-		.map_err(|e| err!(BadServerResponse("Invalid knock event PDU: {e:?}")))?;
-
+#[implement(Service)]
+#[expect(
+	deprecated,
+	reason = "Matrix 1.16 still permits receiving the legacy stripped variant for backwards \
+	          compatibility."
+)]
+async fn ingest_send_knock_state(
+	&self,
+	send_knock_response: &federation::membership::create_knock_event::v1::Response,
+	room_version_id: &RoomVersionId,
+) -> Result<HashMap<u64, OwnedEventId>> {
 	info!("Going through send_knock response knock state events");
 	let state = send_knock_response
 		.knock_room_state
@@ -529,7 +624,7 @@ async fn knock_room_helper_remote(
 			continue;
 		};
 
-		let event_id = gen_event_id(&event, &room_version_id)?;
+		let event_id = gen_event_id(&event, room_version_id)?;
 		let shortstatekey = self
 			.services
 			.short
@@ -543,6 +638,16 @@ async fn knock_room_helper_remote(
 		state_map.insert(shortstatekey, event_id.clone());
 	}
 
+	Ok(state_map)
+}
+
+#[implement(Service)]
+async fn apply_send_knock_state(
+	&self,
+	room_id: &RoomId,
+	state_map: &HashMap<u64, OwnedEventId>,
+	state_lock: &RoomMutexGuard,
+) -> Result {
 	info!("Compressing state from send_knock");
 	let compressed: CompressedState = self
 		.services
@@ -571,54 +676,6 @@ async fn knock_room_helper_remote(
 		.state
 		.force_state(room_id, statehash_before_knock, added, removed, state_lock)
 		.await?;
-
-	let statehash_after_knock = self
-		.services
-		.state
-		.append_to_state(&parsed_knock_pdu)
-		.await?;
-
-	info!("Updating membership locally to knock state with provided stripped state events");
-	let count = self.services.globals.next_count();
-	self.services
-		.state_cache
-		.update_membership(
-			room_id,
-			sender_user,
-			parsed_knock_pdu
-				.get_content::<RoomMemberEventContent>()
-				.expect("we just created this"),
-			sender_user,
-			Some(
-				send_knock_response
-					.knock_room_state
-					.into_iter()
-					.filter_map(|s| extract_variant!(s, RawStrippedState::Stripped))
-					.collect(),
-			),
-			None,
-			false,
-			PduCount::Normal(*count),
-		)
-		.await?;
-
-	info!("Appending room knock event locally");
-	self.services
-		.timeline
-		.append_pdu(
-			&parsed_knock_pdu,
-			knock_event,
-			once(parsed_knock_pdu.event_id.borrow()),
-			state_lock,
-		)
-		.await?;
-
-	info!("Setting final room state for new room");
-	// We set the room state after inserting the pdu, so that we never have a moment
-	// in time where events in the current room state do not exist
-	self.services
-		.state
-		.set_room_state(room_id, statehash_after_knock, state_lock);
 
 	Ok(())
 }
