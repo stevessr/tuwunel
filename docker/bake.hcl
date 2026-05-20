@@ -437,6 +437,108 @@ target "complement-config" {
 }
 
 #
+# Playwright tests (element-web suite driven against tuwunel)
+#
+
+group "playwright" {
+    targets = [
+        "playwright-testee",
+        "playwright-tester",
+    ]
+}
+
+# element-web pin. Bump to a specific SHA before each release cycle.
+variable "element_web_ref" {
+    default = "develop"
+}
+
+variable "playwright_run" {
+    default = ".*"
+}
+variable "playwright_skip" {
+    default = ""
+}
+variable "playwright_shard" {
+    default = "1/1"
+}
+variable "playwright_count" {
+    default = "1"
+}
+variable "playwright_workers" {
+    default = "1"
+}
+
+playwright_args = {
+    element_web_ref    = "${element_web_ref}"
+    playwright_run     = "${playwright_run}"
+    playwright_skip    = "${playwright_skip}"
+    playwright_shard   = "${playwright_shard}"
+    playwright_count   = "${playwright_count}"
+    playwright_workers = "${playwright_workers}"
+}
+
+# Tuwunel SUT for the Playwright suite. Long elem'd tag for matrix
+# disambiguation plus a stable short alias the testcontainer can target by
+# default via TUWUNEL_TESTEE_IMAGE.
+target "playwright-testee" {
+    name = elem("playwright-testee", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("playwright-testee", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
+        "tuwunel-playwright-testee:latest",
+    ]
+    target = "playwright-testee"
+    output = ["type=docker,compression=zstd,mode=min"]
+    dockerfile = "${docker_dir}/Dockerfile.playwright"
+    matrix = cargo_rust_feat_sys
+    inherits = [
+        elem("install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    ]
+    contexts = {
+        input = elem("target:install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    }
+}
+
+# element-web build + playwright runtime. No tuwunel matrix; only sys.
+target "playwright-base" {
+    name = elem("playwright-base", [sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("playwright-base", [sys_name, sys_version, sys_target], "latest"),
+    ]
+    labels = trunk_labels
+    target = "playwright-base"
+    dockerfile = "${docker_dir}/Dockerfile.playwright"
+    matrix = sys
+    inherits = [
+        elem("source", [sys_name, sys_version, sys_target])
+    ]
+    contexts = {
+        source = elem("target:source", [sys_name, sys_version, sys_target])
+    }
+    args = playwright_args
+}
+
+# Spec runner. Inherits playwright-base; matrix only on sys.
+target "playwright-tester" {
+    name = elem("playwright-tester", [sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("playwright-tester", [sys_name, sys_version, sys_target], "latest"),
+        "tuwunel-playwright-tester:latest",
+    ]
+    labels = trunk_labels
+    target = "playwright-tester"
+    output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
+    dockerfile = "${docker_dir}/Dockerfile.playwright"
+    matrix = sys
+    inherits = [
+        elem("playwright-base", [sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:playwright-base", [sys_name, sys_version, sys_target])
+    }
+    args = playwright_args
+}
+
+#
 # Integration tests
 #
 

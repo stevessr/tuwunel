@@ -5,6 +5,7 @@ target/
 # Docker files
 Dockerfile*
 docker/
+!docker/playwright.tuwunel.ts
 
 # IDE files
 .vscode

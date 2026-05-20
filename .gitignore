@@ -96,6 +96,10 @@ rustc-ice-*
 # complement test logs are huge
 tests/complement/logs.jsonl
 
+# playwright results/output captured by docker/playwright.sh; results.json is
+# multi-MB per run and not suitable as a tracked baseline.
+tests/playwright/
+
 # cargo profiles from -Z self-profile
 *.mm_profdata
 
