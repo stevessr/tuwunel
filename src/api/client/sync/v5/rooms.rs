@@ -8,7 +8,7 @@ use futures::{
 	future::{join, join3, join4},
 };
 use ruma::{
-	JsOption, OwnedRoomId, RoomId, UserId,
+	JsOption, OwnedEventId, OwnedRoomId, RoomId, UInt, UserId,
 	api::client::sync::sync_events::{UnreadNotificationsCount, v5::response},
 	events::{
 		AnySyncStateEvent, StateEventType, TimelineEventType, room::member::MembershipState,
@@ -33,6 +33,8 @@ use tuwunel_service::{Services, sync::Room};
 use self::{bump_stamp::room_bump_stamp, heroes::calculate_heroes};
 use super::{super::load_timeline, Connection, SyncInfo, Window, WindowRoom};
 use crate::client::{annotate_membership, ignored_filter, with_membership};
+
+type ThreadCounts = BTreeMap<OwnedEventId, (u64, u64)>;
 
 #[tracing::instrument(
     name = "rooms",
@@ -207,17 +209,7 @@ async fn handle_room(
 		.ok()
 		.map(Option::flatten);
 
-	let highlight_count = services
-		.pusher
-		.highlight_count(sender_user, room_id)
-		.map(TryInto::try_into)
-		.map(Result::ok);
-
-	let notification_count = services
-		.pusher
-		.notification_count(sender_user, room_id)
-		.map(TryInto::try_into)
-		.map(Result::ok);
+	let notification_counts = notification_counts_future(services, sender_user, room_id);
 
 	let joined_count = services
 		.state_cache
@@ -238,10 +230,6 @@ async fn handle_room(
 		.is_direct(room_id, sender_user)
 		.map(|is_dm| is_dm.then_some(is_dm));
 
-	let last_read_count = services
-		.pusher
-		.last_notification_read(sender_user, room_id);
-
 	let timeline = timeline_pdus
 		.iter()
 		.stream()
@@ -254,12 +242,11 @@ async fn handle_room(
 	let meta = join3(room_name, room_avatar, is_dm);
 	let events = join4(timeline, num_live, required_state, invite_state);
 	let member_counts = join(joined_count, invited_count);
-	let notification_counts = join3(highlight_count, notification_count, last_read_count);
 	let (
 		(room_name, room_avatar, is_dm),
 		(timeline, num_live, required_state, invite_state),
 		(joined_count, invited_count),
-		(highlight_count, notification_count, _last_notification_read),
+		(highlight_count, notification_count, _last_notification_read, thread_counts),
 	) = join4(meta, events, member_counts, notification_counts)
 		.boxed()
 		.await;
@@ -298,8 +285,62 @@ async fn handle_room(
 		bump_stamp,
 		joined_count,
 		invited_count,
-		unread_notifications: UnreadNotificationsCount { highlight_count, notification_count },
+		unread_notifications: merge_unread_notifications(
+			highlight_count,
+			notification_count,
+			&thread_counts,
+		),
 	})
+}
+
+fn notification_counts_future<'a>(
+	services: &'a Services,
+	sender_user: &'a UserId,
+	room_id: &'a RoomId,
+) -> impl Future<Output = (Option<UInt>, Option<UInt>, Result<u64>, ThreadCounts)> + Send + 'a {
+	let highlight_count = services
+		.pusher
+		.highlight_count(sender_user, room_id)
+		.map(TryInto::try_into)
+		.map(Result::ok);
+
+	let notification_count = services
+		.pusher
+		.notification_count(sender_user, room_id)
+		.map(TryInto::try_into)
+		.map(Result::ok);
+
+	let last_read_count = services
+		.pusher
+		.last_notification_read(sender_user, room_id);
+
+	let thread_counts = services
+		.pusher
+		.thread_notification_counts(sender_user, room_id);
+
+	join4(highlight_count, notification_count, last_read_count, thread_counts)
+}
+
+// MSC3771/MSC3773: SSS v5 has no per-thread bucket; fold into the room total.
+fn merge_unread_notifications(
+	highlight_count: Option<UInt>,
+	notification_count: Option<UInt>,
+	thread_counts: &ThreadCounts,
+) -> UnreadNotificationsCount {
+	let (thread_notifications, thread_highlights) = thread_counts
+		.values()
+		.fold((0_u64, 0_u64), |(n, h), &(notifs, hl)| {
+			(n.saturating_add(notifs), h.saturating_add(hl))
+		});
+
+	let merge = |total: u64| {
+		move |count: UInt| count.saturating_add(UInt::try_from(total).unwrap_or_default())
+	};
+
+	UnreadNotificationsCount {
+		highlight_count: highlight_count.map(merge(thread_highlights)),
+		notification_count: notification_count.map(merge(thread_notifications)),
+	}
 }
 
 async fn collect_required_state(
