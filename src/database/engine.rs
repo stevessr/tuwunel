@@ -127,6 +127,10 @@ impl Engine {
 
 	#[inline]
 	#[must_use]
+	pub fn has_cf(&self, name: &str) -> bool { self.db.cf_handle(name).is_some() }
+
+	#[inline]
+	#[must_use]
 	#[tracing::instrument(
 		name = "sequence",
 		level = "debug",

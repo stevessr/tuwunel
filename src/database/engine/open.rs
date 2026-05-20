@@ -155,6 +155,10 @@ fn configure_cfds(
 			.any(|dropped| desc.name == dropped.name)
 	};
 
+	// RocksDB cannot create column families in read-only or secondary mode.
+	let read_only = config.rocksdb_read_only || config.rocksdb_secondary;
+	let openable = |desc: &&Descriptor| !read_only || existing.contains(desc.name);
+
 	let dropping = dropping
 		.map(|desc| desc.name)
 		.map(ToOwned::to_owned)
@@ -163,12 +167,14 @@ fn configure_cfds(
 	let cfnames = desc
 		.iter()
 		.filter(not_dropped)
+		.filter(openable)
 		.map(|desc| desc.name)
 		.chain(missing.clone());
 
 	let cfds: Vec<_> = desc
 		.iter()
 		.filter(not_dropped)
+		.filter(openable)
 		.copied()
 		.chain(missing.map(|_| descriptor::IGNORED))
 		.zip(cfnames)
