@@ -420,6 +420,12 @@ jobs:
         cid=$(cat "$name")
         docker cp "$cid:/usr/src/complement/new_results.jsonl" tests/complement/results.jsonl
 
+    - if: success() || (failure() && steps.extract.outcome == 'success')
+      name: Summarise
+      id: summarise
+      run: |
+        .github/workflows/complement_summarise.sh
+
     - if: success() || failure() && steps.execute.outcome == 'failure'
       name: Upload New Results
       id: upload-result
