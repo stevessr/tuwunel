@@ -16,6 +16,12 @@ pub use self::{
 	try_ext_ext::TryExtExt,
 };
 
+/// Unwrap the value from a `Poll<Option<T>>`, early-returning from the
+/// enclosing function on `Ready(None)` or `Pending`.
+///
+/// Must be invoked inside a function returning `Poll<Option<_>>`, such as a
+/// `Stream::poll_next` impl; the `return` arms otherwise produce a type
+/// mismatch at the enclosing function's return.
 #[macro_export]
 macro_rules! ready_some {
 	($e:expr) => {
