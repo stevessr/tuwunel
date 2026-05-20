@@ -4,7 +4,8 @@ use std::{
 };
 
 use futures::{
-	Stream,
+	Stream, StreamExt,
+	stream::{Fuse, FusedStream},
 	task::{Context, Poll},
 };
 use pin_project_lite::pin_project;
@@ -14,8 +15,8 @@ use crate::ready_some;
 
 pin_project! {
 	struct IntersectionSortedStream2<S, Item> {
-		#[pin] a: S,
-		#[pin] b: S,
+		#[pin] a: Fuse<S>,
+		#[pin] b: Fuse<S>,
 		peeked_a: Option<Item>,
 		peeked_b: Option<Item>,
 	}
@@ -31,7 +32,12 @@ where
 	S: Stream<Item = Item> + Send,
 	Item: Ord + Send + Sync,
 {
-	IntersectionSortedStream2 { a, b, peeked_a: None, peeked_b: None }
+	IntersectionSortedStream2 {
+		a: a.fuse(),
+		b: b.fuse(),
+		peeked_a: None,
+		peeked_b: None,
+	}
 }
 
 impl<S, Item> Stream for IntersectionSortedStream2<S, Item>
@@ -55,5 +61,16 @@ where
 				},
 			}
 		}
+	}
+}
+
+impl<S, Item> FusedStream for IntersectionSortedStream2<S, Item>
+where
+	S: Stream<Item = Item>,
+	Item: Ord,
+{
+	fn is_terminated(&self) -> bool {
+		(self.peeked_a.is_none() && self.a.is_terminated())
+			|| (self.peeked_b.is_none() && self.b.is_terminated())
 	}
 }
