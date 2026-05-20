@@ -16,5 +16,5 @@ pub(crate) async fn admin_register_nonce_route(
 		.register_is_enabled()
 		.then(|| services.admin.issue_register_nonce())
 		.map(get_nonce::v1::Response::new)
-		.ok_or_else(|| err!(Request(NotFound("Shared-secret registration is not configured"))))
+		.ok_or_else(|| err!(Request(Unknown("Shared-secret registration is not enabled"))))
 }

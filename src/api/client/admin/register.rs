@@ -5,7 +5,7 @@ use hmac::{Hmac, Mac};
 use ruma::{OwnedUserId, UserId, api::client::admin::register};
 use sha1::Sha1;
 use tuwunel_core::{Err, Result, err};
-use tuwunel_service::users::Register;
+use tuwunel_service::users::{Register, device::generate_refresh_token};
 
 use crate::{ClientIp, Ruma};
 
@@ -22,16 +22,15 @@ pub(crate) async fn admin_register_route(
 	body: Ruma<register::v1::Request>,
 ) -> Result<register::v1::Response> {
 	let Some(shared_secret) = services.admin.register_shared_secret() else {
-		return Err!(Request(NotFound("Shared-secret registration is not configured")));
+		return Err!(Request(Unknown("Shared-secret registration is not enabled")));
 	};
 
-	if body.password.is_empty() {
-		return Err!(Request(InvalidParam("Password must not be empty")));
+	if !services.admin.consume_register_nonce(&body.nonce) {
+		return Err!(Request(InvalidParam("Unrecognised or expired nonce")));
 	}
 
-	if !services.admin.consume_register_nonce(&body.nonce) {
-		return Err!(Request(Forbidden("Unrecognised or expired nonce")));
-	}
+	check_field("Username", &body.username)?;
+	check_field("Password", &body.password)?;
 
 	verify_mac(shared_secret, &body)
 		.map_err(|()| err!(Request(Forbidden("HMAC check failed"))))?;
@@ -57,26 +56,54 @@ pub(crate) async fn admin_register_route(
 		services.admin.make_user_admin(&user_id).await?;
 	}
 
-	let (access_token, expires_in) = services.users.generate_access_token(false);
+	let home_server = services.globals.server_name().to_owned();
+
+	if body.inhibit_login {
+		return Ok(register::v1::Response::new(user_id, home_server));
+	}
+
+	let (access_token, expires_in) = services
+		.users
+		.generate_access_token(body.refresh_token);
+
+	let refresh_token = expires_in.is_some().then(generate_refresh_token);
 
 	let device_id = services
 		.users
 		.create_device(
 			&user_id,
-			None,
+			body.device_id.as_deref(),
 			(Some(&access_token), expires_in),
-			None,
-			None,
+			refresh_token.as_deref(),
+			body.initial_device_display_name.as_deref(),
 			Some(client),
 		)
 		.await?;
 
-	Ok(register::v1::Response::new(
+	Ok(register::v1::Response {
 		user_id,
-		access_token,
-		services.globals.server_name().to_owned(),
-		device_id,
-	))
+		home_server,
+		access_token: Some(access_token),
+		device_id: Some(device_id),
+		refresh_token,
+		expires_in,
+	})
+}
+
+fn check_field(label: &str, value: &str) -> Result<()> {
+	if value.is_empty() {
+		return Err!(Request(InvalidParam("{label} must not be empty")));
+	}
+
+	if value.len() > 512 {
+		return Err!(Request(InvalidParam("{label} must not exceed 512 bytes")));
+	}
+
+	if value.as_bytes().contains(&0) {
+		return Err!(Request(InvalidParam("{label} must not contain a null byte")));
+	}
+
+	Ok(())
 }
 
 fn verify_mac(secret: &str, req: &register::v1::Request) -> StdResult<(), ()> {
@@ -123,12 +150,17 @@ const fn hex_nibble(b: u8) -> Option<u8> {
 
 fn resolve_local_user_id(services: crate::State, username: &str) -> Result<OwnedUserId> {
 	let server_name = services.globals.server_name();
+	let username = username.to_lowercase();
 
 	let user_id = match username.starts_with('@') {
-		| true => UserId::parse(username),
-		| false => UserId::parse_with_server_name(username, server_name),
+		| true => UserId::parse(&username),
+		| false => UserId::parse_with_server_name(&username, server_name),
 	}
 	.map_err(|_| err!(Request(InvalidParam("Invalid user id"))))?;
+
+	user_id.validate_strict().map_err(|_| {
+		err!(Request(InvalidUsername("Username contains disallowed characters or spaces")))
+	})?;
 
 	if user_id.server_name() != server_name {
 		return Err!(Request(InvalidParam("User is not local to this server")));
@@ -161,6 +193,10 @@ mod tests {
 			admin,
 			user_type: user_type.map(Into::into),
 			mac: mac.into(),
+			inhibit_login: false,
+			refresh_token: false,
+			device_id: None,
+			initial_device_display_name: None,
 		}
 	}
 
