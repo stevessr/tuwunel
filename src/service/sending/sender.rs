@@ -80,7 +80,6 @@ type RankedReceipts = SmallVec<[ReceiptMap; 1]>;
 
 const SELECT_PRESENCE_LIMIT: usize = 256;
 const SELECT_RECEIPT_LIMIT: usize = 256;
-const SELECT_EDU_LIMIT: usize = EDU_LIMIT - 2;
 const DEQUEUE_LIMIT: usize = 48;
 
 pub const PDU_LIMIT: usize = 50;
@@ -405,13 +404,17 @@ impl Service {
 			.server
 			.config
 			.allow_outgoing_read_receipts
-			.then_async(|| self.select_edus_receipts(server_name, batch, &max_edu_count));
+			.then_async(|| {
+				self.select_edus_receipts(server_name, batch, &max_edu_count, &events_len)
+			});
 
 		let presence = self
 			.server
 			.config
 			.allow_outgoing_presence
-			.then_async(|| self.select_edus_presence(server_name, batch, &max_edu_count));
+			.then_async(|| {
+				self.select_edus_presence(server_name, batch, &max_edu_count, &events_len)
+			});
 
 		let (device_changes, receipts, presence) =
 			join3(device_changes, receipts, presence).await;
@@ -427,7 +430,7 @@ impl Service {
 	#[tracing::instrument(
 		name = "device_changes",
 		level = "trace",
-		skip(self, server_name, max_edu_count)
+		skip(self, server_name, max_edu_count, events_len)
 	)]
 	async fn select_edus_device_changes(
 		&self,
@@ -476,10 +479,12 @@ impl Service {
 				serde_json::to_writer(&mut buf, &edu)
 					.expect("failed to serialize device list update to JSON");
 
-				events.push(buf);
-				if events_len.fetch_add(1, Ordering::Relaxed) >= SELECT_EDU_LIMIT - 1 {
+				// Reserve before push so concurrent producers see the count first.
+				if events_len.fetch_add(1, Ordering::Relaxed) >= EDU_LIMIT {
 					return events;
 				}
+
+				events.push(buf);
 			}
 		}
 
@@ -498,13 +503,14 @@ impl Service {
 	#[tracing::instrument(
 		name = "receipts",
 		level = "trace",
-		skip(self, server_name, max_edu_count)
+		skip(self, server_name, max_edu_count, events_len)
 	)]
 	async fn select_edus_receipts(
 		&self,
 		server_name: &ServerName,
 		since: (u64, u64),
 		max_edu_count: &AtomicU64,
+		events_len: &AtomicUsize,
 	) -> EduVec {
 		let num = AtomicUsize::new(0);
 		let by_room: SmallVec<[(OwnedRoomId, RankedReceipts); 1]> = self
@@ -552,8 +558,12 @@ impl Service {
 			buf
 		};
 
+		// Reserve a slot per rank from the shared EDU budget.
+		let reserve = |_: &_| events_len.fetch_add(1, Ordering::Relaxed) < EDU_LIMIT;
+
 		(0..max_rank)
 			.filter_map(pivot_rank)
+			.take_while(reserve)
 			.map(serialize_edu)
 			.collect()
 	}
@@ -656,13 +666,14 @@ impl Service {
 	#[tracing::instrument(
 		name = "presence",
 		level = "trace",
-		skip(self, server_name, max_edu_count)
+		skip(self, server_name, max_edu_count, events_len)
 	)]
 	async fn select_edus_presence(
 		&self,
 		server_name: &ServerName,
 		since: (u64, u64),
 		max_edu_count: &AtomicU64,
+		events_len: &AtomicUsize,
 	) -> Option<EduBuf> {
 		let presence_since = self
 			.services
@@ -719,6 +730,11 @@ impl Service {
 		}
 
 		if presence_updates.is_empty() {
+			return None;
+		}
+
+		// Reserve our slot in the shared transaction budget before serializing.
+		if events_len.fetch_add(1, Ordering::Relaxed) >= EDU_LIMIT {
 			return None;
 		}
 
