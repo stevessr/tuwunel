@@ -447,9 +447,12 @@ group "playwright" {
     ]
 }
 
-# element-web pin. Bump to a specific SHA before each release cycle.
+# element-web tracking ref. master == latest stable release tip (e.g.
+# v1.12.18); moves ~monthly with releases instead of multiple times per
+# day like develop, so the playwright-base layer cache stays warm
+# between bumps and we automatically test against what real users run.
 variable "element_web_ref" {
-    default = "develop"
+    default = "master"
 }
 
 variable "playwright_run" {

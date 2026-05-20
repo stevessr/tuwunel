@@ -97,8 +97,10 @@ rustc-ice-*
 tests/complement/logs.jsonl
 
 # playwright results/output captured by docker/playwright.sh; results.json is
-# multi-MB per run and not suitable as a tracked baseline.
-tests/playwright/
+# multi-MB per run and not suitable as a tracked baseline. The
+# known-failures.txt baseline is tracked.
+tests/playwright/results.json
+tests/playwright/output.log
 
 # cargo profiles from -Z self-profile
 *.mm_profdata
