@@ -699,6 +699,28 @@ pub struct Config {
 	/// example: "/etc/tuwunel/.reg_token"
 	pub registration_token_file: Option<PathBuf>,
 
+	/// A pre-shared secret enabling out-of-band account creation via the
+	/// Synapse-style `/_synapse/admin/v1/register` endpoint. The endpoint is
+	/// only available when this is set. Requests authenticate by HMAC-SHA1
+	/// keyed on this value; UIAA is bypassed.
+	///
+	/// Use a high-entropy value (at least 32 bytes) and treat it as a
+	/// secret of equivalent power to a server admin's access token.
+	///
+	/// reloadable: yes
+	/// example: "kZ2hN5pQ8wXyL4mR7tBfCgJxV3aD6sE1u"
+	///
+	/// display: sensitive
+	pub registration_shared_secret: Option<String>,
+
+	/// Path to a file containing the registration shared secret. Trimmed of
+	/// surrounding whitespace on read. Takes precedence over
+	/// `registration_shared_secret` when both are set.
+	///
+	/// reloadable: yes
+	/// example: "/etc/tuwunel/.reg_shared_secret"
+	pub registration_shared_secret_file: Option<PathBuf>,
+
 	/// Controls whether encrypted rooms and events are allowed.
 	/// reloadable: yes
 	#[serde(default = "true_fn")]

@@ -2,10 +2,13 @@ pub mod console;
 pub mod create;
 mod execute;
 mod grant;
+mod register;
 
 use std::{
+	collections::BTreeMap,
 	pin::Pin,
-	sync::{Arc, RwLock as StdRwLock},
+	sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock},
+	time::Instant,
 };
 
 use async_trait::async_trait;
@@ -28,6 +31,10 @@ pub struct Service {
 	pub handle: RwLock<Option<Processor>>,
 	pub complete: StdRwLock<Option<Completer>>,
 	pub admin_alias: OwnedRoomAliasId,
+	/// Resolved Synapse-compatible registration shared secret. Live for the
+	/// lifetime of the service; the matching nonce store sits beside it.
+	register_shared_secret: Option<String>,
+	register_nonces: StdMutex<BTreeMap<String, Instant>>,
 	#[cfg(feature = "console")]
 	pub console: Arc<console::Console>,
 }
@@ -72,6 +79,8 @@ impl crate::Service for Service {
 			complete: StdRwLock::new(None),
 			admin_alias: OwnedRoomAliasId::try_from(format!("#admins:{}", args.server.name))
 				.expect("#admins:server_name is valid alias name"),
+			register_shared_secret: register::resolve_shared_secret(&args.server.config),
+			register_nonces: StdMutex::new(BTreeMap::new()),
 			#[cfg(feature = "console")]
 			console: console::Console::new(args),
 		}))

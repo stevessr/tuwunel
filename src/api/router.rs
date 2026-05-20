@@ -67,6 +67,8 @@ fn register_client_auth_routes(router: Router<State>) -> Router<State> {
 		.ruma_route(&client::suspend_user_route)
 		.ruma_route(&client::is_user_locked_route)
 		.ruma_route(&client::lock_user_route)
+		.ruma_route(&client::admin_register_nonce_route)
+		.ruma_route(&client::admin_register_route)
 }
 
 fn register_client_profile_and_data_routes(router: Router<State>) -> Router<State> {
