@@ -65,6 +65,8 @@ where
 	let mut eventid_info = HashMap::new();
 	let mut graph: HashMap<OwnedEventId, _> = HashMap::with_capacity(todo_outlier_stack.len());
 	while let Some((prev_event_id, mut outlier)) = todo_outlier_stack.next().await {
+		self.services.server.check_running()?;
+
 		let Some((pdu, mut json_opt)) = outlier.pop() else {
 			// Fetch and handle failed
 			graph.insert(prev_event_id.clone(), Default::default());
@@ -135,7 +137,6 @@ where
 		}
 
 		eventid_info.insert(prev_event_id.clone(), (pdu, json));
-		self.services.server.check_running()?;
 	}
 
 	let event_fetch = async |event_id: OwnedEventId| {

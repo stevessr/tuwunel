@@ -58,6 +58,10 @@ where
 		.into_iter()
 		.stream()
 		.fold(Vec::new(), async |mut pdus, (id, local_pdu, events_in_reverse_order)| {
+			if self.services.server.check_running().is_err() {
+				return pdus;
+			}
+
 			// a. Look in the main timeline (pduid_pdu tree)
 			// b. Look at outlier pdu tree
 			// (get_pdu_json checks both)
@@ -151,6 +155,11 @@ async fn fetch_auth_chain(
 		if self.services.timeline.pdu_exists(&next_id).await {
 			trace!(?next_id, "Found in database");
 			continue;
+		}
+
+		if self.services.server.check_running().is_err() {
+			debug_warn!(?next_id, "Server shutting down");
+			break;
 		}
 
 		debug!("Fetching {next_id} over federation.");
