@@ -82,7 +82,7 @@ pub(crate) async fn start(server: Arc<Server>) -> Result<Arc<Services>> {
 	let services = Services::build(server).await?.start().await?;
 
 	#[cfg(all(feature = "systemd", target_os = "linux"))]
-	sd_notify::notify(false, &[sd_notify::NotifyState::Ready])
+	sd_notify::notify(&[sd_notify::NotifyState::Ready])
 		.expect("failed to notify systemd of ready state");
 
 	debug!("Started");
@@ -95,7 +95,10 @@ pub(crate) async fn stop(services: Arc<Services>) -> Result {
 	debug!("Shutting down...");
 
 	#[cfg(all(feature = "systemd", target_os = "linux"))]
-	sd_notify::notify(true, &[sd_notify::NotifyState::Stopping])
+	// SAFETY: clears NOTIFY_SOCKET from the process environment. Safe because no
+	// other thread reads or writes that variable; this matches the previous
+	// `notify(unset_env=true, ...)` semantics from sd-notify 0.4.
+	unsafe { sd_notify::notify_and_unset_env(&[sd_notify::NotifyState::Stopping]) }
 		.expect("failed to notify systemd of stopping state");
 
 	// Wait for all completions before dropping or we'll lose them to the module
@@ -167,11 +170,11 @@ fn handle_services_finish(
 async fn start_systemd_watchdog() {
 	use tokio::time::MissedTickBehavior;
 
-	let mut watchdog_usec = 0;
-	if !sd_notify::watchdog_enabled(false, &mut watchdog_usec) || watchdog_usec == 0 {
+	let Some(watchdog) = sd_notify::watchdog_enabled() else {
 		return;
-	}
+	};
 
+	let watchdog_usec = u64::try_from(watchdog.as_micros()).unwrap_or(u64::MAX);
 	let interval_usec = (watchdog_usec / 2).max(1);
 	let interval = Duration::from_micros(interval_usec);
 
@@ -180,7 +183,7 @@ async fn start_systemd_watchdog() {
 	loop {
 		ticker.tick().await;
 
-		if let Err(e) = sd_notify::notify(false, &[sd_notify::NotifyState::Watchdog]) {
+		if let Err(e) = sd_notify::notify(&[sd_notify::NotifyState::Watchdog]) {
 			error!("failed to notify systemd watchdog state: {e}");
 		}
 	}
