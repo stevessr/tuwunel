@@ -311,13 +311,10 @@ features = [
 ]
 
 [workspace.dependencies.opentelemetry]
-version = "0.31"
-
-[workspace.dependencies.opentelemetry-jaeger-propagator]
-version = "0.31"
+version = "0.32"
 
 [workspace.dependencies.opentelemetry-otlp]
-version = "0.31"
+version = "0.32"
 default-features = false
 features = [
 	"grpc-tonic",
@@ -325,7 +322,7 @@ features = [
 ]
 
 [workspace.dependencies.opentelemetry_sdk]
-version = "0.31"
+version = "0.32"
 
 [workspace.dependencies.pin-project-lite]
 version = "0.2"
@@ -580,7 +577,7 @@ default-features = false
 version = "0.2"
 
 [workspace.dependencies.tracing-opentelemetry]
-version = "0.32"
+version = "0.33"
 
 [workspace.dependencies.tracing-subscriber]
 version = "0.3"

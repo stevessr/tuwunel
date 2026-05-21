@@ -147,7 +147,6 @@ media_thumbnail = [
 ]
 perf_measurements = [
 	"dep:opentelemetry",
-	"dep:opentelemetry-jaeger-propagator",
 	"dep:opentelemetry-otlp",
 	"dep:opentelemetry_sdk",
 	"dep:tracing-flame",
@@ -216,8 +215,6 @@ const-str.workspace = true
 ctor.workspace = true
 dtor.workspace = true
 log.workspace = true
-opentelemetry-jaeger-propagator.optional = true
-opentelemetry-jaeger-propagator.workspace = true
 opentelemetry-otlp.optional = true
 opentelemetry-otlp.workspace = true
 opentelemetry.optional = true

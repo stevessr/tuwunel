@@ -12,9 +12,10 @@ use tuwunel_core::{
 #[cfg(feature = "perf_measurements")]
 use {
 	opentelemetry::trace::TracerProvider as _,
-	opentelemetry_jaeger_propagator::Propagator as JaegerPropagator,
 	opentelemetry_otlp::SpanExporter,
-	opentelemetry_sdk::{Resource, trace::SdkTracerProvider},
+	opentelemetry_sdk::{
+		Resource, propagation::TraceContextPropagator, trace::SdkTracerProvider,
+	},
 };
 
 #[cfg(feature = "perf_measurements")]
@@ -95,7 +96,7 @@ pub(crate) fn init(config: &Config) -> Result<(TracingFlameGuard, Logging)> {
 			.map_err(|e| err!(Config("jaeger_filter", "{e}.")))?;
 
 		let jaeger_layer = config.allow_jaeger.then(|| {
-			opentelemetry::global::set_text_map_propagator(JaegerPropagator::new());
+			opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
 
 			let exporter = SpanExporter::builder()
 				.with_tonic()
