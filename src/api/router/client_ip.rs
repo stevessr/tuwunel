@@ -1,28 +1,16 @@
 //! Tuwunel's client-IP extractor.
 //!
-//! Wraps `axum_client_ip::SecureClientIp` with a two-mode fallback:
+//! Two modes:
 //!
 //! * If the operator configured `ip_source`, a [`ConfiguredIpSource`] marker is
-//!   installed in request extensions and we delegate to
-//!   [`axum_client_ip::SecureClientIp`] with that source. Exception: if the
-//!   peer shown by `ConnectInfo` is on a loopback interface, the insecure
-//!   header-scan + `ConnectInfo` fallback runs instead, since a loopback peer
-//!   (e.g. a locally-connected appservice bridge) cannot have spoofed the
-//!   address.
+//!   installed in request extensions and the extractor reads from the chosen
+//!   source. Exception: if the peer shown by `ConnectInfo` is on a loopback
+//!   interface, the insecure header-scan + `ConnectInfo` fallback runs instead,
+//!   since a loopback peer (e.g. a locally-connected appservice bridge) cannot
+//!   have spoofed the address.
 //! * Otherwise the insecure header-scan + `ConnectInfo` fallback runs directly,
 //!   preserving the prior default behaviour, including the socket-address
 //!   fallback that matters for Unix-socket deployments.
-//!
-//! The plain `SecureClientIpSource::ConnectInfo` extension that
-//! `src/router/layers.rs` installs by default is intentionally ignored here;
-//! only the [`ConfiguredIpSource`] marker participates in the secure path.
-//! This avoids flipping behaviour for deployments that never opted in.
-//!
-//! The header-scan chain mirrors the leftmost-IP behaviour that
-//! `axum_client_ip::InsecureClientIp` provided in 0.7; the 1.x crate
-//! removed that extractor, and inlining the small chain here is what
-//! lets the loopback short-circuit reuse the same fallback for the
-//! configured path.
 
 use std::{
 	fmt,
@@ -31,18 +19,17 @@ use std::{
 };
 
 use axum::extract::{ConnectInfo, FromRequestParts};
-use axum_client_ip::{SecureClientIp, SecureClientIpSource};
 use http::{Extensions, HeaderMap, StatusCode, request::Parts};
+use tuwunel_core::config::IpSource;
 
 /// Tuwunel client-IP extractor. See module docs.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ClientIp(pub(crate) IpAddr);
 
-/// Marker wrapper around [`SecureClientIpSource`] placed into request
-/// extensions only when an operator has explicitly configured
-/// `ip_source`.
+/// Marker wrapper around [`IpSource`] placed into request extensions
+/// only when an operator has explicitly configured `ip_source`.
 #[derive(Clone, Debug)]
-pub struct ConfiguredIpSource(pub SecureClientIpSource);
+pub struct ConfiguredIpSource(pub IpSource);
 
 impl<S> FromRequestParts<S> for ClientIp
 where
@@ -53,12 +40,12 @@ where
 	async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
 		const ERROR: StatusCode = StatusCode::INTERNAL_SERVER_ERROR;
 
-		if let Some(ConfiguredIpSource(source)) = parts.extensions.get::<ConfiguredIpSource>()
+		if let Some(&ConfiguredIpSource(source)) = parts.extensions.get::<ConfiguredIpSource>()
 			&& !peer_is_loopback(&parts.extensions)
 		{
-			return SecureClientIp::from(source, &parts.headers, &parts.extensions)
-				.map(|SecureClientIp(ip)| Self(ip))
-				.map_err(|_| (ERROR, "Can't extract client IP from configured ip_source"));
+			return secure_extract(source, &parts.headers, &parts.extensions)
+				.map(Self)
+				.ok_or((ERROR, "Can't extract client IP from configured ip_source"));
 		}
 
 		insecure_fallback(&parts.headers, &parts.extensions)
@@ -75,6 +62,45 @@ fn peer_is_loopback(extensions: &Extensions) -> bool {
 	extensions
 		.get::<ConnectInfo<SocketAddr>>()
 		.is_some_and(|ConnectInfo(addr)| addr.ip().to_canonical().is_loopback())
+}
+
+fn secure_extract(
+	source: IpSource,
+	headers: &HeaderMap,
+	extensions: &Extensions,
+) -> Option<IpAddr> {
+	match source {
+		| IpSource::ConnectInfo => extensions
+			.get::<ConnectInfo<SocketAddr>>()
+			.map(|ConnectInfo(addr)| addr.ip()),
+		| IpSource::RightmostXForwardedFor => rightmost_x_forwarded_for(headers),
+		| IpSource::RightmostForwarded => rightmost_forwarded(headers),
+		| IpSource::XRealIp => single_ip_header(headers, "x-real-ip"),
+		| IpSource::CfConnectingIp => single_ip_header(headers, "cf-connecting-ip"),
+		| IpSource::TrueClientIp => single_ip_header(headers, "true-client-ip"),
+		| IpSource::FlyClientIp => single_ip_header(headers, "fly-client-ip"),
+		| IpSource::CloudFrontViewerAddress => cloudfront_viewer_address(headers),
+	}
+}
+
+fn rightmost_x_forwarded_for(headers: &HeaderMap) -> Option<IpAddr> {
+	headers
+		.get_all("x-forwarded-for")
+		.iter()
+		.filter_map(|v| v.to_str().ok())
+		.flat_map(|s| s.split(','))
+		.filter_map(|s| s.trim().parse::<IpAddr>().ok())
+		.next_back()
+}
+
+fn rightmost_forwarded(headers: &HeaderMap) -> Option<IpAddr> {
+	headers
+		.get_all("forwarded")
+		.iter()
+		.filter_map(|v| v.to_str().ok())
+		.flat_map(|s| s.split(','))
+		.filter_map(parse_forwarded_for)
+		.next_back()
 }
 
 /// Leftmost header scan with `ConnectInfo` fallback.
@@ -159,7 +185,7 @@ mod tests {
 		extract::{ConnectInfo, FromRequestParts},
 		http::{Request, StatusCode, request::Parts},
 	};
-	use axum_client_ip::SecureClientIpSource;
+	use tuwunel_core::config::IpSource;
 
 	use super::{ClientIp, ConfiguredIpSource};
 
@@ -232,7 +258,7 @@ mod tests {
 		let mut parts = parts([("X-Forwarded-For", "1.1.1.1, 2.2.2.2")]);
 		parts
 			.extensions
-			.insert(ConfiguredIpSource(SecureClientIpSource::RightmostXForwardedFor));
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
 		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
 		assert_eq!(ip.to_string(), "2.2.2.2");
 	}
@@ -242,20 +268,10 @@ mod tests {
 		let mut parts = parts(iter::empty());
 		parts
 			.extensions
-			.insert(ConfiguredIpSource(SecureClientIpSource::RightmostXForwardedFor));
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
 		let err = extract_client_ip(&mut parts).await.unwrap_err();
 		assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
 		assert_eq!(err.1, "Can't extract client IP from configured ip_source");
-	}
-
-	#[tokio::test]
-	async fn secure_client_ip_source_extension_does_not_hijack() {
-		let mut parts = parts([("X-Forwarded-For", "1.1.1.1, 2.2.2.2")]);
-		parts
-			.extensions
-			.insert(SecureClientIpSource::ConnectInfo);
-		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
-		assert_eq!(ip.to_string(), "1.1.1.1");
 	}
 
 	#[tokio::test]
@@ -269,26 +285,13 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn bare_secure_client_ip_source_connect_info_does_not_hijack() {
-		let socket_addr = SocketAddr::from(([203, 0, 113, 10], 4567));
-		let mut parts = parts([("X-Forwarded-For", "1.1.1.1, 2.2.2.2")]);
-		parts.extensions.insert(ConnectInfo(socket_addr));
-		parts
-			.extensions
-			.insert(SecureClientIpSource::ConnectInfo);
-
-		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
-		assert_eq!(ip.to_string(), "1.1.1.1");
-	}
-
-	#[tokio::test]
 	async fn loopback_peer_bypasses_configured_source_for_locally_connected_bridges() {
 		let socket_addr = SocketAddr::from(([127, 0, 0, 1], 38000));
 		let mut parts = parts(iter::empty());
 		parts.extensions.insert(ConnectInfo(socket_addr));
 		parts
 			.extensions
-			.insert(ConfiguredIpSource(SecureClientIpSource::RightmostXForwardedFor));
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
 
 		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
 		assert_eq!(ip, socket_addr.ip());
@@ -305,7 +308,7 @@ mod tests {
 		parts.extensions.insert(ConnectInfo(socket_addr));
 		parts
 			.extensions
-			.insert(ConfiguredIpSource(SecureClientIpSource::RightmostXForwardedFor));
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
 
 		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
 		assert_eq!(ip.to_string(), "9.9.9.9");
@@ -318,7 +321,7 @@ mod tests {
 		parts.extensions.insert(ConnectInfo(socket_addr));
 		parts
 			.extensions
-			.insert(ConfiguredIpSource(SecureClientIpSource::RightmostXForwardedFor));
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
 
 		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
 		assert_eq!(ip, socket_addr.ip());
@@ -331,7 +334,7 @@ mod tests {
 		parts.extensions.insert(ConnectInfo(socket_addr));
 		parts
 			.extensions
-			.insert(ConfiguredIpSource(SecureClientIpSource::RightmostXForwardedFor));
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
 
 		let err = extract_client_ip(&mut parts).await.unwrap_err();
 		assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);

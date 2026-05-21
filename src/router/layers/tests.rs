@@ -3,26 +3,7 @@
 use tuwunel_api::router::ConfiguredIpSource;
 use tuwunel_core::config::IpSource;
 
-use super::{configured_ip_source, ip_source_layer};
-
-#[test]
-fn configured_ip_source_maps_all_variants() {
-	let cases = [
-		(IpSource::ConnectInfo, "ConnectInfo"),
-		(IpSource::RightmostXForwardedFor, "RightmostXForwardedFor"),
-		(IpSource::RightmostForwarded, "RightmostForwarded"),
-		(IpSource::XRealIp, "XRealIp"),
-		(IpSource::CfConnectingIp, "CfConnectingIp"),
-		(IpSource::TrueClientIp, "TrueClientIp"),
-		(IpSource::FlyClientIp, "FlyClientIp"),
-		(IpSource::CloudFrontViewerAddress, "CloudFrontViewerAddress"),
-	];
-
-	for (source, expected) in cases {
-		let ConfiguredIpSource(actual) = ConfiguredIpSource(configured_ip_source(source));
-		assert_eq!(format!("{actual:?}"), expected);
-	}
-}
+use super::ip_source_layer;
 
 #[test]
 fn ip_source_layer_none_returns_identity_branch() {

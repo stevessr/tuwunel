@@ -477,14 +477,17 @@
 # Source of the client IP address for rate limiting, logging, and
 # security tooling.
 #
-# When unset (the default), the `ClientIp` extractor falls back to
-# `axum-client-ip`'s `InsecureClientIp` for backward compatibility;
-# clients can spoof their address via request headers in that mode.
+# When unset (the default), the `ClientIp` extractor scans common
+# proxy headers in leftmost-IP mode (`X-Forwarded-For`, RFC 7239
+# `Forwarded`, `X-Real-IP`, `Fly-Client-IP`, `True-Client-IP`,
+# `CF-Connecting-IP`, `CloudFront-Viewer-Address`) and falls back
+# to the TCP peer address; clients can spoof their address via
+# request headers in that mode.
 #
-# When set, tuwunel installs `SecureClientIpSource` with the selected
-# variant and `ClientIp` resolves exclusively from that source. The
-# rightmost value is used for multi-valued headers; only the proxy can
-# append to the right, so this is resistant to client spoofing.
+# When set, `ClientIp` resolves exclusively from the selected
+# source. The rightmost value is used for multi-valued headers;
+# only the proxy can append to the right, so this is resistant to
+# client spoofing.
 #
 # Supported values:
 # - "connect_info" - TCP peer address only (direct connections)

@@ -1,7 +1,7 @@
 use serde::Deserialize;
 
 /// Selects the source used to determine the connecting client's IP
-/// address. Variants correspond 1:1 to `axum_client_ip::SecureClientIpSource`.
+/// address.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum IpSource {

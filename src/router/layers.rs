@@ -7,7 +7,6 @@ use axum::{
 	Extension, Router,
 	extract::{DefaultBodyLimit, MatchedPath},
 };
-use axum_client_ip::SecureClientIpSource;
 use http::{
 	HeaderValue, Method, StatusCode,
 	header::{self, HeaderName},
@@ -220,21 +219,8 @@ fn body_limit_layer(server: &Server) -> DefaultBodyLimit {
 	DefaultBodyLimit::max(server.config.max_request_size)
 }
 
-fn configured_ip_source(source: IpSource) -> SecureClientIpSource {
-	match source {
-		| IpSource::ConnectInfo => SecureClientIpSource::ConnectInfo,
-		| IpSource::RightmostXForwardedFor => SecureClientIpSource::RightmostXForwardedFor,
-		| IpSource::RightmostForwarded => SecureClientIpSource::RightmostForwarded,
-		| IpSource::XRealIp => SecureClientIpSource::XRealIp,
-		| IpSource::CfConnectingIp => SecureClientIpSource::CfConnectingIp,
-		| IpSource::TrueClientIp => SecureClientIpSource::TrueClientIp,
-		| IpSource::FlyClientIp => SecureClientIpSource::FlyClientIp,
-		| IpSource::CloudFrontViewerAddress => SecureClientIpSource::CloudFrontViewerAddress,
-	}
-}
-
 fn ip_source_layer(source: Option<IpSource>) -> Either<Extension<ConfiguredIpSource>, Identity> {
-	option_layer(source.map(|source| Extension(ConfiguredIpSource(configured_ip_source(source)))))
+	option_layer(source.map(|source| Extension(ConfiguredIpSource(source))))
 }
 
 #[tracing::instrument(name = "panic", level = "error", skip_all)]
