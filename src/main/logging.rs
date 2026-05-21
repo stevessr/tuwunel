@@ -9,6 +9,13 @@ use tuwunel_core::{
 	log::{ConsoleFormat, ConsoleWriter, LogLevelReloadHandles, Logging, capture, fmt_span},
 	result::UnwrapOrErr,
 };
+#[cfg(feature = "perf_measurements")]
+use {
+	opentelemetry::trace::TracerProvider as _,
+	opentelemetry_jaeger_propagator::Propagator as JaegerPropagator,
+	opentelemetry_otlp::SpanExporter,
+	opentelemetry_sdk::{Resource, trace::SdkTracerProvider},
+};
 
 #[cfg(feature = "perf_measurements")]
 pub(crate) type TracingFlameGuard =
@@ -84,34 +91,37 @@ pub(crate) fn init(config: &Config) -> Result<(TracingFlameGuard, Logging)> {
 			(None, None)
 		};
 
-		#[cfg(tuwunel_disable)]
 		let jaeger_filter = EnvFilter::try_new(&config.jaeger_filter)
 			.map_err(|e| err!(Config("jaeger_filter", "{e}.")))?;
 
-		#[cfg(tuwunel_disable)]
 		let jaeger_layer = config.allow_jaeger.then(|| {
-			opentelemetry::global::set_text_map_propagator(
-				opentelemetry_jaeger::Propagator::new(),
-			);
+			opentelemetry::global::set_text_map_propagator(JaegerPropagator::new());
 
-			let tracer = opentelemetry_jaeger::new_agent_pipeline()
-				.with_auto_split_batch(true)
+			let exporter = SpanExporter::builder()
+				.with_tonic()
+				.build()
+				.expect("otlp span exporter");
+
+			let resource = Resource::builder()
 				.with_service_name("tuwunel")
-				.install_batch(opentelemetry_sdk::runtime::Tokio)
-				.expect("jaeger agent pipeline");
+				.build();
 
+			let provider = SdkTracerProvider::builder()
+				.with_batch_exporter(exporter)
+				.with_resource(resource)
+				.build();
+
+			let tracer = provider.tracer("tuwunel");
 			let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
 			let (jaeger_reload_filter, jaeger_reload_handle) =
 				reload::Layer::new(jaeger_filter.clone());
 			reload_handles.add("jaeger", Box::new(jaeger_reload_handle));
 
-			Some(telemetry.with_filter(jaeger_reload_filter))
+			telemetry.with_filter(jaeger_reload_filter)
 		});
 
-		#[cfg(tuwunel_disable)]
 		let subscriber = subscriber.with(flame_layer).with(jaeger_layer);
-		let subscriber = subscriber.with(flame_layer);
 
 		(subscriber, flame_guard)
 	};

@@ -311,14 +311,19 @@ features = [
 [workspace.dependencies.opentelemetry]
 version = "0.31"
 
-# Disabled until they move to opentelemetry 0.30
-#[workspace.dependencies.opentelemetry-jaeger]
-#version = "0.22.0"
-#features = ["rt-tokio"]
+[workspace.dependencies.opentelemetry-jaeger-propagator]
+version = "0.31"
+
+[workspace.dependencies.opentelemetry-otlp]
+version = "0.31"
+default-features = false
+features = [
+	"grpc-tonic",
+	"trace",
+]
 
 [workspace.dependencies.opentelemetry_sdk]
 version = "0.31"
-features = ["rt-tokio"]
 
 [workspace.dependencies.pin-project-lite]
 version = "0.2"
