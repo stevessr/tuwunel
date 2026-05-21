@@ -4,104 +4,17 @@ use axum::extract::State;
 use ruma::{
 	OwnedUserId, UserId,
 	api::client::{
-		account::{
-			check_registration_token_validity, get_username_availability,
-			register::{self, LoginType, RegistrationKind},
-		},
+		account::register::{self, LoginType, RegistrationKind},
 		uiaa::{AuthFlow, AuthType, UiaaInfo},
 	},
 };
 use tuwunel_core::{Err, Error, Result, debug_info, debug_warn, info, utils};
-use tuwunel_service::{
-	appservice::RegistrationInfo,
-	users::{Register, device::generate_refresh_token},
-};
+use tuwunel_service::users::{Register, device::generate_refresh_token};
 
-use super::SESSION_ID_LENGTH;
+use super::{SESSION_ID_LENGTH, is_matrix_appservice_irc};
 use crate::{ClientIp, Ruma};
 
 const RANDOM_USER_ID_LENGTH: usize = 10;
-
-/// # `GET /_matrix/client/v3/register/available`
-///
-/// Checks if a username is valid and available on this server.
-///
-/// Conditions for returning true:
-/// - The user id is not historical
-/// - The server name of the user id matches this server
-/// - No user or appservice on this server already claimed this username
-///
-/// Note: This will not reserve the username, so the username might become
-/// invalid when trying to register
-#[tracing::instrument(skip_all, fields(%client), name = "register_available")]
-pub(crate) async fn get_register_available_route(
-	State(services): State<crate::State>,
-	ClientIp(client): ClientIp,
-	body: Ruma<get_username_availability::v3::Request>,
-) -> Result<get_username_availability::v3::Response> {
-	let is_irc = is_matrix_appservice_irc(body.appservice_info.as_ref());
-
-	if services
-		.config
-		.forbidden_usernames
-		.is_match(&body.username)
-	{
-		return Err!(Request(Forbidden("Username is forbidden")));
-	}
-
-	// don't force the username lowercase if it's from matrix-appservice-irc
-	let body_username = if is_irc {
-		body.username.clone()
-	} else {
-		body.username.to_lowercase()
-	};
-
-	// Validate user id
-	let user_id =
-		match UserId::parse_with_server_name(&body_username, services.globals.server_name()) {
-			| Ok(user_id) => {
-				if let Err(e) = user_id.validate_strict() {
-					// unless the username is from the broken matrix appservice IRC bridge, we
-					// should follow synapse's behaviour on not allowing things like spaces
-					// and UTF-8 characters in usernames
-					if !is_irc {
-						return Err!(Request(InvalidUsername(debug_warn!(
-							"Username {body_username} contains disallowed characters or spaces: \
-							 {e}"
-						))));
-					}
-				}
-
-				user_id
-			},
-			| Err(e) => {
-				return Err!(Request(InvalidUsername(debug_warn!(
-					"Username {body_username} is not valid: {e}"
-				))));
-			},
-		};
-
-	// Check if username is creative enough
-	if services.users.exists(&user_id).await {
-		return Err!(Request(UserInUse("User ID is not available.")));
-	}
-
-	if let Some(ref info) = body.appservice_info
-		&& !info.is_user_match(&user_id)
-	{
-		return Err!(Request(Exclusive("Username is not in an appservice namespace.")));
-	}
-
-	if services
-		.appservice
-		.is_exclusive_user_id(&user_id)
-		.await
-	{
-		return Err!(Request(Exclusive("Username is reserved by an appservice.")));
-	}
-
-	Ok(get_username_availability::v3::Response { available: true })
-}
 
 /// # `POST /_matrix/client/v3/register`
 ///
@@ -206,29 +119,6 @@ pub(crate) async fn register_route(
 	})
 }
 
-/// # `GET /_matrix/client/v1/register/m.login.registration_token/validity`
-///
-/// Checks if the provided registration token is valid at the time of checking
-///
-/// Currently does not have any ratelimiting, and this isn't very practical as
-/// there is only one registration token allowed.
-pub(crate) async fn check_registration_token_validity(
-	State(services): State<crate::State>,
-	body: Ruma<check_registration_token_validity::v1::Request>,
-) -> Result<check_registration_token_validity::v1::Response> {
-	if !services.registration_tokens.is_enabled().await {
-		return Err!(Request(Forbidden("Server does not allow token registration")));
-	}
-
-	let valid = services
-		.registration_tokens
-		.is_token_valid(&body.token)
-		.await
-		.is_ok();
-
-	Ok(check_registration_token_validity::v1::Response { valid })
-}
-
 fn gate_registration_allowed(
 	services: crate::State,
 	body: &Ruma<register::v3::Request>,
@@ -329,16 +219,6 @@ async fn resolve_registration_user_id(
 	}
 
 	Ok(proposed_user_id)
-}
-
-// workaround for https://github.com/matrix-org/matrix-appservice-irc/issues/1780
-fn is_matrix_appservice_irc(appservice_info: Option<&RegistrationInfo>) -> bool {
-	appservice_info.is_some_and(|appservice| {
-		let id = &appservice.registration.id;
-		id == "irc"
-			|| id.contains("matrix-appservice-irc")
-			|| id.contains("matrix_appservice_irc")
-	})
 }
 
 async fn check_appservice_namespace(

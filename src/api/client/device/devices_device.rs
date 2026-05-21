@@ -1,30 +1,11 @@
 use axum::extract::State;
-use futures::StreamExt;
 use ruma::{
 	MilliSecondsSinceUnixEpoch,
-	api::client::device::{
-		self, delete_device, delete_devices, get_device, get_devices, update_device,
-	},
+	api::client::device::{delete_device, get_device, update_device},
 };
 use tuwunel_core::{Err, Result, debug, err, utils::string::to_small_string};
 
 use crate::{ClientIp, Ruma, router::auth_uiaa};
-
-/// # `GET /_matrix/client/r0/devices`
-///
-/// Get metadata on all devices of the sender user.
-pub(crate) async fn get_devices_route(
-	State(services): State<crate::State>,
-	body: Ruma<get_devices::v3::Request>,
-) -> Result<get_devices::v3::Response> {
-	let devices: Vec<device::Device> = services
-		.users
-		.all_devices_metadata(body.sender_user())
-		.collect()
-		.await;
-
-	Ok(get_devices::v3::Response { devices })
-}
 
 /// # `GET /_matrix/client/r0/devices/{deviceId}`
 ///
@@ -148,51 +129,4 @@ pub(crate) async fn delete_device_route(
 		.await;
 
 	Ok(delete_device::v3::Response {})
-}
-
-/// # `POST /_matrix/client/v3/delete_devices`
-///
-/// Deletes the given list of devices.
-///
-/// - Requires UIAA to verify user password unless from an appservice with
-///   MSC4190 enabled.
-///
-/// For each device:
-/// - Invalidates access token
-/// - Deletes device metadata (device id, device display name, last seen ip,
-///   last seen ts)
-/// - Forgets to-device events
-/// - Triggers device list updates
-pub(crate) async fn delete_devices_route(
-	State(services): State<crate::State>,
-	body: Ruma<delete_devices::v3::Request>,
-) -> Result<delete_devices::v3::Response> {
-	let appservice = body.appservice_info.as_ref();
-
-	if appservice.is_some_and(|appservice| appservice.registration.device_management) {
-		let sender_user = body.sender_user();
-		debug!(
-			"Skipping UIAA for {sender_user} as this is from an appservice and MSC4190 is \
-			 enabled"
-		);
-		for device_id in &body.devices {
-			services
-				.users
-				.remove_device(sender_user, device_id)
-				.await;
-		}
-
-		return Ok(delete_devices::v3::Response {});
-	}
-
-	let ref sender_user = auth_uiaa(&services, &body).await?;
-
-	for device_id in &body.devices {
-		services
-			.users
-			.remove_device(sender_user, device_id)
-			.await;
-	}
-
-	Ok(delete_devices::v3::Response {})
 }
