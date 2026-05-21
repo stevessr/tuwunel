@@ -1,6 +1,7 @@
 accessibility/keyboard-navigation.spec.ts :: with an open room
 accessibility/keyboard-navigation.spec.ts :: without an open room
 audio-player/audio-player.spec.ts :: should be rendered, play, and support replying on a thread
+composer/CIDER.spec.ts :: can paste a file
 composer/CIDER.spec.ts :: can send mention
 composer/CIDER.spec.ts :: should allow user to input emoji via graphical picker
 composer/CIDER.spec.ts :: should have focus lock in emoji picker
@@ -12,7 +13,10 @@ crypto/crypto.spec.ts :: Setting up key backup by recovery key
 crypto/crypto.spec.ts :: creating a DM should work, being e2e-encrypted / user verification
 crypto/decryption-failure-messages.spec.ts :: should display undecryptable non-joined historical messages with a different message
 crypto/decryption-failure-messages.spec.ts :: should handle device-relative historical messages
+crypto/device-verification.spec.ts :: No toast after verification, even if the secrets take a while to arrive
+crypto/device-verification.spec.ts :: Verify device with Recovery Key during login
 crypto/event-shields.spec.ts :: Should show a grey padlock for a key restored from backup
+crypto/event-shields.spec.ts :: should show the correct shield on e2e events
 crypto/history-sharing.spec.ts :: Messages sent when we believed the room history was unshared should not be visible
 crypto/history-sharing.spec.ts :: We should share history when sending invites
 crypto/logout.spec.ts :: Ask to set up recovery on logout if not setup
@@ -47,6 +51,7 @@ pinned-messages/pinned-messages.spec.ts :: should pin one message and to have th
 pinned-messages/pinned-messages.spec.ts :: should unpin all messages
 pinned-messages/pinned-messages.spec.ts :: should unpin one message
 polls/pollHistory.spec.ts :: Should display active and past polls
+read-receipts/editing-messages-thread-roots.spec.ts :: An edit of a thread root leaves the room read
 read-receipts/high-level.spec.ts :: Looking in thread view to find old threads that were never read makes the room unread
 read-receipts/high-level.spec.ts :: Paging up to find old threads that were never read keeps the room unread
 read-receipts/new-messages-in-threads.spec.ts :: Reading only one thread's message makes that thread read but not others
@@ -108,6 +113,7 @@ sliding-sync/sliding-sync.spec.ts :: should show and be able to accept/reject/re
 spaces/threads-activity-centre/threadsActivityCentre.spec.ts :: should update with a thread is read
 spotlight/spotlight.spec.ts :: should close spotlight after starting a DM
 spotlight/spotlight.spec.ts :: should find group DMs by usernames or user ids
+spotlight/spotlight.spec.ts :: should show the same user only once
 threads/threads.spec.ts :: navigate through right panel
 threads/threads.spec.ts :: right panel behaves correctly
 threads/threads.spec.ts :: should send location and reply to the location on ThreadView
