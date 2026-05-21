@@ -15,6 +15,7 @@ crypto/decryption-failure-messages.spec.ts :: should display undecryptable non-j
 crypto/decryption-failure-messages.spec.ts :: should handle device-relative historical messages
 crypto/device-verification.spec.ts :: No toast after verification, even if the secrets take a while to arrive
 crypto/device-verification.spec.ts :: Verify device with Recovery Key during login
+crypto/device-verification.spec.ts :: Verify device with Recovery Key from settings
 crypto/event-shields.spec.ts :: Should show a grey padlock for a key restored from backup
 crypto/event-shields.spec.ts :: should show the correct shield on e2e events
 crypto/history-sharing.spec.ts :: Messages sent when we believed the room history was unshared should not be visible
@@ -31,6 +32,19 @@ knock/knock-into-room.spec.ts :: should knock into the room then knock is approv
 knock/knock-into-room.spec.ts :: should knock into the room then knock is approved and user joins the room then user is kicked and joins again
 knock/knock-into-room.spec.ts :: should knock into the room then knock is cancelled by another user and room is forgotten
 lazy-loading/lazy-loading.spec.ts :: should handle lazy loading properly even when offline
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should add a room to a custom section via the More Options menu
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should cancel section creation when dialog is dismissed
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should collapse all sections when 'Collapse all sections' button is clicked
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should create a custom section via the header compose menu
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should create a custom section via the room option menu
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should create multiple custom sections
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should display custom sections between Favourites and Chats
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should edit a custom section name via the section header menu
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should expand all sections when 'Expand all sections' button is clicked
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should move rooms back to Chats when their section is removed
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should show 'Chat moved' toast when adding a room to a custom section
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should show 'Section created' toast after creating a section
+left-panel/room-list-panel/room-list-custom-sections.spec.ts :: should show empty custom sections
 links/messages.spec.ts :: should linkify text inside a URL preview
 links/topic.spec.ts :: should linkify plaintext '#aroom:example.org'
 links/topic.spec.ts :: should linkify plaintext '_@alice:example.org'
@@ -38,6 +52,7 @@ links/topic.spec.ts :: should linkify plaintext 'ftp://example.org'
 links/topic.spec.ts :: should linkify plaintext 'https://example.org'
 location/location.spec.ts :: sends and displays pin drop location message successfully
 login/login.spec.ts :: Can reload after login
+login/soft_logout.spec.ts :: still shows the soft-logout page when the page is reloaded after a soft-logout
 messages/messages.spec.ts :: should render a basic preview
 messages/messages.spec.ts :: should render a preview with a thumbnail
 pinned-messages/pinned-messages.spec.ts :: banner should listen to pinned message list
