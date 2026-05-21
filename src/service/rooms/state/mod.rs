@@ -395,7 +395,8 @@ where
 			.collect()
 			.await;
 
-	self.services
+	let (state_keys, event_ids): (Vec<_>, Vec<_>) = self
+		.services
 		.state_accessor
 		.state_full_shortids(shortstatehash)
 		.ready_filter_map(Result::ok)
@@ -405,13 +406,12 @@ where
 				.map(move |(ty, sk)| ((ty, sk), shorteventid))
 		})
 		.unzip()
-		.map(|(state_keys, event_ids): (Vec<_>, Vec<_>)| {
-			self.services
-				.short
-				.multi_get_eventid_from_short(event_ids.into_iter().stream())
-				.zip(state_keys.into_iter().stream())
-		})
-		.flatten_stream()
+		.await;
+
+	self.services
+		.short
+		.multi_get_eventid_from_short(event_ids.into_iter().stream())
+		.zip(state_keys.into_iter().stream())
 		.ready_filter_map(|(event_id, (ty, sk))| Some(((ty, sk), event_id.ok()?)))
 		.broad_filter_map(async |((ty, sk), event_id): ((&_, &_), OwnedEventId)| {
 			let pdu = self.services.timeline.get_pdu(&event_id).await;
