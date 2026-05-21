@@ -1,0 +1,19 @@
+use ruma::OwnedUserId;
+use tokio::time::Instant;
+use tuwunel_core::Result;
+
+use crate::admin_command;
+
+#[admin_command]
+pub(super) async fn presence_get_presence(&self, user_id: OwnedUserId) -> Result {
+	let timer = Instant::now();
+	let results = self
+		.services
+		.presence
+		.get_presence(&user_id)
+		.await;
+	let query_time = timer.elapsed();
+
+	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
+		.await
+}

@@ -1,0 +1,15 @@
+use tokio::time::Instant;
+use tuwunel_core::Result;
+
+use crate::admin_command;
+
+#[admin_command]
+pub(super) async fn raw_del(&self, map: String, key: String) -> Result {
+	let map = self.services.db.get(&map)?;
+	let timer = Instant::now();
+	map.remove(&key);
+
+	let query_time = timer.elapsed();
+	self.write_str(&format!("Operation completed in {query_time:?}"))
+		.await
+}

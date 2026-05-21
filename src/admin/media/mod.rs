@@ -1,5 +1,13 @@
 #![expect(rustdoc::broken_intra_doc_links)]
-mod commands;
+mod delete;
+mod delete_all_from_server;
+mod delete_all_from_user;
+mod delete_by_event;
+mod delete_list;
+mod delete_range;
+mod get_file_info;
+mod get_remote_file;
+mod get_remote_thumbnail;
 
 use clap::Subcommand;
 use ruma::{OwnedEventId, OwnedMxcUri, OwnedServerName};

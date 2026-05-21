@@ -1,8 +1,11 @@
 mod alias;
-mod commands;
+mod delete;
 mod directory;
+mod exists;
 mod info;
+mod list;
 mod moderation;
+mod prune_empty;
 
 use clap::Subcommand;
 use ruma::OwnedRoomId;

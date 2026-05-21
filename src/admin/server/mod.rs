@@ -1,4 +1,16 @@
-mod commands;
+mod admin_notice;
+mod backup_database;
+mod clear_caches;
+mod list_backups;
+mod list_features;
+mod memory_usage;
+mod reload_config;
+mod reload_mods;
+#[cfg(unix)]
+mod restart;
+mod show_config;
+mod shutdown;
+mod uptime;
 
 use std::path::PathBuf;
 
