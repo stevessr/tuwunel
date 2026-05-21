@@ -107,6 +107,14 @@ pub enum Error {
 	// ruma/tuwunel
 	#[error("Arithmetic operation failed: {0}")]
 	Arithmetic(Cow<'static, str>),
+
+	/// State-res `auth_check` rejection sentinel.
+	///
+	/// Surfaces to the wire as 403 / M_FORBIDDEN with the Display text
+	/// `Auth check failed: {inner}`. Exists so callers can pattern-match the
+	/// cause without grepping the message text.
+	#[error("Auth check failed: {0}")]
+	AuthCheck(Box<Self>),
 	#[error("{0}: {1}")]
 	BadRequest(ruma::api::error::ErrorKind, &'static str), //TODO: remove
 	#[error("{0}")]
@@ -193,11 +201,15 @@ impl Error {
 	/// Returns the Matrix error code / error kind
 	#[inline]
 	pub fn kind(&self) -> ruma::api::error::ErrorKind {
-		use ruma::api::error::ErrorKind::{FeatureDisabled, NotJson, Unknown};
+		use ruma::api::error::{
+			ErrorKind,
+			ErrorKind::{FeatureDisabled, NotJson, Unknown},
+		};
 
 		match self {
 			| Self::FeatureDisabled(..) => FeatureDisabled,
 			| Self::CanonicalJson(..) | Self::Json(..) => NotJson,
+			| Self::AuthCheck(..) => ErrorKind::forbidden(),
 			| Self::BadRequest(kind, ..) | Self::Request(kind, ..) => kind.clone(),
 			| Self::Federation(_, error) | Self::Ruma(error) =>
 				response::ruma_error_kind(error).clone(),
@@ -211,6 +223,7 @@ impl Error {
 		use http::StatusCode;
 
 		match self {
+			| Self::AuthCheck(..) => StatusCode::FORBIDDEN,
 			| Self::Conflict(_) => StatusCode::CONFLICT, // room alias exists
 			| Self::Federation(_, error) | Self::Ruma(error) => error.status_code,
 			| Self::FeatureDisabled(..)
