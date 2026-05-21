@@ -129,25 +129,16 @@ pub(crate) fn init(config: &Config) -> Result<(TracingFlameGuard, Logging)> {
 	#[cfg(not(feature = "perf_measurements"))]
 	let flame_guard = None;
 
-	let subscriber = Arc::new(subscriber);
-
-	// Enable the tokio console. This is slightly kludgy because we're judggling
-	// compile-time and runtime conditions to elide it, each of those changing the
-	// subscriber's type.
 	let (console_enabled, console_disabled_reason) = tokio_console_enabled(config);
-	#[cfg(all(feature = "tokio_console", tokio_unstable, tuwunel_disable))]
-	if console_enabled && config.log_global_default {
-		let console_layer = console_subscriber::ConsoleLayer::builder()
-			.with_default_env()
-			.spawn();
 
-		set_global_default(subscriber.clone().with(console_layer));
-		return Ok((flame_guard, Log {
-			reload: reload_handles,
-			capture: cap_state,
-			subscriber,
-		}));
-	}
+	#[cfg(all(feature = "tokio_console", tokio_unstable))]
+	let subscriber = subscriber.with((console_enabled && config.log_global_default).then(|| {
+		console_subscriber::ConsoleLayer::builder()
+			.with_default_env()
+			.spawn()
+	}));
+
+	let subscriber = Arc::new(subscriber);
 
 	if config.log_global_default {
 		set_global_default(subscriber.clone());
@@ -167,7 +158,7 @@ pub(crate) fn init(config: &Config) -> Result<(TracingFlameGuard, Logging)> {
 }
 
 fn tokio_console_enabled(config: &Config) -> (bool, &'static str) {
-	if !cfg!(all(feature = "tokio_console", tokio_unstable, tuwunel_disable)) {
+	if !cfg!(all(feature = "tokio_console", tokio_unstable)) {
 		return (false, "");
 	}
 
