@@ -147,6 +147,31 @@ variable "rustdoc_base_path" {
 	default = ""
 }
 
+variable "meta_stats" {
+	default = "no"
+}
+variable "time_passes" {
+	default = "no"
+}
+variable "time_llvm_passes" {
+	default = "no"
+}
+variable "print_llvm_passes" {
+	default = "no"
+}
+variable "llvm_time_trace" {
+	default = "no"
+}
+variable "print_type_sizes" {
+	default = "no"
+}
+variable "print_mono_items" {
+	default = "no"
+}
+variable "mono_stats_dir" {
+	default = ""
+}
+
 #
 # Rustflags
 #
@@ -183,8 +208,7 @@ nightly_rustflags = [
     "--cfg tokio_unstable",
     "--allow=unstable-features",
     "-Z enforce-type-length-limit",
-    #"-Z time-passes",
-    #"-Z time-llvm-passes",
+    "-Z share-generics=yes",
 ]
 
 static_nightly_rustflags = [
@@ -207,6 +231,19 @@ override_rustflags = [
 macro_rustflags = [
     "-C relocation-model=pic",
     "-C target-feature=-crt-static",
+]
+
+stats_rustflags = [
+    meta_stats != "no"?         "-Z meta-stats":                              "",
+    time_passes != "no"?        "-Z time-passes":                             "",
+    time_passes != "no"?        "-Z time-passes-format=json":                 "",
+    time_llvm_passes != "no"?   "-Z time-llvm-passes":                        "",
+    print_llvm_passes != "no"?  "-Z print-llvm-passes":                       "",
+    llvm_time_trace != "no"?    "-Z llvm-time-trace":                         "",
+    print_type_sizes != "no"?   "-Z print-type-sizes":                        "",
+    print_mono_items != "no"?   "-Z print-mono-items=${print_mono_items}":    "",
+    mono_stats_dir != ""?       "-Z dump-mono-stats=${mono_stats_dir}":       "",
+    mono_stats_dir != ""?       "-Z dump-mono-stats-format=json":             "",
 ]
 
 #
@@ -1631,6 +1668,7 @@ target "deps-base" {
             substr(rust_toolchain, 0, 7) == "nightly"?
                 join(" ", [
                     join(" ", rustflags),
+                    join(" ", stats_rustflags),
                     join(" ", nightly_rustflags),
                     join(" ", dynamic_rustflags),
                     sys_target_triple(sys_target) == "x86_64-linux-gnu"?
