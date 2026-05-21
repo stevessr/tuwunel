@@ -236,30 +236,16 @@ pub fn state_keys_with_ids<'a>(
 	shortstatehash: ShortStateHash,
 	event_type: &'a StateEventType,
 ) -> impl Stream<Item = (StateKey, OwnedEventId)> + Send + 'a {
-	let state_keys_with_short_ids = self
-		.state_keys_with_shortids(shortstatehash, event_type)
+	self.state_keys_with_shortids(shortstatehash, event_type)
 		.unzip()
-		.map(|(ssks, sids): (Vec<StateKey>, Vec<u64>)| (ssks, sids))
-		.shared();
-
-	let state_keys = state_keys_with_short_ids
-		.clone()
-		.map(at!(0))
-		.map(Vec::into_iter)
-		.map(IterStream::stream)
-		.flatten_stream();
-
-	let shorteventids = state_keys_with_short_ids
-		.map(at!(1))
-		.map(Vec::into_iter)
-		.map(IterStream::stream)
-		.flatten_stream();
-
-	self.services
-		.short
-		.multi_get_eventid_from_short(shorteventids)
-		.zip(state_keys)
-		.ready_filter_map(|(eid, sk)| eid.map(move |eid| (sk, eid)).ok())
+		.map(|(state_keys, shorteventids): (Vec<_>, Vec<_>)| {
+			self.services
+				.short
+				.multi_get_eventid_from_short(shorteventids.into_iter().stream())
+				.zip(state_keys.into_iter().stream())
+				.ready_filter_map(|(eid, sk)| eid.map(move |eid| (sk, eid)).ok())
+		})
+		.flatten_stream()
 }
 
 /// Iterates the state_keys for an event_type in the state; current state
@@ -270,36 +256,22 @@ pub fn state_keys_with_shortids<'a>(
 	shortstatehash: ShortStateHash,
 	event_type: &'a StateEventType,
 ) -> impl Stream<Item = (StateKey, ShortEventId)> + Send + 'a {
-	let short_ids = self
-		.state_full_shortids(shortstatehash)
+	self.state_full_shortids(shortstatehash)
 		.ignore_err()
 		.unzip()
-		.map(|(ssks, sids): (Vec<u64>, Vec<u64>)| (ssks, sids))
-		.shared();
-
-	let shortstatekeys = short_ids
-		.clone()
-		.map(at!(0))
-		.map(Vec::into_iter)
-		.map(IterStream::stream)
-		.flatten_stream();
-
-	let shorteventids = short_ids
-		.map(at!(1))
-		.map(Vec::into_iter)
-		.map(IterStream::stream)
-		.flatten_stream();
-
-	self.services
-		.short
-		.multi_get_statekey_from_short(shortstatekeys)
-		.zip(shorteventids)
-		.ready_filter_map(|(res, id)| res.map(|res| (res, id)).ok())
-		.ready_filter_map(move |((event_type_, state_key), event_id)| {
-			event_type_
-				.eq(event_type)
-				.then_some((state_key, event_id))
+		.map(move |(shortstatekeys, shorteventids): (Vec<_>, Vec<_>)| {
+			self.services
+				.short
+				.multi_get_statekey_from_short(shortstatekeys.into_iter().stream())
+				.zip(shorteventids.into_iter().stream())
+				.ready_filter_map(|(res, id)| res.map(|res| (res, id)).ok())
+				.ready_filter_map(move |((event_type_, state_key), event_id)| {
+					event_type_
+						.eq(event_type)
+						.then_some((state_key, event_id))
+				})
 		})
+		.flatten_stream()
 }
 
 /// Iterates the state_keys for an event_type in the state
@@ -392,30 +364,17 @@ pub fn state_full_ids(
 	&self,
 	shortstatehash: ShortStateHash,
 ) -> impl Stream<Item = (ShortStateKey, OwnedEventId)> + Send + '_ {
-	let shortids = self
-		.state_full_shortids(shortstatehash)
+	self.state_full_shortids(shortstatehash)
 		.ignore_err()
 		.unzip()
-		.shared();
-
-	let shortstatekeys = shortids
-		.clone()
-		.map(at!(0))
-		.map(Vec::into_iter)
-		.map(IterStream::stream)
-		.flatten_stream();
-
-	let shorteventids = shortids
-		.map(at!(1))
-		.map(Vec::into_iter)
-		.map(IterStream::stream)
-		.flatten_stream();
-
-	self.services
-		.short
-		.multi_get_eventid_from_short(shorteventids)
-		.zip(shortstatekeys)
-		.ready_filter_map(|(event_id, shortstatekey)| Some((shortstatekey, event_id.ok()?)))
+		.map(|(shortstatekeys, shorteventids): (Vec<_>, Vec<_>)| {
+			self.services
+				.short
+				.multi_get_eventid_from_short(shorteventids.into_iter().stream())
+				.zip(shortstatekeys.into_iter().stream())
+				.ready_filter_map(|(eid, ssk)| eid.ok().map(|eid| (ssk, eid)))
+		})
+		.flatten_stream()
 }
 
 #[implement(super::Service)]
