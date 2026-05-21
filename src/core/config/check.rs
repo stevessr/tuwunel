@@ -2,8 +2,9 @@ use std::{env::consts::OS, net::SocketAddr};
 
 use either::Either;
 use itertools::Itertools;
+use regex::RegexSet;
 
-use super::{DEPRECATED_KEYS, IdentityProvider, IpSource};
+use super::{DEPRECATED_KEYS, IdentityProvider, IpSource, KNOWN_KEYS};
 use crate::{Config, Err, Result, debug, debug_info, error, warn};
 
 /// Performs check() with additional checks specific to reloading old config
@@ -499,19 +500,18 @@ fn warn_deprecated(config: &Config) {
 /// errors if there are any.
 fn warn_unknown_key(config: &Config) -> Result {
 	debug!("Checking for unknown config keys");
+	let known_keys =
+		RegexSet::new(KNOWN_KEYS).expect("Invalid regular expression set construction");
+
 	let unknown_keys = config
 		.catchall
 		.keys()
-		.filter_map(|key| {
-			if key == "config" {
-				None
+		.filter(|key| !known_keys.is_match(key))
+		.inspect(|key| {
+			if config.error_on_unknown_config_opts {
+				error!("Config parameter \"{key}\" is unknown to tuwunel");
 			} else {
-				if config.error_on_unknown_config_opts {
-					error!("Config parameter \"{key}\" is unknown to tuwunel");
-				} else {
-					warn!("Config parameter \"{key}\" is unknown to tuwunel, ignoring.");
-				}
-				Some(key.as_str())
+				warn!("Config parameter \"{key}\" is unknown to tuwunel, ignoring.");
 			}
 		})
 		.collect_vec();

@@ -3646,7 +3646,14 @@ impl From<AppServiceNamespace> for ruma::api::appservice::Namespace {
 	}
 }
 
-const DEPRECATED_KEYS: &[&str; 9] = &[
+/// Items matched here will not generate an "unknown to tuwunel" warning when
+/// configured. This is important for environment variables which share the
+/// `TUWUNEL_` prefix namespace but aren't config items;  match them here in
+/// their split+lowercased format.
+static KNOWN_KEYS: &[&str; 2] = &["^config$", "^runtime_[a-z0-9_]+$"];
+
+/// Items listed here generate a deprecation warning when configured.
+static DEPRECATED_KEYS: &[&str; 9] = &[
 	"cache_capacity",
 	"conduit_cache_capacity_modifier",
 	"max_concurrent_requests",
