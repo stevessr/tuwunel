@@ -111,9 +111,9 @@ emit_diff() {
 	test -n "$gate$regress_only$progress" || return 0
 	echo
 	echo '```diff'
-	printf '%s\n' "$gate"         | sed -n 's/^./- 🟨 &/p'
-	printf '%s\n' "$regress_only" | sed -n 's/^./- 🟥 &/p'
-	printf '%s\n' "$progress"     | sed -n 's/^./+ 🟩 &/p'
+	printf '%s\n' "$gate"         | sed -n 's/^./- &/p'
+	printf '%s\n' "$regress_only" | sed -n 's/^./- &/p'
+	printf '%s\n' "$progress"     | sed -n 's/^./+ &/p'
 	echo '```'
 }
 
