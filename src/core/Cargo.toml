@@ -66,6 +66,7 @@ tuwunel-macros.workspace = true
 const-str.workspace = true
 core_affinity.workspace = true
 ctor.workspace = true
+dtor.workspace = true
 cyborgtime.workspace = true
 derive_more.workspace = true
 either.workspace = true

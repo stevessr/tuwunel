@@ -69,7 +69,7 @@ fn is_bumpable_pdu(pdu: &PduEvent, sender_user: &UserId) -> bool {
 		.is_ok()
 }
 
-#[cfg_attr(debug_assertions, tuwunel_core::ctor)]
+#[cfg_attr(debug_assertions, tuwunel_core::ctor(unsafe))]
 fn _is_sorted() {
 	debug_assert!(
 		DEFAULT_BUMP_TYPES.is_sorted(),

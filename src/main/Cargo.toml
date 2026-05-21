@@ -214,6 +214,7 @@ console-subscriber.optional = true
 console-subscriber.workspace = true
 const-str.workspace = true
 ctor.workspace = true
+dtor.workspace = true
 log.workspace = true
 opentelemetry-jaeger-propagator.optional = true
 opentelemetry-jaeger-propagator.workspace = true

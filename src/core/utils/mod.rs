@@ -23,7 +23,8 @@ pub mod time;
 pub mod two_phase_counter;
 pub mod unhandled;
 
-pub use ::ctor::{ctor, dtor};
+pub use ::ctor::ctor;
+pub use ::dtor::dtor;
 pub use ::tuwunel_macros::implement;
 
 pub use self::{

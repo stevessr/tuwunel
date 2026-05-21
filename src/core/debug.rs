@@ -56,7 +56,7 @@ pub const INFO_SPAN_LEVEL: Level = if logging() { Level::INFO } else { Level::DE
 pub static DEBUGGER: LazyLock<bool> =
 	LazyLock::new(|| env::var("_").unwrap_or_default().ends_with("gdb"));
 
-#[cfg_attr(debug_assertions, crate::ctor)]
+#[cfg_attr(debug_assertions, crate::ctor(unsafe))]
 #[cfg_attr(not(debug_assertions), allow(dead_code))]
 fn set_panic_trap() {
 	if !*DEBUGGER {

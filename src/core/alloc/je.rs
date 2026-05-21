@@ -66,7 +66,7 @@ static GLOBAL_ALLOCS: AtomicU64 = AtomicU64::new(0);
 static COUNT_GLOBAL_ALLOCS: AtomicBool = AtomicBool::new(false);
 static TRACE_GLOBAL_ALLOCS: AtomicBool = AtomicBool::new(false);
 
-#[crate::ctor]
+#[crate::ctor(unsafe)]
 fn _static_initialization() {
 	// SAFETY: Mutable static globals in jemalloc crate; must be initialized
 	// properly and uniquely.

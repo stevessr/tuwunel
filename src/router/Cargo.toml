@@ -111,6 +111,7 @@ axum.workspace = true
 bytes.workspace = true
 const-str.workspace = true
 ctor.workspace = true
+dtor.workspace = true
 futures.workspace = true
 http.workspace = true
 http-body-util.workspace = true

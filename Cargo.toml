@@ -157,7 +157,10 @@ features = [
 ]
 
 [workspace.dependencies.ctor]
-version = "0.10"
+version = "1.0"
+
+[workspace.dependencies.dtor]
+version = "1.0"
 
 [workspace.dependencies.cyborgtime]
 version = "2.1"
