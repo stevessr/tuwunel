@@ -11,7 +11,7 @@ use ruma::{
 };
 use serde_json::json;
 use tuwunel_core::{
-	Err, Result, at, implement,
+	Err, Result, at, implement, trace,
 	utils::{
 		self, BoolExt, ReadyExt,
 		stream::{IterStream, TryIgnore},
@@ -386,6 +386,15 @@ pub fn add_to_device_event(
 			"sender": sender,
 			"content": content,
 		})),
+	);
+
+	trace!(
+		%target_user_id,
+		%target_device_id,
+		count = *count,
+		%event_type,
+		%sender,
+		"to_device write",
 	);
 }
 
