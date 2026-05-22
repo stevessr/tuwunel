@@ -57,6 +57,7 @@ envs="$envs -e complement_shuffle=${complement_shuffle:-$default_complement_shuf
 envs="$envs -e complement_timeout=${complement_timeout:-$default_complement_timeout}"
 envs="$envs -e complement_skip=${complement_skip:-$skip}"
 envs="$envs -e complement_run=${1:-$default_complement_run}"
+envs="$envs -e COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1"
 
 set -x
 tester_image="complement-tester--${sys_name}--${sys_version}--${sys_target}"
@@ -92,13 +93,22 @@ extract_results() {
 	docker cp "$result_src" "$result_dst"
 }
 
-trap 'extract_output; set +x; date; echo -e "\033[1;41;37mERROR\033[0m"' ERR
-trap 'docker container stop $cid; extract_output' INT
+metrics_archive="tests/complement/runtime_metrics.tar.zst"
+extract_metrics() {
+	rm -f "$metrics_archive"
+	docker cp "$cid:/runtime_metrics" - 2>/dev/null \
+		| zstd > "$metrics_archive" \
+		|| rm -f "$metrics_archive"
+}
+
+trap 'extract_output; extract_metrics; set +x; date; echo -e "\033[1;41;37mERROR\033[0m"' ERR
+trap 'docker container stop $cid; extract_output; extract_metrics' INT
 docker logs -f "$cid"
 docker wait "$cid" 2>/dev/null
 
 extract_results
 extract_output
+extract_metrics
 git diff -U0 --color --shortstat "$result_dst" | (grep "$run" || true)
 
 git diff --quiet --exit-code "$result_dst"

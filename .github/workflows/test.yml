@@ -449,6 +449,15 @@ jobs:
         path: ./tests/complement/logs.jsonl
         if-no-files-found: ignore
 
+    - if: success() || (failure() && steps.execute.outcome == 'failure')
+      name: Upload Runtime Metrics
+      id: upload-metrics
+      uses: actions/upload-artifact@v7
+      with:
+        name: complement_runtime_metrics-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}.tar.zst
+        path: ./tests/complement/runtime_metrics.tar.zst
+        if-no-files-found: ignore
+
     - name: Accept
       id: accept
       run: |

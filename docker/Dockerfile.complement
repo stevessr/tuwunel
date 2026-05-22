@@ -105,8 +105,11 @@ FROM input AS complement-testee
 
 EXPOSE 8008 8448
 RUN mkdir /database
+RUN mkdir -p /var/log/tuwunel/metrics
 COPY --from=complement-config * /complement/
 ENV TUWUNEL_CONFIG="/complement/complement.toml"
+ENV TUWUNEL_RUNTIME_METRICS_DIR="/var/log/tuwunel/metrics"
+ENV TUWUNEL_RUNTIME_USAGE_DIR="/var/log/tuwunel/metrics"
 ENTRYPOINT tuwunel -Oserver_name=\""$SERVER_NAME\""
 
 
@@ -115,8 +118,11 @@ ARG db_pool_max_workers=128
 
 EXPOSE 8008 8448
 RUN mkdir /database
+RUN mkdir -p /var/log/tuwunel/metrics
 COPY --from=complement-config * /complement/
 ENV TUWUNEL_CONFIG="/complement/complement.toml"
+ENV TUWUNEL_RUNTIME_METRICS_DIR="/var/log/tuwunel/metrics"
+ENV TUWUNEL_RUNTIME_USAGE_DIR="/var/log/tuwunel/metrics"
 ENTRYPOINT valgrind \
     --leak-check=no \
     --undef-value-errors=no \
@@ -178,11 +184,35 @@ ENV COMPLEMENT_ENABLE_DIRTY_RUNS="$complement_dirty"
 ENV COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS="$complement_verbose"
 ENV COMPLEMENT_HOSTNAME_RUNNING_COMPLEMENT="host.docker.internal"
 ENV COMPLEMENT_HOST_MOUNTS="/var/run/docker.sock:/var/run/docker.sock"
+ENV COMPLEMENT_POST_TEST_SCRIPT="/usr/src/complement/post_test.sh"
 ENV jq_res='{Action: .Action, Test: .Test}'
 ENV jq_sel='select((.Action == \"pass\" or .Action == \"fail\" or .Action == \"skip\") and .Test != null)'
 ENV jq_tab='[.Action, .Test] | @tsv'
 ENV jq_out='select(.Test != null) | {Test: .Test, Output: .Output}'
 COPY --from=complement-config /complement/old_results.jsonl .
+COPY <<'EOF' post_test.sh
+#!/bin/bash
+# Invoked by Complement per spawned homeserver after each test, before the
+# container is removed. Args: container_id, test_name, test_failed. Extracts
+# /var/log/tuwunel/metrics from the stopped testee via the docker engine
+# unix-socket API and lands the dump files under
+# /runtime_metrics/by_test/<test_name>/<container_id>/ for the runner to tar.
+set -eo pipefail
+
+cid="$1"
+test_name="${2:-_unknown}"
+test_name_safe="${test_name//\//__}"
+
+dst="/runtime_metrics/by_test/$test_name_safe/$cid"
+mkdir -p "$dst"
+
+curl --silent --fail --unix-socket /var/run/docker.sock \
+    --output - \
+    "http://localhost/containers/$cid/archive?path=/var/log/tuwunel/metrics" \
+    | tar -x --strip-components=1 -C "$dst" 2>/dev/null \
+    || rmdir "$dst" 2>/dev/null || true
+EOF
+RUN chmod a+x post_test.sh
 COPY <<EOF uwu.sh
     env;
     set -eux;
