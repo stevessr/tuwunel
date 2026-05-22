@@ -38,38 +38,24 @@ pub(crate) async fn well_known_support(
 	_body: Ruma<discover_support::Request>,
 ) -> Result<discover_support::Response> {
 	let support_page = services
-		.server
 		.config
 		.well_known
 		.support_page
 		.as_ref()
 		.map(ToString::to_string);
 
-	let role = services
-		.server
-		.config
-		.well_known
-		.support_role
-		.clone();
+	let role = services.config.well_known.support_role.clone();
 
 	// support page or role must be either defined for this to be valid
 	if support_page.is_none() && role.is_none() {
 		return Err!(Request(NotFound("Not found.")));
 	}
 
-	let email_address = services
-		.server
-		.config
-		.well_known
-		.support_email
-		.clone();
+	let email_address = services.config.well_known.support_email.clone();
 
-	let matrix_id = services
-		.server
-		.config
-		.well_known
-		.support_mxid
-		.clone();
+	let matrix_id = services.config.well_known.support_mxid.clone();
+
+	let pgp_key = services.config.well_known.support_pgp_key.clone();
 
 	// if a role is specified, an email address or matrix id is required
 	if role.is_some() && (email_address.is_none() && matrix_id.is_none()) {
@@ -80,7 +66,7 @@ pub(crate) async fn well_known_support(
 	let mut contacts: Vec<Contact> = vec![];
 
 	if let Some(role) = role {
-		let contact = Contact { role, email_address, matrix_id };
+		let contact = Contact { role, email_address, matrix_id, pgp_key };
 
 		contacts.push(contact);
 	}

@@ -2811,6 +2811,21 @@ pub struct WellKnownConfig {
 	/// reloadable: yes
 	pub support_mxid: Option<OwnedUserId>,
 
+	/// The PGP key (i.e. OpenPGP) that one may use for encrypted communications
+	/// for the above support role. No specific format is mandated for this
+	/// field or by the spec proposal. This field can contain a URL to a PGP
+	/// key, the 64-bit long ID, the OPENPGPKEY DNS record, or just the full
+	/// fingerprint.
+	///
+	/// Full/raw key content must not be here.
+	///
+	/// As this is a spec proposal (MSC4439), the identifier/prefix for this
+	/// field is currently "dev.zirco.msc4439.pgp_key"
+	///
+	/// reloadable: yes
+	/// example: "openpgp4fpr:8B77919975EAFA5E2456EE03665FE73077489DB0"
+	pub support_pgp_key: Option<String>,
+
 	/// LiveKit JWT endpoint.
 	/// Required for Element Call / MatrixRTC (MSC4143).
 	///
