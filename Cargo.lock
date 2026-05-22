@@ -5725,6 +5725,7 @@ dependencies = [
 name = "tuwunel_admin"
 version = "1.7.0"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "bytes",
  "clap",
@@ -5916,6 +5917,7 @@ dependencies = [
  "base64 0.22.1",
  "blurhash",
  "bytes",
+ "clap",
  "const-str",
  "criterion",
  "ctor",

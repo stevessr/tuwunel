@@ -17,8 +17,8 @@ pub(crate) async fn run(services: Arc<Services>) -> Result {
 	let server = &services.server;
 	debug!("Start");
 
-	// Install the admin room callback here for now
-	tuwunel_admin::init(&services.admin).await;
+	// Install the admin command root here for now
+	tuwunel_admin::init(&services.admin);
 
 	// Execute configured startup commands.
 	services.admin.startup_execute().await?;
@@ -67,8 +67,8 @@ pub(crate) async fn run(services: Arc<Services>) -> Result {
 	sigs.abort();
 	_ = sigs.await;
 
-	// Remove the admin room callback
-	tuwunel_admin::fini(&services.admin).await;
+	// Remove the admin command root
+	tuwunel_admin::fini(&services.admin);
 
 	debug_info!("Finish");
 	res

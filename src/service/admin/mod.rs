@@ -1,24 +1,26 @@
 pub mod console;
+pub mod context;
 pub mod create;
 mod execute;
 mod grant;
+mod processor;
 mod register;
 
 use std::{
 	collections::BTreeMap,
-	pin::Pin,
 	sync::{Arc, Mutex as StdMutex, RwLock as StdRwLock},
 	time::Instant,
 };
 
 use async_trait::async_trait;
+pub use context::Context;
 pub use create::create_admin_room;
-use futures::{Future, FutureExt, TryFutureExt};
+use futures::{FutureExt, TryFutureExt};
 use ruma::{
 	OwnedEventId, OwnedRoomAliasId, OwnedRoomId, RoomId, UserId,
 	events::room::message::{Relation, RoomMessageEventContent},
 };
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::mpsc;
 use tuwunel_core::{
 	Err, Error, Event, Result, debug, err, error, error::default_log, pdu::PduBuilder,
 };
@@ -28,8 +30,7 @@ use crate::rooms::state::RoomMutexGuard;
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
 	channel: StdRwLock<Option<mpsc::Sender<CommandInput>>>,
-	pub handle: RwLock<Option<Processor>>,
-	pub complete: StdRwLock<Option<Completer>>,
+	pub command: StdRwLock<Option<Arc<dyn Command>>>,
 	pub admin_alias: OwnedRoomAliasId,
 	/// Resolved Synapse-compatible registration shared secret. Live for the
 	/// lifetime of the service; the matching nonce store sits beside it.
@@ -46,16 +47,16 @@ pub struct CommandInput {
 	pub reply_id: Option<OwnedEventId>,
 }
 
-/// Prototype of the tab-completer. The input is buffered text when tab
-/// asserted; the output will fully replace the input buffer.
-pub type Completer = fn(&str) -> String;
+/// Root of a clap command tree installed by a downstream crate.
+#[async_trait]
+pub trait Command: Send + Sync + 'static {
+	/// The clap command tree; equivalent to
+	/// `<C as clap::CommandFactory>::command()`.
+	fn clap(&self) -> clap::Command;
 
-/// Prototype of the command processor. This is a callback supplied by the
-/// reloadable admin module.
-pub type Processor = fn(Arc<crate::Services>, CommandInput) -> ProcessorFuture;
-
-/// Return type of the processor
-pub type ProcessorFuture = Pin<Box<dyn Future<Output = ProcessorResult> + Send>>;
+	/// Dispatch already-parsed argument matches to the matching handler.
+	async fn dispatch(&self, matches: clap::ArgMatches, context: &Context<'_>) -> Result;
+}
 
 /// Result wrapping of a command's handling. Both variants are complete message
 /// events which have digested any prior errors. The wrapping preserves whether
@@ -75,8 +76,7 @@ impl crate::Service for Service {
 		Ok(Arc::new(Self {
 			services: args.services.clone(),
 			channel: StdRwLock::new(None),
-			handle: RwLock::new(None),
-			complete: StdRwLock::new(None),
+			command: StdRwLock::new(None),
 			admin_alias: OwnedRoomAliasId::try_from(format!("#admins:{}", args.server.name))
 				.expect("#admins:server_name is valid alias name"),
 			register_shared_secret: register::resolve_shared_secret(&args.server.config),
@@ -190,10 +190,11 @@ impl Service {
 	/// Invokes the tab-completer to complete the command. When unavailable,
 	/// None is returned.
 	pub fn complete_command(&self, command: &str) -> Option<String> {
-		self.complete
+		self.command
 			.read()
 			.expect("locked for reading")
-			.map(|complete| complete(command))
+			.as_ref()
+			.map(|root| processor::complete(root.clap(), command))
 	}
 
 	async fn handle_signal(&self, sig: &'static str) {
@@ -220,13 +221,14 @@ impl Service {
 	}
 
 	async fn process_command(&self, command: CommandInput) -> ProcessorResult {
-		let handle = &self
-			.handle
+		let root = self
+			.command
 			.read()
-			.await
+			.expect("locked for reading")
+			.clone()
 			.expect("Admin module is not loaded");
 
-		handle(Arc::clone(self.services.get()), command).await
+		processor::handle_command(root, Arc::clone(self.services.get()), command).await
 	}
 
 	/// Checks whether a given user is an admin of this server
