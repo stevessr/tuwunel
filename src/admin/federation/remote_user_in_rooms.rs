@@ -33,11 +33,9 @@ pub(super) async fn remote_user_in_rooms(&self, user_id: OwnedUserId) -> Result 
 	rooms.reverse();
 
 	let num = rooms.len();
-	let body = rooms
-		.iter()
-		.map(|(id, members, name)| format!("{id} | Members: {members} | Name: {name}"))
-		.collect::<Vec<_>>()
-		.join("\n");
-
-	write!(self, "Rooms {user_id} shares with us ({num}):\n```\n{body}\n```").await
+	write!(self, "Rooms {user_id} shares with us ({num}):\n```\n").await?;
+	for (id, members, name) in &rooms {
+		writeln!(self, "{id} | Members: {members} | Name: {name}").await?;
+	}
+	write!(self, "```").await
 }

@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use futures::StreamExt;
 use ruma::{OwnedRoomAliasId, OwnedRoomId};
 use tuwunel_core::Result;
@@ -23,14 +21,12 @@ async fn list_aliases_for_room(context: &Context<'_>, room_id: OwnedRoomId) -> R
 		.collect()
 		.await;
 
-	let mut plain_list = String::new();
-
+	writeln!(context, "Aliases for {room_id}:").await?;
 	for alias in aliases {
-		writeln!(plain_list, "- {alias}")?;
+		writeln!(context, "- {alias}").await?;
 	}
 
-	let plain = format!("Aliases for {room_id}:\n{plain_list}");
-	context.write_str(&plain).await
+	Ok(())
 }
 
 async fn list_all_aliases(context: &Context<'_>) -> Result {
@@ -44,11 +40,10 @@ async fn list_all_aliases(context: &Context<'_>) -> Result {
 
 	let server_name = context.services.globals.server_name();
 
-	let mut plain_list = String::new();
+	writeln!(context, "Aliases:").await?;
 	for (room_id, alias_id) in aliases {
-		writeln!(plain_list, "- `{room_id}` -> #{alias_id}:{server_name}")?;
+		writeln!(context, "- `{room_id}` -> #{alias_id}:{server_name}").await?;
 	}
 
-	let plain = format!("Aliases:\n{plain_list}");
-	context.write_str(&plain).await
+	Ok(())
 }

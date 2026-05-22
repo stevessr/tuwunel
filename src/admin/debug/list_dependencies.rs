@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use tuwunel_core::{Result, info};
 
 use crate::admin_command;
@@ -11,10 +9,9 @@ pub(super) async fn list_dependencies(&self, names: bool) -> Result {
 		return self.write_str(&out).await;
 	}
 
-	let mut out = String::new();
 	let deps = info::cargo::dependencies();
-	writeln!(out, "| name | version | features |")?;
-	writeln!(out, "| ---- | ------- | -------- |")?;
+	writeln!(self, "| name | version | features |").await?;
+	writeln!(self, "| ---- | ------- | -------- |").await?;
 	for (name, dep) in deps {
 		let version = dep.try_req().unwrap_or("*");
 		let feats = dep.req_features();
@@ -24,8 +21,8 @@ pub(super) async fn list_dependencies(&self, names: bool) -> Result {
 			String::new()
 		};
 
-		writeln!(out, "| {name} | {version} | {feats} |")?;
+		writeln!(self, "| {name} | {version} | {feats} |").await?;
 	}
 
-	self.write_str(&out).await
+	Ok(())
 }

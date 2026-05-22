@@ -29,11 +29,9 @@ pub(super) async fn directory_list(&self, page: Option<usize>) -> Result {
 		return Ok(());
 	}
 
-	let body = rooms
-		.iter()
-		.map(|(id, members, name)| format!("{id} | Members: {members} | Name: {name}"))
-		.collect::<Vec<_>>()
-		.join("\n");
-
-	write!(self, "Rooms (page {page}):\n```\n{body}\n```").await
+	write!(self, "Rooms (page {page}):\n```\n").await?;
+	for (id, members, name) in &rooms {
+		writeln!(self, "{id} | Members: {members} | Name: {name}").await?;
+	}
+	write!(self, "```").await
 }

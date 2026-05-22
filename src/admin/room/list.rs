@@ -42,17 +42,13 @@ pub(super) async fn room_list(
 		return Err!("No more rooms.");
 	}
 
-	let body = rooms
-		.iter()
-		.map(|(id, members, name)| {
-			if no_details {
-				format!("{id}")
-			} else {
-				format!("{id}\tMembers: {members}\tName: {name}")
-			}
-		})
-		.collect::<Vec<_>>()
-		.join("\n");
-
-	write!(self, "Rooms ({}):\n```\n{body}\n```", rooms.len()).await
+	write!(self, "Rooms ({}):\n```\n", rooms.len()).await?;
+	for (id, members, name) in &rooms {
+		if no_details {
+			writeln!(self, "{id}").await?;
+		} else {
+			writeln!(self, "{id}\tMembers: {members}\tName: {name}").await?;
+		}
+	}
+	write!(self, "```").await
 }

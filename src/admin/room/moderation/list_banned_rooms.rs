@@ -30,17 +30,13 @@ pub(super) async fn list_banned_rooms(&self, no_details: bool) -> Result {
 
 	let num = rooms.len();
 
-	let body = rooms
-		.iter()
-		.map(|(id, members, name)| {
-			if no_details {
-				format!("{id}")
-			} else {
-				format!("{id}\tMembers: {members}\tName: {name}")
-			}
-		})
-		.collect::<Vec<_>>()
-		.join("\n");
-
-	write!(self, "Rooms Banned ({num}):\n```\n{body}\n```").await
+	write!(self, "Rooms Banned ({num}):\n```\n").await?;
+	for (id, members, name) in &rooms {
+		if no_details {
+			writeln!(self, "{id}").await?;
+		} else {
+			writeln!(self, "{id}\tMembers: {members}\tName: {name}").await?;
+		}
+	}
+	write!(self, "```").await
 }

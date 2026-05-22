@@ -24,11 +24,9 @@ pub(super) async fn list_joined_rooms(&self, user_id: String) -> Result {
 	rooms.sort_by_key(|r| r.1);
 	rooms.reverse();
 
-	let body = rooms
-		.iter()
-		.map(|(id, members, name)| format!("{id}\tMembers: {members}\tName: {name}"))
-		.collect::<Vec<_>>()
-		.join("\n");
-
-	write!(self, "Rooms {user_id} Joined ({}):\n```\n{body}\n```", rooms.len()).await
+	write!(self, "Rooms {user_id} Joined ({}):\n```\n", rooms.len()).await?;
+	for (id, members, name) in &rooms {
+		writeln!(self, "{id}\tMembers: {members}\tName: {name}").await?;
+	}
+	write!(self, "```").await
 }

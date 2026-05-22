@@ -13,9 +13,9 @@ pub(super) async fn list_users(&self) -> Result {
 		.collect()
 		.await;
 
-	let mut plain_msg = format!("Found {} local user account(s):\n```\n", users.len());
-	plain_msg += users.join("\n").as_str();
-	plain_msg += "\n```";
-
-	self.write_str(&plain_msg).await
+	write!(self, "Found {} local user account(s):\n```\n", users.len()).await?;
+	for user in &users {
+		writeln!(self, "{user}").await?;
+	}
+	write!(self, "```").await
 }

@@ -1,5 +1,3 @@
-use std::fmt::Write;
-
 use ruma::OwnedServerName;
 use tuwunel_core::Result;
 
@@ -15,12 +13,11 @@ pub(super) async fn get_verify_keys(&self, server_name: Option<OwnedServerName>)
 		.verify_keys_for(&server_name)
 		.await;
 
-	let mut out = String::new();
-	writeln!(out, "| Key ID | Public Key |")?;
-	writeln!(out, "| --- | --- |")?;
+	writeln!(self, "| Key ID | Public Key |").await?;
+	writeln!(self, "| --- | --- |").await?;
 	for (key_id, key) in keys {
-		writeln!(out, "| {key_id} | {key:?} |")?;
+		writeln!(self, "| {key_id} | {key:?} |").await?;
 	}
 
-	self.write_str(&out).await
+	Ok(())
 }

@@ -37,11 +37,9 @@ pub(super) async fn list_joined_members(&self, room_id: OwnedRoomId, local_only:
 		.await;
 
 	let num = member_info.len();
-	let body = member_info
-		.into_iter()
-		.map(|(displayname, mxid)| format!("{mxid} | {displayname}"))
-		.collect::<Vec<_>>()
-		.join("\n");
-
-	write!(self, "{num} Members in Room \"{room_name}\":\n```\n{body}\n```").await
+	write!(self, "{num} Members in Room \"{room_name}\":\n```\n").await?;
+	for (displayname, mxid) in &member_info {
+		writeln!(self, "{mxid} | {displayname}").await?;
+	}
+	write!(self, "```").await
 }
