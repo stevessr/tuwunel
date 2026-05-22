@@ -15,7 +15,7 @@ use axum::{
 };
 pub use client_ip::ConfiguredIpSource;
 use http::{Uri, uri};
-use tuwunel_core::{Server, err};
+use tuwunel_core::{Server, config::Manager, err};
 
 use self::handler::RouterExt;
 pub(super) use self::{
@@ -32,7 +32,7 @@ pub fn build(router: Router<State>, server: &Server) -> Router<State> {
 	let router = register_client_room_routes(router);
 	let router = register_client_state_and_sync_routes(router);
 	let router = register_client_media_and_device_routes(router);
-	let router = register_client_misc_routes(router);
+	let router = register_client_misc_routes(router, allow_support_route(config));
 	let router = register_oidc_routes(router);
 	let router = register_server_misc_routes(router);
 	let router = register_federation_routes(router, config.allow_federation);
@@ -243,13 +243,24 @@ fn register_client_media_and_device_routes(router: Router<State>) -> Router<Stat
 		.ruma_route(&client::send_event_to_device_route)
 }
 
-fn register_client_misc_routes(router: Router<State>) -> Router<State> {
-	router
-		.ruma_route(&client::turn_server_route)
-		.ruma_route(&client::get_transports_route)
-		.ruma_route(&client::well_known_support)
-		.ruma_route(&client::well_known_client)
-		.route("/_tuwunel/server_version", get(client::tuwunel_server_version))
+fn register_client_misc_routes(
+	router: Router<State>,
+	allow_support_route: bool,
+) -> Router<State> {
+	if allow_support_route {
+		router
+			.ruma_route(&client::turn_server_route)
+			.ruma_route(&client::get_transports_route)
+			.ruma_route(&client::well_known_support)
+			.ruma_route(&client::well_known_client)
+			.route("/_tuwunel/server_version", get(client::tuwunel_server_version))
+	} else {
+		router
+			.ruma_route(&client::turn_server_route)
+			.ruma_route(&client::get_transports_route)
+			.ruma_route(&client::well_known_client)
+			.route("/_tuwunel/server_version", get(client::tuwunel_server_version))
+	}
 }
 
 fn register_oidc_routes(router: Router<State>) -> Router<State> {
@@ -351,6 +362,12 @@ fn register_legacy_media_routes(
 			.route("/_matrix/media/v3/thumbnail/{*path}", any(legacy_media_disabled))
 			.route("/_matrix/media/v3/preview_url", any(redirect_legacy_preview))
 	}
+}
+
+fn allow_support_route(config: &Manager) -> bool {
+	config.well_known.support_role.is_some()
+		|| !config.well_known.support_contact.is_empty()
+		|| config.well_known.support_page.is_some()
 }
 
 async fn redirect_legacy_preview(uri: Uri) -> impl IntoResponse {

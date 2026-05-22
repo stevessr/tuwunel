@@ -2433,51 +2433,6 @@
 #
 #server =
 
-# The URL of the support web page. This and the below generate the content
-# of `/.well-known/matrix/support`.
-#
-# reloadable: yes
-# example: "https://example.com/support"
-#
-#support_page =
-
-# The name of the support role.
-#
-# reloadable: yes
-# example: "m.role.admin"
-#
-#support_role =
-
-# The email address for the above support role.
-#
-# reloadable: yes
-# example: "admin@example.com"
-#
-#support_email =
-
-# The Matrix User ID for the above support role.
-#
-# example "@admin:example.com"
-# reloadable: yes
-#
-#support_mxid =
-
-# The PGP key (i.e. OpenPGP) that one may use for encrypted communications
-# for the above support role. No specific format is mandated for this
-# field or by the spec proposal. This field can contain a URL to a PGP
-# key, the 64-bit long ID, the OPENPGPKEY DNS record, or just the full
-# fingerprint.
-#
-# Full/raw key content must not be here.
-#
-# As this is a spec proposal (MSC4439), the identifier/prefix for this
-# field is currently "dev.zirco.msc4439.pgp_key"
-#
-# reloadable: yes
-# example: "openpgp4fpr:8B77919975EAFA5E2456EE03665FE73077489DB0"
-#
-#support_pgp_key =
-
 # LiveKit JWT endpoint.
 # Required for Element Call / MatrixRTC (MSC4143).
 #
@@ -2511,6 +2466,43 @@
 # reloadable: yes
 #
 #rtc_transports = []
+
+
+
+#[global.well_known.support_contact.<ID>]
+
+# The name of the support role.
+#
+# example: "m.role.admin"
+#
+#role =
+
+# The email address for the above support role.
+#
+# example: "admin@example.com"
+#
+#email_address =
+
+# The Matrix User ID for the above support role.
+#
+# example "@admin:example.com"
+#
+#matrix_id =
+
+# The PGP key (i.e. OpenPGP) that one may use for encrypted communications
+# for the above support role. No specific format is mandated for this
+# field or by the spec proposal. This field can contain a URL to a PGP
+# key, the 64-bit long ID, the OPENPGPKEY DNS record, or just the full
+# fingerprint.
+#
+# Full/raw key content must not be here.
+#
+# As this is a spec proposal (MSC4439), the identifier/prefix for this
+# field is currently "dev.zirco.msc4439.pgp_key"
+#
+# example: "openpgp4fpr:8B77919975EAFA5E2456EE03665FE73077489DB0"
+#
+#pgp_key =
 
 
 

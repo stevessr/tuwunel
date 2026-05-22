@@ -56,6 +56,7 @@ pub fn check(config: &Config) -> Result {
 	check_room_version(config)?;
 	check_identity_providers(config)?;
 	check_media_providers(config)?;
+	check_well_known_support_contact_validity(config)?;
 
 	Ok(())
 }
@@ -474,6 +475,31 @@ fn check_media_providers(config: &Config) -> Result {
 	}
 
 	Ok(())
+}
+
+fn check_well_known_support_contact_validity(config: &Config) -> Result {
+	let well_known = &config.well_known;
+
+	if well_known.support_role.is_some()
+		&& well_known.support_email.is_none()
+		&& well_known.support_mxid.is_none()
+	{
+		return Err!(
+			"well_known.support_role is set but neither support_email nor support_mxid is \
+			 configured to accompany it"
+		);
+	}
+
+	well_known
+		.support_contact
+		.iter()
+		.find(|(_, contact)| contact.email_address.is_none() && contact.matrix_id.is_none())
+		.map_or(Ok(()), |(id, _)| {
+			Err!(
+				"well_known.support_contact.{id} has neither email_address nor matrix_id; at \
+				 least one is required"
+			)
+		})
 }
 
 /// Iterates over all the keys in the config file and warns if there is a

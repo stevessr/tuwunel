@@ -2769,7 +2769,9 @@ pub struct TlsConfig {
 #[derive(Clone, Debug, Deserialize, Default)]
 #[config_example_generator(
 	filename = "tuwunel-example.toml",
-	section = "global.well_known"
+	section = "global.well_known",
+	ignore = "support_contact support_role support_email support_mxid support_page \
+	          support_pgp_key"
 )]
 pub struct WellKnownConfig {
 	/// The server URL that the client well-known file will serve. This should
@@ -2786,29 +2788,40 @@ pub struct WellKnownConfig {
 	/// example: "matrix.example.com:443"
 	pub server: Option<OwnedServerName>,
 
+	// external structure; separate section
+	#[serde(default)]
+	pub support_contact: BTreeMap<String, SupportContact>,
+
 	/// The URL of the support web page. This and the below generate the content
 	/// of `/.well-known/matrix/support`.
 	///
-	/// reloadable: yes
 	/// example: "https://example.com/support"
 	pub support_page: Option<Url>,
 
 	/// The name of the support role.
 	///
-	/// reloadable: yes
-	/// example: "m.role.admin"
+	///
+	/// display: hidden
+	// This config option is hidden because [global.well_known.support_contact.<ID>] should be
+	// used instead. However for compatibility purposes the config option will still function and
+	// be prioritised first.
 	pub support_role: Option<ContactRole>,
 
 	/// The email address for the above support role.
 	///
-	/// reloadable: yes
-	/// example: "admin@example.com"
+	///
+	/// display: hidden
+	// This config option is hidden because [global.well_known.support_contact.<ID>] should be
+	// used instead. However for compatibility purposes the config option will still function and
+	// be prioritised first.
 	pub support_email: Option<String>,
 
 	/// The Matrix User ID for the above support role.
 	///
-	/// example "@admin:example.com"
-	/// reloadable: yes
+	/// display: hidden
+	// This config option is hidden because [global.well_known.support_contact.<ID>] should be
+	// used instead. However for compatibility purposes the config option will still function and
+	// be prioritised first.
 	pub support_mxid: Option<OwnedUserId>,
 
 	/// The PGP key (i.e. OpenPGP) that one may use for encrypted communications
@@ -2822,8 +2835,10 @@ pub struct WellKnownConfig {
 	/// As this is a spec proposal (MSC4439), the identifier/prefix for this
 	/// field is currently "dev.zirco.msc4439.pgp_key"
 	///
-	/// reloadable: yes
-	/// example: "openpgp4fpr:8B77919975EAFA5E2456EE03665FE73077489DB0"
+	/// display: hidden
+	// This config option is hidden because [global.well_known.support_contact.<ID>] should be
+	// used instead. However for compatibility purposes the config option will still function and
+	// be prioritised first.
 	pub support_pgp_key: Option<String>,
 
 	/// LiveKit JWT endpoint.
@@ -2861,6 +2876,53 @@ pub struct WellKnownConfig {
 	/// default: []
 	#[serde(default)]
 	pub rtc_transports: Vec<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "global.well_known.support_contact.<ID>"
+)]
+pub struct SupportContact {
+	/// The name of the support role.
+	///
+	/// example: "m.role.admin"
+	pub role: ContactRole,
+
+	/// The email address for the above support role.
+	///
+	/// example: "admin@example.com"
+	pub email_address: Option<String>,
+
+	/// The Matrix User ID for the above support role.
+	///
+	/// example "@admin:example.com"
+	pub matrix_id: Option<OwnedUserId>,
+
+	/// The PGP key (i.e. OpenPGP) that one may use for encrypted communications
+	/// for the above support role. No specific format is mandated for this
+	/// field or by the spec proposal. This field can contain a URL to a PGP
+	/// key, the 64-bit long ID, the OPENPGPKEY DNS record, or just the full
+	/// fingerprint.
+	///
+	/// Full/raw key content must not be here.
+	///
+	/// As this is a spec proposal (MSC4439), the identifier/prefix for this
+	/// field is currently "dev.zirco.msc4439.pgp_key"
+	///
+	/// example: "openpgp4fpr:8B77919975EAFA5E2456EE03665FE73077489DB0"
+	pub pgp_key: Option<String>,
+}
+
+impl From<SupportContact> for ruma::api::client::discovery::discover_support::Contact {
+	fn from(conf: SupportContact) -> Self {
+		Self {
+			role: conf.role,
+			matrix_id: conf.matrix_id,
+			email_address: conf.email_address,
+			pgp_key: conf.pgp_key,
+		}
+	}
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Default)]

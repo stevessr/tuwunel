@@ -1,3 +1,5 @@
+use core::iter::once;
+
 use axum::extract::State;
 use ruma::api::client::discovery::{
 	discover_homeserver::{self, HomeserverInfo},
@@ -44,37 +46,32 @@ pub(crate) async fn well_known_support(
 		.as_ref()
 		.map(ToString::to_string);
 
-	let role = services.config.well_known.support_role.clone();
+	let single_contact = services
+		.config
+		.well_known
+		.support_role
+		.clone()
+		.map(|role| Contact {
+			role,
+			email_address: services.config.well_known.support_email.clone(),
+			matrix_id: services.config.well_known.support_mxid.clone(),
+			pgp_key: services.config.well_known.support_pgp_key.clone(),
+		});
 
-	// support page or role must be either defined for this to be valid
-	if support_page.is_none() && role.is_none() {
-		return Err!(Request(NotFound("Not found.")));
-	}
+	let contacts = {
+		let contacts = services
+			.config
+			.well_known
+			.support_contact
+			.clone()
+			.into_values()
+			.map(Into::into);
 
-	let email_address = services.config.well_known.support_email.clone();
-
-	let matrix_id = services.config.well_known.support_mxid.clone();
-
-	let pgp_key = services.config.well_known.support_pgp_key.clone();
-
-	// if a role is specified, an email address or matrix id is required
-	if role.is_some() && (email_address.is_none() && matrix_id.is_none()) {
-		return Err!(Request(NotFound("Not found.")));
-	}
-
-	// TODO: support defining multiple contacts in the config
-	let mut contacts: Vec<Contact> = vec![];
-
-	if let Some(role) = role {
-		let contact = Contact { role, email_address, matrix_id, pgp_key };
-
-		contacts.push(contact);
-	}
-
-	// support page or role+contacts must be either defined for this to be valid
-	if contacts.is_empty() && support_page.is_none() {
-		return Err!(Request(NotFound("Not found.")));
-	}
+		match single_contact {
+			| Some(contact) => contacts.chain(once(contact)).collect(),
+			| None => contacts.collect(),
+		}
+	};
 
 	Ok(discover_support::Response { contacts, support_page })
 }
