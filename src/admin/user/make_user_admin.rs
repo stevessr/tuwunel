@@ -17,6 +17,5 @@ pub(super) async fn make_user_admin(&self, user_id: String) -> Result {
 		.boxed()
 		.await?;
 
-	self.write_str(&format!("{user_id} has been granted admin privileges."))
-		.await
+	write!(self, "{user_id} has been granted admin privileges.").await
 }

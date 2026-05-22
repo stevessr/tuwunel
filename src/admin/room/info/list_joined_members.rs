@@ -43,6 +43,5 @@ pub(super) async fn list_joined_members(&self, room_id: OwnedRoomId, local_only:
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("{num} Members in Room \"{room_name}\":\n```\n{body}\n```"))
-		.await
+	write!(self, "{num} Members in Room \"{room_name}\":\n```\n{body}\n```").await
 }

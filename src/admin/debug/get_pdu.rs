@@ -30,6 +30,5 @@ pub(super) async fn get_pdu(&self, event_id: OwnedEventId) -> Result {
 		"PDU found in our database"
 	};
 
-	self.write_str(&format!("{msg}\n```json\n{text}\n```"))
-		.await
+	write!(self, "{msg}\n```json\n{text}\n```").await
 }

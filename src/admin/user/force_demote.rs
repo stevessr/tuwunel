@@ -71,9 +71,10 @@ pub(super) async fn force_demote(&self, user_id: String, room_id: OwnedRoomOrAli
 		)
 		.await?;
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"User {user_id} demoted themselves to the room default power level in {room_id} - \
 		 {event_id}"
-	))
+	)
 	.await
 }

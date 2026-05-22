@@ -13,8 +13,7 @@ pub(super) async fn get_retained_pdu(&self, event_id: OwnedEventId) -> Result {
 
 	let text = serde_json::to_string_pretty(&pdu)?;
 
-	self.write_str(&format!("Original PDU:\n```json\n{text}\n```"))
-		.await?;
+	write!(self, "Original PDU:\n```json\n{text}\n```").await?;
 
 	Ok(())
 }

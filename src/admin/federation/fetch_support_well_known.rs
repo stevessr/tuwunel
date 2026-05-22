@@ -39,6 +39,5 @@ pub(super) async fn fetch_support_well_known(&self, server_name: OwnedServerName
 		},
 	};
 
-	self.write_str(&format!("Got JSON response:\n\n```json\n{pretty_json}\n```"))
-		.await
+	write!(self, "Got JSON response:\n\n```json\n{pretty_json}\n```").await
 }

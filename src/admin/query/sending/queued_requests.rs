@@ -26,8 +26,5 @@ pub(super) async fn sending_queued_requests(
 	let queued_requests = results.collect::<Vec<_>>().await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!(
-		"Query completed in {query_time:?}:\n\n```rs\n{queued_requests:#?}\n```"
-	))
-	.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{queued_requests:#?}\n```").await
 }

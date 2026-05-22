@@ -21,6 +21,5 @@ pub(super) async fn delete_range(
 		.delete_range(duration, older_than, newer_than, yes_i_want_to_delete_local_media)
 		.await?;
 
-	self.write_str(&format!("Deleted {deleted_count} total files."))
-		.await
+	write!(self, "Deleted {deleted_count} total files.").await
 }

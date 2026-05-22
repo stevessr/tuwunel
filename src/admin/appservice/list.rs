@@ -14,6 +14,5 @@ pub(super) async fn appservice_list(&self) -> Result {
 
 	let len = appservices.len();
 	let list = appservices.join(", ");
-	self.write_str(&format!("Appservices ({len}): {list}"))
-		.await
+	write!(self, "Appservices ({len}): {list}").await
 }

@@ -12,6 +12,5 @@ pub(super) async fn delete_all_from_user(&self, username: String) -> Result {
 		.delete_from_user(&user_id)
 		.await?;
 
-	self.write_str(&format!("Deleted {deleted_count} total files."))
-		.await
+	write!(self, "Deleted {deleted_count} total files.").await
 }

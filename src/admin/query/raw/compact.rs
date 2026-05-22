@@ -53,6 +53,5 @@ pub(super) async fn raw_compact(
 	let timer = Instant::now();
 	let results = results.await;
 	let query_time = timer.elapsed();
-	self.write_str(&format!("Jobs completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	write!(self, "Jobs completed in {query_time:?}:\n\n```rs\n{results:#?}\n```").await
 }

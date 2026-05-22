@@ -26,6 +26,5 @@ pub(super) async fn issue(
 		.issue_token(expires)
 		.await?;
 
-	self.write_str(&format!("New registration token issued: `{token}` - {info}"))
-		.await
+	write!(self, "New registration token issued: `{token}` - {info}").await
 }

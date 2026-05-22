@@ -14,6 +14,5 @@ pub(super) async fn globals_signing_keys_for(&self, origin: OwnedServerName) -> 
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```").await
 }

@@ -24,6 +24,5 @@ pub(super) async fn change_log_level(&self, filter: Option<String>, reset: bool)
 		.reload(&filter_layer, Some(handles))
 		.map_err(|e| err!("Failed to modify and reload the global tracing log level: {e}"))?;
 
-	self.write_str(&format!("Successfully changed log level to {filter}"))
-		.await
+	write!(self, "Successfully changed log level to {filter}").await
 }

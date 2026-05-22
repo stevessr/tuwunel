@@ -14,6 +14,5 @@ pub(super) async fn get_master_key(&self, user_id: OwnedUserId) -> Result {
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```").await
 }

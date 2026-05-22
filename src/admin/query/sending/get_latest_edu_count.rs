@@ -15,6 +15,5 @@ pub(super) async fn sending_get_latest_edu_count(&self, server_name: OwnedServer
 		.await;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```").await
 }

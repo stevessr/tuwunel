@@ -20,6 +20,5 @@ pub(super) async fn get_to_device_events(
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```").await
 }

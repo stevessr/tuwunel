@@ -17,5 +17,5 @@ pub(super) async fn short_room_id(&self, room_id: OwnedRoomOrAliasId) -> Result 
 		.get_shortroomid(&room_id)
 		.await?;
 
-	self.write_str(&format!("{shortid:#?}")).await
+	write!(self, "{shortid:#?}").await
 }

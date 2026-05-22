@@ -9,6 +9,5 @@ pub(super) async fn count_users(&self) -> Result {
 	let result = self.services.users.count().await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```").await
 }

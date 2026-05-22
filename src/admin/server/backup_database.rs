@@ -18,6 +18,5 @@ pub(super) async fn backup_database(&self) -> Result {
 		.await?;
 
 	let count = self.services.db.engine.backup_count()?;
-	self.write_str(&format!("{result}. Currently have {count} backups."))
-		.await
+	write!(self, "{result}. Currently have {count} backups.").await
 }

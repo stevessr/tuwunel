@@ -24,6 +24,5 @@ pub(super) async fn raw_count(&self, map: Option<String>, prefix: Option<String>
 		.await;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{count:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{count:#?}\n```").await
 }

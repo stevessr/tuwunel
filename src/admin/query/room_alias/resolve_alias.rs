@@ -10,6 +10,5 @@ pub(super) async fn resolve_alias(&self, alias: OwnedRoomAliasId) -> Result {
 	let results = self.services.alias.resolve_alias(&alias).await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```").await
 }

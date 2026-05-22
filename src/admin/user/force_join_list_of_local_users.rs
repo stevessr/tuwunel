@@ -102,9 +102,10 @@ pub(super) async fn force_join_list_of_local_users(
 		}
 	}
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"{successful_joins} local users have been joined to {room_id}. {failed_joins} joins \
 		 failed.",
-	))
+	)
 	.await
 }

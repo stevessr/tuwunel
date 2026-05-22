@@ -41,6 +41,5 @@ pub(super) async fn force_leave_room(
 
 	drop(state_lock);
 
-	self.write_str(&format!("{user_id} has left {room_id}."))
-		.await
+	write!(self, "{user_id} has left {room_id}.").await
 }

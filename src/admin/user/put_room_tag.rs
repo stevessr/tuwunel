@@ -44,8 +44,9 @@ pub(super) async fn put_room_tag(
 		)
 		.await?;
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"Successfully updated room account data for {user_id} and room {room_id} with tag {tag}"
-	))
+	)
 	.await
 }

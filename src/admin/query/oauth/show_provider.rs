@@ -8,11 +8,11 @@ pub(super) async fn oauth_show_provider(&self, id: ProviderId, config: bool) -> 
 	if config {
 		let config = self.services.oauth.providers.get_config(&id)?;
 
-		self.write_str(&format!("{config:#?}\n")).await?;
+		write!(self, "{config:#?}\n").await?;
 		return Ok(());
 	}
 
 	let provider = self.services.oauth.providers.get(&id).await?;
 
-	self.write_str(&format!("{provider:#?}\n")).await
+	write!(self, "{provider:#?}\n").await
 }

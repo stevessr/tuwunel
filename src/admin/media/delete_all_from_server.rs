@@ -52,6 +52,5 @@ pub(super) async fn delete_all_from_server(
 		}
 	}
 
-	self.write_str(&format!("Deleted {deleted_count} total files."))
-		.await
+	write!(self, "Deleted {deleted_count} total files.").await
 }

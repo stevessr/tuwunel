@@ -30,6 +30,5 @@ pub(super) async fn list_joined_rooms(&self, user_id: String) -> Result {
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("Rooms {user_id} Joined ({}):\n```\n{body}\n```", rooms.len()))
-		.await
+	write!(self, "Rooms {user_id} Joined ({}):\n```\n{body}\n```", rooms.len()).await
 }

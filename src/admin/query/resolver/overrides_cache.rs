@@ -21,8 +21,7 @@ pub(super) async fn overrides_cache(&self, server_name: Option<String>) -> Resul
 		}
 
 		let expire = time::format(expire, "%+");
-		self.write_str(&format!("| {name} | {ips:?} | {port} | {expire} | {overriding:?} |\n"))
-			.await?;
+		write!(self, "| {name} | {ips:?} | {port} | {expire} | {overriding:?} |\n").await?;
 	}
 
 	Ok(())

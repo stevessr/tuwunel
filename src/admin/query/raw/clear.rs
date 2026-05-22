@@ -24,6 +24,5 @@ pub(super) async fn raw_clear(&self, map: String, confirm: bool) -> Result {
 
 	drop(cork);
 	let query_time = timer.elapsed();
-	self.write_string(format!("Operation completed in {query_time:?}\n\nremoved {count} keys\n"))
-		.await
+	write!(self, "Operation completed in {query_time:?}\n\nremoved {count} keys\n").await
 }

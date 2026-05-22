@@ -24,6 +24,5 @@ pub(super) async fn get_room_tags(&self, user_id: String, room_id: OwnedRoomId) 
 			content: TagEventContent { tags: BTreeMap::new() },
 		});
 
-	self.write_str(&format!("```\n{:#?}\n```", tags_event.content.tags))
-		.await
+	write!(self, "```\n{:#?}\n```", tags_event.content.tags).await
 }

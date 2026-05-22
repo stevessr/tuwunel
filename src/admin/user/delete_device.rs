@@ -18,6 +18,5 @@ pub(super) async fn delete_device(
 		.remove_device(&user_id, &device_id)
 		.await;
 
-	self.write_str(&format!("User {user_id}'s device {device_id} removed."))
-		.await
+	write!(self, "User {user_id}'s device {device_id} removed.").await
 }

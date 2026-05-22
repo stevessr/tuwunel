@@ -62,9 +62,10 @@ pub(super) async fn ban_list_of_rooms(&self) -> Result {
 		do_ban_room(self.services, &room_id).await;
 	}
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"Finished bulk room ban, banned {rooms_len} total rooms, evicted all users, and \
 		 disabled incoming federation with the room."
-	))
+	)
 	.await
 }

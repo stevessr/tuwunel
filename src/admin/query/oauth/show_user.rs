@@ -13,7 +13,7 @@ pub(super) async fn oauth_show_user(&self, user_id: OwnedUserId) -> Result {
 		.try_for_each(async |id| {
 			let session = self.services.oauth.sessions.get(&id).await?;
 
-			self.write_str(&format!("{session:#?}\n")).await
+			write!(self, "{session:#?}\n").await
 		})
 		.await
 }

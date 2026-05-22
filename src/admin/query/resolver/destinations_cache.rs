@@ -25,8 +25,7 @@ pub(super) async fn destinations_cache(&self, server_name: Option<OwnedServerNam
 		}
 
 		let expire = time::format(expire, "%+");
-		self.write_str(&format!("| {name} | {dest} | {host} | {expire} |\n"))
-			.await?;
+		write!(self, "| {name} | {dest} | {host} | {expire} |\n").await?;
 	}
 
 	Ok(())

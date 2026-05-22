@@ -20,6 +20,5 @@ pub(super) async fn get_short_pdu(&self, shortroomid: ShortRoomId, count: i64) -
 
 	let json_text = serde_json::to_string_pretty(&json)?;
 
-	self.write_str(&format!("```json\n{json_text}\n```"))
-		.await
+	write!(self, "```json\n{json_text}\n```").await
 }

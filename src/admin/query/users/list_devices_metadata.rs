@@ -16,6 +16,5 @@ pub(super) async fn list_devices_metadata(&self, user_id: OwnedUserId) -> Result
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{devices:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{devices:#?}\n```").await
 }

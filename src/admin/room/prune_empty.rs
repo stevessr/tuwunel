@@ -45,8 +45,7 @@ pub(super) async fn room_prune_empty(&self, force: bool) -> Result {
 
 	let rooms_len = rooms.len();
 
-	self.write_str(&format!("Successfully deleted {rooms_len} rooms from our database."))
-		.await?;
+	write!(self, "Successfully deleted {rooms_len} rooms from our database.").await?;
 
 	Ok(())
 }

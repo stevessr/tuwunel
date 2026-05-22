@@ -35,6 +35,5 @@ pub(super) async fn directory_list(&self, page: Option<usize>) -> Result {
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("Rooms (page {page}):\n```\n{body}\n```"))
-		.await
+	write!(self, "Rooms (page {page}):\n```\n{body}\n```").await
 }

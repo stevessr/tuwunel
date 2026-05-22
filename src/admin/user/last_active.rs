@@ -43,8 +43,7 @@ pub(super) async fn last_active(&self, limit: Option<usize>) -> Result {
 			let user_id = user_id.localpart();
 			let ip = last_seen_ip.as_deref().unwrap_or_default();
 
-			self.write_string(format!("{ago:?} {ip:<40} {user_id}\n"))
-				.await
+			write!(self, "{ago:?} {ip:<40} {user_id}\n").await
 		})
 		.boxed()
 		.await

@@ -19,6 +19,5 @@ pub(super) async fn raw_get(&self, map: String, key: String, base64: bool) -> Re
 		encode(&handle)
 	};
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{result:?}\n```").await
 }

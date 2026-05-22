@@ -61,6 +61,5 @@ pub(super) async fn get_remote_pdu(
 
 	let text = serde_json::to_string_pretty(&json)?;
 	let msg = "Got PDU from specified server and handled as backfilled";
-	self.write_str(&format!("{msg}. Event body:\n```json\n{text}\n```"))
-		.await
+	write!(self, "{msg}. Event body:\n```json\n{text}\n```").await
 }

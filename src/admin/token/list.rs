@@ -12,11 +12,10 @@ pub(super) async fn list(&self) -> Result {
 		.collect()
 		.await;
 
-	self.write_str(&format!("Found {} registration tokens:\n", tokens.len()))
-		.await?;
+	write!(self, "Found {} registration tokens:\n", tokens.len()).await?;
 
 	for token in tokens {
-		self.write_str(&format!("- {token}\n")).await?;
+		write!(self, "- {token}\n").await?;
 	}
 
 	Ok(())

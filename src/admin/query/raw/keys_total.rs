@@ -27,6 +27,5 @@ pub(super) async fn raw_keys_total(&self, map: Option<String>, prefix: Option<St
 		.await;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("```\n{result:#?}\n\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	write!(self, "```\n{result:#?}\n\n```\n\nQuery completed in {query_time:?}").await
 }

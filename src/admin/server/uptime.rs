@@ -12,5 +12,5 @@ pub(super) async fn uptime(&self) -> Result {
 		.expect("standard duration");
 
 	let result = time::pretty(elapsed);
-	self.write_str(&format!("{result}.")).await
+	write!(self, "{result}.").await
 }

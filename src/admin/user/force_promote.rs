@@ -81,10 +81,11 @@ pub(super) async fn force_promote(
 
 	drop(state_lock);
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"User {privileged_member} promoted {target_id} to {power_level} power level in \
 		 {room_id} - {event_id}"
-	))
+	)
 	.await?;
 
 	Ok(())

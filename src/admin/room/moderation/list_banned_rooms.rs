@@ -42,6 +42,5 @@ pub(super) async fn list_banned_rooms(&self, no_details: bool) -> Result {
 		.collect::<Vec<_>>()
 		.join("\n");
 
-	self.write_str(&format!("Rooms Banned ({num}):\n```\n{body}\n```"))
-		.await
+	write!(self, "Rooms Banned ({num}):\n```\n{body}\n```").await
 }

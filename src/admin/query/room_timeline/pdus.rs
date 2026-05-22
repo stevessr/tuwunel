@@ -27,5 +27,5 @@ pub(super) async fn pdus(
 		.try_collect()
 		.await?;
 
-	self.write_str(&format!("{result:#?}")).await
+	write!(self, "{result:#?}").await
 }

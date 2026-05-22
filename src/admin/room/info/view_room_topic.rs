@@ -14,6 +14,5 @@ pub(super) async fn view_room_topic(&self, room_id: OwnedRoomId) -> Result {
 		return Err!("Room does not have a room topic set.");
 	};
 
-	self.write_str(&format!("Room topic:\n```\n{room_topic}\n```"))
-		.await
+	write!(self, "Room topic:\n```\n{room_topic}\n```").await
 }

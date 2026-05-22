@@ -6,5 +6,5 @@ use crate::admin_command;
 pub(super) async fn raw_sequence(&self) -> Result {
 	let sequence = self.services.db.engine.current_sequence();
 
-	self.write_str(&format!("{sequence:#?}")).await
+	write!(self, "{sequence:#?}").await
 }

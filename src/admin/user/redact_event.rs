@@ -59,8 +59,5 @@ pub(super) async fn redact_event(&self, event_id: OwnedEventId) -> Result {
 			.await?
 	};
 
-	self.write_str(&format!(
-		"Successfully redacted event. Redaction event ID: {redaction_event_id}"
-	))
-	.await
+	write!(self, "Successfully redacted event. Redaction event ID: {redaction_event_id}").await
 }

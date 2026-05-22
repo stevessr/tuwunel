@@ -19,5 +19,5 @@ pub(super) async fn query_storage_move(
 
 	let result = provider.rename(&src, &dst, overwrite).await;
 
-	self.write_string(format!("{result:#?}\n")).await
+	write!(self, "{result:#?}\n").await
 }

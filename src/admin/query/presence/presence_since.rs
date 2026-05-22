@@ -16,6 +16,5 @@ pub(super) async fn presence_presence_since(&self, since: u64, to: Option<u64>) 
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```").await
 }

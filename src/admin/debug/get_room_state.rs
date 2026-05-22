@@ -25,7 +25,7 @@ pub(super) async fn get_room_state(
 				serde_json::to_value(&event).map_err(Error::from)
 			})
 			.ready_and_then(|event| serde_json::to_string_pretty(&event).map_err(Error::from))
-			.try_for_each(|json| self.write_string(format!("```json\n{json}\n```\n")))
+			.try_for_each(|json| writeln!(self, "```json\n{json}\n```"))
 			.await;
 	}
 
@@ -41,9 +41,7 @@ pub(super) async fn get_room_state(
 
 		let value = serde_json::to_value(&event)?;
 		let json = serde_json::to_string_pretty(&value)?;
-		return self
-			.write_string(format!("```json\n{json}\n```\n"))
-			.await;
+		return writeln!(self, "```json\n{json}\n```").await;
 	}
 
 	self.services
@@ -54,6 +52,6 @@ pub(super) async fn get_room_state(
 			serde_json::to_value(&event).map_err(Error::from)
 		})
 		.ready_and_then(|event| serde_json::to_string_pretty(&event).map_err(Error::from))
-		.try_for_each(|json| self.write_string(format!("```json\n{json}\n```\n")))
+		.try_for_each(|json| writeln!(self, "```json\n{json}\n```"))
 		.await
 }

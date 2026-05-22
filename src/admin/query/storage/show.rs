@@ -10,5 +10,5 @@ pub(super) async fn query_storage_show(&self, provider: Option<String>, src: Str
 	let provider = self.services.storage.provider(id)?;
 	let meta = provider.head(src).await?;
 
-	self.write_string(format!("{meta:#?}\n")).await
+	write!(self, "{meta:#?}\n").await
 }

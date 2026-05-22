@@ -26,8 +26,5 @@ pub(super) async fn sending_active_requests_for(
 	let active_requests = results.collect::<Vec<_>>().await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!(
-		"Query completed in {query_time:?}:\n\n```rs\n{active_requests:#?}\n```"
-	))
-	.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{active_requests:#?}\n```").await
 }

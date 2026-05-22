@@ -9,6 +9,5 @@ pub(super) async fn globals_current_count(&self) -> Result {
 	let results = self.services.globals.current_count();
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{results:#?}\n```").await
 }

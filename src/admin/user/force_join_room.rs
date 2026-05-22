@@ -22,6 +22,5 @@ pub(super) async fn force_join_room(&self, user_id: String, room: OwnedRoomOrAli
 		.join(&user_id, &room_id, Some(&room), None, &servers, false)
 		.await?;
 
-	self.write_str(&format!("{user_id} has been joined to {room_id}."))
-		.await
+	write!(self, "{user_id} has been joined to {room_id}.").await
 }

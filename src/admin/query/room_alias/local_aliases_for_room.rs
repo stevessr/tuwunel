@@ -17,6 +17,5 @@ pub(super) async fn local_aliases_for_room(&self, room_id: OwnedRoomId) -> Resul
 		.await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{aliases:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{aliases:#?}\n```").await
 }

@@ -41,6 +41,5 @@ pub(super) async fn raw_iter(
 		.await?;
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("\n```\n\nQuery completed in {query_time:?}"))
-		.await
+	write!(self, "\n```\n\nQuery completed in {query_time:?}").await
 }

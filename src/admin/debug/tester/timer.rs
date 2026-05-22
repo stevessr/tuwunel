@@ -12,7 +12,7 @@ pub(super) async fn timer(&self) -> Result {
 	timed(self.body);
 
 	let elapsed = started.elapsed();
-	self.write_str(&format!("completed in {elapsed:#?}")).await
+	write!(self, "completed in {elapsed:#?}").await
 }
 
 #[inline(never)]

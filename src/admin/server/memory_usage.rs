@@ -9,8 +9,9 @@ pub(super) async fn memory_usage(&self) -> Result {
 	let allocator_usage = tuwunel_core::alloc::memory_usage()
 		.map_or(String::new(), |s| format!("\nAllocator:\n{s}"));
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"Services:\n{services_usage}\nDatabase:\n{database_usage}{allocator_usage}",
-	))
+	)
 	.await
 }

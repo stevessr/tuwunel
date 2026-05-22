@@ -44,9 +44,10 @@ pub(super) async fn delete_room_tag(
 		)
 		.await?;
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"Successfully updated room account data for {user_id} and room {room_id}, deleting room \
 		 tag {tag}"
-	))
+	)
 	.await
 }

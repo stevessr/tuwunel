@@ -45,9 +45,10 @@ pub(super) async fn delete_list(&self) -> Result {
 		}
 	}
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"Finished bulk MXC deletion, deleted {mxc_deletion_count} total MXCs from our database \
 		 and the filesystem. {failed_parsed_mxcs} MXCs failed to be parsed from the database.",
-	))
+	)
 	.await
 }

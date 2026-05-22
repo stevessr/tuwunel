@@ -20,6 +20,5 @@ pub(super) async fn alias_remove(&self, room_alias_localpart: String) -> Result 
 		.await
 		.map_err(|err| err!("Failed to remove alias: {err}"))?;
 
-	self.write_str(&format!("Removed alias from {id}"))
-		.await
+	write!(self, "Removed alias from {id}").await
 }

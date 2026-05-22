@@ -12,5 +12,5 @@ pub(super) async fn raw_maps(&self) -> Result {
 		.copied()
 		.collect();
 
-	self.write_str(&format!("{list:#?}")).await
+	write!(self, "{list:#?}").await
 }

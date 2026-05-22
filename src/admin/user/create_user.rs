@@ -31,6 +31,5 @@ pub(super) async fn create_user(&self, username: String, password: Option<String
 		})
 		.await?;
 
-	self.write_str(&format!("Created user with user_id: {user_id} and password: `{password}`"))
-		.await
+	write!(self, "Created user with user_id: {user_id} and password: `{password}`").await
 }

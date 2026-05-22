@@ -10,6 +10,5 @@ pub(super) async fn raw_del(&self, map: String, key: String) -> Result {
 	map.remove(&key);
 
 	let query_time = timer.elapsed();
-	self.write_str(&format!("Operation completed in {query_time:?}"))
-		.await
+	write!(self, "Operation completed in {query_time:?}").await
 }

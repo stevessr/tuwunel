@@ -20,5 +20,5 @@ pub(super) async fn oauth_token_info(&self, id: SessionId) -> Result {
 		.request_tokeninfo((&provider, &session))
 		.await?;
 
-	self.write_str(&format!("{tokeninfo:#?}\n")).await
+	write!(self, "{tokeninfo:#?}\n").await
 }

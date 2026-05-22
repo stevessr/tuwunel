@@ -26,6 +26,5 @@ pub(super) async fn oauth_delete(&self, id: SessionOrUserId, force: bool) -> Res
 		},
 	}
 
-	self.write_string(format!("deleted any oauth state for {id}"))
-		.await
+	write!(self, "deleted any oauth state for {id}").await
 }

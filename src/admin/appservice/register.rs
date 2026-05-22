@@ -28,6 +28,5 @@ pub(super) async fn appservice_register(&self) -> Result {
 		.await
 		.map_err(|e| err!("Failed to register appservice: {e}"))?;
 
-	self.write_string(format!("Appservice registered with ID: {id}"))
-		.await
+	write!(self, "Appservice registered with ID: {id}").await
 }

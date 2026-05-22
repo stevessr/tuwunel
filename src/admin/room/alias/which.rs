@@ -14,6 +14,5 @@ pub(super) async fn alias_which(&self, room_alias_localpart: String) -> Result {
 		.await
 		.map_err(|_| err!("Alias isn't in use."))?;
 
-	self.write_str(&format!("Alias resolves to {id}"))
-		.await
+	write!(self, "Alias resolves to {id}").await
 }

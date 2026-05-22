@@ -52,10 +52,11 @@ pub(super) async fn delete_by_event(&self, event_id: OwnedEventId) -> Result {
 		}
 	}
 
-	self.write_str(&format!(
+	write!(
+		self,
 		"Deleted {mxc_deletion_count} total MXCs from our database and the filesystem from \
 		 event ID {event_id}."
-	))
+	)
 	.await
 }
 

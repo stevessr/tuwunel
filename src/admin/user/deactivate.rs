@@ -15,6 +15,5 @@ pub(super) async fn deactivate(&self, no_leave_rooms: bool, user_id: String) -> 
 
 	deactivate_user(self.services, &user_id, no_leave_rooms).await?;
 
-	self.write_str(&format!("User {user_id} has been deactivated"))
-		.await
+	write!(self, "User {user_id} has been deactivated").await
 }

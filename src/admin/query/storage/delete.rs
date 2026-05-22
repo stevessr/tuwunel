@@ -21,12 +21,8 @@ pub(super) async fn query_storage_delete(
 		.for_each(async |result| {
 			match result {
 				| Ok(_) if !verbose => Ok(()),
-				| Ok(path) =>
-					self.write_string(format!("deleted {path}\n"))
-						.await,
-				| Err(e) =>
-					self.write_string(format!("failed: {e:?}\n"))
-						.await,
+				| Ok(path) => write!(self, "deleted {path}\n").await,
+				| Err(e) => write!(self, "failed: {e:?}\n").await,
 			}
 			.log_err()
 			.ok();

@@ -27,6 +27,5 @@ pub(super) async fn get_remote_thumbnail(
 	let len = result.content.len();
 	result.content.clear();
 
-	self.write_str(&format!("```\n{result:#?}\nreceived {len} bytes for file content.\n```"))
-		.await
+	write!(self, "```\n{result:#?}\nreceived {len} bytes for file content.\n```").await
 }

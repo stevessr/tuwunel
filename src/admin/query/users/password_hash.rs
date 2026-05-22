@@ -10,6 +10,5 @@ pub(super) async fn password_hash(&self, user_id: OwnedUserId) -> Result {
 	let result = self.services.users.password_hash(&user_id).await;
 	let query_time = timer.elapsed();
 
-	self.write_str(&format!("Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```"))
-		.await
+	write!(self, "Query completed in {query_time:?}:\n\n```rs\n{result:#?}\n```").await
 }

@@ -57,6 +57,5 @@ pub(super) async fn reject_invites(&self, user_id: String, reason: Option<String
 		return Err!("{user_id} has no pending invites.");
 	}
 
-	self.write_string(format!("Rejected {rejected} invite(s) for {user_id}. {failed} failed."))
-		.await
+	write!(self, "Rejected {rejected} invite(s) for {user_id}. {failed} failed.").await
 }
