@@ -8,7 +8,7 @@ use std::path::PathBuf;
 pub use self::{
 	compute::available_parallelism,
 	limits::*,
-	usage::{statm, thread_usage, usage},
+	usage::{Usage, statm, thread_usage, usage},
 };
 use crate::{Result, at};
 

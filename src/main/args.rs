@@ -125,6 +125,34 @@ pub struct Args {
 	)]
 	pub worker_histogram_buckets: usize,
 
+	/// Write tokio runtime metrics at exit to a file in the directory
+	/// provided. The format will be JSON. The file will be named
+	/// `tuwunel.runtime_metrics.<pid>.json`. The metrics are accumulated for
+	/// the last runtime interval; total value is only obtained if this is the
+	/// first call for the execution.
+	#[arg(
+		long,
+		hide(true),
+		num_args = 0..=1,
+		require_equals(false),
+		env = "TUWUNEL_RUNTIME_METRICS_DIR",
+		default_missing_value = ""
+	)]
+	pub runtime_metrics_dir: Option<PathBuf>,
+
+	/// Write system resource usage (`getrusage(2)`) metrics at exit to a file
+	/// in the directory provided. The format will be JSON. The file will be
+	/// named `tuwunel.runtime_usage.<pid>.json`.
+	#[arg(
+		long,
+		hide(true),
+		num_args = 0..=1,
+		require_equals(false),
+		env = "TUWUNEL_RUNTIME_USAGE_DIR",
+		default_missing_value = ""
+	)]
+	pub runtime_usage_dir: Option<PathBuf>,
+
 	/// Toggles worker affinity feature.
 	#[arg(
 		long,

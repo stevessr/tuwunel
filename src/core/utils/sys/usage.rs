@@ -1,4 +1,4 @@
-use nix::sys::resource::Usage;
+pub use nix::sys::resource::Usage;
 #[cfg(unix)]
 use nix::sys::resource::{UsageWho, getrusage};
 

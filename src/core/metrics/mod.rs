@@ -1,3 +1,5 @@
+pub mod dump;
+
 use std::sync::{
 	Arc,
 	atomic::{AtomicU32, AtomicU64},
