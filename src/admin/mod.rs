@@ -1,6 +1,7 @@
 #![expect(clippy::too_many_arguments)]
 
 pub(crate) mod admin;
+#[macro_use]
 pub(crate) mod context;
 mod tests;
 pub(crate) mod utils;

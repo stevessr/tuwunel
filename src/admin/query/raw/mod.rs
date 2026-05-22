@@ -211,7 +211,7 @@ fn encode(data: &[u8]) -> String {
 
 	for byte in data {
 		if *byte < 0x20 || *byte > 0x7E {
-			let _ = write!(res, "\\x{byte:02x}");
+			_ = write!(res, "\\x{byte:02x}");
 		} else {
 			res.push(*byte as char);
 		}
