@@ -193,10 +193,11 @@ struct Visitor<'a>(&'a mut String);
 impl Visit for Visitor<'_> {
 	#[inline]
 	fn record_debug(&mut self, field: &Field, val: &dyn fmt::Debug) {
-		if field.name() == "message" {
-			write!(self.0, "{val:?}").expect("stream error");
-		} else {
-			write!(self.0, " {}={val:?}", field.name()).expect("stream error");
+		match field.name() {
+			| "message" => write!(self.0, "{val:?}").expect("stream error"),
+			// already named in Error::Config Display; suppress the duplicate field here.
+			| "config" => {},
+			| name => write!(self.0, " {name}={val:?}").expect("stream error"),
 		}
 	}
 }
