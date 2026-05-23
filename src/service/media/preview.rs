@@ -5,12 +5,12 @@
 //! of dependencies and nulls out results through the existing interface when
 //! not featured.
 
-use std::time::SystemTime;
+use std::{net::IpAddr, time::SystemTime};
 
 use ipaddress::IPAddress;
 use serde::Serialize;
 use tuwunel_core::{Err, Result, debug, err, implement};
-use url::Url;
+use url::{Host, Url};
 
 use super::Service;
 
@@ -119,11 +119,7 @@ pub async fn get_url_preview(&self, url: &Url) -> Result<UrlPreviewData> {
 
 #[implement(Service)]
 async fn request_url_preview(&self, url: &Url) -> Result<UrlPreviewData> {
-	if let Ok(ip) = IPAddress::parse(url.host_str().expect("URL previously validated"))
-		&& !self.services.client.valid_cidr_range(&ip)
-	{
-		return Err!(Request(Forbidden("Requesting from this address is forbidden")));
-	}
+	self.check_url_host(url)?;
 
 	let client = &self.services.client.url_preview;
 	let response = client.get(url.as_str()).send().await?;
@@ -236,7 +232,20 @@ async fn download_html(
 			let image_url = url
 				.join(&obj.url)
 				.map_err(|e| err!(Request(Unknown("Invalid og:image URL: {e}"))))?;
+
+			self.check_url_host(&image_url)?;
 			let image_response = client.get(image_url.as_str()).send().await?;
+
+			if let Some(remote_addr) = image_response.remote_addr() {
+				debug!(?image_url, ?remote_addr, "og:image remote address");
+
+				if let Ok(ip) = IPAddress::parse(remote_addr.ip().to_string())
+					&& !self.services.client.valid_cidr_range(&ip)
+				{
+					return Err!(Request(Forbidden("Requesting from this address is forbidden")));
+				}
+			}
+
 			self.download_image(image_response).await?
 		},
 	};
@@ -264,6 +273,25 @@ async fn download_html(
 	_response: reqwest::Response,
 ) -> Result<UrlPreviewData> {
 	Err!(FeatureDisabled("url_preview"))
+}
+
+#[implement(Service)]
+fn check_url_host(&self, url: &Url) -> Result {
+	let host = url
+		.host()
+		.ok_or_else(|| err!(Request(Unknown("URL has no host"))))?;
+
+	let ip = match host {
+		| Host::Domain(_) => return Ok(()),
+		| Host::Ipv4(v4) => IpAddr::V4(v4),
+		| Host::Ipv6(v6) => IpAddr::V6(v6),
+	};
+
+	if !self.services.client.valid_cidr_range_ip(ip) {
+		return Err!(Request(Forbidden("Requesting from this address is forbidden")));
+	}
+
+	Ok(())
 }
 
 #[implement(Service)]
@@ -357,7 +385,7 @@ pub fn url_preview_allowed(&self, url: &Url) -> bool {
 							 url_preview_domain_explicit_denylist (check 1/3)",
 							&root_domain
 						);
-						return true;
+						return false;
 					}
 
 					if allowlist_domain_explicit.contains(&root_domain.to_owned()) {

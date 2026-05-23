@@ -1,10 +1,11 @@
 use std::{
+	net::IpAddr,
 	ops::Deref,
 	sync::{Arc, LazyLock},
 	time::Duration,
 };
 
-use ipaddress::IPAddress;
+use ipaddress::{IPAddress, ipv4::from_u32 as ipv4_from_u32};
 use reqwest::{Certificate, Client, ClientBuilder, dns::Resolve, header::HeaderValue, redirect};
 use tuwunel_core::{Config, Result, either::Either, err, implement, trace};
 
@@ -26,7 +27,7 @@ pub struct Clients {
 pub struct Service {
 	pub clients: LazyLock<Clients, Box<dyn FnOnce() -> Clients + Send>>,
 
-	pub cidr_range_denylist: Vec<IPAddress>,
+	pub cidr_range_denylist: Arc<[IPAddress]>,
 }
 
 impl Deref for Service {
@@ -51,7 +52,8 @@ impl crate::Service for Service {
 				.iter()
 				.map(IPAddress::parse)
 				.inspect(|cidr| trace!("Denied CIDR range: {cidr:?}"))
-				.collect::<Result<_, String>>()
+				.collect::<Result<Vec<_>, String>>()
+				.map(Arc::from)
 				.map_err(|e| err!(Config("ip_range_denylist", e)))?,
 		}))
 	}
@@ -82,9 +84,14 @@ fn make_clients(services: &Services) -> Result<Clients> {
 			let bind_addr = interface.clone().and_then(Either::left);
 			let bind_iface = interface.clone().and_then(Either::right);
 
+			let resolver = crate::resolver::Validating::new(
+				Arc::clone(&services.resolver.resolver),
+				Arc::clone(&services.client.cidr_range_denylist),
+			);
+
 			builder_interface(cb, bind_iface.as_deref())?
 				.local_address(bind_addr)
-				.dns_resolver(Arc::clone(&services.resolver.resolver))
+				.dns_resolver(resolver)
 				.redirect(redirect::Policy::limited(3))
 		}),
 
@@ -268,4 +275,25 @@ pub fn valid_cidr_range(&self, ip: &IPAddress) -> bool {
 	self.cidr_range_denylist
 		.iter()
 		.all(|cidr| !cidr.includes(ip))
+}
+
+#[inline]
+#[must_use]
+#[implement(Service)]
+pub fn valid_cidr_range_ip(&self, ip: IpAddr) -> bool {
+	let addr = ipaddress_from_std(ip);
+	self.cidr_range_denylist
+		.iter()
+		.all(|cidr| !cidr.includes(&addr))
+}
+
+#[must_use]
+pub(crate) fn ipaddress_from_std(ip: IpAddr) -> IPAddress {
+	match ip {
+		| IpAddr::V4(v4) =>
+			ipv4_from_u32(u32::from(v4), 32).expect("/32 is always a valid prefix"),
+		// ipv6::from_int would skip the regex parser but pulls in num-bigint.
+		| IpAddr::V6(v6) =>
+			IPAddress::parse(v6.to_string()).expect("Ipv6Addr Display output parses"),
+	}
 }

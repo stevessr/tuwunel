@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{io, io::ErrorKind::PermissionDenied, net::SocketAddr, sync::Arc, time::Duration};
 
 use futures::FutureExt;
 use hickory_resolver::{
@@ -7,16 +7,25 @@ use hickory_resolver::{
 	lookup_ip::LookupIp,
 	net::runtime::TokioRuntimeProvider,
 };
+use ipaddress::IPAddress;
 use reqwest::dns::{Addrs, Name, Resolve, Resolving};
 use tuwunel_core::{Result, Server, err, trace};
 
 use super::cache::{Cache, CachedOverride};
+use crate::client::ipaddress_from_std;
 
 pub struct Resolver {
 	pub(crate) resolver: Arc<TokioResolver>,
 	pub(crate) passthru: Arc<Passthru>,
 	pub(crate) hooked: Arc<Hooked>,
 	server: Arc<Server>,
+}
+
+/// Inner resolver wrapper that drops addresses matching the configured CIDR
+/// denylist before reqwest opens a connection.
+pub struct Validating<R> {
+	inner: Arc<R>,
+	denylist: Arc<[IPAddress]>,
 }
 
 pub(crate) struct Hooked {
@@ -138,6 +147,42 @@ impl Resolver {
 	/// Clear the in-memory hickory-dns caches
 	#[inline]
 	pub fn clear_cache(&self) { self.resolver.clear_cache(); }
+}
+
+impl<R: Resolve + 'static> Validating<R> {
+	pub fn new(inner: Arc<R>, denylist: Arc<[IPAddress]>) -> Arc<Self> {
+		Arc::new(Self { inner, denylist })
+	}
+}
+
+impl<R: Resolve + 'static> Resolve for Validating<R> {
+	fn resolve(&self, name: Name) -> Resolving {
+		validate_addrs(self.inner.clone(), self.denylist.clone(), name).boxed()
+	}
+}
+
+async fn validate_addrs<R: Resolve + 'static>(
+	inner: Arc<R>,
+	denylist: Arc<[IPAddress]>,
+	name: Name,
+) -> ResolvingResult {
+	let mut filtered = inner
+		.resolve(name)
+		.await?
+		.filter(move |sa| {
+			let ip = ipaddress_from_std(sa.ip());
+			!denylist.iter().any(|cidr| cidr.includes(&ip))
+		})
+		.peekable();
+
+	if filtered.peek().is_none() {
+		return Err(Box::new(io::Error::new(
+			PermissionDenied,
+			"All resolved addresses are denied by ip_range_denylist",
+		)));
+	}
+
+	Ok(Box::new(filtered))
 }
 
 impl Resolve for Resolver {
