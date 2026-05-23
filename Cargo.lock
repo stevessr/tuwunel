@@ -4147,6 +4147,7 @@ dependencies = [
  "ruma-events",
  "ruma-federation-api",
  "ruma-identifiers-validation",
+ "ruma-identity-service-api",
  "ruma-push-gateway-api",
  "ruma-signatures",
  "web-time",

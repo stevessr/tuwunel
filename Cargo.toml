@@ -368,6 +368,7 @@ features = [
     "compat-upload-signatures",
     "federation-api",
     "identifiers-validation",
+    "identity-service-api",
     "markdown",
     "push-gateway-api-c",
     "rand",
@@ -395,6 +396,8 @@ features = [
     "unstable-msc4186",
     "unstable-msc4195",
     "unstable-msc4203", # sending to-device events to appservices
+    "unstable-msc4265",
+    "unstable-msc4266",
     "unstable-msc4310",
     "unstable-msc4311",
     "unstable-msc4383",

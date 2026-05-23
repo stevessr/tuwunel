@@ -1,9 +1,13 @@
 use core::iter::once;
+use std::collections::BTreeMap;
 
 use axum::extract::State;
-use ruma::api::client::discovery::{
-	discover_homeserver::{self, HomeserverInfo},
-	discover_support::{self, Contact},
+use ruma::api::{
+	client::discovery::{
+		discover_homeserver::{self, HomeserverInfo},
+		discover_support::{self, Contact},
+	},
+	identity_service::tos::get_terms_of_service::v2::{LocalizedPolicy, Policies},
 };
 use tuwunel_core::{Err, Result};
 
@@ -73,5 +77,21 @@ pub(crate) async fn well_known_support(
 		}
 	};
 
-	Ok(discover_support::Response { contacts, support_page })
+	let policies = services
+		.config
+		.well_known
+		.support_policy
+		.clone()
+		.into_values()
+		.map(|policy| {
+			let localized = BTreeMap::from([(
+				policy.policy_translation.language.clone(),
+				LocalizedPolicy::from(policy.policy_translation),
+			)]);
+
+			(policy.name, Policies { version: policy.version, localized })
+		})
+		.collect();
+
+	Ok(discover_support::Response { contacts, support_page, policies })
 }

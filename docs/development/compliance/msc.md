@@ -19,8 +19,8 @@
 ## Counts
 
 - ✅ `yes`: 218
-- 🟨 `partial`: 58
-- ❌ `no`: 456
+- 🟨 `partial`: 59
+- ❌ `no`: 455
 - ⬛ `n/a`: 292
 
 ### Status by inventory bucket
@@ -28,7 +28,7 @@
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
 | merged | 151 | 29 | 12 | 64 | 256 |
-| open | 59 | 28 | 405 | 176 | 668 |
+| open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
 ## Merged
@@ -396,7 +396,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4279 | ❌ ● | 0/0 | Server notice rooms | no notice room presets, no leave_rules, no server_notice room type filter |
 | MSC4276 | ❌ ● | 0/0 | Soft unfailure for self redactions | no self-redaction soft-fail bypass |
 | MSC4271 | ❌ ◐ | 0/0 | Recommended enabled-ness for default push rules | no admin override knob; uses Ruma defaults verbatim |
-| MSC4266 | ❌ ● | 0/0 | Policies in /.well-known/matrix/support | policies field not added to /.well-known/matrix/support |
+| MSC4266 | 🟨 ● | 55/70 | Policies in /.well-known/matrix/support | policies served from config; wire key not unstable-prefixed, multi-lang confi... |
 | MSC4265 | ❌ ◐ | 10/10 | Data Protection Officer contact in /.well-known/matrix/support | support_role configurable; MSC role string accepted as Custom |
 | MSC4264 | ❌ ● | 0/0 | Tokens for Contacting Accounts or Joining Semi-Public Rooms | Tokens for contact / semi-public-room joins not implemented |
 | MSC4263 | ❌ ◐ | 10/10 | Preventing MXID enumeration via key queries | MUST floor met implicitly; MAY restriction unused |

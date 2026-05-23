@@ -2799,7 +2799,7 @@ pub struct TlsConfig {
 	filename = "tuwunel-example.toml",
 	section = "global.well_known",
 	ignore = "support_contact support_role support_email support_mxid support_page \
-	          support_pgp_key"
+	          support_pgp_key support_policy"
 )]
 pub struct WellKnownConfig {
 	/// The server URL that the client well-known file will serve. This should
@@ -2819,6 +2819,10 @@ pub struct WellKnownConfig {
 	// external structure; separate section
 	#[serde(default)]
 	pub support_contact: BTreeMap<String, SupportContact>,
+
+	// external structure; separate section
+	#[serde(default)]
+	pub support_policy: BTreeMap<String, SupportPolicy>,
 
 	/// The URL of the support web page. This and the below generate the content
 	/// of `/.well-known/matrix/support`.
@@ -2904,6 +2908,69 @@ pub struct WellKnownConfig {
 	/// default: []
 	#[serde(default)]
 	pub rtc_transports: Vec<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "global.well_known.support_policy.<ID>",
+	ignore = "policy_translation"
+)]
+pub struct SupportPolicy {
+	/// Identifier name of the policy document.
+	///
+	/// example: "privacy_policy"
+	/// reloadable: yes
+	pub name: String,
+
+	/// Version string of the policy document.
+	///
+	/// example: "v6.7"
+	/// reloadable: yes
+	pub version: String,
+
+	/// Policy document translation definition
+	///
+	/// reloadable: yes
+	pub policy_translation: SupportPolicyTranslation,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "global.well_known.support_policy.<ID>.policy_translation"
+)]
+pub struct SupportPolicyTranslation {
+	/// User friendly name of the policy document.
+	///
+	/// example: "Privacy Policy"
+	/// reloadable: yes
+	pub name: String,
+
+	/// Link to the test of the policy document. A valid URL must be specified.
+	///
+	/// example: "https://website.local/privacy-policy"
+	/// reloadable: yes
+	pub url: Url,
+
+	/// Language code of the policy document. This should be formatted as
+	/// specified in Section 2.2 of RFC5646:
+	/// https://datatracker.ietf.org/doc/html/rfc5646#section-2.2
+	///
+	/// example: "en_US"
+	/// reloadable: yes
+	pub language: String,
+}
+
+impl From<SupportPolicyTranslation>
+	for ruma::api::identity_service::tos::get_terms_of_service::v2::LocalizedPolicy
+{
+	fn from(conf: SupportPolicyTranslation) -> Self {
+		Self {
+			name: conf.name,
+			url: conf.url.to_string(),
+		}
+	}
 }
 
 #[derive(Clone, Debug, Deserialize)]
