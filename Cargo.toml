@@ -232,6 +232,12 @@ features = [
 [workspace.dependencies.ipaddress]
 version = "0.1"
 
+[workspace.dependencies.ipnet]
+version = "2.12"
+features = [
+	"serde",
+]
+
 [workspace.dependencies.itertools]
 version = "0.14"
 

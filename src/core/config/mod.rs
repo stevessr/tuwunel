@@ -19,6 +19,7 @@ use derive_more::Debug;
 use either::{Either, Either::Left};
 use figment::providers::{Data, Env, Format, Toml};
 pub use figment::{Figment, value::Value as FigmentValue};
+use ipnet::IpNet;
 use itertools::Itertools;
 use regex::RegexSet;
 use ruma::{
@@ -651,6 +652,33 @@ pub struct Config {
 	/// config-example: "connect_info"
 	#[serde(default)]
 	pub ip_source: Option<IpSource>,
+
+	/// Subnets whose TCP peers are treated as trusted and bypass the
+	/// `ip_source`-based extraction, falling through to the same
+	/// insecure header-scan + `ConnectInfo` fallback used when
+	/// `ip_source` is unset. Each entry is CIDR notation, including
+	/// the prefix length (use `/32` or `/128` to trust a single host).
+	///
+	/// Loopback (`127.0.0.0/8`, `::1/128`) is always bypassed and
+	/// need not be listed.
+	///
+	/// Use this when locally-attached bridges or other server-side
+	/// clients connect from a private container or VPN subnet that
+	/// cannot carry the configured proxy header (e.g. a Docker
+	/// user-defined bridge network without `network_mode: host`).
+	///
+	/// WARNING: any peer in these subnets can forge the client IP via
+	/// request headers. Only include subnets you control end-to-end.
+	/// Changing this value requires a server restart.
+	///
+	/// default: []
+	/// config-example: ["172.18.0.0/16", "fd00::/8"]
+	#[expect(
+		clippy::doc_link_with_quotes,
+		reason = "config-example directive emits literal quoted strings, not an intra-doc link"
+	)]
+	#[serde(default)]
+	pub ip_source_trusted_subnets: Vec<IpNet>,
 
 	/// Grace period for clean shutdown of federation requests (seconds).
 	///

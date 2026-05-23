@@ -12,6 +12,7 @@ use http::{
 	header::{self, HeaderName},
 	uri::PathAndQuery,
 };
+use ipnet::IpNet;
 use tower::{
 	ServiceBuilder,
 	layer::util::Identity,
@@ -26,7 +27,7 @@ use tower_http::{
 	trace::{DefaultOnFailure, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 use tracing::Level;
-use tuwunel_api::router::{ConfiguredIpSource, state::Guard};
+use tuwunel_api::router::{ConfiguredIpSource, TrustedPeerSubnets, state::Guard};
 use tuwunel_core::{Result, Server, config::IpSource, debug, error};
 use tuwunel_service::Services;
 
@@ -77,6 +78,7 @@ pub(crate) fn build(services: &Arc<Services>) -> Result<(Router, Guard)> {
 				.on_response(DefaultOnResponse::new().level(Level::DEBUG)),
 		)
 		.layer(axum::middleware::from_fn_with_state(Arc::clone(services), request::handle))
+		.layer(trusted_peer_subnets_layer(&server.config.ip_source_trusted_subnets))
 		.layer(ip_source_layer(server.config.ip_source))
 		.layer(ResponseBodyTimeoutLayer::new(Duration::from_secs(
 			server.config.client_response_timeout,
@@ -217,6 +219,12 @@ fn cors_layer(server: &Server) -> CorsLayer {
 
 fn body_limit_layer(server: &Server) -> DefaultBodyLimit {
 	DefaultBodyLimit::max(server.config.max_request_size)
+}
+
+fn trusted_peer_subnets_layer(
+	subnets: &[IpNet],
+) -> Either<Extension<TrustedPeerSubnets>, Identity> {
+	option_layer((!subnets.is_empty()).then(|| Extension(TrustedPeerSubnets(Arc::from(subnets)))))
 }
 
 fn ip_source_layer(source: Option<IpSource>) -> Either<Extension<ConfiguredIpSource>, Identity> {

@@ -86,6 +86,7 @@ hmac.workspace = true
 http.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
+ipnet.workspace = true
 itertools.workspace = true
 log.workspace = true
 rand.workspace = true

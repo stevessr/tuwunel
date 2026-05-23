@@ -75,6 +75,7 @@ futures.workspace = true
 http-body-util.workspace = true
 http.workspace = true
 ipaddress.workspace = true
+ipnet.workspace = true
 itertools.workspace = true
 jsonwebtoken.workspace = true
 libc.workspace = true

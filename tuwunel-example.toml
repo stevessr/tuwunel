@@ -508,6 +508,26 @@
 #
 #ip_source = "connect_info"
 
+# Subnets whose TCP peers are treated as trusted and bypass the
+# `ip_source`-based extraction, falling through to the same
+# insecure header-scan + `ConnectInfo` fallback used when
+# `ip_source` is unset. Each entry is CIDR notation, including
+# the prefix length (use `/32` or `/128` to trust a single host).
+#
+# Loopback (`127.0.0.0/8`, `::1/128`) is always bypassed and
+# need not be listed.
+#
+# Use this when locally-attached bridges or other server-side
+# clients connect from a private container or VPN subnet that
+# cannot carry the configured proxy header (e.g. a Docker
+# user-defined bridge network without `network_mode: host`).
+#
+# WARNING: any peer in these subnets can forge the client IP via
+# request headers. Only include subnets you control end-to-end.
+# Changing this value requires a server restart.
+#
+#ip_source_trusted_subnets = ["172.18.0.0/16", "fd00::/8"]
+
 # Grace period for clean shutdown of federation requests (seconds).
 #
 # reloadable: yes

@@ -13,7 +13,7 @@ use axum::{
 	response::{IntoResponse, Redirect},
 	routing::{any, get, post},
 };
-pub use client_ip::ConfiguredIpSource;
+pub use client_ip::{ConfiguredIpSource, TrustedPeerSubnets};
 use http::{Uri, uri};
 use tuwunel_core::{Server, config::Manager, err};
 

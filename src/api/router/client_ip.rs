@@ -5,9 +5,11 @@
 //! * If the operator configured `ip_source`, a [`ConfiguredIpSource`] marker is
 //!   installed in request extensions and the extractor reads from the chosen
 //!   source. Exception: if the peer shown by `ConnectInfo` is on a loopback
-//!   interface, the insecure header-scan + `ConnectInfo` fallback runs instead,
-//!   since a loopback peer (e.g. a locally-connected appservice bridge) cannot
-//!   have spoofed the address.
+//!   interface, or sits inside an operator-listed trusted subnet (see
+//!   [`TrustedPeerSubnets`]), the insecure header-scan + `ConnectInfo` fallback
+//!   runs instead, since such peers (e.g. a locally-connected appservice
+//!   bridge, or a containerized bridge on a private Docker network) cannot have
+//!   spoofed the address at the IP layer.
 //! * Otherwise the insecure header-scan + `ConnectInfo` fallback runs directly,
 //!   preserving the prior default behaviour, including the socket-address
 //!   fallback that matters for Unix-socket deployments.
@@ -16,10 +18,12 @@ use std::{
 	fmt,
 	marker::Sync,
 	net::{IpAddr, SocketAddr},
+	sync::Arc,
 };
 
 use axum::extract::{ConnectInfo, FromRequestParts};
 use http::{Extensions, HeaderMap, StatusCode, request::Parts};
+use ipnet::IpNet;
 use tuwunel_core::config::IpSource;
 
 /// Tuwunel client-IP extractor. See module docs.
@@ -31,6 +35,12 @@ pub(crate) struct ClientIp(pub(crate) IpAddr);
 #[derive(Clone, Debug)]
 pub struct ConfiguredIpSource(pub IpSource);
 
+/// Operator-configured subnets whose TCP peers bypass the secure
+/// `ip_source` extraction in the same way loopback peers do. Installed
+/// in request extensions only when the configured list is non-empty.
+#[derive(Clone, Debug)]
+pub struct TrustedPeerSubnets(pub Arc<[IpNet]>);
+
 impl<S> FromRequestParts<S> for ClientIp
 where
 	S: Sync,
@@ -41,7 +51,7 @@ where
 		const ERROR: StatusCode = StatusCode::INTERNAL_SERVER_ERROR;
 
 		if let Some(&ConfiguredIpSource(source)) = parts.extensions.get::<ConfiguredIpSource>()
-			&& !peer_is_loopback(&parts.extensions)
+			&& !peer_is_trusted(&parts.extensions)
 		{
 			return secure_extract(source, &parts.headers, &parts.extensions)
 				.map(Self)
@@ -58,10 +68,17 @@ impl fmt::Display for ClientIp {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { fmt::Display::fmt(&self.0, f) }
 }
 
-fn peer_is_loopback(extensions: &Extensions) -> bool {
-	extensions
-		.get::<ConnectInfo<SocketAddr>>()
-		.is_some_and(|ConnectInfo(addr)| addr.ip().to_canonical().is_loopback())
+fn peer_is_trusted(extensions: &Extensions) -> bool {
+	let Some(ConnectInfo(addr)) = extensions.get::<ConnectInfo<SocketAddr>>() else {
+		return false;
+	};
+
+	let peer = addr.ip().to_canonical();
+
+	peer.is_loopback()
+		|| extensions
+			.get::<TrustedPeerSubnets>()
+			.is_some_and(|TrustedPeerSubnets(nets)| nets.iter().any(|net| net.contains(&peer)))
 }
 
 fn secure_extract(
@@ -179,15 +196,25 @@ fn cloudfront_viewer_address(headers: &HeaderMap) -> Option<IpAddr> {
 
 #[cfg(test)]
 mod tests {
-	use std::{iter, net::SocketAddr};
+	use std::{iter, net::SocketAddr, sync::Arc};
 
 	use axum::{
 		extract::{ConnectInfo, FromRequestParts},
 		http::{Request, StatusCode, request::Parts},
 	};
+	use ipnet::IpNet;
 	use tuwunel_core::config::IpSource;
 
-	use super::{ClientIp, ConfiguredIpSource};
+	use super::{ClientIp, ConfiguredIpSource, TrustedPeerSubnets};
+
+	fn trusted(nets: &[&str]) -> TrustedPeerSubnets {
+		let nets: Arc<[IpNet]> = nets
+			.iter()
+			.map(|s| s.parse().expect("test CIDR"))
+			.collect();
+
+		TrustedPeerSubnets(nets)
+	}
 
 	fn parts(headers: impl IntoIterator<Item = (&'static str, &'static str)>) -> Parts {
 		let mut request = Request::builder().uri("/");
@@ -339,5 +366,112 @@ mod tests {
 		let err = extract_client_ip(&mut parts).await.unwrap_err();
 		assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
 		assert_eq!(err.1, "Can't extract client IP from configured ip_source");
+	}
+
+	#[tokio::test]
+	async fn trusted_subnet_peer_bypasses_configured_source() {
+		let socket_addr = SocketAddr::from(([172, 18, 0, 5], 38000));
+		let mut parts = parts(iter::empty());
+		parts.extensions.insert(ConnectInfo(socket_addr));
+		parts
+			.extensions
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
+		parts
+			.extensions
+			.insert(trusted(&["172.18.0.0/16"]));
+
+		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
+		assert_eq!(ip, socket_addr.ip());
+	}
+
+	#[tokio::test]
+	async fn trusted_subnet_peer_with_proxy_header_uses_insecure_fallback() {
+		let socket_addr = SocketAddr::from(([172, 18, 0, 5], 38000));
+		let mut parts = parts([("X-Forwarded-For", "9.9.9.9")]);
+		parts.extensions.insert(ConnectInfo(socket_addr));
+		parts
+			.extensions
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
+		parts
+			.extensions
+			.insert(trusted(&["172.18.0.0/16"]));
+
+		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
+		assert_eq!(ip.to_string(), "9.9.9.9");
+	}
+
+	#[tokio::test]
+	async fn non_trusted_peer_with_subnets_configured_still_rejects() {
+		let socket_addr = SocketAddr::from(([203, 0, 113, 9], 38000));
+		let mut parts = parts(iter::empty());
+		parts.extensions.insert(ConnectInfo(socket_addr));
+		parts
+			.extensions
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
+		parts
+			.extensions
+			.insert(trusted(&["172.18.0.0/16"]));
+
+		let err = extract_client_ip(&mut parts).await.unwrap_err();
+		assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+		assert_eq!(err.1, "Can't extract client IP from configured ip_source");
+	}
+
+	#[tokio::test]
+	async fn ipv6_trusted_subnet_peer_bypasses_configured_source() {
+		let socket_addr = SocketAddr::from(([0xFD00_u16, 0, 0, 0, 0, 0, 0, 1], 38000));
+		let mut parts = parts(iter::empty());
+		parts.extensions.insert(ConnectInfo(socket_addr));
+		parts
+			.extensions
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
+		parts.extensions.insert(trusted(&["fd00::/8"]));
+
+		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
+		assert_eq!(ip, socket_addr.ip());
+	}
+
+	#[tokio::test]
+	async fn trusted_single_host_cidr_matches_only_that_address() {
+		let configured = ConfiguredIpSource(IpSource::RightmostXForwardedFor);
+
+		let mut listed = parts(iter::empty());
+		listed
+			.extensions
+			.insert(ConnectInfo(SocketAddr::from(([10, 0, 0, 5], 38000))));
+		listed.extensions.insert(configured.clone());
+		listed
+			.extensions
+			.insert(trusted(&["10.0.0.5/32"]));
+
+		let ClientIp(ip) = extract_client_ip(&mut listed).await.unwrap();
+		assert_eq!(ip.to_string(), "10.0.0.5");
+
+		let mut neighbour = parts(iter::empty());
+		neighbour
+			.extensions
+			.insert(ConnectInfo(SocketAddr::from(([10, 0, 0, 6], 38000))));
+		neighbour.extensions.insert(configured);
+		neighbour
+			.extensions
+			.insert(trusted(&["10.0.0.5/32"]));
+
+		let err = extract_client_ip(&mut neighbour)
+			.await
+			.unwrap_err();
+		assert_eq!(err.0, StatusCode::INTERNAL_SERVER_ERROR);
+	}
+
+	#[tokio::test]
+	async fn loopback_still_bypasses_when_trusted_subnets_extension_absent() {
+		let socket_addr = SocketAddr::from(([127, 0, 0, 1], 38000));
+		let mut parts = parts(iter::empty());
+		parts.extensions.insert(ConnectInfo(socket_addr));
+		parts
+			.extensions
+			.insert(ConfiguredIpSource(IpSource::RightmostXForwardedFor));
+
+		let ClientIp(ip) = extract_client_ip(&mut parts).await.unwrap();
+		assert_eq!(ip, socket_addr.ip());
 	}
 }
