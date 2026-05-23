@@ -178,7 +178,6 @@ variable "mono_stats_dir" {
 
 rustflags = [
     "-C link-arg=--verbose",
-    "-C link-arg=-Wl,--gc-sections",
 ]
 
 static_rustflags = [

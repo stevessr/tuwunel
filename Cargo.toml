@@ -707,7 +707,6 @@ lto = "fat"
 #	'-Ztls-model=local-exec',
 #	'-Zinline-mir=true',
 #	'-Zmir-opt-level=3',
-#	'-Clink-arg=-Wl,--gc-sections',
 #	'-Ztime-passes',
 #	'-Ztime-llvm-passes',
 #]

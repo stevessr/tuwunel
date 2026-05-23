@@ -24,6 +24,7 @@ use crate::{
 };
 
 #[cfg(feature = "jemalloc_conf")]
+#[used]
 #[unsafe(no_mangle)]
 pub static malloc_conf: &[u8] = const_str::concat_bytes!(
 	"tcache:true",
