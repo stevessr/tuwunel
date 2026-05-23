@@ -58,6 +58,7 @@ envs="$envs -e complement_timeout=${complement_timeout:-$default_complement_time
 envs="$envs -e complement_skip=${complement_skip:-$skip}"
 envs="$envs -e complement_run=${1:-$default_complement_run}"
 envs="$envs -e COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1"
+envs="$envs -e COMPLEMENT_DESTROY_HS_TIMEOUT_SECS=10"
 
 set -x
 tester_image="complement-tester--${sys_name}--${sys_version}--${sys_target}"

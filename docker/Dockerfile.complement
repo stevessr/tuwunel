@@ -110,7 +110,7 @@ COPY --from=complement-config * /complement/
 ENV TUWUNEL_CONFIG="/complement/complement.toml"
 ENV TUWUNEL_RUNTIME_METRICS_DIR="/var/log/tuwunel/metrics"
 ENV TUWUNEL_RUNTIME_USAGE_DIR="/var/log/tuwunel/metrics"
-ENTRYPOINT tuwunel -Oserver_name=\""$SERVER_NAME\""
+ENTRYPOINT exec tuwunel -Oserver_name=\""$SERVER_NAME\""
 
 
 FROM input AS complement-testee-valgrind
@@ -123,7 +123,7 @@ COPY --from=complement-config * /complement/
 ENV TUWUNEL_CONFIG="/complement/complement.toml"
 ENV TUWUNEL_RUNTIME_METRICS_DIR="/var/log/tuwunel/metrics"
 ENV TUWUNEL_RUNTIME_USAGE_DIR="/var/log/tuwunel/metrics"
-ENTRYPOINT valgrind \
+ENTRYPOINT exec valgrind \
     --leak-check=no \
     --undef-value-errors=no \
     --exit-on-first-error=yes \
@@ -136,7 +136,7 @@ ENTRYPOINT valgrind \
 FROM input AS complement-base
 ARG var_cache
 ARG var_lib_apt
-ARG complement_ref="28df927bb293d917bc36f2e030f30771ef366d0c"
+ARG complement_ref="30f0e3b9becc2c4770050ea51822f84d924241c6"
 ARG complement_tags="conduwuit_blacklist"
 ARG complement_tests="./tests/..."
 ARG complement_run=".*"
