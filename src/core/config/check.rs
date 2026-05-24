@@ -1,11 +1,11 @@
-use std::{env::consts::OS, net::SocketAddr};
+use std::{env::consts::OS, fs::read_to_string, net::SocketAddr};
 
 use either::Either;
 use itertools::Itertools;
 use regex::RegexSet;
 
 use super::{DEPRECATED_KEYS, IdentityProvider, IpSource, KNOWN_KEYS};
-use crate::{Config, Err, Result, debug, debug_info, error, warn};
+use crate::{Config, Err, Result, debug, debug_info, err, error, warn};
 
 /// Performs check() with additional checks specific to reloading old config
 /// with new config.
@@ -221,7 +221,7 @@ fn check_registration(config: &Config) -> Result {
 		.registration_token_file
 		.as_ref()
 		.is_some_and(|path| {
-			let Ok(token) = std::fs::read_to_string(path).inspect_err(|e| {
+			let Ok(token) = read_to_string(path).inspect_err(|e| {
 				error!("Failed to read the registration token file: {e}");
 			}) else {
 				return true;
@@ -418,17 +418,17 @@ fn check_identity_provider_secret(i: &str, provider: &IdentityProvider) -> Resul
 		));
 	};
 
-	let Ok(secret) = std::fs::read_to_string(secret_path) else {
-		return Err!(Config(
+	let secret = read_to_string(secret_path).map_err(|e| {
+		err!(Config(
 			"client_secret_file",
-			"Client secret file was specified but failed to be read at identity provider №{i}"
-		));
-	};
+			"Failed to read client secret file {secret_path:?} on identity provider №{i}: {e}"
+		))
+	})?;
 
-	if secret.is_empty() {
+	if secret.trim().is_empty() {
 		return Err!(Config(
 			"client_secret_file",
-			"Client secret file was specified but is empty on identity provider №{i}"
+			"Client secret file {secret_path:?} is empty on identity provider №{i}"
 		));
 	}
 

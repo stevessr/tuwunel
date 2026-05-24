@@ -2821,10 +2821,15 @@
 #
 #client_secret =
 
-# Secret key to use that's read from the file path specified.
+# Secret key to use, read from the file path specified.
 #
-# This takes priority over "client_secret" first, and falls back to
-# "client_secret" if invalid or failed to open.
+# Alternative to `client_secret` for deployments that prefer to keep the
+# secret outside the config file. When both are configured `client_secret`
+# is used and this field is ignored. The file is read at startup and on
+# each OAuth exchange, must exist and must be non-empty; leading and
+# trailing whitespace is trimmed. Under systemd the path must be visible
+# to the service after sandboxing (`ReadWritePaths` / `ProtectHome`),
+# typically by placing the file under `/etc/tuwunel/`.
 #
 # example: "/etc/tuwunel/.client_secret"
 #
