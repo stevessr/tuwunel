@@ -41,11 +41,17 @@ pub(super) async fn oauth_associate(
 		.map_ok(apply!(2, ToOwned::to_owned))
 		.collect::<Result<_>>()?;
 
-	let _replaced = self
+	let replaced = self
 		.services
 		.oauth
 		.sessions
 		.set_user_association_pending(provider.id(), &user_id, claim);
 
-	Ok(())
+	let action = replaced.map_or("added", |_| "replaced");
+	writeln!(
+		self,
+		"Pending association {action} for {user_id} on provider {}.",
+		provider.id()
+	)
+	.await
 }
