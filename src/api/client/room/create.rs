@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use axum::extract::State;
-use futures::FutureExt;
+use futures::{FutureExt, StreamExt};
 use itertools::Itertools;
 use ruma::{
 	CanonicalJsonObject, EventEncryptionAlgorithm, Int, OwnedRoomAliasId, OwnedRoomId,
@@ -40,7 +40,7 @@ use serde_json::{
 use tuwunel_core::{
 	Err, Result, debug_info, debug_warn, err, info,
 	matrix::{StateKey, pdu::PduBuilder, room_version},
-	utils::{BoolExt, option::OptionExt},
+	utils::{BoolExt, IterStream, ReadyExt, option::OptionExt},
 	warn,
 };
 use tuwunel_service::{Services, appservice::RegistrationInfo, rooms::state::RoomMutexGuard};
@@ -148,34 +148,21 @@ pub(crate) async fn create_room_route(
 		BTreeMap::new()
 	};
 
-	if preset == RoomPreset::TrustedPrivateChat {
-		for invite in &body.invite {
-			if services
-				.users
-				.user_is_ignored(sender_user, invite)
-				.await
-			{
-				continue;
-			} else if services
-				.users
-				.user_is_ignored(invite, sender_user)
-				.await
-			{
-				// silently drop the invite to the recipient if they've been ignored by the
-				// sender, pretend it worked
-				continue;
-			} else if services.users.invites_blocked(invite).await {
-				// MSC4380: skip invitees whose m.invite_permission_config blocks invites.
-				continue;
-			}
-
-			if !version_rules
-				.authorization
-				.additional_room_creators
-			{
+	if preset == RoomPreset::TrustedPrivateChat
+		&& !version_rules
+			.authorization
+			.additional_room_creators
+	{
+		users = body
+			.invite
+			.iter()
+			.stream()
+			.filter(|&invite| invite_allowed(&services, sender_user, invite))
+			.ready_fold(users, |mut users, invite| {
 				users.insert(invite.clone(), int!(100));
-			}
-		}
+				users
+			})
+			.await;
 	}
 
 	let power_levels_content = default_power_levels_content(
@@ -453,35 +440,33 @@ async fn process_invites(
 	room_id: &RoomId,
 ) {
 	// 8. Events implied by invite (and TODO: invite_3pid)
-	for user_id in &body.invite {
-		if services
-			.users
-			.user_is_ignored(sender_user, user_id)
-			.await
-		{
-			continue;
-		} else if services
-			.users
-			.user_is_ignored(user_id, sender_user)
-			.await
-		{
-			// silently drop the invite to the recipient if they've been ignored by the
-			// sender, pretend it worked
-			continue;
-		} else if services.users.invites_blocked(user_id).await {
-			// MSC4380: m.invite_permission_config blocks invites to this user.
-			continue;
-		}
+	body.invite
+		.iter()
+		.stream()
+		.filter(|&user_id| invite_allowed(services, sender_user, user_id))
+		.for_each(|user_id| async {
+			if let Err(e) = services
+				.membership
+				.invite(sender_user, user_id, room_id, None, body.is_direct)
+				.boxed()
+				.await
+			{
+				warn!(%e, "Failed to send invite");
+			}
+		})
+		.await;
+}
 
-		if let Err(e) = services
-			.membership
-			.invite(sender_user, user_id, room_id, None, body.is_direct)
-			.boxed()
-			.await
-		{
-			warn!(%e, "Failed to send invite");
-		}
-	}
+/// Gate an invitee against the sender's ignore list, the recipient's ignore
+/// list, and MSC4380 `m.invite_permission_config`.
+async fn invite_allowed(services: &Services, sender_user: &UserId, invitee: &UserId) -> bool {
+	!(services
+		.users
+		.user_is_ignored(sender_user, invitee)
+		.await || services
+		.users
+		.user_is_ignored(invitee, sender_user)
+		.await || services.users.invites_blocked(invitee).await)
 }
 
 async fn finalize_alias_and_directory(
