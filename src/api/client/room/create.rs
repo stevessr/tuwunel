@@ -164,6 +164,9 @@ pub(crate) async fn create_room_route(
 				// silently drop the invite to the recipient if they've been ignored by the
 				// sender, pretend it worked
 				continue;
+			} else if services.users.invites_blocked(invite).await {
+				// MSC4380: skip invitees whose m.invite_permission_config blocks invites.
+				continue;
 			}
 
 			if !version_rules
@@ -464,6 +467,9 @@ async fn process_invites(
 		{
 			// silently drop the invite to the recipient if they've been ignored by the
 			// sender, pretend it worked
+			continue;
+		} else if services.users.invites_blocked(user_id).await {
+			// MSC4380: m.invite_permission_config blocks invites to this user.
 			continue;
 		}
 

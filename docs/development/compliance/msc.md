@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 218
-- 🟨 `partial`: 59
+- ✅ `yes`: 219
+- 🟨 `partial`: 58
 - ❌ `no`: 455
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 151 | 29 | 12 | 64 | 256 |
+| merged | 152 | 28 | 12 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -38,7 +38,7 @@ in the [Out of scope](#out-of-scope) section.
 
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
-| MSC4380 | 🟨 ● | 70/70 | Invite blocking | phase A landed (invite-creating endpoints gated, M_INVITE_BLOCKED 403); phase... |
+| MSC4380 | ✅ ● | 100/100 | Invite blocking | src/api/client/sync/{v3.rs,v5/selector.rs} suppress stored invites; createRoo... |
 | MSC4376 | ✅ ● | 100/100 | Remove /v1/send_join and /v1/send_leave | v1 send_join and v1 send_leave routes are not registered |
 | MSC4341 | ❌ ● | 0/0 | Support for RFC 8628 Device Authorization Grant | OAuth Device Authorization Grant (RFC 8628) not advertised |
 | MSC4335 | ❌ ● | 0/0 | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
@@ -245,7 +245,6 @@ for spec compliance.
 | MSC2659 | 🟨 ● | 70/90 | Application service ping endpoint | src/api/client/appservice.rs:11 calls AS /_matrix/app/v1/ping |
 | MSC3787 | 🟨 ● | 70/? | Allowing knocks to restricted rooms | complement: 33p/14f |
 | MSC4133 | 🟨 ● | 70/80 | Extending User Profile API with Custom Key:Value Pairs | GET/PUT/DELETE profile field endpoints routed at unstable prefix |
-| MSC4380 | 🟨 ● | 70/70 | Invite blocking | phase A landed (invite-creating endpoints gated, M_INVITE_BLOCKED 403); phase... |
 | MSC1866 | 🟨 ○ | 60/70 | MSC 1866 - Unsupported Room Version Error Code for Invites | federation invite errors propagated; not explicitly mapped |
 | MSC2666 | 🟨 ● | 60/70 | Get rooms in common with another user | src/api/client/unstable.rs:28 GET /unstable/uk.half-shot.msc2666/user/mutual_... |
 | MSC2966 | 🟨 ● | 60/80 | Usage of OAuth 2.0 Dynamic Client Registration in Matrix | dynamic client registration endpoint |

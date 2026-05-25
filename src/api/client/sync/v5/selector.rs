@@ -10,7 +10,7 @@ use tuwunel_core::{
 	matrix::PduCount,
 	trace,
 	utils::{
-		BoolExt, TryFutureExtExt,
+		BoolExt, ReadyExt, TryFutureExtExt,
 		math::usize_from_ruma,
 		option::OptionExt,
 		stream::{BroadbandExt, IterStream},
@@ -32,10 +32,15 @@ pub(super) async fn selector(
 
 	let SyncInfo { services, sender_user, .. } = sync_info;
 
+	// MSC4380: when m.invite_permission_config blocks invites, omit invited
+	// rooms from the sliding-sync window; an unblock re-exposes them.
+	let invites_blocked = services.users.invites_blocked(sender_user).await;
+
 	let mut rooms = services
 		.state_cache
 		.user_memberships(sender_user, Some(&[Join, Invite, Knock]))
 		.map(|(membership, room_id)| (room_id.to_owned(), Some(membership)))
+		.ready_filter(move |(_, m)| !invites_blocked || !matches!(m, Some(Invite)))
 		.broad_filter_map(|(room_id, membership)| matcher(sync_info, conn, room_id, membership))
 		.collect::<Vec<_>>()
 		.await;
@@ -56,7 +61,7 @@ pub(super) async fn selector(
 	let lists = response_lists(rooms.iter());
 
 	trace!(?lists);
-	let window = window(sync_info, conn, rooms.iter(), &lists).await;
+	let window = window(sync_info, conn, rooms.iter(), &lists, invites_blocked).await;
 
 	trace!(?window);
 	(window, lists)
@@ -163,6 +168,7 @@ async fn window<'a, Rooms>(
 	conn: &Connection,
 	rooms: Rooms,
 	lists: &ResponseLists,
+	invites_blocked: bool,
 ) -> Window
 where
 	Rooms: Iterator<Item = &'a WindowRoom> + Clone + Send + Sync,
@@ -219,7 +225,10 @@ where
 
 			let (membership, filter) = join(membership, filter).await;
 
-			filter.then(|| WindowRoom {
+			// MSC4380: suppress invited-room subscriptions when invites are blocked.
+			let suppress = invites_blocked && matches!(membership, Some(MembershipState::Invite));
+
+			(filter && !suppress).then(|| WindowRoom {
 				room_id: room_id.clone(),
 				lists: Default::default(),
 				ranked: usize::MAX,

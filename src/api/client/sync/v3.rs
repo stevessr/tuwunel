@@ -344,6 +344,10 @@ async fn build_sync_events(
 	use_state_after: bool,
 	filter: &FilterDefinition,
 ) -> Result<sync_events::v3::Response> {
+	// MSC4380: when m.invite_permission_config blocks invites, suppress stored
+	// invite events from /sync entirely; a later unblock re-exposes them.
+	let invites_blocked = services.users.invites_blocked(sender_user).await;
+
 	let joined_rooms = services
 		.state_cache
 		.rooms_joined(sender_user)
@@ -402,6 +406,7 @@ async fn build_sync_events(
 	let invited_rooms = services
 		.state_cache
 		.rooms_invited_state(sender_user)
+		.ready_filter(move |_| !invites_blocked)
 		.ready_filter(|(room_id, _)| filter.room.matches(room_id))
 		.fold_default(async |mut invited_rooms: BTreeMap<_, _>, (room_id, invite_state)| {
 			let invite_count = services
