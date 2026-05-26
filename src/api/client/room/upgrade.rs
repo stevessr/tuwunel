@@ -463,40 +463,44 @@ async fn move_space_state(&self) -> Result {
 		| false => &[StateEventType::SpaceParent],
 	};
 
-	for event_type in event_types {
-		let state_keys: Vec<StateKey> = self
-			.services
-			.state_accessor
-			.room_state_keys(self.old_room_id, event_type)
-			.ignore_err()
-			.collect()
-			.await;
-
-		for state_key in state_keys {
-			let Ok(event) = self
-				.services
-				.state_accessor
-				.room_state_get(self.old_room_id, event_type, &state_key)
-				.await
-			else {
-				continue;
-			};
-
+	event_types
+		.iter()
+		.stream()
+		.map(Ok)
+		.try_for_each(|event_type| {
 			self.services
-				.timeline
-				.build_and_append_pdu(
-					self.rebuild_state_event(&event).await?,
-					self.creator,
-					self.new_room_id,
-					self.new_state_lock,
-				)
-				.inspect_err(|e| error!(?event, ?self, "Failed to copy space state: {e}"))
-				.await
-				.ok();
-		}
-	}
+				.state_accessor
+				.room_state_keys(self.old_room_id, event_type)
+				.ignore_err()
+				.map(Ok)
+				.try_for_each(move |state_key| async move {
+					let Ok(event) = self
+						.services
+						.state_accessor
+						.room_state_get(self.old_room_id, event_type, &state_key)
+						.await
+					else {
+						return Ok(());
+					};
 
-	Ok(())
+					self.services
+						.timeline
+						.build_and_append_pdu(
+							self.rebuild_state_event(&event).await?,
+							self.creator,
+							self.new_room_id,
+							self.new_state_lock,
+						)
+						.inspect_err(|e| {
+							error!(?event, ?self, "Failed to copy space state: {e}");
+						})
+						.await
+						.ok();
+
+					Ok(())
+				})
+		})
+		.await
 }
 
 #[implement(RoomUpgradeContext, params = "<'_>")]

@@ -1,6 +1,10 @@
 use axum::extract::State;
-use ruma::api::client::device::delete_devices;
-use tuwunel_core::{Result, debug};
+use futures::StreamExt;
+use ruma::api::client::device::delete_devices::{self, v3::Response};
+use tuwunel_core::{
+	Result, debug,
+	utils::stream::{IterStream, automatic_width},
+};
 
 use crate::{Ruma, router::auth_uiaa};
 
@@ -20,7 +24,7 @@ use crate::{Ruma, router::auth_uiaa};
 pub(crate) async fn delete_devices_route(
 	State(services): State<crate::State>,
 	body: Ruma<delete_devices::v3::Request>,
-) -> Result<delete_devices::v3::Response> {
+) -> Result<Response> {
 	let appservice = body.appservice_info.as_ref();
 
 	if appservice.is_some_and(|appservice| appservice.registration.device_management) {
@@ -29,24 +33,30 @@ pub(crate) async fn delete_devices_route(
 			"Skipping UIAA for {sender_user} as this is from an appservice and MSC4190 is \
 			 enabled"
 		);
-		for device_id in &body.devices {
-			services
-				.users
-				.remove_device(sender_user, device_id)
-				.await;
-		}
+		body.devices
+			.iter()
+			.stream()
+			.for_each_concurrent(automatic_width(), |device_id| {
+				services
+					.users
+					.remove_device(sender_user, device_id)
+			})
+			.await;
 
-		return Ok(delete_devices::v3::Response {});
+		return Ok(Response {});
 	}
 
 	let ref sender_user = auth_uiaa(&services, &body).await?;
 
-	for device_id in &body.devices {
-		services
-			.users
-			.remove_device(sender_user, device_id)
-			.await;
-	}
+	body.devices
+		.iter()
+		.stream()
+		.for_each_concurrent(automatic_width(), |device_id| {
+			services
+				.users
+				.remove_device(sender_user, device_id)
+		})
+		.await;
 
-	Ok(delete_devices::v3::Response {})
+	Ok(Response {})
 }

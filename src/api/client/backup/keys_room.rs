@@ -1,8 +1,9 @@
 use axum::extract::State;
+use futures::{StreamExt, TryStreamExt};
 use ruma::api::client::backup::{
 	add_backup_keys_for_room, delete_backup_keys_for_room, get_backup_keys_for_room,
 };
-use tuwunel_core::{Err, Result};
+use tuwunel_core::{Err, Result, utils::stream::IterStream};
 
 use super::get_count_etag;
 use crate::Ruma;
@@ -30,12 +31,20 @@ pub(crate) async fn add_backup_keys_for_room_route(
 		)));
 	}
 
-	for (session_id, key_data) in &body.sessions {
-		services
-			.key_backups
-			.add_key(body.sender_user(), &body.version, &body.room_id, session_id, key_data)
-			.await?;
-	}
+	body.sessions
+		.iter()
+		.stream()
+		.map(Ok)
+		.try_for_each(|(sid, kd)| {
+			services.key_backups.add_key(
+				body.sender_user(),
+				&body.version,
+				&body.room_id,
+				sid,
+				kd,
+			)
+		})
+		.await?;
 
 	let (count, etag) = get_count_etag(&services, body.sender_user(), &body.version).await?;
 

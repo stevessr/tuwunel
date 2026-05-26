@@ -625,24 +625,20 @@ async fn handle_edu_direct_to_device_user<Event: Send + Sync>(
 	ev_type: &str,
 	map: BTreeMap<DeviceIdOrAllDevices, Raw<Event>>,
 ) {
-	for (target_device_id_maybe, event) in map {
-		let Ok(event) = event
-			.deserialize_as()
-			.map_err(|e| err!(Request(InvalidParam(error!("To-Device event is invalid: {e}")))))
-		else {
-			continue;
-		};
-
-		handle_edu_direct_to_device_event(
-			services,
-			&target_user_id,
-			sender,
-			target_device_id_maybe,
-			ev_type,
-			event,
-		)
+	map.into_iter()
+		.stream()
+		.ready_filter_map(|(tid, raw)| {
+			raw.deserialize_as()
+				.map_err(|e| {
+					err!(Request(InvalidParam(error!("To-Device event is invalid: {e}"))))
+				})
+				.ok()
+				.map(|ev| (tid, ev))
+		})
+		.for_each_concurrent(automatic_width(), |(tid, ev)| {
+			handle_edu_direct_to_device_event(services, &target_user_id, sender, tid, ev_type, ev)
+		})
 		.await;
-	}
 }
 
 async fn handle_edu_direct_to_device_event(
