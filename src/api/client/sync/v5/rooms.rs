@@ -8,8 +8,11 @@ use futures::{
 	future::{join, join3, join4},
 };
 use ruma::{
-	JsOption, OwnedEventId, OwnedRoomId, RoomId, UInt, UserId,
-	api::client::sync::sync_events::{UnreadNotificationsCount, v5::response},
+	JsOption, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, RoomId, UInt, UserId,
+	api::client::sync::sync_events::{
+		UnreadNotificationsCount,
+		v5::{DisplayName, response, response::Heroes},
+	},
 	events::{
 		AnySyncStateEvent, StateEventType, TimelineEventType, room::member::MembershipState,
 	},
@@ -31,7 +34,7 @@ use tuwunel_core::{
 use tuwunel_service::{Services, sync::Room};
 
 use self::{bump_stamp::room_bump_stamp, heroes::calculate_heroes};
-use super::{super::load_timeline, Connection, SyncInfo, Window, WindowRoom};
+use super::{super::load_timeline, Connection, ListIds, SyncInfo, Window, WindowRoom};
 use crate::client::{annotate_membership, ignored_filter, with_membership};
 
 type ThreadCounts = BTreeMap<OwnedEventId, (u64, u64)>;
@@ -72,12 +75,15 @@ pub(super) async fn handle(
 	fields(room_id, roomsince)
 )]
 async fn handle_room(
-	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
+	sync_info: SyncInfo<'_>,
 	conn: &Connection,
-	WindowRoom {
-		lists, membership, room_id, last_count, ..
-	}: &WindowRoom,
+	window_room: &WindowRoom,
 ) -> Result<response::Room> {
+	let SyncInfo { services, sender_user, .. } = sync_info;
+	let WindowRoom {
+		lists, membership, room_id, last_count, ..
+	} = window_room;
+
 	let &Room { roomsince, .. } = conn
 		.rooms
 		.get(room_id)
@@ -89,22 +95,7 @@ async fn handle_room(
 	);
 
 	if matches!(*membership, Some(MembershipState::Leave | MembershipState::Ban)) {
-		return Ok(response::Room {
-			initial: roomsince.eq(&0).then_some(true),
-			lists: lists.clone(),
-			membership: membership.clone(),
-			prev_batch: Some(conn.next_batch.to_string().into()),
-			limited: true,
-			required_state: vec![
-				services
-					.state_accessor
-					.room_state_get(room_id, &StateEventType::RoomMember, sender_user.as_str())
-					.map_ok(Event::into_format)
-					.await?,
-			],
-
-			..Default::default()
-		});
+		return leave_or_ban_response(sync_info, conn, window_room, roomsince).await;
 	}
 
 	let is_invite = *membership == Some(MembershipState::Invite);
@@ -114,20 +105,7 @@ async fn handle_room(
 		.is_encrypted_room(room_id)
 		.await;
 
-	let default_details = (0_usize, HashSet::new());
-	let (timeline_limit, required_state) = lists
-		.iter()
-		.filter_map(|list_id| conn.lists.get(list_id))
-		.map(|list| &list.room_details)
-		.chain(conn.subscriptions.get(room_id).into_iter())
-		.fold(default_details, |(mut timeline_limit, mut required_state), config| {
-			let limit = usize_from_ruma(config.timeline_limit);
-
-			timeline_limit = timeline_limit.max(limit);
-			required_state.extend(config.required_state.clone());
-
-			(timeline_limit, required_state)
-		});
+	let (timeline_limit, required_state) = merged_room_details(conn, lists, room_id);
 
 	let timeline = is_invite.is_false().then_async(|| {
 		load_timeline(
@@ -196,40 +174,6 @@ async fn handle_room(
 			.ok()
 	});
 
-	let room_name = services
-		.state_accessor
-		.get_name(room_id)
-		.map_ok(Into::into)
-		.map(Result::ok);
-
-	let room_avatar = services
-		.state_accessor
-		.get_avatar(room_id)
-		.map_ok(|content| content.url)
-		.ok()
-		.map(Option::flatten);
-
-	let notification_counts = notification_counts_future(services, sender_user, room_id);
-
-	let joined_count = services
-		.state_cache
-		.room_joined_count(room_id)
-		.map_ok(TryInto::try_into)
-		.map_ok(Result::ok)
-		.map(FlatOk::flat_ok);
-
-	let invited_count = services
-		.state_cache
-		.room_invited_count(room_id)
-		.map_ok(TryInto::try_into)
-		.map_ok(Result::ok)
-		.map(FlatOk::flat_ok);
-
-	let is_dm = services
-		.state_accessor
-		.is_direct(room_id, sender_user)
-		.map(|is_dm| is_dm.then_some(is_dm));
-
 	let timeline = timeline_pdus
 		.iter()
 		.stream()
@@ -239,9 +183,10 @@ async fn handle_room(
 		.map(Event::into_format)
 		.collect();
 
-	let meta = join3(room_name, room_avatar, is_dm);
+	let meta = room_meta_future(services, sender_user, room_id);
 	let events = join4(timeline, num_live, required_state, invite_state);
-	let member_counts = join(joined_count, invited_count);
+	let member_counts = member_counts_future(services, room_id);
+	let notification_counts = notification_counts_future(services, sender_user, room_id);
 	let (
 		(room_name, room_avatar, is_dm),
 		(timeline, num_live, required_state, invite_state),
@@ -251,22 +196,14 @@ async fn handle_room(
 		.boxed()
 		.await;
 
-	let heroes = services
-		.config
-		.calculate_heroes
-		.then_async(|| {
-			calculate_heroes(
-				services,
-				sender_user,
-				room_id,
-				room_name.as_ref(),
-				room_avatar.as_deref(),
-			)
-		})
-		.await
-		.unwrap_or_default();
-
-	let (heroes, heroes_name, heroes_avatar) = heroes;
+	let (heroes, heroes_name, heroes_avatar) = resolve_heroes(
+		services,
+		sender_user,
+		room_id,
+		room_name.as_ref(),
+		room_avatar.as_deref(),
+	)
+	.await;
 
 	Ok(response::Room {
 		initial: roomsince.eq(&0).then_some(true),
@@ -291,6 +228,107 @@ async fn handle_room(
 			&thread_counts,
 		),
 	})
+}
+
+async fn leave_or_ban_response(
+	SyncInfo { services, sender_user, .. }: SyncInfo<'_>,
+	conn: &Connection,
+	WindowRoom { lists, membership, room_id, .. }: &WindowRoom,
+	roomsince: u64,
+) -> Result<response::Room> {
+	let member_event = services
+		.state_accessor
+		.room_state_get(room_id, &StateEventType::RoomMember, sender_user.as_str())
+		.map_ok(Event::into_format)
+		.await?;
+
+	Ok(response::Room {
+		initial: roomsince.eq(&0).then_some(true),
+		lists: lists.clone(),
+		membership: membership.clone(),
+		prev_batch: Some(conn.next_batch.to_string().into()),
+		limited: true,
+		required_state: vec![member_event],
+		..Default::default()
+	})
+}
+
+fn merged_room_details(
+	conn: &Connection,
+	lists: &ListIds,
+	room_id: &RoomId,
+) -> (usize, HashSet<(StateEventType, StateKey)>) {
+	lists
+		.iter()
+		.filter_map(|list_id| conn.lists.get(list_id))
+		.map(|list| &list.room_details)
+		.chain(conn.subscriptions.get(room_id))
+		.fold((0_usize, HashSet::new()), |(timeline_limit, mut required_state), config| {
+			required_state.extend(config.required_state.clone());
+			(timeline_limit.max(usize_from_ruma(config.timeline_limit)), required_state)
+		})
+}
+
+async fn resolve_heroes(
+	services: &Services,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	room_name: Option<&DisplayName>,
+	room_avatar: Option<&MxcUri>,
+) -> (Option<Heroes>, Option<DisplayName>, Option<OwnedMxcUri>) {
+	services
+		.config
+		.calculate_heroes
+		.then_async(|| calculate_heroes(services, sender_user, room_id, room_name, room_avatar))
+		.await
+		.unwrap_or_default()
+}
+
+fn room_meta_future<'a>(
+	services: &'a Services,
+	sender_user: &'a UserId,
+	room_id: &'a RoomId,
+) -> impl Future<Output = (Option<DisplayName>, Option<OwnedMxcUri>, Option<bool>)> + Send + 'a {
+	let room_name = services
+		.state_accessor
+		.get_name(room_id)
+		.map_ok(Into::into)
+		.map(Result::ok);
+
+	let room_avatar = services
+		.state_accessor
+		.get_avatar(room_id)
+		.map_ok(|content| content.url)
+		.ok()
+		.map(Option::flatten);
+
+	let is_dm = services
+		.state_accessor
+		.is_direct(room_id, sender_user)
+		.map(|is_dm| is_dm.then_some(is_dm));
+
+	join3(room_name, room_avatar, is_dm)
+}
+
+fn member_counts_future<'a>(
+	services: &'a Services,
+	room_id: &'a RoomId,
+) -> impl Future<Output = (Option<UInt>, Option<UInt>)> + Send + 'a {
+	let joined_count = services
+		.state_cache
+		.room_joined_count(room_id)
+		.map_ok(TryInto::try_into)
+		.map_ok(Result::ok)
+		.map(FlatOk::flat_ok);
+
+	let invited_count = services
+		.state_cache
+		.room_invited_count(room_id)
+		.map_ok(TryInto::try_into)
+		.map_ok(Result::ok)
+		.map(FlatOk::flat_ok);
+
+	join(joined_count, invited_count)
 }
 
 fn notification_counts_future<'a>(
