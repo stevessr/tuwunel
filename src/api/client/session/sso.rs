@@ -3,7 +3,7 @@ mod uiaa;
 use std::{borrow::Cow, collections::BTreeMap, net::IpAddr, time::Duration};
 
 use axum::extract::State;
-use axum_extra::extract::cookie::{Cookie, SameSite};
+use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD as b64};
 use futures::{FutureExt, StreamExt, TryFutureExt, future::try_join};
 use reqwest::header::{CONTENT_TYPE, HeaderValue};
@@ -36,7 +36,8 @@ use tuwunel_service::{
 	Services,
 	media::MXC_LENGTH,
 	oauth::{
-		CODE_VERIFIER_LENGTH, Provider, SESSION_ID_LENGTH, Session, UserInfo, unique_id_sub,
+		CODE_VERIFIER_LENGTH, Provider, SESSION_ID_LENGTH, Session, TokenResponse, UserInfo,
+		unique_id_sub,
 	},
 	users::{PASSWORD_SENTINEL, Register, propagation_default},
 };
@@ -300,7 +301,6 @@ pub(crate) async fn sso_callback_route(
 		.get(body.body.idp_id.as_str());
 
 	let (provider, session) = try_join(provider, session).await.log_err()?;
-	let client_id = &provider.client_id;
 	let idp_id = provider.id();
 
 	if session.sess_id.as_deref() != Some(sess_id) {
@@ -315,66 +315,22 @@ pub(crate) async fn sso_callback_route(
 
 	if session
 		.authorize_expires_at
-		.map(timepoint_has_passed)
-		.unwrap_or(false)
+		.is_some_and(timepoint_has_passed)
 	{
 		return Err!(Request(Unauthorized("Authorization grant session has expired.")));
 	}
 
 	if provider.check_cookie {
-		let cookie = body
-			.cookie
-			.get(GRANT_SESSION_COOKIE)
-			.map(Cookie::value)
-			.map(serde_html_form::from_str::<GrantCookie<'_>>)
-			.transpose()?
-			.ok_or_else(|| {
-				err!(Request(Unauthorized("Missing cookie {GRANT_SESSION_COOKIE:?}")))
-			})?;
-
-		if cookie.client_id.as_ref() != client_id.as_str() {
-			return Err!(Request(Unauthorized("Client ID {client_id:?} cookie mismatch.")));
-		}
-
-		if Some(cookie.nonce.as_ref()) != session.cookie_nonce.as_deref() {
-			return Err!(Request(Unauthorized("Cookie nonce does not match session state.")));
-		}
-
-		if cookie.state.as_ref() != sess_id {
-			return Err!(Request(Unauthorized("Session ID {sess_id:?} cookie mismatch.")));
-		}
+		validate_session_cookie(&body.cookie, &provider, &session, sess_id)?;
 	}
 
-	// Request access token.
 	let token_response = services
 		.oauth
 		.request_token((&provider, &session), code)
 		.await?;
 
-	let token_expires_at = token_response
-		.expires_in
-		.map(Duration::from_secs)
-		.map(timepoint_from_now)
-		.transpose()?;
+	let session = apply_token_response(session, token_response)?;
 
-	let refresh_token_expires_at = token_response
-		.refresh_token_expires_in
-		.map(Duration::from_secs)
-		.map(timepoint_from_now)
-		.transpose()?;
-
-	// Update the session with access token results
-	let session = Session {
-		scope: token_response.scope,
-		token_type: token_response.token_type,
-		access_token: token_response.access_token,
-		expires_at: token_expires_at,
-		refresh_token: token_response.refresh_token,
-		refresh_token_expires_at,
-		..session
-	};
-
-	// Request userinfo claims.
 	let userinfo = services
 		.oauth
 		.request_userinfo((&provider, &session))
@@ -382,39 +338,23 @@ pub(crate) async fn sso_callback_route(
 
 	let unique_id = unique_id_sub((&provider, &userinfo.sub))?;
 
-	// Check for an existing session from this identity. We want to maintain one
-	// session for each identity and keep the newer one which has up-to-date state
-	// and access.
-	let (old_user_id, old_sess_id) = match services
-		.oauth
-		.sessions
-		.get_by_unique_id(&unique_id)
-		.await
-	{
-		| Ok(session) => (session.user_id, session.sess_id),
-		| Err(error) if !error.is_not_found() => return Err(error),
-		| Err(_) => (None, None),
-	};
+	let (old_user_id, old_sess_id) = existing_identity_session(&services, &unique_id).await?;
 
-	// Update the session with userinfo
 	let session = Session {
 		user_info: Some(userinfo.clone()),
 		..session
 	};
 
-	// Keep the user_id from the old session as best as possible.
 	let user_id = match (session.user_id, old_user_id) {
 		| (Some(user_id), ..) | (None, Some(user_id)) => user_id,
 		| (None, None) => decide_user_id(&services, &provider, &userinfo, &unique_id).await?,
 	};
 
-	// Update the session with user_id
 	let session = Session {
 		user_id: Some(user_id.clone()),
 		..session
 	};
 
-	// Attempt to register a non-existing user.
 	if !services.users.exists(&user_id).await {
 		if !provider.registration {
 			return Err!(Request(Forbidden("Registration from this provider is disabled")));
@@ -423,10 +363,8 @@ pub(crate) async fn sso_callback_route(
 		register_user(&services, &provider, &session, &userinfo, &user_id).await?;
 	}
 
-	// Commit the updated session.
 	services.oauth.sessions.put(&session).await;
 
-	// Delete any old session.
 	if let Some(old_sess_id) = old_sess_id
 		.as_deref()
 		.filter(is_not_equal_to!(&sess_id))
@@ -444,7 +382,6 @@ pub(crate) async fn sso_callback_route(
 		.to_string()
 		.into();
 
-	// Decide if this is a UIAA authentication and take the UIAA branch if so.
 	if let Some(redirect_url) = session
 		.redirect_url
 		.as_ref()
@@ -453,8 +390,91 @@ pub(crate) async fn sso_callback_route(
 		return handle_uiaa(&services, &user_id, cookie, redirect_url).await;
 	}
 
-	// Decide the next provider to chain after this one.
-	let next_idp_url = services
+	let next_idp_url = chain_next_idp_url(&services, &provider, &session, idp_id);
+
+	let location = finalize_login_redirect(&services, &session, next_idp_url, &user_id)?;
+
+	Ok(sso_callback::unstable::Response { location, cookie: Some(cookie) })
+}
+
+fn validate_session_cookie(
+	cookies: &CookieJar,
+	provider: &Provider,
+	session: &Session,
+	sess_id: &str,
+) -> Result {
+	let client_id = &provider.client_id;
+	let cookie = cookies
+		.get(GRANT_SESSION_COOKIE)
+		.map(Cookie::value)
+		.map(serde_html_form::from_str::<GrantCookie<'_>>)
+		.transpose()?
+		.ok_or_else(|| err!(Request(Unauthorized("Missing cookie {GRANT_SESSION_COOKIE:?}"))))?;
+
+	if cookie.client_id.as_ref() != client_id.as_str() {
+		return Err!(Request(Unauthorized("Client ID {client_id:?} cookie mismatch.")));
+	}
+
+	if Some(cookie.nonce.as_ref()) != session.cookie_nonce.as_deref() {
+		return Err!(Request(Unauthorized("Cookie nonce does not match session state.")));
+	}
+
+	if cookie.state.as_ref() != sess_id {
+		return Err!(Request(Unauthorized("Session ID {sess_id:?} cookie mismatch.")));
+	}
+
+	Ok(())
+}
+
+fn apply_token_response(session: Session, token: TokenResponse) -> Result<Session> {
+	let expires_at = token
+		.expires_in
+		.map(Duration::from_secs)
+		.map(timepoint_from_now)
+		.transpose()?;
+
+	let refresh_token_expires_at = token
+		.refresh_token_expires_in
+		.map(Duration::from_secs)
+		.map(timepoint_from_now)
+		.transpose()?;
+
+	Ok(Session {
+		scope: token.scope,
+		token_type: token.token_type,
+		access_token: token.access_token,
+		expires_at,
+		refresh_token: token.refresh_token,
+		refresh_token_expires_at,
+		..session
+	})
+}
+
+/// Locate any prior session bound to the same upstream identity, to preserve
+/// one session and its `user_id` association per identity.
+async fn existing_identity_session(
+	services: &Services,
+	unique_id: &str,
+) -> Result<(Option<OwnedUserId>, Option<String>)> {
+	match services
+		.oauth
+		.sessions
+		.get_by_unique_id(unique_id)
+		.await
+	{
+		| Ok(session) => Ok((session.user_id, session.sess_id)),
+		| Err(error) if !error.is_not_found() => Err(error),
+		| Err(_) => Ok((None, None)),
+	}
+}
+
+fn chain_next_idp_url(
+	services: &Services,
+	provider: &Provider,
+	session: &Session,
+	idp_id: &str,
+) -> Option<Url> {
+	services
 		.config
 		.identity_provider
 		.values()
@@ -474,25 +494,29 @@ pub(crate) async fn sso_callback_route(
 
 				url
 			})
-		});
+		})
+}
 
-	// Allow the user to login to Matrix.
+fn finalize_login_redirect(
+	services: &Services,
+	session: &Session,
+	next_idp_url: Option<Url>,
+	user_id: &UserId,
+) -> Result<String> {
 	let login_token = utils::random_string(TOKEN_LENGTH);
 	let _login_token_expires_in = services
 		.users
-		.create_login_token(&user_id, &login_token);
+		.create_login_token(user_id, &login_token);
 
 	let location = next_idp_url
-		.or(session.redirect_url)
-		.as_ref()
+		.or_else(|| session.redirect_url.clone())
 		.ok_or_else(|| err!(Request(InvalidParam("Missing redirect URL in session data"))))?
-		.clone()
 		.query_pairs_mut()
 		.append_pair("loginToken", &login_token)
 		.finish()
 		.to_string();
 
-	Ok(sso_callback::unstable::Response { location, cookie: Some(cookie) })
+	Ok(location)
 }
 
 async fn handle_uiaa(
