@@ -305,10 +305,6 @@ fn register_federation_routes(router: Router<State>, allow_federation: bool) -> 
 		router
 			.ruma_route(&server::get_server_version_route)
 			.route("/_matrix/key/v2/server", get(server::get_server_keys_route))
-			.route(
-				"/_matrix/key/v2/server/{key_id}",
-				get(server::get_server_keys_deprecated_route),
-			)
 			.ruma_route(&server::get_public_rooms_route)
 			.ruma_route(&server::get_public_rooms_filtered_route)
 			.ruma_route(&server::send_transaction_message_route)
