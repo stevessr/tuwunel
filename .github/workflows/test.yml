@@ -429,6 +429,11 @@ jobs:
     - if: success() || (failure() && steps.extract.outcome == 'success')
       name: Summarise
       id: summarise
+      env:
+        feat_set: ${{matrix.feat_set}}
+        sys_name: ${{matrix.sys_name}}
+        sys_target: ${{matrix.sys_target}}
+        GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
       run: |
         .github/workflows/complement_summarise.sh
 

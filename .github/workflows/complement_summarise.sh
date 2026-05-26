@@ -87,6 +87,62 @@ emit_diff() {
 	echo '```'
 }
 
+# Fetch the prior successful main.yml run's runtime-metrics artifact for this
+# matrix slot. Echoes the local tar path and the run id on success, nothing on
+# miss. Soft-fails: no gh, no auth, no prior run, expired artifact all yield "".
+fetch_baseline_metrics() {
+	command -v gh >/dev/null 2>&1 || return 0
+	test -n "${feat_set:-}${sys_name:-}${sys_target:-}" || return 0
+
+	local branch="${GITHUB_REF_NAME:-}"
+	test "$branch" = "main" && return 0   # no useful comparand on main itself
+
+	local artifact="complement_runtime_metrics-${feat_set}-${sys_name}-${sys_target}.tar.zst"
+	local prev
+	prev=$(gh run list \
+		--workflow=main.yml \
+		--branch="$branch" \
+		--status=success \
+		--limit=5 \
+		--json databaseId \
+		--jq '.[].databaseId' 2>/dev/null \
+		| grep -v "^${GITHUB_RUN_ID:-}\$" \
+		| head -1) || return 0
+	test -n "$prev" || return 0
+
+	local dir
+	dir=$(mktemp -d)
+	if ! gh run download "$prev" --name "$artifact" --dir "$dir" >/dev/null 2>&1; then
+		rm -rf "$dir"
+		return 0
+	fi
+	test -s "$dir/runtime_metrics.tar.zst" || { rm -rf "$dir"; return 0; }
+	printf '%s\t%s\n' "$dir/runtime_metrics.tar.zst" "$prev"
+}
+
+emit_runtime_metrics() {
+	local tar="tests/complement/runtime_metrics.tar.zst"
+	test -s "$tar" || return 0
+	command -v python3 >/dev/null 2>&1 || return 0
+
+	local script="$(dirname "$0")/complement_metrics_summarise.py"
+	test -x "$script" || return 0
+
+	local pair base_tar base_run
+	pair=$(fetch_baseline_metrics || true)
+	base_tar=$(printf '%s' "$pair" | cut -f1)
+	base_run=$(printf '%s' "$pair" | cut -f2)
+
+	local args=(--tar "$tar" --out "$out")
+	if test -n "$base_tar" && test -s "$base_tar"; then
+		args+=(--baseline-tar "$base_tar" --baseline-label "Baseline (run $base_run)")
+	fi
+	python3 "$script" "${args[@]}" || :
+	if test -n "$base_tar"; then
+		rm -rf "$(dirname "$base_tar")"
+	fi
+}
+
 main() {
 	if test ! -s "$jsonl"; then
 		echo "No results.jsonl produced." >> "$out"
@@ -119,6 +175,7 @@ main() {
 	fi
 
 	{ emit_header "$grid"; emit_diff; } >> "$out"
+	emit_runtime_metrics
 }
 
 main "$@"
