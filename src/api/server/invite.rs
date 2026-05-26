@@ -2,19 +2,20 @@ use axum::extract::State;
 use base64::{Engine as _, engine::general_purpose};
 use futures::StreamExt;
 use ruma::{
-	CanonicalJsonValue, OwnedRoomId, OwnedUserId, RoomId, UserId,
+	CanonicalJsonObject, CanonicalJsonValue, OwnedRoomId, OwnedUserId, RoomId, RoomVersionId,
+	ServerName, UserId,
 	api::{
 		appservice::event::push_events,
 		error::{ErrorKind, IncompatibleRoomVersionErrorData},
 		federation::membership::{RawStrippedState, create_invite},
 	},
 	events::{
-		GlobalAccountDataEventType, StateEventType,
+		AnyStrippedStateEvent, GlobalAccountDataEventType, StateEventType,
 		push_rules::PushRulesEvent,
 		room::member::{MembershipState, RoomMemberEventContent},
 	},
 	push,
-	serde::JsonObject,
+	serde::{JsonObject, Raw},
 };
 use tuwunel_core::{
 	Err, Error, Result, debug_warn, err, extract_variant,
@@ -40,7 +41,46 @@ pub(crate) async fn create_invite_route(
 	ClientIp(client): ClientIp,
 	body: Ruma<create_invite::v2::Request>,
 ) -> Result<create_invite::v2::Response> {
-	// ACL check origin
+	validate_request(&services, &body).await?;
+
+	let (mut signed_event, invited_user) = parse_and_validate_event(&services, &body).await?;
+
+	sign_event(&services, &mut signed_event, &body.room_version)?;
+
+	let sender = validate_origins(&signed_event, body.origin())?;
+
+	check_invite_permitted(&services, &body, &invited_user).await?;
+
+	let pdu = build_pdu(&body)?;
+
+	let invite_state: Vec<_> = body
+		.invite_room_state
+		.clone()
+		.into_iter()
+		.filter_map(|s| extract_variant!(s, RawStrippedState::Stripped))
+		.chain([pdu.to_format()])
+		.collect();
+
+	if !services
+		.state_cache
+		.server_in_room(services.globals.server_name(), &body.room_id)
+		.await
+	{
+		record_local_invite(&services, &body, &invited_user, sender, invite_state, &pdu).await?;
+	}
+
+	Ok(create_invite::v2::Response {
+		event: services
+			.federation
+			.format_pdu_into(signed_event, Some(&body.room_version))
+			.await,
+	})
+}
+
+async fn validate_request(
+	services: &Services,
+	body: &Ruma<create_invite::v2::Request>,
+) -> Result<()> {
 	services
 		.event_handler
 		.acl_check(body.origin(), &body.room_id)
@@ -66,7 +106,14 @@ pub(crate) async fn create_invite_route(
 		return Err!(Request(Forbidden("Server is banned on this homeserver.")));
 	}
 
-	let mut signed_event = utils::to_canonical_object(&body.event)
+	Ok(())
+}
+
+async fn parse_and_validate_event(
+	services: &Services,
+	body: &Ruma<create_invite::v2::Request>,
+) -> Result<(CanonicalJsonObject, OwnedUserId)> {
+	let signed_event = utils::to_canonical_object(&body.event)
 		.map_err(|_| err!(Request(InvalidParam("Invite event is invalid."))))?;
 
 	let room_id: OwnedRoomId = signed_event
@@ -120,23 +167,34 @@ pub(crate) async fn create_invite_route(
 		return Err!(Request(InvalidParam("Event membership must be invite.")));
 	}
 
-	// Make sure we're not ACL'ed from their room.
 	services
 		.event_handler
 		.acl_check(invited_user.server_name(), &body.room_id)
 		.await?;
 
+	Ok((signed_event, invited_user))
+}
+
+fn sign_event(
+	services: &Services,
+	signed_event: &mut CanonicalJsonObject,
+	room_version: &RoomVersionId,
+) -> Result<()> {
 	services
 		.server_keys
-		.hash_and_sign_event(&mut signed_event, &body.room_version)
+		.hash_and_sign_event(signed_event, room_version)
 		.map_err(|e| err!(Request(InvalidParam("Failed to sign event: {e}"))))?;
 
-	// Generate event id
-	let event_id = gen_event_id(&signed_event, &body.room_version)?;
-
-	// Add event_id back
+	let event_id = gen_event_id(signed_event, room_version)?;
 	signed_event.insert("event_id".into(), CanonicalJsonValue::String(event_id.to_string()));
 
+	Ok(())
+}
+
+fn validate_origins<'a>(
+	signed_event: &'a CanonicalJsonObject,
+	body_origin: &ServerName,
+) -> Result<&'a UserId> {
 	let origin: Option<&str> = signed_event
 		.get("origin")
 		.and_then(CanonicalJsonValue::as_str);
@@ -146,7 +204,7 @@ pub(crate) async fn create_invite_route(
 		.try_into()
 		.map_err(|e| err!(Request(InvalidParam("Invalid sender property: {e}"))))?;
 
-	if sender.server_name() != body.origin() {
+	if sender.server_name() != body_origin {
 		return Err!(Request(Forbidden("Can only send invites on behalf of your users.")));
 	}
 
@@ -154,108 +212,109 @@ pub(crate) async fn create_invite_route(
 		return Err!(Request(Forbidden("Your users can only be from your origin.")));
 	}
 
-	if origin.is_some_and(|origin| origin != body.origin()) {
+	if origin.is_some_and(|origin| origin != body_origin) {
 		return Err!(Request(Forbidden("Can only send events from your origin.")));
 	}
 
+	Ok(sender)
+}
+
+async fn check_invite_permitted(
+	services: &Services,
+	body: &Ruma<create_invite::v2::Request>,
+	invited_user: &UserId,
+) -> Result<()> {
 	if services.metadata.is_banned(&body.room_id).await
-		&& !services.admin.user_is_admin(&invited_user).await
+		&& !services.admin.user_is_admin(invited_user).await
 	{
 		return Err!(Request(Forbidden("This room is banned on this homeserver.")));
 	}
 
 	if services.config.block_non_admin_invites
-		&& !services.admin.user_is_admin(&invited_user).await
+		&& !services.admin.user_is_admin(invited_user).await
 	{
 		return Err!(Request(Forbidden("This server does not allow room invites.")));
 	}
 
-	let mut invite_state: Vec<_> = body
-		.invite_room_state
-		.clone()
-		.into_iter()
-		.filter_map(|s| extract_variant!(s, RawStrippedState::Stripped))
-		.collect();
+	Ok(())
+}
 
+fn build_pdu(body: &Ruma<create_invite::v2::Request>) -> Result<PduEvent> {
 	let mut event: JsonObject = serde_json::from_str(body.event.get())
 		.map_err(|e| err!(Request(BadJson("Invalid invite event PDU: {e}"))))?;
 
 	event.insert("event_id".into(), "$placeholder".into());
 
-	let pdu: PduEvent = serde_json::from_value(event.into())
-		.map_err(|e| err!(Request(BadJson("Invalid invite event PDU: {e}"))))?;
+	serde_json::from_value(event.into())
+		.map_err(|e| err!(Request(BadJson("Invalid invite event PDU: {e}"))))
+}
 
-	invite_state.push(pdu.to_format());
-
-	// If we are active in the room, the remote server will notify us about the
-	// join/invite through /send. If we are not in the room, we need to manually
-	// record the invited state for client /sync through update_membership(), and
-	// send the invite PDU to the relevant appservices.
-	if !services
-		.state_cache
-		.server_in_room(services.globals.server_name(), &body.room_id)
+/// Record an invite for a room we are not currently in.
+///
+/// When we are active in the room, the remote server will notify us about the
+/// join/invite through `/send`. When we are not in the room, the invited state
+/// must be recorded manually for client `/sync` through `update_membership()`,
+/// and the invite PDU pushed to the relevant appservices.
+async fn record_local_invite(
+	services: &Services,
+	body: &Ruma<create_invite::v2::Request>,
+	invited_user: &UserId,
+	sender: &UserId,
+	invite_state: Vec<Raw<AnyStrippedStateEvent>>,
+	pdu: &PduEvent,
+) -> Result<()> {
+	if services
+		.state_accessor
+		.room_state_get_content::<RoomMemberEventContent>(
+			&body.room_id,
+			&StateEventType::RoomMember,
+			invited_user.as_str(),
+		)
 		.await
+		.is_ok_and(|content| content.membership == MembershipState::Ban)
 	{
-		// Synapse and Dendrite both accept re-invites over local stale state because
-		// we may not have received the unban PDU.
-		if services
-			.state_accessor
-			.room_state_get_content::<RoomMemberEventContent>(
-				&body.room_id,
-				&StateEventType::RoomMember,
-				invited_user.as_str(),
-			)
-			.await
-			.is_ok_and(|content| content.membership == MembershipState::Ban)
-		{
-			debug_warn!(
-				room_id = %body.room_id,
-				user_id = %invited_user,
-				"Recording invite while local room state shows banned membership.",
-			);
-		}
+		debug_warn!(
+			room_id = %body.room_id,
+			user_id = %invited_user,
+			"Recording invite while local room state shows banned membership.",
+		);
+	}
 
-		let count = services.globals.next_count();
-		services
-			.state_cache
-			.update_membership(
-				&body.room_id,
-				&invited_user,
-				RoomMemberEventContent::new(MembershipState::Invite),
-				sender,
-				Some(invite_state),
-				body.via.clone(),
-				true,
-				PduCount::Normal(*count),
-			)
-			.await?;
-		drop(count);
+	let count = services.globals.next_count();
+	services
+		.state_cache
+		.update_membership(
+			&body.room_id,
+			invited_user,
+			RoomMemberEventContent::new(MembershipState::Invite),
+			sender,
+			Some(invite_state),
+			body.via.clone(),
+			true,
+			PduCount::Normal(*count),
+		)
+		.await?;
+	drop(count);
 
-		notify_pushers(&services, &invited_user, &pdu).await;
+	notify_pushers(services, invited_user, pdu).await;
 
-		for appservice in services.appservice.read().await.values() {
-			if appservice.is_user_match(&invited_user) {
-				services
-					.appservice
-					.send_request(appservice.registration.clone(), push_events::v1::Request {
-						events: vec![pdu.to_format()],
-						txn_id: general_purpose::URL_SAFE_NO_PAD
-							.encode(sha256::hash(pdu.event_id.as_bytes()))
-							.into(),
-						ephemeral: Vec::new(),
-						to_device: Vec::new(),
-					})
-					.await?;
-			}
+	for appservice in services.appservice.read().await.values() {
+		if appservice.is_user_match(invited_user) {
+			services
+				.appservice
+				.send_request(appservice.registration.clone(), push_events::v1::Request {
+					events: vec![pdu.to_format()],
+					txn_id: general_purpose::URL_SAFE_NO_PAD
+						.encode(sha256::hash(pdu.event_id.as_bytes()))
+						.into(),
+					ephemeral: Vec::new(),
+					to_device: Vec::new(),
+				})
+				.await?;
 		}
 	}
 
-	Ok(create_invite::v2::Response {
-		event: services
-			.federation
-			.format_pdu_into(signed_event, Some(&body.room_version))
-			.await,
-	})
+	Ok(())
 }
 
 async fn notify_pushers(services: &Services, invited_user: &UserId, pdu: &PduEvent) {
