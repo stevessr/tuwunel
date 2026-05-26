@@ -2500,13 +2500,6 @@
 
 #[global.well_known.support_policy.<ID>]
 
-# Identifier name of the policy document.
-#
-# example: "privacy_policy"
-# reloadable: yes
-#
-#name =
-
 # Version string of the policy document.
 #
 # example: "v6.7"
@@ -2516,7 +2509,7 @@
 
 
 
-#[global.well_known.support_policy.<ID>.policy_translation]
+#[global.well_known.support_policy.<ID>.policy_translation.<LANG>]
 
 # User friendly name of the policy document.
 #
@@ -2531,15 +2524,6 @@
 # reloadable: yes
 #
 #url =
-
-# Language code of the policy document. This should be formatted as
-# specified in Section 2.2 of RFC5646:
-# https://datatracker.ietf.org/doc/html/rfc5646#section-2.2
-#
-# example: "en_US"
-# reloadable: yes
-#
-#language =
 
 
 

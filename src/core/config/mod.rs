@@ -7,6 +7,7 @@ pub mod proxy;
 pub mod room_version;
 #[cfg(test)]
 mod tests;
+pub mod well_known;
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
@@ -2926,28 +2927,20 @@ pub struct WellKnownConfig {
 	ignore = "policy_translation"
 )]
 pub struct SupportPolicy {
-	/// Identifier name of the policy document.
-	///
-	/// example: "privacy_policy"
-	/// reloadable: yes
-	pub name: String,
-
 	/// Version string of the policy document.
 	///
 	/// example: "v6.7"
 	/// reloadable: yes
 	pub version: String,
 
-	/// Policy document translation definition
-	///
-	/// reloadable: yes
-	pub policy_translation: SupportPolicyTranslation,
+	// external structure; separate section
+	pub policy_translation: BTreeMap<String, SupportPolicyTranslation>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[config_example_generator(
 	filename = "tuwunel-example.toml",
-	section = "global.well_known.support_policy.<ID>.policy_translation"
+	section = "global.well_known.support_policy.<ID>.policy_translation.<LANG>"
 )]
 pub struct SupportPolicyTranslation {
 	/// User friendly name of the policy document.
@@ -2961,14 +2954,6 @@ pub struct SupportPolicyTranslation {
 	/// example: "https://website.local/privacy-policy"
 	/// reloadable: yes
 	pub url: Url,
-
-	/// Language code of the policy document. This should be formatted as
-	/// specified in Section 2.2 of RFC5646:
-	/// https://datatracker.ietf.org/doc/html/rfc5646#section-2.2
-	///
-	/// example: "en_US"
-	/// reloadable: yes
-	pub language: String,
 }
 
 impl From<SupportPolicyTranslation>

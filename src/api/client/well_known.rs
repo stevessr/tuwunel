@@ -1,17 +1,11 @@
-use core::iter::once;
-use std::collections::BTreeMap;
-
 use axum::extract::State;
-use ruma::api::{
-	client::discovery::{
-		discover_homeserver::{self, HomeserverInfo},
-		discover_support::{self, Contact},
-	},
-	identity_service::tos::get_terms_of_service::v2::{LocalizedPolicy, Policies},
+use ruma::api::client::discovery::{
+	discover_homeserver::{self, HomeserverInfo},
+	discover_support::{self},
 };
 use tuwunel_core::{Err, Result};
 
-use crate::{Ruma, client::rtc};
+use crate::Ruma;
 
 /// # `GET /.well-known/matrix/client`
 ///
@@ -22,13 +16,13 @@ pub(crate) async fn well_known_client(
 	_body: Ruma<discover_homeserver::Request>,
 ) -> Result<discover_homeserver::Response> {
 	let homeserver = HomeserverInfo {
-		base_url: match services.server.config.well_known.client.as_ref() {
+		base_url: match services.config.well_known.client.as_ref() {
 			| Some(url) => url.to_string(),
 			| None => return Err!(Request(NotFound("Not found."))),
 		},
 	};
 
-	let rtc_foci = rtc::get_transports(&services)?;
+	let rtc_foci = services.config.well_known.get_transports()?;
 
 	Ok(discover_homeserver::Response {
 		rtc_foci,
@@ -43,55 +37,20 @@ pub(crate) async fn well_known_support(
 	State(services): State<crate::State>,
 	_body: Ruma<discover_support::Request>,
 ) -> Result<discover_support::Response> {
-	let support_page = services
-		.config
-		.well_known
+	let config = &services.config.well_known;
+
+	let support_page = config
 		.support_page
 		.as_ref()
 		.map(ToString::to_string);
 
-	let single_contact = services
-		.config
-		.well_known
-		.support_role
-		.clone()
-		.map(|role| Contact {
-			role,
-			email_address: services.config.well_known.support_email.clone(),
-			matrix_id: services.config.well_known.support_mxid.clone(),
-			pgp_key: services.config.well_known.support_pgp_key.clone(),
-		});
+	let contacts = config.get_contacts();
 
-	let contacts = {
-		let contacts = services
-			.config
-			.well_known
-			.support_contact
-			.clone()
-			.into_values()
-			.map(Into::into);
+	let policies = config.get_policies();
 
-		match single_contact {
-			| Some(contact) => contacts.chain(once(contact)).collect(),
-			| None => contacts.collect(),
-		}
-	};
-
-	let policies = services
-		.config
-		.well_known
-		.support_policy
-		.clone()
-		.into_values()
-		.map(|policy| {
-			let localized = BTreeMap::from([(
-				policy.policy_translation.language.clone(),
-				LocalizedPolicy::from(policy.policy_translation),
-			)]);
-
-			(policy.name, Policies { version: policy.version, localized })
-		})
-		.collect();
+	if support_page.is_none() && contacts.is_empty() && policies.is_empty() {
+		return Err!(Request(NotFound("Not found.")));
+	}
 
 	Ok(discover_support::Response { contacts, support_page, policies })
 }
