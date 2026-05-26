@@ -502,7 +502,7 @@
 # On Unix-socket deployments, leave this unset rather than setting
 # "connect_info"; that source requires a TCP peer address.
 #
-# WARNING: a header-based value without a trusted reverse proxy in
+# WARNING: A header-based value without a trusted reverse proxy in
 # front of tuwunel allows clients to forge their IP. Changing this
 # value requires a server restart.
 #
@@ -517,12 +517,21 @@
 # Loopback (`127.0.0.0/8`, `::1/128`) is always bypassed and
 # need not be listed.
 #
-# Use this when locally-attached bridges or other server-side
+# Use this when locally attached bridges or other server-side
 # clients connect from a private container or VPN subnet that
-# cannot carry the configured proxy header (e.g. a Docker
-# user-defined bridge network without `network_mode: host`).
+# cannot carry the configured proxy header (e.g. a user-defined
+# Docker bridge network without `network_mode: host`).
 #
-# WARNING: any peer in these subnets can forge the client IP via
+# NOTE: If you configure an entire subnet here, be sure that it
+# does not include the address Tuwunel receives external traffic
+# from, i.e. that of your proxy. This would, for example, happen
+# if you deployed the proxy in a common bridge network with your
+# other components (e.g. in a Compose deployment) and specified
+# said network's subnet here. Traffic from the proxy would then
+# also have the bypass applied, rendering the `ip_source` option
+# effectively useless.
+#
+# WARNING: Any peer in these subnets can forge the client IP via
 # request headers. Only include subnets you control end-to-end.
 # Changing this value requires a server restart.
 #
