@@ -340,6 +340,10 @@ pub(super) static MAPS: &[Descriptor] = &[
 		..descriptor::RANDOM_SMALL_CACHE
 	},
 	Descriptor {
+		name: "servername_status",
+		..descriptor::RANDOM_SMALL_CACHE
+	},
+	Descriptor {
 		name: "servernameevent_data",
 		cache_disp: CacheDisp::Unique,
 		val_size_hint: Some(128),
