@@ -382,12 +382,12 @@ async fn collect_required_state(
 		.map(|(event_type, _)| event_type.clone())
 		.collect();
 
-	// Sequential await: per-event-type stream → Vec resolution. Stream form
-	// (.then + flatten) triggers an HRTB mismatch downstream against join4.
-	let mut wildcard_state: Vec<(StateEventType, StateKey)> = Vec::new();
-	for event_type in wildcard_types {
-		wildcard_state.extend(wildcard_state_keys(services, room_id, event_type).await);
-	}
+	let wildcard_state: Vec<(StateEventType, StateKey)> = wildcard_types
+		.into_iter()
+		.stream()
+		.broad_then(|event_type| wildcard_state_keys(services, room_id, event_type))
+		.concat()
+		.await;
 
 	required_state
 		.iter()
