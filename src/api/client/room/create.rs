@@ -47,22 +47,6 @@ use tuwunel_service::{Services, appservice::RegistrationInfo, rooms::state::Room
 
 use crate::{Ruma, client::utils::invite_check};
 
-/// # `POST /_matrix/client/v3/createRoom`
-///
-/// Creates a new room.
-///
-/// - Room ID is randomly generated
-/// - Create alias if `room_alias_name` is set
-/// - Send create event
-/// - Join sender user
-/// - Send power levels event
-/// - Send canonical room alias
-/// - Send join rules
-/// - Send history visibility
-/// - Send guest access
-/// - Send events listed in initial state
-/// - Send events implied by `name` and `topic`
-/// - Send invite events
 pub(crate) async fn create_room_route(
 	State(services): State<crate::State>,
 	body: Ruma<create_room::v3::Request>,
@@ -119,88 +103,29 @@ pub(crate) async fn create_room_route(
 				})?,
 	};
 
-	// 2. Let the room creator join
 	let sender_user = body.sender_user();
-	services
-		.timeline
-		.build_and_append_pdu(
-			PduBuilder::state(sender_user.to_string(), &RoomMemberEventContent {
-				displayname: services.users.displayname(sender_user).await.ok(),
-				avatar_url: services.users.avatar_url(sender_user).await.ok(),
-				blurhash: services.users.blurhash(sender_user).await.ok(),
-				is_direct: Some(body.is_direct),
-				..RoomMemberEventContent::new(MembershipState::Join)
-			}),
-			sender_user,
-			&room_id,
-			&state_lock,
-		)
+
+	// 2. Let the room creator join
+	apply_creator_join_pdu(&services, &body, sender_user, &room_id, &state_lock)
 		.boxed()
 		.await?;
 
 	// 3. Power levels
-	let mut users = if !version_rules
-		.authorization
-		.explicitly_privilege_room_creators
-	{
-		BTreeMap::from_iter([(sender_user.to_owned(), int!(100))])
-	} else {
-		BTreeMap::new()
-	};
-
-	if preset == RoomPreset::TrustedPrivateChat
-		&& !version_rules
-			.authorization
-			.additional_room_creators
-	{
-		users = body
-			.invite
-			.iter()
-			.stream()
-			.filter(|&invite| invite_allowed(&services, sender_user, invite))
-			.ready_fold(users, |mut users, invite| {
-				users.insert(invite.clone(), int!(100));
-				users
-			})
-			.await;
-	}
-
-	let power_levels_content = default_power_levels_content(
-		&version_rules,
-		body.power_level_content_override.as_ref(),
+	apply_power_levels_pdu(
+		&services,
+		&body,
 		&preset,
-		users,
-	)?;
-
-	services
-		.timeline
-		.build_and_append_pdu(
-			PduBuilder {
-				event_type: TimelineEventType::RoomPowerLevels,
-				content: to_raw_value(&power_levels_content)?,
-				state_key: Some(StateKey::new()),
-				..Default::default()
-			},
-			sender_user,
-			&room_id,
-			&state_lock,
-		)
-		.boxed()
-		.await?;
+		&version_rules,
+		sender_user,
+		&room_id,
+		&state_lock,
+	)
+	.boxed()
+	.await?;
 
 	// 4. Canonical room alias
 	if let Some(room_alias_id) = &alias {
-		services
-			.timeline
-			.build_and_append_pdu(
-				PduBuilder::state(String::new(), &RoomCanonicalAliasEventContent {
-					alias: Some(room_alias_id.to_owned()),
-					alt_aliases: vec![],
-				}),
-				sender_user,
-				&room_id,
-				&state_lock,
-			)
+		apply_canonical_alias_pdu(&services, room_alias_id, sender_user, &room_id, &state_lock)
 			.boxed()
 			.await?;
 	}
@@ -248,6 +173,123 @@ pub(crate) async fn create_room_route(
 	info!("{sender_user} created a room with room ID {room_id}");
 
 	Ok(create_room::v3::Response::new(room_id))
+}
+
+async fn apply_creator_join_pdu(
+	services: &Services,
+	body: &Ruma<create_room::v3::Request>,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	state_lock: &RoomMutexGuard,
+) -> Result {
+	services
+		.timeline
+		.build_and_append_pdu(
+			PduBuilder::state(sender_user.to_string(), &RoomMemberEventContent {
+				displayname: services.users.displayname(sender_user).await.ok(),
+				avatar_url: services.users.avatar_url(sender_user).await.ok(),
+				blurhash: services.users.blurhash(sender_user).await.ok(),
+				is_direct: Some(body.is_direct),
+				..RoomMemberEventContent::new(MembershipState::Join)
+			}),
+			sender_user,
+			room_id,
+			state_lock,
+		)
+		.await
+		.map(|_| ())
+}
+
+async fn apply_power_levels_pdu(
+	services: &Services,
+	body: &Ruma<create_room::v3::Request>,
+	preset: &RoomPreset,
+	version_rules: &RoomVersionRules,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	state_lock: &RoomMutexGuard,
+) -> Result {
+	let users =
+		build_power_levels_users(services, body, preset, version_rules, sender_user).await;
+
+	let power_levels_content = default_power_levels_content(
+		version_rules,
+		body.power_level_content_override.as_ref(),
+		preset,
+		users,
+	)?;
+
+	services
+		.timeline
+		.build_and_append_pdu(
+			PduBuilder {
+				event_type: TimelineEventType::RoomPowerLevels,
+				content: to_raw_value(&power_levels_content)?,
+				state_key: Some(StateKey::new()),
+				..Default::default()
+			},
+			sender_user,
+			room_id,
+			state_lock,
+		)
+		.await
+		.map(|_| ())
+}
+
+async fn build_power_levels_users(
+	services: &Services,
+	body: &Ruma<create_room::v3::Request>,
+	preset: &RoomPreset,
+	version_rules: &RoomVersionRules,
+	sender_user: &UserId,
+) -> BTreeMap<OwnedUserId, Int> {
+	let seed = version_rules
+		.authorization
+		.explicitly_privilege_room_creators
+		.or(|| (sender_user.to_owned(), int!(100)))
+		.into_iter()
+		.collect::<BTreeMap<_, _>>();
+
+	let trusted_invitees = *preset == RoomPreset::TrustedPrivateChat
+		&& !version_rules
+			.authorization
+			.additional_room_creators;
+
+	if !trusted_invitees {
+		return seed;
+	}
+
+	body.invite
+		.iter()
+		.stream()
+		.filter(|&invite| invite_allowed(services, sender_user, invite))
+		.ready_fold(seed, |mut users, invite| {
+			users.insert(invite.clone(), int!(100));
+			users
+		})
+		.await
+}
+
+async fn apply_canonical_alias_pdu(
+	services: &Services,
+	room_alias_id: &RoomAliasId,
+	sender_user: &UserId,
+	room_id: &RoomId,
+	state_lock: &RoomMutexGuard,
+) -> Result {
+	services
+		.timeline
+		.build_and_append_pdu(
+			PduBuilder::state(String::new(), &RoomCanonicalAliasEventContent {
+				alias: Some(room_alias_id.to_owned()),
+				alt_aliases: vec![],
+			}),
+			sender_user,
+			room_id,
+			state_lock,
+		)
+		.await
+		.map(|_| ())
 }
 
 async fn apply_preset_state_pdus(
