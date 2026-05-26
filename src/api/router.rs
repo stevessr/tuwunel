@@ -6,15 +6,12 @@ mod request;
 mod response;
 pub mod state;
 
-use std::str::FromStr;
-
 use axum::{
 	Router,
-	response::{IntoResponse, Redirect},
+	response::IntoResponse,
 	routing::{any, get, post},
 };
 pub use client_ip::{ConfiguredIpSource, TrustedPeerSubnets};
-use http::{Uri, uri};
 use tuwunel_core::{Server, config::Manager, err};
 
 use self::handler::RouterExt;
@@ -356,7 +353,7 @@ fn register_legacy_media_routes(
 			.route("/_matrix/media/v3/config", any(legacy_media_disabled))
 			.route("/_matrix/media/v3/download/{*path}", any(legacy_media_disabled))
 			.route("/_matrix/media/v3/thumbnail/{*path}", any(legacy_media_disabled))
-			.route("/_matrix/media/v3/preview_url", any(redirect_legacy_preview))
+			.route("/_matrix/media/v3/preview_url", any(legacy_media_disabled))
 	}
 }
 
@@ -364,23 +361,6 @@ fn allow_support_route(config: &Manager) -> bool {
 	config.well_known.support_role.is_some()
 		|| !config.well_known.support_contact.is_empty()
 		|| config.well_known.support_page.is_some()
-}
-
-async fn redirect_legacy_preview(uri: Uri) -> impl IntoResponse {
-	let path = "/_matrix/client/v1/media/preview_url";
-	let query = uri.query().unwrap_or_default();
-
-	let path_and_query = format!("{path}?{query}");
-	let path_and_query = uri::PathAndQuery::from_str(&path_and_query)
-		.expect("Failed to build PathAndQuery for media preview redirect URI");
-
-	let uri = uri::Builder::new()
-		.path_and_query(path_and_query)
-		.build()
-		.expect("Failed to build URI for redirect")
-		.to_string();
-
-	Redirect::temporary(&uri)
 }
 
 async fn legacy_media_disabled() -> impl IntoResponse {
