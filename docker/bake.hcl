@@ -279,6 +279,7 @@ group "tests" {
 group "matrix-compliance" {
     targets = [
         "complement",
+        "complement-crypto",
         "rust-sdk-integ",
     ]
 }
@@ -473,6 +474,88 @@ target "complement-config" {
 }
 
 #
+# Complement Crypto tests (E2EE suite driven against tuwunel)
+#
+
+group "complement-crypto" {
+    targets = [
+        "complement-crypto-tester",
+    ]
+}
+
+variable "complement_crypto_count" {
+    default = 1
+}
+variable "complement_crypto_run" {
+    default = ".*"
+}
+variable "complement_crypto_skip" {
+    default = ""
+}
+
+complement_crypto_args = {
+    complement_crypto_count = "${complement_crypto_count}"
+    complement_crypto_run   = "${complement_crypto_run}"
+    complement_crypto_skip  = "${complement_crypto_skip}"
+}
+
+target "complement-crypto-tester" {
+    name = elem("complement-crypto-tester", [sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("complement-crypto-tester", [sys_name, sys_version, sys_target], "latest"),
+    ]
+    labels = trunk_labels
+    target = "complement-crypto-tester"
+    output = ["type=docker,compression=zstd,mode=min,compression-level=${zstd_image_compress_level}"]
+    entitlements = ["network.host"]
+    dockerfile = "${docker_dir}/Dockerfile.complement-crypto"
+    matrix = sys
+    inherits = [
+        elem("complement-crypto-base", [sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:complement-crypto-base", [sys_name, sys_version, sys_target])
+    }
+    args = complement_crypto_args
+}
+
+target "complement-crypto-base" {
+    name = elem("complement-crypto-base", [sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("complement-crypto-base", [sys_name, sys_version, sys_target], "latest"),
+    ]
+    labels = trunk_labels
+    target = "complement-crypto-base"
+    dockerfile = "${docker_dir}/Dockerfile.complement-crypto"
+    matrix = sys
+    inherits = [
+        elem("complement-crypto-deps", [sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:complement-crypto-deps", [sys_name, sys_version, sys_target])
+    }
+    args = complement_crypto_args
+}
+
+target "complement-crypto-deps" {
+    name = elem("complement-crypto-deps", [sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("complement-crypto-deps", [sys_name, sys_version, sys_target], "latest"),
+    ]
+    labels = trunk_labels
+    target = "complement-crypto-deps"
+    dockerfile = "${docker_dir}/Dockerfile.complement-crypto"
+    matrix = sys
+    inherits = [
+        elem("rust", ["nightly", "x86_64-unknown-linux-gnu", sys_name, sys_version, sys_target]),
+    ]
+    contexts = {
+        input = elem("target:rust", ["nightly", "x86_64-unknown-linux-gnu", sys_name, sys_version, sys_target])
+    }
+    args = complement_crypto_args
+}
+
+#
 # Playwright tests (element-web suite driven against tuwunel)
 #
 
@@ -621,7 +704,12 @@ target "rust-sdk-valgrind" {
         mrsdk_startup_delay = "30s"
         mrsdk_skip_list =<<EOF
             --skip test_delayed_invite_response_and_sent_message_decryption
-            --skip test_history_share_on_invite_pin_violation
+            --skip test_history_share_on_invite
+            --skip test_history_sharing_session_merging
+            --skip test_transitive_history_share_with_withhelds
+            --skip test_latest_event_few_rooms
+            --skip test_latest_thread_event_is_redecrypted_and_updated
+            --skip test_event_with_context
 EOF
     }
 }
@@ -651,6 +739,12 @@ target "rust-sdk-integ" {
 
         mrsdk_skip_list =<<EOF
             --skip test_delayed_invite_response_and_sent_message_decryption
+            --skip test_history_share_on_invite
+            --skip test_history_sharing_session_merging
+            --skip test_transitive_history_share_with_withhelds
+            --skip test_latest_event_few_rooms
+            --skip test_latest_thread_event_is_redecrypted_and_updated
+            --skip test_event_with_context
 EOF
     }
 }

@@ -129,6 +129,8 @@ jobs:
       enable_test_complement: ${{fromJSON(inputs.enable_test_complement || 'true')}}
       complement_verbose: ${{fromJSON(inputs.complement_verbose || 'false')}}
       complement_runner: 'het'
+      enable_test_complement_crypto: ${{fromJSON(inputs.enable_test_complement_crypto || 'true')}}
+      complement_crypto_verbose: ${{fromJSON(inputs.complement_crypto_verbose || 'false')}}
       enable_test_playwright: ${{fromJSON(inputs.enable_test_playwright || env.is_dev || 'false')}}
       playwright_runner: 'het'
       enable_package: ${{fromJSON(inputs.enable_package || 'true')}}
@@ -270,6 +272,8 @@ jobs:
       enable_complement: ${{needs.init.outputs.enable_test_complement}}
       complement_runner: ${{needs.init.outputs.complement_runner}}
       complement_verbose: ${{needs.init.outputs.complement_verbose}}
+      enable_complement_crypto: ${{needs.init.outputs.enable_test_complement_crypto}}
+      complement_crypto_verbose: ${{needs.init.outputs.complement_crypto_verbose}}
       enable_playwright: ${{needs.init.outputs.enable_test_playwright}}
       playwright_runner: ${{needs.init.outputs.playwright_runner}}
       cargo_profiles: ${{needs.init.outputs.cargo_profiles}}
