@@ -12,15 +12,15 @@ use ruma::{
 };
 use tokio::time::timeout;
 use tuwunel_core::{
-	Err, Error, Result, debug, debug::INFO_SPAN_LEVEL, debug_error, debug_warn, err,
-	error::inspect_debug_log, implement, trace,
+	Err, Error, Result, debug, debug::INFO_SPAN_LEVEL, debug_error, debug_warn, err, implement,
+	trace,
 };
 
 use super::{
 	Classification, ShouldAttempt,
 	scheme::{FedAuth, FedPath},
 };
-use crate::resolver::actual::ActualDest;
+use crate::{client::read_response_capped, resolver::actual::ActualDest};
 
 /// Sends a request to a federation server
 #[implement(super::Service)]
@@ -169,8 +169,11 @@ where
 	let method = request.method().clone();
 
 	debug!(?method, ?url, "Sending request");
+	let limit = self.services.server.config.max_response_size;
+
 	match client.execute(request).await {
-		| Ok(response) => handle_response::<T>(actual, dest, &method, &url, response).await,
+		| Ok(response) =>
+			handle_response::<T>(actual, dest, &method, &url, response, limit).await,
 		| Err(error) => Err(self
 			.handle_error(dest, actual, &method, &url, error)
 			.expect_err("always returns error")),
@@ -210,13 +213,14 @@ async fn handle_response<T>(
 	method: &Method,
 	url: &Url,
 	response: Response,
+	limit: usize,
 ) -> Result<T::IncomingResponse>
 where
 	T: OutgoingRequest + Send,
 	T::Authentication: FedAuth,
 	T::PathBuilder: FedPath,
 {
-	let response = into_http_response(dest, actual, method, url, response).await?;
+	let response = into_http_response(dest, actual, method, url, response, limit).await?;
 
 	T::IncomingResponse::try_from_http_response(response)
 		.map_err(|e| err!(BadServerResponse("Server returned bad 200 response: {e:?}")))
@@ -228,6 +232,7 @@ async fn into_http_response(
 	method: &Method,
 	url: &Url,
 	mut response: Response,
+	limit: usize,
 ) -> Result<http::Response<Bytes>> {
 	let status = response.status();
 	trace!(
@@ -251,11 +256,7 @@ async fn into_http_response(
 
 	// TODO: handle timeout
 	trace!("Waiting for response body...");
-	let body = response
-		.bytes()
-		.await
-		.inspect_err(inspect_debug_log)
-		.unwrap_or_else(|_| Vec::new().into());
+	let body = read_response_capped(response, limit).await?;
 
 	let http_response = http_response_builder
 		.body(body)

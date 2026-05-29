@@ -9,6 +9,8 @@ use ruma::api::{
 };
 use tuwunel_core::{Err, Result, debug_error, err, implement, trace, utils, warn};
 
+use crate::client::read_response_capped;
+
 /// Sends a request to an appservice
 ///
 /// Only returns Ok(None) if there is no url specified in the appservice
@@ -90,7 +92,8 @@ where
 			.expect("http::response::Builder is usable"),
 	);
 
-	let body = response.bytes().await?; // TODO: handle timeout
+	let limit = self.services.config.max_response_size;
+	let body = read_response_capped(response, limit).await?;
 
 	if !status.is_success() {
 		debug_error!("Appservice response bytes: {:?}", utils::string_from_bytes(&body));
