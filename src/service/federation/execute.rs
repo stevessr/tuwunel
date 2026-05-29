@@ -1,4 +1,4 @@
-use std::{fmt::Debug, mem};
+use std::{fmt::Debug, mem, time::Duration};
 
 use bytes::Bytes;
 use ipaddress::IPAddress;
@@ -10,13 +10,14 @@ use ruma::{
 		error::Error as RumaError,
 	},
 };
+use tokio::time::timeout;
 use tuwunel_core::{
 	Err, Error, Result, debug, debug::INFO_SPAN_LEVEL, debug_error, debug_warn, err,
 	error::inspect_debug_log, implement, trace,
 };
 
 use super::{
-	Classification,
+	Classification, ShouldAttempt,
 	scheme::{FedAuth, FedPath},
 };
 use crate::resolver::actual::ActualDest;
@@ -32,6 +33,38 @@ where
 {
 	let client = &self.services.client.federation;
 	self.execute_on(client, dest, request).await
+}
+
+/// Client-initiated key lookup (`/keys/query`, `/keys/claim`) over federation:
+/// skips servers already in backoff and bounds the request by
+/// `federation_keys_timeout` so a waiting client is not held past its own send
+/// deadline. Honors peer-status but does not record into it; a slow key lookup
+/// must not suppress unrelated outbound traffic to the server.
+#[implement(super::Service)]
+#[tracing::instrument(skip_all, name = "keys", level = "debug")]
+pub async fn execute_keys<T>(&self, dest: &ServerName, request: T) -> Result<T::IncomingResponse>
+where
+	T: OutgoingRequest + Debug + Send,
+	T::Authentication: FedAuth,
+	T::PathBuilder: FedPath,
+{
+	if matches!(self.should_attempt(dest).await, ShouldAttempt::No { .. }) {
+		return Err!("{dest} is in federation backoff; skipping key lookup");
+	}
+
+	let timeout_dur = Duration::from_secs(
+		self.services
+			.server
+			.config
+			.federation_keys_timeout,
+	);
+
+	let client = &self.services.client.federation;
+
+	match timeout(timeout_dur, self.execute_uncounted(client, dest, request)).await {
+		| Ok(result) => result,
+		| Err(_elapsed) => Err!("{dest} key lookup exceeded {}s", timeout_dur.as_secs()),
+	}
 }
 
 /// Like execute() but with a very large timeout
@@ -52,12 +85,38 @@ where
 }
 
 #[implement(super::Service)]
+pub async fn execute_on<T>(
+	&self,
+	client: &Client,
+	dest: &ServerName,
+	request: T,
+) -> Result<T::IncomingResponse>
+where
+	T: OutgoingRequest + Send,
+	T::Authentication: FedAuth,
+	T::PathBuilder: FedPath,
+{
+	let result = self
+		.execute_uncounted(client, dest, request)
+		.await;
+
+	match &result {
+		| Ok(_) => self.record_success(dest),
+		| Err(_) => self.record_failure(dest, Classification::Transient),
+	}
+
+	result
+}
+
+/// Like [`execute_on`] but leaves peer-status untouched, for callers that
+/// must honor backoff without contributing to it.
+#[implement(super::Service)]
 #[tracing::instrument(
 	name = "fed",
 	level = INFO_SPAN_LEVEL,
 	skip(self, client, request),
 )]
-pub async fn execute_on<T>(
+async fn execute_uncounted<T>(
 	&self,
 	client: &Client,
 	dest: &ServerName,
@@ -88,16 +147,9 @@ where
 		.await?;
 
 	let request = self.prepare(&actual, dest, request)?;
-	let result = self
-		.perform::<T>(&actual, dest, request, client)
-		.await;
 
-	match &result {
-		| Ok(_) => self.record_success(dest),
-		| Err(_) => self.record_failure(dest, Classification::Transient),
-	}
-
-	result
+	self.perform::<T>(&actual, dest, request, client)
+		.await
 }
 
 #[implement(super::Service)]
