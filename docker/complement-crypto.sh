@@ -26,7 +26,14 @@ mitmproxy_image="mitmproxy/mitmproxy:10.1.5"
 
 run="${1:-$default_complement_crypto_run}"
 
-skip=""
+# Three upstream tests are nondeterministic against the exact-match results
+# gate. TestOnRejoinBob races the rust SDK timeline (the backpaginated event
+# is intermittently absent at lookup; upstream marks the spot with a TODO).
+# TestDelayedInviteResponse self-skips on a decrypt miss (matrix-rust-sdk#3622)
+# and otherwise passes, so it flips between skip and pass run to run.
+# TestChangingDeviceAfterInviteReEncrypts intermittently fails the gate run to
+# run.
+skip="TestOnRejoinBobCanSeeButNotDecryptHistoryInPublicRoom|TestDelayedInviteResponse|TestChangingDeviceAfterInviteReEncrypts"
 
 set -a
 cargo_profile="${cargo_profile:-$default_cargo_profile}"

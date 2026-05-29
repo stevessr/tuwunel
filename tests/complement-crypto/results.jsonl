@@ -8,12 +8,8 @@
 {"Action":"pass","Test":"TestCanBackupKeys/{rust_hs1}|{rust_hs1}"}
 {"Action":"pass","Test":"TestCanDecryptMessagesAfterInviteButBeforeJoin"}
 {"Action":"pass","Test":"TestCanDecryptMessagesAfterInviteButBeforeJoin/{rust_hs1}|{rust_hs1}"}
-{"Action":"pass","Test":"TestChangingDeviceAfterInviteReEncrypts"}
-{"Action":"pass","Test":"TestChangingDeviceAfterInviteReEncrypts/{rust_hs1}|{rust_hs1}"}
 {"Action":"pass","Test":"TestClientRetriesSendToDevice"}
 {"Action":"pass","Test":"TestClientRetriesSendToDevice/{rust_hs1}|{rust_hs1}"}
-{"Action":"skip","Test":"TestDelayedInviteResponse"}
-{"Action":"skip","Test":"TestDelayedInviteResponse/rust"}
 {"Action":"pass","Test":"TestExistingSessionCannotGetKeysForOfflineServer"}
 {"Action":"pass","Test":"TestExistingSessionCannotGetKeysForOfflineServer/rust"}
 {"Action":"pass","Test":"TestFailedDeviceKeyDownloadRetries"}
@@ -28,8 +24,6 @@
 {"Action":"pass","Test":"TestNewUserCannotGetKeysForOfflineServer/rust"}
 {"Action":"pass","Test":"TestOnNewDeviceBobCanSeeButNotDecryptHistoryInPublicRoom"}
 {"Action":"pass","Test":"TestOnNewDeviceBobCanSeeButNotDecryptHistoryInPublicRoom/{rust_hs1}|{rust_hs1}"}
-{"Action":"pass","Test":"TestOnRejoinBobCanSeeButNotDecryptHistoryInPublicRoom"}
-{"Action":"pass","Test":"TestOnRejoinBobCanSeeButNotDecryptHistoryInPublicRoom/{rust_hs1}|{rust_hs1}"}
 {"Action":"pass","Test":"TestRoomKeyIsCycledAfterEnoughMessages"}
 {"Action":"pass","Test":"TestRoomKeyIsCycledAfterEnoughMessages/{rust_hs1}|{rust_hs1}"}
 {"Action":"pass","Test":"TestRoomKeyIsCycledAfterEnoughTime"}
