@@ -1,6 +1,7 @@
 mod execute;
 mod format;
 mod peer;
+mod rank;
 pub mod scheme;
 
 use std::{sync::Arc, time::Duration};
@@ -9,7 +10,10 @@ use tuwunel_core::{Result, utils::exponential_backoff_streak_cap};
 use tuwunel_database::Map;
 
 use self::peer::MAX_BACKOFF;
-pub use self::peer::{Classification, ShouldAttempt};
+pub use self::{
+	peer::{Classification, ShouldAttempt},
+	rank::{Candidates, WhenAllBackedOff},
+};
 use crate::services::OnceServices;
 
 pub struct Service {

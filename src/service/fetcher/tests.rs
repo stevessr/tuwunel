@@ -17,7 +17,7 @@ use tokio::{
 use tuwunel_core::{Result, err};
 
 use super::*;
-use crate::services::OnceServices;
+use crate::{federation::Candidates, services::OnceServices};
 
 impl Service {
 	fn test(
@@ -167,11 +167,11 @@ impl MockSelect {
 
 #[async_trait]
 impl Select for MockSelect {
-	async fn candidates(&self, opts: &Opts) -> Vec<OwnedServerName> {
+	async fn candidates(&self, opts: &Opts) -> Candidates {
 		opts.event_id
 			.as_ref()
 			.and_then(|event| self.by_event.get(event))
-			.cloned()
+			.map(|servers| servers.iter().cloned().collect())
 			.unwrap_or_default()
 	}
 }

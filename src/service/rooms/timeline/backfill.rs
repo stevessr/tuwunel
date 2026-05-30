@@ -6,7 +6,7 @@ use futures::{
 };
 use rand::seq::SliceRandom;
 use ruma::{
-	CanonicalJsonObject, EventId, OwnedServerName, RoomId, ServerName,
+	CanonicalJsonObject, EventId, RoomId, ServerName,
 	api::federation::backfill::get_backfill::v1::Request as BackfillRequest,
 	events::TimelineEventType, uint,
 };
@@ -27,13 +27,9 @@ use tuwunel_database::Json;
 
 use super::ExtractBody;
 use crate::{
-	federation::ShouldAttempt,
+	federation::{Candidates, WhenAllBackedOff},
 	fetcher::{Op, Opts},
 };
-
-/// Three candidate buckets, ordered by [`ShouldAttempt`] verdict:
-/// `Yes`, `Deprioritize`, `No`.
-type RankedCandidates = (Vec<OwnedServerName>, Vec<OwnedServerName>, Vec<OwnedServerName>);
 
 #[implement(super::Service)]
 #[tracing::instrument(name = "backfill", level = "debug", skip(self))]
@@ -130,7 +126,7 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 		.map(ToOwned::to_owned)
 		.stream();
 
-	let (yes, depri, no): RankedCandidates = power_servers
+	let eligible: Candidates = power_servers
 		.chain(canonical_room_alias_server)
 		.chain(trusted_servers)
 		.ready_filter(|server_name| !self.services.globals.server_is_ours(server_name))
@@ -141,33 +137,14 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 				.await
 				.then_some(server_name)
 		})
-		.fold(RankedCandidates::default(), async |(mut y, mut d, mut n), server_name| {
-			match self
-				.services
-				.federation
-				.should_attempt(&server_name)
-				.await
-			{
-				| ShouldAttempt::Yes => y.push(server_name),
-				| ShouldAttempt::Deprioritize => d.push(server_name),
-				| ShouldAttempt::No { .. } => n.push(server_name),
-			}
-			(y, d, n)
-		})
+		.collect()
 		.await;
 
-	let fallthrough = yes.is_empty() && depri.is_empty();
-	if fallthrough && !no.is_empty() {
-		debug_warn!(
-			n = no.len(),
-			"All backfill candidates are backed off via peer_status; attempting anyway",
-		);
-	}
-
-	let pool = yes
-		.into_iter()
-		.chain(depri)
-		.chain(fallthrough.then_some(no).into_iter().flatten());
+	let pool = self
+		.services
+		.federation
+		.rank_candidates(eligible, WhenAllBackedOff::Attempt)
+		.await;
 
 	for backfill_server in pool {
 		let request = BackfillRequest {

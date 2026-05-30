@@ -2,16 +2,19 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
 use futures::StreamExt;
-use ruma::{EventId, OwnedServerName, ServerName};
+use ruma::{EventId, ServerName};
 
 use super::Opts;
-use crate::services::OnceServices;
+use crate::{
+	federation::{Candidates, WhenAllBackedOff},
+	services::OnceServices,
+};
 
 /// Candidate enumeration seam. The production impl derives the server pool from
 /// room state; tests substitute a fixed list.
 #[async_trait]
 pub(super) trait Select: Send + Sync {
-	async fn candidates(&self, opts: &Opts) -> Vec<OwnedServerName>;
+	async fn candidates(&self, opts: &Opts) -> Candidates;
 }
 
 pub(super) struct RoomCandidates {
@@ -20,7 +23,7 @@ pub(super) struct RoomCandidates {
 
 #[async_trait]
 impl Select for RoomCandidates {
-	async fn candidates(&self, opts: &Opts) -> Vec<OwnedServerName> {
+	async fn candidates(&self, opts: &Opts) -> Candidates {
 		let route_via = self
 			.services
 			.state_cache
@@ -50,14 +53,20 @@ impl Select for RoomCandidates {
 		.map(ToOwned::to_owned);
 
 		let mut seen = BTreeSet::new();
-		opts.hint
+		let ordered: Candidates = opts
+			.hint
 			.clone()
 			.into_iter()
 			.chain(room_servers)
 			.chain(mxid_hosts)
 			.filter(|server| self.is_eligible(server))
 			.filter(|server| seen.insert(server.clone()))
-			.collect()
+			.collect();
+
+		self.services
+			.federation
+			.rank_candidates(ordered, WhenAllBackedOff::Attempt)
+			.await
 	}
 }
 
