@@ -11,8 +11,13 @@ pub enum Op {
 	/// `GET /_matrix/federation/v1/event/{eventId}`
 	Event,
 
+	/// `GET /_matrix/federation/v1/event/{eventId}` for an event fetched while
+	/// reconstructing an auth chain; routed like [`Op::Event`] but pins the
+	/// room's authority server ahead of the popularity ranking.
+	AuthEvent,
+
 	/// `GET /_matrix/federation/v1/event_auth/{roomId}/{eventId}`
-	EventAuth,
+	AuthChain,
 
 	/// `GET /_matrix/federation/v1/backfill/{roomId}`
 	Backfill,
@@ -25,7 +30,8 @@ pub enum Op {
 }
 
 /// Caller contract. `event_id` is the sought datum for [`Op::Event`] /
-/// [`Op::EventAuth`] / [`Op::StateIds`] and a reference point for the others.
+/// [`Op::AuthEvent`] / [`Op::AuthChain`] / [`Op::StateIds`] and a reference
+/// point for the others.
 #[derive(Clone, Debug)]
 pub struct Opts {
 	pub op: Op,

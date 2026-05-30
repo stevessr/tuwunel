@@ -169,7 +169,7 @@ async fn fetch_auth_chain(
 			.services
 			.fetcher
 			.fetch(
-				Opts::new(Op::Event, room_id.to_owned())
+				Opts::new(Op::AuthEvent, room_id.to_owned())
 					.event_id(next_id.clone())
 					.hint(origin.to_owned())
 					.room_version(room_version.to_owned())

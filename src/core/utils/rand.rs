@@ -12,6 +12,15 @@ pub fn shuffle<T>(vec: &mut [T]) {
 	vec.shuffle(&mut rng);
 }
 
+/// A uniform random index into `0..len`, or `0` when `len` is `0`.
+#[must_use]
+pub fn index(len: usize) -> usize {
+	match len {
+		| 0 => 0,
+		| len => rng().random_range(0..len),
+	}
+}
+
 pub fn string(length: usize) -> String {
 	rng()
 		.sample_iter(&rand::distr::Alphanumeric)

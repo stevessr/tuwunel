@@ -1,14 +1,23 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
-use futures::StreamExt;
-use ruma::{EventId, ServerName};
+use futures::{Stream, StreamExt, future::Either};
+use ruma::{EventId, OwnedServerName, ServerName};
+use tuwunel_core::{
+	arrayvec::ArrayVec,
+	implement,
+	utils::{BoolExt, IterStream, ReadyExt, StreamTools, rand::index},
+};
 
-use super::Opts;
+use super::{Op, Opts};
 use crate::{
 	federation::{Candidates, WhenAllBackedOff},
 	services::OnceServices,
 };
+
+/// Population-ranked servers kept per fetch; bounds the serial federation
+/// fan-out per missing event.
+const ROUTE_FANOUT: usize = 5;
 
 /// Candidate enumeration seam. The production impl derives the server pool from
 /// room state; tests substitute a fixed list.
@@ -24,23 +33,7 @@ pub(super) struct RoomCandidates {
 #[async_trait]
 impl Select for RoomCandidates {
 	async fn candidates(&self, opts: &Opts) -> Candidates {
-		let route_via = self
-			.services
-			.state_cache
-			.servers_route_via(&opts.room_id)
-			.await
-			.unwrap_or_default();
-
-		let room_servers = if route_via.is_empty() {
-			self.services
-				.state_cache
-				.room_servers(&opts.room_id)
-				.map(ToOwned::to_owned)
-				.collect::<Vec<_>>()
-				.await
-		} else {
-			route_via
-		};
+		let authority = self.authority_server(opts).await;
 
 		let mxid_hosts = [
 			opts.event_id
@@ -52,16 +45,20 @@ impl Select for RoomCandidates {
 		.flatten()
 		.map(ToOwned::to_owned);
 
-		let mut seen = BTreeSet::new();
-		let ordered: Candidates = opts
+		let mut ordered: Candidates = opts
 			.hint
 			.clone()
 			.into_iter()
-			.chain(room_servers)
-			.chain(mxid_hosts)
-			.filter(|server| self.is_eligible(server))
-			.filter(|server| seen.insert(server.clone()))
-			.collect();
+			.chain(authority)
+			.stream()
+			.chain(self.route_by_popularity(opts).await)
+			.chain(mxid_hosts.stream())
+			.ready_filter(|server| self.is_eligible(server))
+			.collect()
+			.await;
+
+		let mut seen = BTreeSet::new();
+		ordered.retain(|server| seen.insert(server.clone()));
 
 		self.services
 			.federation
@@ -70,13 +67,82 @@ impl Select for RoomCandidates {
 	}
 }
 
-impl RoomCandidates {
-	fn is_eligible(&self, server: &ServerName) -> bool {
-		!self.services.globals.server_is_ours(server)
-			&& !self
-				.services
-				.server
-				.config
-				.is_forbidden_remote_server_name(server)
+/// The room's most-powerful server, pinned ahead of the population ranking
+/// for auth-event and auth-chain fetches only.
+#[implement(RoomCandidates)]
+async fn authority_server(&self, opts: &Opts) -> Option<OwnedServerName> {
+	matches!(opts.op, Op::AuthEvent | Op::AuthChain)
+		.then_async(|| {
+			self.services
+				.state_cache
+				.most_powerful_user_server(&opts.room_id)
+		})
+		.await
+		.flatten()
+}
+
+/// Participating servers sampled in proportion to their resident member
+/// count: each draw lands on a random member, so its server appears with
+/// probability proportional to that server's population. Populous servers
+/// therefore lead more often, without ranking the whole membership. Falls
+/// back to the participating-server set when the room has no resident
+/// members.
+#[implement(RoomCandidates)]
+async fn route_by_popularity<'a>(
+	&'a self,
+	opts: &'a Opts,
+) -> impl Stream<Item = OwnedServerName> + Send + 'a {
+	let sampled: ArrayVec<OwnedServerName, ROUTE_FANOUT> = self
+		.services
+		.state_cache
+		.room_members(&opts.room_id)
+		.sample_by(|user| user.server_name().to_owned())
+		.await;
+
+	if sampled.is_empty() {
+		return Either::Right(
+			self.services
+				.state_cache
+				.room_servers(&opts.room_id)
+				.map(ToOwned::to_owned),
+		);
 	}
+
+	Either::Left(sampled.into_iter().stream())
+}
+
+/// Uniform-random window over the participating-server cursor: count, skip
+/// a uniform offset, then take a small run. Fully lazy, with no popularity
+/// aggregation.
+#[implement(RoomCandidates)]
+#[allow(dead_code)]
+async fn route_uniformly<'a>(
+	&'a self,
+	opts: &'a Opts,
+) -> impl Stream<Item = OwnedServerName> + Send + 'a {
+	let count = self
+		.services
+		.state_cache
+		.room_servers(&opts.room_id)
+		.count()
+		.await;
+
+	let offset = index(count);
+
+	self.services
+		.state_cache
+		.room_servers(&opts.room_id)
+		.map(ToOwned::to_owned)
+		.skip(offset)
+		.take(ROUTE_FANOUT)
+}
+
+#[implement(RoomCandidates)]
+fn is_eligible(&self, server: &ServerName) -> bool {
+	!self.services.globals.server_is_ours(server)
+		&& !self
+			.services
+			.server
+			.config
+			.is_forbidden_remote_server_name(server)
 }

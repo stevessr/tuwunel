@@ -14,6 +14,6 @@ pub(super) async fn event_fetcher_event_auth(
 	attempt_limit: Option<usize>,
 	verify: bool,
 ) -> Result {
-	let opts = base_opts(Op::EventAuth, room_id, event_id, server, attempt_limit, verify);
+	let opts = base_opts(Op::AuthChain, room_id, event_id, server, attempt_limit, verify);
 	run(self, opts).await
 }

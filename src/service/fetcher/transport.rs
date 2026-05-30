@@ -38,14 +38,14 @@ impl Transport for FederationTransport {
 		let event_id = require_event_id(opts)?;
 
 		match op {
-			| Op::Event => {
+			| Op::Event | Op::AuthEvent => {
 				let res = federation
 					.execute(server, EventRequest { event_id })
 					.await?;
 
 				Ok(Bytes::copy_from_slice(res.pdu.get().as_bytes()))
 			},
-			| Op::EventAuth => {
+			| Op::AuthChain => {
 				let res = federation
 					.execute(server, EventAuthRequest { room_id, event_id })
 					.await?;

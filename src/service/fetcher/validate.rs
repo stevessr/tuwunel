@@ -17,7 +17,7 @@ pub(super) async fn validate(&self, opts: &Opts, bytes: &[u8]) -> Result {
 	}
 
 	let deep = opts.check_event_id || opts.check_hashes || opts.check_signature;
-	if matches!(opts.op, Op::Event) && deep {
+	if matches!(opts.op, Op::Event | Op::AuthEvent) && deep {
 		self.verify_pdu(opts, bytes).await?;
 	}
 
