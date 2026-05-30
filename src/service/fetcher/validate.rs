@@ -29,12 +29,14 @@ async fn verify_pdu(&self, opts: &Opts, bytes: &[u8]) -> Result {
 	let value: CanonicalJsonObject = serde_json::from_slice(bytes)
 		.map_err(|e| err!(BadServerResponse("PDU is not a canonical JSON object: {e}")))?;
 
-	// Room version is pinned to V11 here, so a valid event from a non-V11 room
-	// (v12 redaction, v1/v2 explicit ids) is wrongly rejected and rolls onward.
+	// Omitted room version defaults to V11.
+	let v11 = RoomVersionId::V11;
+	let room_version = opts.room_version.as_ref().unwrap_or(&v11);
+
 	if opts.check_event_id
 		&& let Some(expected) = opts.event_id.as_ref()
 	{
-		let calculated = gen_event_id(&value, &RoomVersionId::V11)?;
+		let calculated = gen_event_id(&value, room_version)?;
 		if calculated != *expected {
 			return Err!(BadServerResponse("server returned the wrong event id"));
 		}
@@ -43,7 +45,7 @@ async fn verify_pdu(&self, opts: &Opts, bytes: &[u8]) -> Result {
 	if opts.check_signature || opts.check_hashes {
 		self.services
 			.server_keys
-			.verify_event(&value, None)
+			.verify_event(&value, Some(room_version))
 			.await?;
 	}
 

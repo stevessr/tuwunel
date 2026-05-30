@@ -14,6 +14,7 @@ mod upgrade_outlier_pdu;
 use std::{
 	collections::{HashMap, hash_map},
 	fmt::Write,
+	num::NonZeroUsize,
 	ops::Range,
 	sync::{Arc, RwLock},
 	time::{Duration, Instant},
@@ -41,6 +42,9 @@ struct Data {
 
 type RoomMutexMap = MutexMap<OwnedRoomId, ()>;
 type RateLimitState = (Instant, u32); // Time if last failed try, number of failed tries
+
+// Distinct candidate servers tried per fetch, not retries per server.
+const EVENT_FETCH_ATTEMPT_LIMIT: NonZeroUsize = NonZeroUsize::new(3).unwrap();
 
 #[async_trait]
 impl crate::Service for Service {

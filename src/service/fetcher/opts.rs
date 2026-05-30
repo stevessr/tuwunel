@@ -1,7 +1,7 @@
 use std::{fmt, num::NonZeroUsize};
 
 use bytes::Bytes;
-use ruma::{OwnedEventId, OwnedRoomId, OwnedServerName};
+use ruma::{OwnedEventId, OwnedRoomId, OwnedServerName, RoomVersionId};
 use tuwunel_core::err;
 
 /// Federation endpoint a fetch targets. The dedup key folds this in, so two
@@ -32,6 +32,7 @@ pub struct Opts {
 	pub room_id: OwnedRoomId,
 	pub event_id: Option<OwnedEventId>,
 	pub hint: Option<OwnedServerName>,
+	pub room_version: Option<RoomVersionId>,
 	pub attempt_limit: Option<NonZeroUsize>,
 	pub backfill_limit: Option<NonZeroUsize>,
 	pub check_event_id: bool,
@@ -51,6 +52,7 @@ impl Opts {
 			room_id,
 			event_id: None,
 			hint: None,
+			room_version: None,
 			attempt_limit: None,
 			backfill_limit: None,
 			check_event_id: true,
@@ -68,6 +70,22 @@ impl Opts {
 
 	#[must_use]
 	pub fn hint(self, hint: OwnedServerName) -> Self { Self { hint: Some(hint), ..self } }
+
+	/// Room version for [`Op::Event`] id and signature checks. `None` keeps the
+	/// V11 default, so callers on a non-V11 room must name it to avoid a
+	/// spurious rejection.
+	#[must_use]
+	pub fn room_version(self, room_version: RoomVersionId) -> Self {
+		Self { room_version: Some(room_version), ..self }
+	}
+
+	#[must_use]
+	pub fn attempt_limit(self, attempt_limit: NonZeroUsize) -> Self {
+		Self {
+			attempt_limit: Some(attempt_limit),
+			..self
+		}
+	}
 
 	/// Toggle every validation gate at once. Callers that re-validate
 	/// downstream pass `false` to fetch raw bytes without rejecting non-V11

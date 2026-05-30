@@ -7,7 +7,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use loole::unbounded;
 use ruma::{
-	OwnedEventId, OwnedRoomId, OwnedServerName, ServerName, event_id, room_id, server_name,
+	OwnedEventId, OwnedRoomId, OwnedServerName, RoomVersionId, ServerName, event_id, room_id,
+	server_name,
 };
 use tokio::{
 	sync::Notify,
@@ -428,4 +429,47 @@ async fn coalesces_same_key_deferred_under_backpressure() {
 
 	drop(gb1.await);
 	drop(gb2.await);
+}
+
+#[tokio::test]
+async fn room_version_threads_into_event_id_check() {
+	// A v1 event carries an explicit event_id that gen_event_id passes through,
+	// where the V11 reference-hash algorithm derives a different id. The threaded
+	// room version must accept the valid event; the prior V11 pin rejected it.
+	let svc = Service::test(Arc::new(MockTransport::new([])), Arc::new(MockSelect::new([])), 4);
+
+	let event = event_id!("$explicit:test.local").to_owned();
+	let bytes = br#"{
+		"auth_events": [],
+		"content": { "body": "hello" },
+		"depth": 1,
+		"event_id": "$explicit:test.local",
+		"origin": "test.local",
+		"origin_server_ts": 1000,
+		"prev_events": [],
+		"room_id": "!room:test.local",
+		"sender": "@alice:test.local",
+		"type": "m.room.message"
+	}"#;
+
+	let versioned = Opts {
+		check_hashes: false,
+		check_signature: false,
+		..Opts::new(Op::Event, room())
+			.event_id(event.clone())
+			.room_version(RoomVersionId::V1)
+	};
+
+	svc.validate(&versioned, bytes)
+		.await
+		.expect("v1 event accepted when its room version is named");
+
+	let pinned = Opts { room_version: None, ..versioned.clone() };
+
+	let error = svc
+		.validate(&pinned, bytes)
+		.await
+		.expect_err("rejected under the V11 default");
+
+	assert!(error.to_string().contains("wrong event id"), "unexpected error: {error}");
 }

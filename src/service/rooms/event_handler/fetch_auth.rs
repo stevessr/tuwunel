@@ -7,15 +7,17 @@ use std::{
 use futures::{FutureExt, StreamExt, TryFutureExt};
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, EventId, OwnedEventId, RoomId, RoomVersionId,
-	ServerName, api::federation::event::get_event,
+	ServerName,
 };
 use tuwunel_core::{
 	debug, debug_error, debug_warn, expected, implement,
-	matrix::{PduEvent, event::gen_event_id_canonical_json, pdu::MAX_AUTH_EVENTS},
+	matrix::{PduEvent, pdu::MAX_AUTH_EVENTS},
 	trace,
 	utils::stream::{BroadbandExt, IterStream, ReadyExt},
 	warn,
 };
+
+use crate::fetcher::{Op, Opts};
 
 /// Find the event and auth it. Once the event is validated (steps 1 - 8)
 /// it is appended to the outliers Tree.
@@ -121,7 +123,7 @@ where
 async fn fetch_auth_chain(
 	&self,
 	origin: &ServerName,
-	_room_id: &RoomId,
+	room_id: &RoomId,
 	event_id: &EventId,
 	room_version: &RoomVersionId,
 ) -> (OwnedEventId, Option<PduEvent>, Vec<(OwnedEventId, CanonicalJsonObject)>) {
@@ -163,14 +165,17 @@ async fn fetch_auth_chain(
 		}
 
 		debug!("Fetching {next_id} over federation.");
-		let Ok(res) = self
+		let Ok(outcome) = self
 			.services
-			.federation
-			.execute(origin, get_event::v1::Request { event_id: next_id.clone() })
+			.fetcher
+			.fetch(
+				Opts::new(Op::Event, room_id.to_owned())
+					.event_id(next_id.clone())
+					.hint(origin.to_owned())
+					.room_version(room_version.to_owned())
+					.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT),
+			)
 			.inspect_err(|e| debug_error!(?next_id, "Failed to fetch event: {e}"))
-			.inspect_ok(|_| {
-				self.cancel_back_off(&next_id);
-			})
 			.await
 		else {
 			debug_warn!("Backing off from {next_id}");
@@ -178,25 +183,12 @@ async fn fetch_auth_chain(
 			continue;
 		};
 
-		debug!("Got {next_id} over federation");
-		let Ok((calculated_event_id, value)) =
-			gen_event_id_canonical_json(&res.pdu, room_version)
-		else {
+		let Ok(value) = serde_json::from_slice::<CanonicalJsonObject>(&outcome.bytes) else {
 			self.back_off(&next_id);
 			continue;
 		};
 
-		if calculated_event_id != next_id {
-			warn!(
-				"Server returned wrong event id: requested {next_id}, got \
-				 {calculated_event_id}. Event: {:?}",
-				&res.pdu
-			);
-
-			self.back_off(&next_id);
-			continue;
-		}
-
+		debug!("Got {next_id} over federation");
 		self.cancel_back_off(&next_id);
 		value
 			.get("auth_events")
