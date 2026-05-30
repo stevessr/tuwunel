@@ -39,7 +39,7 @@ pub(crate) async fn get_supported_versions_route(
 			.zip(once(true).cycle())
 			.collect(),
 
-		server,
+		server: Some(server),
 	})
 }
 
