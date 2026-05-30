@@ -5747,6 +5747,7 @@ dependencies = [
  "dtor",
  "futures",
  "log",
+ "regex",
  "ruma",
  "serde",
  "serde_json",
