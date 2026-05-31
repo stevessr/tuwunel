@@ -5,16 +5,25 @@
 //! [`SharedResult`] is the broadcast outcome and [`Subscription`] the caller's
 //! handle, whose liveness token cancels the fetch on drop.
 
-use std::sync::{Arc, Weak};
+use std::{
+	collections::hash_map::DefaultHasher,
+	hash::{Hash, Hasher},
+	sync::{Arc, Weak},
+};
 
 use ruma::{OwnedEventId, OwnedRoomId};
 use tokio::sync::watch::{Receiver, Sender};
+use tuwunel_core::smallvec::SmallVec;
 
 use super::{Failure, Op, Opts, Outcome};
 
-/// Single-flight dedup key. `MissingEvents` does not coalesce on a single
-/// event_id (OQ6); a body hash will fold in when that op gains a multi-id
-/// request body in a later phase.
+/// Borrowed window ids gathered for sorting before hashing; inline-sized for
+/// the common single-prev case.
+type WindowRefs<'a> = SmallVec<[&'a OwnedEventId; 1]>;
+
+/// Single-flight dedup key. `MissingEvents` keys on a content hash of its
+/// request window instead of a single event_id, so two callers asking for the
+/// same window coalesce regardless of event order; see [`window_hash`].
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub(super) struct Key {
 	/// Endpoint class; two ops over the same event do not coalesce.
@@ -25,6 +34,10 @@ pub(super) struct Key {
 
 	/// Sought event, or `None` for ops that do not key on one.
 	pub(super) event_id: Option<OwnedEventId>,
+
+	/// Content hash of the [`Op::MissingEvents`] window; `None` for every other
+	/// op, so their coalescing is byte-identical to before.
+	pub(super) window_hash: Option<u64>,
 }
 
 /// Outcome shared by every caller coalesced onto one fetch. Cheap to clone so
@@ -56,6 +69,25 @@ impl Key {
 			op: opts.op,
 			room_id: opts.room_id.clone(),
 			event_id: opts.event_id.clone(),
+			window_hash: matches!(opts.op, Op::MissingEvents).then(|| window_hash(opts)),
 		}
 	}
+}
+
+/// Order-independent content hash of an [`Op::MissingEvents`] window: the
+/// sorted `latest_events` and `earliest_events` sets plus the batch limit.
+/// Sorting before hashing folds request-order permutations onto one key; the
+/// two sets hash as distinct sequences so swapping them does not collide.
+fn window_hash(opts: &Opts) -> u64 {
+	let mut latest: WindowRefs<'_> = opts.latest_events.iter().collect();
+	let mut earliest: WindowRefs<'_> = opts.earliest_events.iter().collect();
+	latest.sort_unstable();
+	earliest.sort_unstable();
+
+	let mut hasher = DefaultHasher::new();
+	latest.hash(&mut hasher);
+	earliest.hash(&mut hasher);
+	opts.backfill_limit.hash(&mut hasher);
+
+	hasher.finish()
 }

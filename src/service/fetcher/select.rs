@@ -46,6 +46,10 @@ impl Select for RoomCandidates {
 		),
 	)]
 	async fn candidates(&self, opts: &Opts) -> Candidates {
+		if !opts.candidates.is_empty() {
+			return self.ranked_override(opts).await;
+		}
+
 		let authority = self.authority_server(opts).await;
 
 		let mxid_hosts = [
@@ -58,7 +62,7 @@ impl Select for RoomCandidates {
 		.flatten()
 		.map(ToOwned::to_owned);
 
-		let mut ordered: Candidates = opts
+		let ordered: Candidates = opts
 			.hint
 			.clone()
 			.into_iter()
@@ -70,14 +74,38 @@ impl Select for RoomCandidates {
 			.collect()
 			.await;
 
-		let mut seen = BTreeSet::new();
-		ordered.retain(|server| seen.insert(server.clone()));
-
-		self.services
-			.federation
-			.rank_candidates(ordered, WhenAllBackedOff::Attempt)
-			.await
+		self.rank_unique(ordered).await
 	}
+}
+
+/// Rank a caller-supplied candidate pool in place of the room-derived one,
+/// filtering the ineligible (our own server, forbidden remotes). The hint, if
+/// any, still leads.
+#[implement(RoomCandidates)]
+#[tracing::instrument(level = "trace", skip_all)]
+async fn ranked_override(&self, opts: &Opts) -> Candidates {
+	let ordered: Candidates = opts
+		.hint
+		.iter()
+		.chain(opts.candidates.iter())
+		.filter(|&server| self.is_eligible(server))
+		.cloned()
+		.collect();
+
+	self.rank_unique(ordered).await
+}
+
+/// Dedup an assembled candidate list in place, then order it by peer-status
+/// reachability.
+#[implement(RoomCandidates)]
+async fn rank_unique(&self, mut ordered: Candidates) -> Candidates {
+	let mut seen = BTreeSet::new();
+	ordered.retain(|server| seen.insert(server.clone()));
+
+	self.services
+		.federation
+		.rank_candidates(ordered, WhenAllBackedOff::Attempt)
+		.await
 }
 
 /// The room's most-powerful server, pinned ahead of the population ranking

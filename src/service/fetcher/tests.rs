@@ -11,6 +11,7 @@ use ruma::{
 	OwnedEventId, OwnedRoomId, OwnedServerName, RoomVersionId, ServerName, event_id, room_id,
 	server_name,
 };
+use serde_json::value::RawValue as RawJsonValue;
 use tokio::{
 	sync::Notify,
 	task::{spawn, yield_now},
@@ -46,6 +47,11 @@ impl Service {
 	}
 }
 
+/// A two-element JSON array, the batch shape `Op::Backfill` /
+/// `Op::MissingEvents` return; the bytes a [`Behavior::Batch`] server answers
+/// with.
+const BATCH_BODY: &[u8] = br#"[{"x":1},{"y":2}]"#;
+
 enum Behavior {
 	/// Valid JSON object.
 	Good,
@@ -55,6 +61,9 @@ enum Behavior {
 
 	/// Transport-level failure.
 	Fail,
+
+	/// Valid JSON array of two events ([`BATCH_BODY`]).
+	Batch,
 
 	/// Block until released, then answer with garbage.
 	BlockGarbage,
@@ -66,6 +75,7 @@ enum Behavior {
 struct MockTransport {
 	behaviors: HashMap<OwnedServerName, Behavior>,
 	calls: Mutex<Vec<OwnedServerName>>,
+	seen_opts: Mutex<Vec<Opts>>,
 	dropped: Mutex<Vec<OwnedServerName>>,
 	releases: HashMap<OwnedServerName, Notify>,
 }
@@ -104,6 +114,7 @@ impl MockTransport {
 		Self {
 			behaviors,
 			calls: Mutex::new(Vec::new()),
+			seen_opts: Mutex::new(Vec::new()),
 			dropped: Mutex::new(Vec::new()),
 			releases,
 		}
@@ -113,6 +124,15 @@ impl MockTransport {
 		self.calls
 			.lock()
 			.expect("calls not poisoned")
+			.clone()
+	}
+
+	fn last_opts(&self) -> Opts {
+		self.seen_opts
+			.lock()
+			.expect("seen_opts not poisoned")
+			.last()
+			.expect("at least one fetch recorded")
 			.clone()
 	}
 
@@ -149,11 +169,16 @@ impl MockTransport {
 
 #[async_trait]
 impl Transport for MockTransport {
-	async fn fetch_raw(&self, _op: Op, server: &ServerName, _opts: &Opts) -> Result<Bytes> {
+	async fn fetch_raw(&self, _op: Op, server: &ServerName, opts: &Opts) -> Result<Bytes> {
 		self.calls
 			.lock()
 			.expect("calls not poisoned")
 			.push(server.to_owned());
+
+		self.seen_opts
+			.lock()
+			.expect("seen_opts not poisoned")
+			.push(opts.clone());
 
 		match self
 			.behaviors
@@ -163,6 +188,7 @@ impl Transport for MockTransport {
 			| Behavior::Good => Ok(Bytes::from_static(b"{\"ok\":true}")),
 			| Behavior::Garbage => Ok(Bytes::from_static(b"not json")),
 			| Behavior::Fail => Err(err!("mock transport failure")),
+			| Behavior::Batch => Ok(Bytes::from_static(BATCH_BODY)),
 			| Behavior::BlockGarbage => {
 				let mut guard = CancelGuard {
 					dropped: &self.dropped,
@@ -201,17 +227,34 @@ impl MockTransport {
 
 struct MockSelect {
 	by_event: HashMap<OwnedEventId, Vec<OwnedServerName>>,
+	fixed: Vec<OwnedServerName>,
 }
 
 impl MockSelect {
 	fn new(by_event: impl IntoIterator<Item = (OwnedEventId, Vec<OwnedServerName>)>) -> Self {
-		Self { by_event: by_event.into_iter().collect() }
+		Self {
+			by_event: by_event.into_iter().collect(),
+			fixed: Vec::new(),
+		}
+	}
+
+	/// Return one fixed pool for every fetch, regardless of `event_id`; the
+	/// room-scoped ops carry no event to key on.
+	fn fixed(servers: impl IntoIterator<Item = OwnedServerName>) -> Self {
+		Self {
+			by_event: HashMap::new(),
+			fixed: servers.into_iter().collect(),
+		}
 	}
 }
 
 #[async_trait]
 impl Select for MockSelect {
 	async fn candidates(&self, opts: &Opts) -> Candidates {
+		if !self.fixed.is_empty() {
+			return self.fixed.iter().cloned().collect();
+		}
+
 		opts.event_id
 			.as_ref()
 			.and_then(|event| self.by_event.get(event))
@@ -794,4 +837,105 @@ async fn attempt_limit_caps_total_contacts() {
 	assert!(error.to_string().contains("not found"), "unexpected error: {error}");
 	assert_eq!(mock.call_count(), 3, "attempt_limit caps total contacts across rounds");
 	assert_eq!(mock.calls(), pool[..3].to_vec(), "first three candidates, in order");
+}
+
+#[test]
+fn missing_events_key_folds_order_and_separates_window() {
+	let a = event_id!("$a:test.local").to_owned();
+	let b = event_id!("$b:test.local").to_owned();
+	let key = |opts: &Opts| Key::new(opts);
+
+	let forward = Opts::new(Op::MissingEvents, room()).latest_events([a.clone(), b.clone()]);
+	let reverse = Opts::new(Op::MissingEvents, room()).latest_events([b.clone(), a.clone()]);
+	assert_eq!(key(&forward), key(&reverse), "the window key folds request order");
+
+	let a_only = Opts::new(Op::MissingEvents, room()).latest_events([a.clone()]);
+	assert_ne!(key(&forward), key(&a_only), "a different window is a different key");
+
+	let latest_a = Opts::new(Op::MissingEvents, room())
+		.latest_events([a.clone()])
+		.earliest_events([b.clone()]);
+	let latest_b = Opts::new(Op::MissingEvents, room())
+		.latest_events([b])
+		.earliest_events([a]);
+	assert_ne!(key(&latest_a), key(&latest_b), "earliest and latest do not commute");
+}
+
+#[tokio::test]
+async fn missing_events_request_carries_window() {
+	let server = server_name!("s.test.local").to_owned();
+	let latest = [event_id!("$l1:test.local").to_owned(), event_id!("$l2:test.local").to_owned()];
+	let earliest = [event_id!("$e1:test.local").to_owned()];
+
+	let mock = Arc::new(MockTransport::new([(server.clone(), Behavior::Batch)]));
+	let select = Arc::new(MockSelect::fixed([server.clone()]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let opts = Opts::new(Op::MissingEvents, room())
+		.latest_events(latest.clone())
+		.earliest_events(earliest.clone())
+		.backfill_limit(nz(25));
+
+	svc.fetch(opts)
+		.await
+		.expect("windowed batch fetched");
+
+	let seen = mock.last_opts();
+	assert_eq!(seen.op, Op::MissingEvents);
+	assert_eq!(
+		seen.latest_events.as_slice(),
+		latest.as_slice(),
+		"latest window threaded intact"
+	);
+	assert_eq!(
+		seen.earliest_events.as_slice(),
+		earliest.as_slice(),
+		"earliest window threaded intact"
+	);
+	assert_eq!(seen.backfill_limit, Some(nz(25)), "limit threaded intact");
+}
+
+#[tokio::test]
+async fn missing_events_batch_round_trips() {
+	let server = server_name!("s.test.local").to_owned();
+	let mock = Arc::new(MockTransport::new([(server.clone(), Behavior::Batch)]));
+	let select = Arc::new(MockSelect::fixed([server.clone()]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let outcome = svc
+		.fetch(
+			Opts::new(Op::MissingEvents, room())
+				.latest_events([event_id!("$l:test.local").to_owned()]),
+		)
+		.await
+		.expect("batch fetched");
+
+	assert_eq!(&*outcome.bytes, BATCH_BODY, "the batch body round-trips verbatim");
+
+	let events: Vec<Box<RawJsonValue>> =
+		serde_json::from_slice(&outcome.bytes).expect("batch parses as a pdu array");
+	assert_eq!(events.len(), 2, "both events survive the round-trip");
+}
+
+#[tokio::test]
+async fn backfill_parses_pdu_batch() {
+	let server = server_name!("s.test.local").to_owned();
+	let mock = Arc::new(MockTransport::new([(server.clone(), Behavior::Batch)]));
+	let select = Arc::new(MockSelect::fixed([server.clone()]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let outcome = svc
+		.fetch(
+			Opts::new(Op::Backfill, room())
+				.event_id(event_id!("$first:test.local").to_owned())
+				.backfill_limit(nz(100)),
+		)
+		.await
+		.expect("backfill fetched");
+
+	let pdus: Vec<Box<RawJsonValue>> =
+		serde_json::from_slice(&outcome.bytes).expect("backfill parses as a pdu array");
+
+	assert_eq!(pdus.len(), 2, "both pdus survive the round-trip");
+	assert_eq!(outcome.origin, server, "the answering server is reported");
 }

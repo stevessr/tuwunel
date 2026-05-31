@@ -2,19 +2,27 @@ use std::{collections::HashMap, iter::once};
 
 use futures::{FutureExt, StreamExt, stream::FuturesOrdered};
 use ruma::{
-	CanonicalJsonObject, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId, RoomId,
-	RoomVersionId, ServerName, int, uint,
+	CanonicalJsonObject, CanonicalJsonValue, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId,
+	RoomId, RoomVersionId, ServerName, int, uint,
 };
+use serde_json::value::RawValue as RawJsonValue;
 use tuwunel_core::{
 	Result, debug_warn, err, implement,
 	matrix::{
 		Event, PduEvent,
+		event::gen_event_id,
 		pdu::{MAX_PREV_EVENTS, check_room_id},
 	},
-	utils::stream::IterStream,
+	utils::{
+		BoolExt,
+		stream::{IterStream, automatic_width},
+	},
 };
 
-use crate::rooms::state_res;
+use crate::{
+	fetcher::{EventWindow, Op, Opts},
+	rooms::state_res,
+};
 
 #[implement(super::Service)]
 #[tracing::instrument(
@@ -25,11 +33,12 @@ use crate::rooms::state_res;
 		events = %initial_set.clone().count(),
 	),
 )]
-#[expect(clippy::type_complexity)]
+#[expect(clippy::type_complexity, clippy::too_many_arguments)]
 pub(super) async fn fetch_prev<'a, Events>(
 	&self,
 	origin: &ServerName,
 	room_id: &RoomId,
+	incoming_event_id: &EventId,
 	initial_set: Events,
 	room_version: &RoomVersionId,
 	recursion_level: usize,
@@ -38,6 +47,24 @@ pub(super) async fn fetch_prev<'a, Events>(
 where
 	Events: Iterator<Item = &'a EventId> + Clone + Send,
 {
+	let has_gap = initial_set
+		.clone()
+		.stream()
+		.any(async |event_id| !self.services.timeline.pdu_exists(event_id).await)
+		.await;
+
+	has_gap
+		.then_async(|| {
+			self.prefetch_missing_events(
+				origin,
+				room_id,
+				incoming_event_id,
+				room_version,
+				recursion_level,
+			)
+		})
+		.await;
+
 	let mut todo_outlier_stack: FuturesOrdered<_> = initial_set
 		.stream()
 		.map(ToOwned::to_owned)
@@ -166,4 +193,99 @@ where
 	);
 
 	Ok((sorted, eventid_info))
+}
+
+/// Fill the prev gap below `incoming_event_id` with one `/get_missing_events`
+/// batch, landing each returned event as a local outlier so the per-event walk
+/// resolves it without a federation fetch. `latest_events` is the held event
+/// the server walks back from, bounded by our forward extremities so it returns
+/// only the gap; best effort, so a failed batch or rejected event just leaves
+/// that id for the walk.
+#[implement(super::Service)]
+#[tracing::instrument(name = "missing", level = "debug", skip_all)]
+async fn prefetch_missing_events(
+	&self,
+	origin: &ServerName,
+	room_id: &RoomId,
+	incoming_event_id: &EventId,
+	room_version: &RoomVersionId,
+	recursion_level: usize,
+) {
+	let boundary: EventWindow = self
+		.services
+		.state
+		.get_forward_extremities(room_id)
+		.map(ToOwned::to_owned)
+		.collect()
+		.await;
+
+	let Ok(outcome) = self
+		.services
+		.fetcher
+		.fetch(
+			Opts::new(Op::MissingEvents, room_id.to_owned())
+				.latest_events([incoming_event_id.to_owned()])
+				.earliest_events(boundary)
+				.hint(origin.to_owned())
+				.room_version(room_version.to_owned())
+				.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
+				.fanout_for_op(),
+		)
+		.await
+	else {
+		return;
+	};
+
+	let Ok(events) = serde_json::from_slice::<Vec<Box<RawJsonValue>>>(&outcome.bytes) else {
+		return;
+	};
+
+	events
+		.into_iter()
+		.stream()
+		.for_each_concurrent(automatic_width(), async |pdu| {
+			self.land_missing_event(origin, room_id, &pdu, room_version, recursion_level)
+				.await
+				.ok();
+		})
+		.await;
+}
+
+/// Authenticate and persist one event from the missing-events batch as an
+/// outlier, deriving its id from content rather than trusting a requested id.
+#[implement(super::Service)]
+#[tracing::instrument(name = "land", level = "trace", skip_all)]
+async fn land_missing_event(
+	&self,
+	origin: &ServerName,
+	room_id: &RoomId,
+	pdu: &RawJsonValue,
+	room_version: &RoomVersionId,
+	recursion_level: usize,
+) -> Result {
+	let value: CanonicalJsonObject = serde_json::from_str(pdu.get())
+		.map_err(|e| err!(BadServerResponse("missing-events pdu is not canonical json: {e}")))?;
+
+	value
+		.get("room_id")
+		.and_then(CanonicalJsonValue::as_str)
+		.is_some_and(|id| id == room_id.as_str())
+		.then_some(())
+		.ok_or_else(|| {
+			err!(Request(InvalidParam("missing-events pdu is for a different room")))
+		})?;
+
+	let event_id = gen_event_id(&value, room_version)?;
+
+	Box::pin(self.handle_outlier_pdu(
+		origin,
+		room_id,
+		&event_id,
+		value,
+		room_version,
+		recursion_level,
+		false,
+	))
+	.await
+	.map(|_| ())
 }

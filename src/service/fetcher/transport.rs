@@ -48,10 +48,10 @@ impl Transport for FederationTransport {
 	async fn fetch_raw(&self, op: Op, server: &ServerName, opts: &Opts) -> Result<Bytes> {
 		let federation = &self.services.federation;
 		let room_id = opts.room_id.clone();
-		let event_id = require_event_id(opts)?;
 
 		match op {
 			| Op::Event | Op::AuthEvent => {
+				let event_id = require_event_id(opts)?;
 				let res = federation
 					.execute(server, EventRequest { event_id })
 					.await?;
@@ -59,6 +59,7 @@ impl Transport for FederationTransport {
 				Ok(Bytes::copy_from_slice(res.pdu.get().as_bytes()))
 			},
 			| Op::AuthChain => {
+				let event_id = require_event_id(opts)?;
 				let res = federation
 					.execute(server, EventAuthRequest { room_id, event_id })
 					.await?;
@@ -66,18 +67,19 @@ impl Transport for FederationTransport {
 				to_bytes(&res.auth_chain)
 			},
 			| Op::Backfill => {
-				let limit = opts.backfill_limit.map_or_else(
-					|| UInt::from(10_u8),
-					|n| UInt::new_saturating(u64::try_from(n.get()).unwrap_or(u64::MAX)),
-				);
-
+				let event_id = require_event_id(opts)?;
 				let res = federation
-					.execute(server, BackfillRequest { room_id, v: vec![event_id], limit })
+					.execute(server, BackfillRequest {
+						room_id,
+						v: vec![event_id],
+						limit: batch_limit(opts),
+					})
 					.await?;
 
 				to_bytes(&res.pdus)
 			},
 			| Op::StateIds => {
+				let event_id = require_event_id(opts)?;
 				let res = federation
 					.execute(server, StateIdsRequest { room_id, event_id })
 					.await?;
@@ -88,11 +90,12 @@ impl Transport for FederationTransport {
 				}))
 			},
 			| Op::MissingEvents => {
+				require_latest_events(opts)?;
 				let req = MissingEventsRequest {
 					room_id,
-					earliest_events: Vec::new(),
-					latest_events: vec![event_id],
-					limit: UInt::from(10_u8),
+					earliest_events: opts.earliest_events.to_vec(),
+					latest_events: opts.latest_events.to_vec(),
+					limit: batch_limit(opts),
 					min_depth: UInt::default(),
 				};
 
@@ -108,6 +111,23 @@ fn require_event_id(opts: &Opts) -> Result<OwnedEventId> {
 	opts.event_id
 		.clone()
 		.ok_or_else(|| err!(Request(InvalidParam("event_id is required for op {:?}", opts.op))))
+}
+
+fn require_latest_events(opts: &Opts) -> Result {
+	(!opts.latest_events.is_empty())
+		.then_some(())
+		.ok_or_else(|| {
+			err!(Request(InvalidParam("latest_events is required for op {:?}", opts.op)))
+		})
+}
+
+/// Event count requested per batch op, defaulting to the federation default of
+/// 10 and saturating an oversized cap to the wire `UInt`.
+fn batch_limit(opts: &Opts) -> UInt {
+	opts.backfill_limit.map_or_else(
+		|| UInt::from(10_u8),
+		|n| UInt::new_saturating(u64::try_from(n.get()).unwrap_or(u64::MAX)),
+	)
 }
 
 fn to_bytes<T: serde::Serialize>(value: &T) -> Result<Bytes> {

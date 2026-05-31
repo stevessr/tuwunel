@@ -7,6 +7,13 @@ use std::num::NonZeroUsize;
 
 use bytes::Bytes;
 use ruma::{OwnedEventId, OwnedRoomId, OwnedServerName, RoomVersionId};
+use tuwunel_core::smallvec::SmallVec;
+
+use crate::federation::Candidates;
+
+/// Event-id window for the batch ops, inline-sized for the common single-prev
+/// case and spilling to the heap past that.
+pub type EventWindow = SmallVec<[OwnedEventId; 1]>;
 
 /// Federation endpoint a fetch targets. The dedup key folds this in, so two
 /// callers asking for the same event over different endpoints do not coalesce.
@@ -91,8 +98,20 @@ pub struct Opts {
 	/// Event to fetch (id-addressed ops) or anchor from (room-scoped ops).
 	pub event_id: Option<OwnedEventId>,
 
+	/// Boundary events the requester already holds; an [`Op::MissingEvents`]
+	/// window stops its backward walk here. Empty for every other op.
+	pub earliest_events: EventWindow,
+
+	/// Frontier events an [`Op::MissingEvents`] window fills the predecessors
+	/// of. Empty for every other op.
+	pub latest_events: EventWindow,
+
 	/// Server to try ahead of the ranked candidates.
 	pub hint: Option<OwnedServerName>,
+
+	/// Caller-supplied candidate pool tried in place of the room-derived
+	/// ranking; empty defers to the room-derived candidates.
+	pub candidates: Candidates,
 
 	/// Room version governing id and signature checks; `None` assumes V11.
 	pub room_version: Option<RoomVersionId>,
@@ -100,7 +119,8 @@ pub struct Opts {
 	/// Cap on candidate servers tried; `None` tries every candidate.
 	pub attempt_limit: Option<NonZeroUsize>,
 
-	/// Event count requested per [`Op::Backfill`] response; defaults to 10.
+	/// Event count requested per [`Op::Backfill`] / [`Op::MissingEvents`] batch
+	/// response; defaults to 10.
 	pub backfill_limit: Option<NonZeroUsize>,
 
 	/// Per-round width curve for staged fan-out. `Fixed(1)` is sequential.
@@ -139,7 +159,10 @@ impl Opts {
 			op,
 			room_id,
 			event_id: None,
+			earliest_events: EventWindow::new(),
+			latest_events: EventWindow::new(),
 			hint: None,
+			candidates: Candidates::new(),
 			room_version: None,
 			attempt_limit: None,
 			backfill_limit: None,
@@ -160,9 +183,45 @@ impl Opts {
 		Self { event_id: Some(event_id), ..self }
 	}
 
+	/// Set the boundary the [`Op::MissingEvents`] backward walk stops at.
+	#[must_use]
+	pub fn earliest_events<I>(self, earliest_events: I) -> Self
+	where
+		I: IntoIterator<Item = OwnedEventId>,
+	{
+		Self {
+			earliest_events: earliest_events.into_iter().collect(),
+			..self
+		}
+	}
+
+	/// Set the frontier an [`Op::MissingEvents`] window fills behind.
+	#[must_use]
+	pub fn latest_events<I>(self, latest_events: I) -> Self
+	where
+		I: IntoIterator<Item = OwnedEventId>,
+	{
+		Self {
+			latest_events: latest_events.into_iter().collect(),
+			..self
+		}
+	}
+
 	/// Try the named server ahead of the ranked candidates.
 	#[must_use]
 	pub fn hint(self, hint: OwnedServerName) -> Self { Self { hint: Some(hint), ..self } }
+
+	/// Supply the candidate pool verbatim, bypassing the room-derived ranking.
+	#[must_use]
+	pub fn candidates<I>(self, candidates: I) -> Self
+	where
+		I: IntoIterator<Item = OwnedServerName>,
+	{
+		Self {
+			candidates: candidates.into_iter().collect(),
+			..self
+		}
+	}
 
 	/// Room version for [`Op::Event`] id and signature checks. `None` keeps the
 	/// V11 default, so callers on a non-V11 room must name it to avoid a
@@ -177,6 +236,16 @@ impl Opts {
 	pub fn attempt_limit(self, attempt_limit: NonZeroUsize) -> Self {
 		Self {
 			attempt_limit: Some(attempt_limit),
+			..self
+		}
+	}
+
+	/// Set the events requested per [`Op::Backfill`] / [`Op::MissingEvents`]
+	/// batch.
+	#[must_use]
+	pub fn backfill_limit(self, backfill_limit: NonZeroUsize) -> Self {
+		Self {
+			backfill_limit: Some(backfill_limit),
 			..self
 		}
 	}

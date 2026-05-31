@@ -14,6 +14,9 @@ pub(super) async fn event_fetcher_missing_events(
 	attempt_limit: Option<usize>,
 	verify: bool,
 ) -> Result {
-	let opts = base_opts(Op::MissingEvents, room_id, event_id, server, attempt_limit, verify);
+	let opts =
+		base_opts(Op::MissingEvents, room_id, event_id.clone(), server, attempt_limit, verify)
+			.latest_events([event_id]);
+
 	run(self, opts).await
 }

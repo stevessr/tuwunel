@@ -162,6 +162,7 @@ pub async fn handle_incoming_pdu<'a>(
 		.fetch_prev(
 			origin,
 			room_id,
+			event_id,
 			incoming_pdu.prev_events(),
 			&room_version,
 			recursion_level,
