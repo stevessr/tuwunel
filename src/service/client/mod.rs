@@ -170,7 +170,7 @@ fn base(config: &Config, name: Option<&str>) -> Result<ClientBuilder> {
 		.map(|name| format!("{user_agent} {name}").try_into())
 		.unwrap_or_else(|| user_agent.try_into())?;
 
-	let mut builder = Client::builder()
+	let builder = Client::builder()
 		.connect_timeout(Duration::from_secs(config.request_conn_timeout))
 		.read_timeout(Duration::from_secs(config.request_timeout))
 		.timeout(Duration::from_secs(config.request_total_timeout))
@@ -187,48 +187,6 @@ fn base(config: &Config, name: Option<&str>) -> Result<ClientBuilder> {
 				}),
 		)
 		.connection_verbose(cfg!(debug_assertions));
-
-	#[cfg(feature = "gzip_compression")]
-	{
-		builder = if config.gzip_compression {
-			builder.gzip(true)
-		} else {
-			builder.gzip(false).no_gzip()
-		};
-	};
-
-	#[cfg(feature = "brotli_compression")]
-	{
-		builder = if config.brotli_compression {
-			builder.brotli(true)
-		} else {
-			builder.brotli(false).no_brotli()
-		};
-	};
-
-	#[cfg(feature = "zstd_compression")]
-	{
-		builder = if config.zstd_compression {
-			builder.zstd(true)
-		} else {
-			builder.zstd(false).no_zstd()
-		};
-	};
-
-	#[cfg(not(feature = "gzip_compression"))]
-	{
-		builder = builder.no_gzip();
-	};
-
-	#[cfg(not(feature = "brotli_compression"))]
-	{
-		builder = builder.no_brotli();
-	};
-
-	#[cfg(not(feature = "zstd_compression"))]
-	{
-		builder = builder.no_zstd();
-	};
 
 	match config.proxy.to_proxy()? {
 		| Some(proxy) => Ok(builder.proxy(proxy)),
