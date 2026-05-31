@@ -5,8 +5,9 @@
 //! per-fetch work splits across the submodules: candidate selection, the
 //! federation transport, and response validation.
 
+mod error;
+mod inflight;
 mod opts;
-mod request;
 mod select;
 mod transport;
 mod validate;
@@ -27,8 +28,8 @@ use tuwunel_core::{Result, implement};
 
 pub use self::opts::{FanoutGrowth, Op, Opts, Outcome};
 use self::{
-	opts::{Failure, Key},
-	request::{SharedResult, Subscription},
+	error::Failure,
+	inflight::{Key, SharedResult, Subscription},
 	select::{RoomCandidates, Select},
 	transport::{FederationTransport, Transport},
 };

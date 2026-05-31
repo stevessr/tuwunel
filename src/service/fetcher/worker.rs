@@ -18,8 +18,7 @@ use tuwunel_core::{debug_warn, implement, trace};
 
 use super::{
 	Failure, Msg, Opts, Outcome, Service,
-	opts::Key,
-	request::{Inflight, SharedResult},
+	inflight::{Inflight, Key, SharedResult},
 };
 
 /// One in-flight fetch, borrowing the worker for the service's lifetime and

@@ -1,13 +1,12 @@
 //! Caller contract and result types for a fetch: [`Opts`] in, [`Outcome`] out.
 //!
 //! [`Op`] selects the federation endpoint and folds into the single-flight
-//! [`Key`]; [`Failure`] is the internal error converted at the public edge.
+//! dedup key; [`FanoutGrowth`] schedules the staged fan-out width.
 
-use std::{fmt, num::NonZeroUsize};
+use std::num::NonZeroUsize;
 
 use bytes::Bytes;
 use ruma::{OwnedEventId, OwnedRoomId, OwnedServerName, RoomVersionId};
-use tuwunel_core::err;
 
 /// Federation endpoint a fetch targets. The dedup key folds this in, so two
 /// callers asking for the same event over different endpoints do not coalesce.
@@ -83,12 +82,25 @@ impl FanoutGrowth {
 /// point for the others.
 #[derive(Clone, Debug)]
 pub struct Opts {
+	/// Federation endpoint this fetch targets.
 	pub op: Op,
+
+	/// Room the fetch is scoped to.
 	pub room_id: OwnedRoomId,
+
+	/// Event to fetch (id-addressed ops) or anchor from (room-scoped ops).
 	pub event_id: Option<OwnedEventId>,
+
+	/// Server to try ahead of the ranked candidates.
 	pub hint: Option<OwnedServerName>,
+
+	/// Room version governing id and signature checks; `None` assumes V11.
 	pub room_version: Option<RoomVersionId>,
+
+	/// Cap on candidate servers tried; `None` tries every candidate.
 	pub attempt_limit: Option<NonZeroUsize>,
+
+	/// Event count requested per [`Op::Backfill`] response; defaults to 10.
 	pub backfill_limit: Option<NonZeroUsize>,
 
 	/// Per-round width curve for staged fan-out. `Fixed(1)` is sequential.
@@ -102,11 +114,20 @@ pub struct Opts {
 	/// Cap on escalation rounds before giving up. `None` runs until exhaustion.
 	pub fanout_rounds: Option<NonZeroUsize>,
 
+	/// Reject a response whose event does not hash to the requested id.
 	pub check_event_id: bool,
+
+	/// Reject a response that is not well-formed JSON.
 	pub check_conforms: bool,
+
+	/// Reject a response that fails content-hash verification.
 	pub check_hashes: bool,
-	// Accepted but not yet consulted; redaction-aware hash verification is unimplemented.
+
+	/// Accepted but not yet consulted; redaction-aware hash verification is
+	/// unimplemented.
 	pub authoritative_redaction: bool,
+
+	/// Reject a response that fails signature verification.
 	pub check_signature: bool,
 }
 
@@ -133,11 +154,13 @@ impl Opts {
 		}
 	}
 
+	/// Set the target event; required for the id-addressed ops.
 	#[must_use]
 	pub fn event_id(self, event_id: OwnedEventId) -> Self {
 		Self { event_id: Some(event_id), ..self }
 	}
 
+	/// Try the named server ahead of the ranked candidates.
 	#[must_use]
 	pub fn hint(self, hint: OwnedServerName) -> Self { Self { hint: Some(hint), ..self } }
 
@@ -149,6 +172,7 @@ impl Opts {
 		Self { room_version: Some(room_version), ..self }
 	}
 
+	/// Cap the number of candidate servers tried.
 	#[must_use]
 	pub fn attempt_limit(self, attempt_limit: NonZeroUsize) -> Self {
 		Self {
@@ -157,9 +181,11 @@ impl Opts {
 		}
 	}
 
+	/// Set the per-round fan-out width schedule.
 	#[must_use]
 	pub fn fanout(self, growth: FanoutGrowth) -> Self { Self { fanout_growth: growth, ..self } }
 
+	/// Cap the per-round fan-out concurrency.
 	#[must_use]
 	pub fn fanout_max_width(self, max_width: NonZeroUsize) -> Self {
 		Self {
@@ -168,6 +194,7 @@ impl Opts {
 		}
 	}
 
+	/// Cap the number of escalation rounds.
 	#[must_use]
 	pub fn fanout_rounds(self, rounds: NonZeroUsize) -> Self {
 		Self { fanout_rounds: Some(rounds), ..self }
@@ -227,58 +254,4 @@ impl Opts {
 pub struct Outcome {
 	pub bytes: Bytes,
 	pub origin: OwnedServerName,
-}
-
-/// Internal failure shape. Kept `Clone` so it can ride the shared-result
-/// channel to every coalesced caller; converted to [`tuwunel_core::Error`] at
-/// the public boundary. Carries the servers tried for the operator-facing
-/// message.
-#[derive(Clone, Debug)]
-pub(super) enum Failure {
-	/// Every candidate was tried and none returned a valid response.
-	NotFound {
-		attempted: Vec<OwnedServerName>,
-	},
-
-	/// No candidate servers were available to try.
-	NoCandidates,
-
-	/// All callers dropped the future before a server answered.
-	Cancelled,
-}
-
-impl fmt::Display for Failure {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			| Self::NotFound { attempted } => {
-				write!(f, "event not found on any of {} servers", attempted.len())
-			},
-			| Self::NoCandidates => write!(f, "no candidate servers available"),
-			| Self::Cancelled => write!(f, "fetch cancelled"),
-		}
-	}
-}
-
-impl From<Failure> for tuwunel_core::Error {
-	fn from(failure: Failure) -> Self { err!(Request(NotFound("{failure}"))) }
-}
-
-/// Single-flight dedup key. `MissingEvents` does not coalesce on a single
-/// event_id (OQ6); a body hash will fold in when that op gains a multi-id
-/// request body in a later phase.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(super) struct Key {
-	pub(super) op: Op,
-	pub(super) room_id: OwnedRoomId,
-	pub(super) event_id: Option<OwnedEventId>,
-}
-
-impl Key {
-	pub(super) fn new(opts: &Opts) -> Self {
-		Self {
-			op: opts.op,
-			room_id: opts.room_id.clone(),
-			event_id: opts.event_id.clone(),
-		}
-	}
 }

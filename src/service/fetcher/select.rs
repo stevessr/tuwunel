@@ -83,6 +83,7 @@ impl Select for RoomCandidates {
 /// The room's most-powerful server, pinned ahead of the population ranking
 /// for auth-event and auth-chain fetches only.
 #[implement(RoomCandidates)]
+#[tracing::instrument(level = "trace", skip_all)]
 async fn authority_server(&self, opts: &Opts) -> Option<OwnedServerName> {
 	matches!(opts.op, Op::AuthEvent | Op::AuthChain)
 		.then_async(|| {
@@ -101,6 +102,7 @@ async fn authority_server(&self, opts: &Opts) -> Option<OwnedServerName> {
 /// back to the participating-server set when the room has no resident
 /// members.
 #[implement(RoomCandidates)]
+#[tracing::instrument(level = "trace", skip_all)]
 async fn route_by_popularity<'a>(
 	&'a self,
 	opts: &'a Opts,
