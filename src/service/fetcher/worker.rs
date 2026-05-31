@@ -1,3 +1,9 @@
+//! The fetch worker loop: one task owning every in-flight fetch, lock-free.
+//!
+//! [`Service::run_worker`] coalesces incoming requests, dispatches attempts up
+//! to the capacity bound, defers the rest, and broadcasts each outcome to its
+//! subscribers.
+
 use std::{
 	collections::{HashMap, VecDeque},
 	sync::{Arc, Weak},
@@ -172,6 +178,15 @@ fn on_complete<'a>(
 }
 
 #[implement(Service)]
+#[tracing::instrument(
+	level = "debug",
+	skip_all,
+	fields(
+		op = ?opts.op,
+		room_id = %opts.room_id,
+		event_id = ?opts.event_id,
+	),
+)]
 async fn run_attempts(&self, opts: &Opts, interest: &Weak<()>) -> SharedResult {
 	let candidates = self.select.candidates(opts).await;
 	if candidates.is_empty() {

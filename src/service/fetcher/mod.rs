@@ -1,3 +1,10 @@
+//! Coalesced, failover federation fetch of raw event bytes.
+//!
+//! [`Service::fetch`] is the entry point; behind it a single worker task owns
+//! every in-flight fetch and the dedup map, so no lock guards them. The
+//! per-fetch work splits across the submodules: candidate selection, the
+//! federation transport, and response validation.
+
 mod opts;
 mod request;
 mod select;
@@ -84,6 +91,15 @@ impl crate::Service for Service {
 /// failover, and poison detection happen internally; the future resolves only
 /// once a clean response arrives or every candidate is exhausted.
 #[implement(Service)]
+#[tracing::instrument(
+	level = "debug",
+	skip_all,
+	fields(
+		op = ?opts.op,
+		room_id = %opts.room_id,
+		event_id = ?opts.event_id,
+	),
+)]
 pub async fn fetch(&self, opts: Opts) -> Result<Arc<Outcome>> {
 	let key = Key::new(&opts);
 	let (reply, reply_rx) = channel();

@@ -1,3 +1,9 @@
+//! Single-flight bookkeeping for one in-flight fetch.
+//!
+//! [`Inflight`] is the worker-owned entry every coalesced caller subscribes to;
+//! [`SharedResult`] is the broadcast outcome and [`Subscription`] the caller's
+//! handle, whose liveness token cancels the fetch on drop.
+
 use std::sync::{Arc, Weak};
 
 use tokio::sync::watch::{Receiver, Sender};

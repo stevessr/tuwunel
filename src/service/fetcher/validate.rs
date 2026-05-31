@@ -1,3 +1,7 @@
+//! Two-tier response validation: a cheap conformance check, then an opt-in deep
+//! PDU pass (event id, content hashes, signatures) that runs only for event ops
+//! with those checks enabled. The per-check toggles live on [`Opts`].
+
 use ruma::{CanonicalJsonObject, RoomVersionId};
 use serde::de::IgnoredAny;
 use tuwunel_core::{Err, Result, err, implement, matrix::event::gen_event_id};
@@ -25,6 +29,7 @@ pub(super) async fn validate(&self, opts: &Opts, bytes: &[u8]) -> Result {
 }
 
 #[implement(super::Service)]
+#[tracing::instrument(level = "trace", skip_all)]
 async fn verify_pdu(&self, opts: &Opts, bytes: &[u8]) -> Result {
 	let value: CanonicalJsonObject = serde_json::from_slice(bytes)
 		.map_err(|e| err!(BadServerResponse("PDU is not a canonical JSON object: {e}")))?;

@@ -1,3 +1,9 @@
+//! Federation transport: an [`Op`] and target server in, raw response bytes
+//! out.
+//!
+//! The [`Transport`] seam isolates the network behind a trait the tests mock;
+//! [`FederationTransport`] is the production impl.
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -32,6 +38,13 @@ pub(super) struct FederationTransport {
 
 #[async_trait]
 impl Transport for FederationTransport {
+	#[tracing::instrument(
+		level = "debug",
+		skip(self, opts),
+		fields(
+			%server,
+		),
+	)]
 	async fn fetch_raw(&self, op: Op, server: &ServerName, opts: &Opts) -> Result<Bytes> {
 		let federation = &self.services.federation;
 		let room_id = opts.room_id.clone();

@@ -1,3 +1,9 @@
+//! Candidate server selection for a fetch.
+//!
+//! The [`Select`] seam enumerates the server pool; [`RoomCandidates`] derives
+//! it from room state and orders it by population, pinning the room's authority
+//! server ahead of the ranking for auth fetches.
+
 use std::{collections::BTreeSet, sync::Arc};
 
 use async_trait::async_trait;
@@ -32,6 +38,13 @@ pub(super) struct RoomCandidates {
 
 #[async_trait]
 impl Select for RoomCandidates {
+	#[tracing::instrument(
+		level = "trace",
+		skip_all,
+		fields(
+			room_id = %opts.room_id,
+		),
+	)]
 	async fn candidates(&self, opts: &Opts) -> Candidates {
 		let authority = self.authority_server(opts).await;
 

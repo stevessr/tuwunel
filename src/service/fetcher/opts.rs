@@ -1,3 +1,8 @@
+//! Caller contract and result types for a fetch: [`Opts`] in, [`Outcome`] out.
+//!
+//! [`Op`] selects the federation endpoint and folds into the single-flight
+//! [`Key`]; [`Failure`] is the internal error converted at the public edge.
+
 use std::{fmt, num::NonZeroUsize};
 
 use bytes::Bytes;
