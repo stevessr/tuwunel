@@ -1,5 +1,6 @@
 use std::{
 	collections::HashMap,
+	num::NonZeroUsize,
 	sync::{Arc, Mutex},
 };
 
@@ -65,7 +66,28 @@ enum Behavior {
 struct MockTransport {
 	behaviors: HashMap<OwnedServerName, Behavior>,
 	calls: Mutex<Vec<OwnedServerName>>,
+	dropped: Mutex<Vec<OwnedServerName>>,
 	releases: HashMap<OwnedServerName, Notify>,
+}
+
+/// Records a server whose in-flight fetch was cancelled (future dropped before
+/// it was released), so a fan-out test can prove the loser of a race was
+/// aborted.
+struct CancelGuard<'a> {
+	dropped: &'a Mutex<Vec<OwnedServerName>>,
+	server: OwnedServerName,
+	armed: bool,
+}
+
+impl Drop for CancelGuard<'_> {
+	fn drop(&mut self) {
+		if self.armed {
+			self.dropped
+				.lock()
+				.expect("dropped not poisoned")
+				.push(self.server.clone());
+		}
+	}
 }
 
 impl MockTransport {
@@ -82,6 +104,7 @@ impl MockTransport {
 		Self {
 			behaviors,
 			calls: Mutex::new(Vec::new()),
+			dropped: Mutex::new(Vec::new()),
 			releases,
 		}
 	}
@@ -90,6 +113,13 @@ impl MockTransport {
 		self.calls
 			.lock()
 			.expect("calls not poisoned")
+			.clone()
+	}
+
+	fn dropped(&self) -> Vec<OwnedServerName> {
+		self.dropped
+			.lock()
+			.expect("dropped not poisoned")
 			.clone()
 	}
 
@@ -134,11 +164,25 @@ impl Transport for MockTransport {
 			| Behavior::Garbage => Ok(Bytes::from_static(b"not json")),
 			| Behavior::Fail => Err(err!("mock transport failure")),
 			| Behavior::BlockGarbage => {
+				let mut guard = CancelGuard {
+					dropped: &self.dropped,
+					server: server.to_owned(),
+					armed: true,
+				};
+
 				self.blocked(server).await;
+				guard.armed = false;
 				Ok(Bytes::from_static(b"not json"))
 			},
 			| Behavior::BlockGood => {
+				let mut guard = CancelGuard {
+					dropped: &self.dropped,
+					server: server.to_owned(),
+					armed: true,
+				};
+
 				self.blocked(server).await;
+				guard.armed = false;
 				Ok(Bytes::from_static(b"{\"ok\":true}"))
 			},
 		}
@@ -177,6 +221,26 @@ impl Select for MockSelect {
 }
 
 fn room() -> OwnedRoomId { room_id!("!room:test.local").to_owned() }
+
+fn nz(n: usize) -> NonZeroUsize { NonZeroUsize::new(n).expect("nonzero") }
+
+/// Eight distinct candidate servers, returned in a stable order so a fan-out
+/// test can predict which servers each round pulls.
+fn pool8() -> Vec<OwnedServerName> {
+	Vec::from(
+		[
+			server_name!("s0.test.local"),
+			server_name!("s1.test.local"),
+			server_name!("s2.test.local"),
+			server_name!("s3.test.local"),
+			server_name!("s4.test.local"),
+			server_name!("s5.test.local"),
+			server_name!("s6.test.local"),
+			server_name!("s7.test.local"),
+		]
+		.map(ToOwned::to_owned),
+	)
+}
 
 fn test_opts(event: &OwnedEventId) -> Opts {
 	Opts {
@@ -472,4 +536,262 @@ async fn room_version_threads_into_event_id_check() {
 		.expect_err("rejected under the V11 default");
 
 	assert!(error.to_string().contains("wrong event id"), "unexpected error: {error}");
+}
+
+#[test]
+fn round_width_schedules() {
+	let fixed = FanoutGrowth::Fixed(nz(1));
+	assert_eq!(fixed.round_width(0), 1);
+	assert_eq!(fixed.round_width(7), 1);
+
+	let linear = FanoutGrowth::Linear { base: nz(1), step: nz(1) };
+	assert_eq!(linear.round_width(0), 1);
+	assert_eq!(linear.round_width(1), 2);
+	assert_eq!(linear.round_width(2), 3);
+
+	let geometric = FanoutGrowth::Geometric { base: nz(1), factor: nz(2) };
+	assert_eq!(geometric.round_width(0), 1);
+	assert_eq!(geometric.round_width(1), 2);
+	assert_eq!(geometric.round_width(2), 4);
+	assert_eq!(geometric.round_width(3), 8);
+
+	// a runaway exponent saturates rather than overflowing
+	assert_eq!(geometric.round_width(1000), usize::MAX);
+}
+
+#[test]
+fn fanout_for_op_profiles() {
+	let profile = |op| Opts::new(op, room()).fanout_for_op();
+
+	let auth_event = profile(Op::AuthEvent);
+	assert_eq!(auth_event.fanout_growth, FanoutGrowth::Geometric { base: nz(1), factor: nz(2) });
+	assert_eq!(auth_event.fanout_max_width, Some(nz(4)));
+	assert_eq!(auth_event.fanout_rounds, Some(nz(5)));
+
+	let auth_chain = profile(Op::AuthChain);
+	assert_eq!(auth_chain.fanout_growth, FanoutGrowth::Linear { base: nz(1), step: nz(1) });
+	assert_eq!(auth_chain.fanout_max_width, Some(nz(2)));
+	assert_eq!(auth_chain.fanout_rounds, Some(nz(2)));
+
+	let state_ids = profile(Op::StateIds);
+	assert_eq!(state_ids.fanout_growth, FanoutGrowth::Linear { base: nz(1), step: nz(1) });
+	assert_eq!(state_ids.fanout_max_width, Some(nz(3)));
+	assert_eq!(state_ids.fanout_rounds, Some(nz(3)));
+
+	let missing = profile(Op::MissingEvents);
+	assert_eq!(missing.fanout_growth, FanoutGrowth::Geometric { base: nz(1), factor: nz(2) });
+	assert_eq!(missing.fanout_max_width, None, "prev_events ramp is unbounded");
+	assert_eq!(missing.fanout_rounds, Some(nz(3)));
+
+	for op in [Op::Event, Op::Backfill] {
+		let dark = profile(op);
+		assert_eq!(dark.fanout_growth, FanoutGrowth::Fixed(nz(1)), "{op:?} stays sequential");
+		assert_eq!(dark.fanout_max_width, None);
+		assert_eq!(dark.fanout_rounds, None);
+	}
+}
+
+#[tokio::test]
+async fn default_opts_attempts_sequentially() {
+	// The Opts::new default (Fixed(1)) must hold exactly one request in flight: B
+	// is not raced while A is still pending.
+	let a = server_name!("a.test.local").to_owned();
+	let b = server_name!("b.test.local").to_owned();
+	let event = event_id!("$ev:test.local").to_owned();
+
+	let mock = Arc::new(MockTransport::new([
+		(a.clone(), Behavior::BlockGarbage),
+		(b.clone(), Behavior::Good),
+	]));
+	let select = Arc::new(MockSelect::new([(event.clone(), vec![a.clone(), b.clone()])]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let g = {
+		let svc = svc.clone();
+		let opts = test_opts(&event);
+		spawn(async move { svc.fetch(opts).await })
+	};
+
+	wait_for(|| mock.call_count() >= 1).await;
+	settle().await;
+	assert_eq!(mock.calls(), vec![a.clone()], "B not raced while A is in flight");
+
+	mock.release(&a);
+	let outcome = g
+		.await
+		.expect("join")
+		.expect("fails over to the good server");
+
+	assert_eq!(outcome.origin, b);
+	assert_eq!(mock.calls(), vec![a, b], "sequential fallover, candidate order");
+}
+
+#[tokio::test]
+async fn max_width_caps_round_concurrency() {
+	// Geometric growth wants 1, 2, 4, ... but a ceiling of 2 holds every round at
+	// most 2 wide, so after three rounds exactly 1 + 2 + 2 servers were contacted.
+	let pool = pool8();
+	let event = event_id!("$ev:test.local").to_owned();
+
+	let behaviors = pool
+		.iter()
+		.cloned()
+		.map(|server| (server, Behavior::BlockGarbage));
+	let mock = Arc::new(MockTransport::new(behaviors));
+	let select = Arc::new(MockSelect::new([(event.clone(), pool.clone())]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let opts = test_opts(&event)
+		.fanout(FanoutGrowth::Geometric { base: nz(1), factor: nz(2) })
+		.fanout_max_width(nz(2));
+	let g = {
+		let svc = svc.clone();
+		spawn(async move { svc.fetch(opts).await })
+	};
+
+	wait_for(|| mock.call_count() >= 1).await;
+	settle().await;
+	assert_eq!(mock.call_count(), 1, "round 0 opens one");
+
+	mock.release(&pool[0]);
+	wait_for(|| mock.call_count() >= 3).await;
+	settle().await;
+	assert_eq!(mock.call_count(), 3, "round 1 opens two");
+
+	mock.release(&pool[1]);
+	mock.release(&pool[2]);
+	wait_for(|| mock.call_count() >= 5).await;
+	settle().await;
+	assert_eq!(mock.call_count(), 5, "round 2 opens two (ceiling), not four (curve)");
+
+	g.abort();
+	drop(g.await);
+}
+
+#[tokio::test]
+async fn unbounded_round_races_remaining_budget() {
+	// With no ceiling, a fast curve's later round races every remaining candidate
+	// at once: round 1 (width 4) sweeps all three servers left after round 0.
+	let pool = pool8()[..4].to_vec();
+	let event = event_id!("$ev:test.local").to_owned();
+
+	let behaviors = pool
+		.iter()
+		.cloned()
+		.map(|server| (server, Behavior::BlockGarbage));
+	let mock = Arc::new(MockTransport::new(behaviors));
+	let select = Arc::new(MockSelect::new([(event.clone(), pool.clone())]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let opts = test_opts(&event).fanout(FanoutGrowth::Geometric { base: nz(1), factor: nz(4) });
+	let g = {
+		let svc = svc.clone();
+		spawn(async move { svc.fetch(opts).await })
+	};
+
+	wait_for(|| mock.call_count() >= 1).await;
+	settle().await;
+	assert_eq!(mock.call_count(), 1, "round 0 opens one");
+
+	mock.release(&pool[0]);
+	wait_for(|| mock.call_count() >= 4).await;
+	settle().await;
+	assert_eq!(mock.call_count(), 4, "unbounded round races all three remaining at once");
+
+	g.abort();
+	drop(g.await);
+}
+
+#[tokio::test]
+async fn race_winner_cancels_loser() {
+	// Two servers race in one round; the winner's valid response drops the round's
+	// future set, which must cancel the slower in-flight request.
+	let fast = server_name!("fast.test.local").to_owned();
+	let slow = server_name!("slow.test.local").to_owned();
+	let event = event_id!("$ev:test.local").to_owned();
+
+	let mock = Arc::new(MockTransport::new([
+		(fast.clone(), Behavior::BlockGood),
+		(slow.clone(), Behavior::BlockGood),
+	]));
+	let select = Arc::new(MockSelect::new([(event.clone(), vec![fast.clone(), slow.clone()])]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let opts = test_opts(&event).fanout(FanoutGrowth::Fixed(nz(2)));
+	let g = {
+		let svc = svc.clone();
+		spawn(async move { svc.fetch(opts).await })
+	};
+
+	wait_for(|| mock.call_count() >= 2).await;
+
+	mock.release(&fast);
+	let outcome = g.await.expect("join").expect("fast server wins");
+
+	settle().await;
+	assert_eq!(outcome.origin, fast);
+	assert_eq!(mock.dropped(), vec![slow], "the slow loser was cancelled in flight");
+}
+
+#[tokio::test]
+async fn poisoned_sibling_does_not_abort_valid() {
+	// A garbage response inside a multi-server round is a miss, not a winner, and
+	// must not cancel a valid sibling still in flight.
+	let poison = server_name!("poison.test.local").to_owned();
+	let good = server_name!("good.test.local").to_owned();
+	let event = event_id!("$ev:test.local").to_owned();
+
+	let mock = Arc::new(MockTransport::new([
+		(poison.clone(), Behavior::Garbage),
+		(good.clone(), Behavior::BlockGood),
+	]));
+	let select = Arc::new(MockSelect::new([(event.clone(), vec![poison.clone(), good.clone()])]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let opts = test_opts(&event).fanout(FanoutGrowth::Fixed(nz(2)));
+	let g = {
+		let svc = svc.clone();
+		spawn(async move { svc.fetch(opts).await })
+	};
+
+	wait_for(|| mock.call_count() >= 2).await;
+
+	mock.release(&good);
+	let outcome = g
+		.await
+		.expect("join")
+		.expect("valid sibling wins despite the poisoned peer");
+
+	settle().await;
+	assert_eq!(outcome.origin, good);
+	assert!(mock.dropped().is_empty(), "the valid sibling was not cancelled");
+}
+
+#[tokio::test]
+async fn attempt_limit_caps_total_contacts() {
+	// A wide curve cannot exceed attempt_limit: Geometric over five servers with a
+	// limit of 3 contacts exactly three before giving up.
+	let pool = pool8()[..5].to_vec();
+	let event = event_id!("$ev:test.local").to_owned();
+
+	let behaviors = pool
+		.iter()
+		.cloned()
+		.map(|server| (server, Behavior::Fail));
+	let mock = Arc::new(MockTransport::new(behaviors));
+	let select = Arc::new(MockSelect::new([(event.clone(), pool.clone())]));
+	let svc = Service::test_spawn(mock.clone(), select, 4);
+
+	let opts = test_opts(&event)
+		.fanout(FanoutGrowth::Geometric { base: nz(1), factor: nz(2) })
+		.attempt_limit(nz(3));
+
+	let error = svc
+		.fetch(opts)
+		.await
+		.expect_err("no server has the event");
+
+	assert!(error.to_string().contains("not found"), "unexpected error: {error}");
+	assert_eq!(mock.call_count(), 3, "attempt_limit caps total contacts across rounds");
+	assert_eq!(mock.calls(), pool[..3].to_vec(), "first three candidates, in order");
 }

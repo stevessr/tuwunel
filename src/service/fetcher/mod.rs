@@ -25,7 +25,7 @@ use tokio::sync::{
 };
 use tuwunel_core::{Result, implement};
 
-pub use self::opts::{Op, Opts, Outcome};
+pub use self::opts::{FanoutGrowth, Op, Opts, Outcome};
 use self::{
 	opts::{Failure, Key},
 	request::{SharedResult, Subscription},

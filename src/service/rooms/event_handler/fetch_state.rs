@@ -40,7 +40,8 @@ pub(super) async fn fetch_state(
 			Opts::new(Op::StateIds, room_id.to_owned())
 				.event_id(event_id.to_owned())
 				.hint(origin.to_owned())
-				.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT),
+				.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
+				.fanout_for_op(),
 		)
 		.await
 		.inspect_err(|e| debug_warn!("Fetching state for event failed: {e}"))?;

@@ -173,7 +173,8 @@ async fn fetch_auth_chain(
 					.event_id(next_id.clone())
 					.hint(origin.to_owned())
 					.room_version(room_version.to_owned())
-					.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT),
+					.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
+					.fanout_for_op(),
 			)
 			.inspect_err(|e| debug_error!(?next_id, "Failed to fetch event: {e}"))
 			.await

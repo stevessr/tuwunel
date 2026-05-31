@@ -34,6 +34,50 @@ pub enum Op {
 	MissingEvents,
 }
 
+/// Per-round width schedule for staged fan-out: how many candidate servers a
+/// fetch races concurrently in each escalation round, before the worker's
+/// per-round ceiling and remaining-budget clamps. `Fixed(1)` (the `Opts::new`
+/// default) reproduces strictly-sequential attempts.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FanoutGrowth {
+	/// Every round races the same width.
+	Fixed(NonZeroUsize),
+
+	/// `base`, `base + step`, `base + 2*step`, ...
+	Linear {
+		base: NonZeroUsize,
+		step: NonZeroUsize,
+	},
+
+	/// `base`, `base * factor`, `base * factor^2`, ...  Base 1, factor 2 is the
+	/// 1 -> 2 -> 4 -> 8 hedging ramp.
+	Geometric {
+		base: NonZeroUsize,
+		factor: NonZeroUsize,
+	},
+}
+
+impl FanoutGrowth {
+	/// Width for round `round` (0-based). Always >= 1; saturating, so a runaway
+	/// exponent cannot overflow (the candidate pool and `attempt_limit` clamp
+	/// the value to something small regardless).
+	#[must_use]
+	pub fn round_width(self, round: usize) -> usize {
+		match self {
+			| Self::Fixed(width) => width.get(),
+			| Self::Linear { base, step } => base
+				.get()
+				.saturating_add(step.get().saturating_mul(round)),
+			| Self::Geometric { base, factor } => {
+				let exp = u32::try_from(round).unwrap_or(u32::MAX);
+
+				base.get()
+					.saturating_mul(factor.get().saturating_pow(exp))
+			},
+		}
+	}
+}
+
 /// Caller contract. `event_id` is the sought datum for [`Op::Event`] /
 /// [`Op::AuthEvent`] / [`Op::AuthChain`] / [`Op::StateIds`] and a reference
 /// point for the others.
@@ -46,6 +90,18 @@ pub struct Opts {
 	pub room_version: Option<RoomVersionId>,
 	pub attempt_limit: Option<NonZeroUsize>,
 	pub backfill_limit: Option<NonZeroUsize>,
+
+	/// Per-round width curve for staged fan-out. `Fixed(1)` is sequential.
+	pub fanout_growth: FanoutGrowth,
+
+	/// Per-round concurrency ceiling. `None` lets the curve run free, clamped
+	/// only by the candidate pool and `attempt_limit`; `Some(n)` caps each
+	/// round at `n`.
+	pub fanout_max_width: Option<NonZeroUsize>,
+
+	/// Cap on escalation rounds before giving up. `None` runs until exhaustion.
+	pub fanout_rounds: Option<NonZeroUsize>,
+
 	pub check_event_id: bool,
 	pub check_conforms: bool,
 	pub check_hashes: bool,
@@ -66,6 +122,9 @@ impl Opts {
 			room_version: None,
 			attempt_limit: None,
 			backfill_limit: None,
+			fanout_growth: FanoutGrowth::Fixed(NonZeroUsize::MIN),
+			fanout_max_width: None,
+			fanout_rounds: None,
 			check_event_id: true,
 			check_conforms: true,
 			check_hashes: true,
@@ -95,6 +154,55 @@ impl Opts {
 		Self {
 			attempt_limit: Some(attempt_limit),
 			..self
+		}
+	}
+
+	#[must_use]
+	pub fn fanout(self, growth: FanoutGrowth) -> Self { Self { fanout_growth: growth, ..self } }
+
+	#[must_use]
+	pub fn fanout_max_width(self, max_width: NonZeroUsize) -> Self {
+		Self {
+			fanout_max_width: Some(max_width),
+			..self
+		}
+	}
+
+	#[must_use]
+	pub fn fanout_rounds(self, rounds: NonZeroUsize) -> Self {
+		Self { fanout_rounds: Some(rounds), ..self }
+	}
+
+	/// Apply the op's advised staged-fan-out ramp. `Opts::new` is otherwise
+	/// dark on every op, so a callsite opts in by chaining this; the generic
+	/// and single-shot-batch ops keep the sequential default.
+	#[must_use]
+	pub fn fanout_for_op(self) -> Self {
+		use FanoutGrowth::{Geometric, Linear};
+
+		const ONE: NonZeroUsize = NonZeroUsize::new(1).unwrap();
+		const TWO: NonZeroUsize = NonZeroUsize::new(2).unwrap();
+		const THREE: NonZeroUsize = NonZeroUsize::new(3).unwrap();
+		const FOUR: NonZeroUsize = NonZeroUsize::new(4).unwrap();
+		const FIVE: NonZeroUsize = NonZeroUsize::new(5).unwrap();
+
+		match self.op {
+			| Op::AuthEvent => self
+				.fanout(Geometric { base: ONE, factor: TWO })
+				.fanout_max_width(FOUR)
+				.fanout_rounds(FIVE),
+			| Op::AuthChain => self
+				.fanout(Linear { base: ONE, step: ONE })
+				.fanout_max_width(TWO)
+				.fanout_rounds(TWO),
+			| Op::StateIds => self
+				.fanout(Linear { base: ONE, step: ONE })
+				.fanout_max_width(THREE)
+				.fanout_rounds(THREE),
+			| Op::MissingEvents => self
+				.fanout(Geometric { base: ONE, factor: TWO })
+				.fanout_rounds(THREE),
+			| Op::Event | Op::Backfill => self,
 		}
 	}
 

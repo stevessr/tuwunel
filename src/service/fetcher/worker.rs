@@ -6,9 +6,11 @@
 
 use std::{
 	collections::{HashMap, VecDeque},
+	num::NonZeroUsize,
 	sync::{Arc, Weak},
 };
 
+use bytes::Bytes;
 use futures::{FutureExt, StreamExt, future::BoxFuture, stream::FuturesUnordered};
 use ruma::OwnedServerName;
 use tokio::sync::watch::channel;
@@ -179,6 +181,7 @@ fn on_complete<'a>(
 
 #[implement(Service)]
 #[tracing::instrument(
+	name = "attempts",
 	level = "debug",
 	skip_all,
 	fields(
@@ -197,29 +200,96 @@ async fn run_attempts(&self, opts: &Opts, interest: &Weak<()>) -> SharedResult {
 		.attempt_limit
 		.map_or(candidates.len(), |n| n.get().min(candidates.len()));
 
+	let max_width = opts
+		.fanout_max_width
+		.map_or(usize::MAX, NonZeroUsize::get);
+
 	let mut attempted: Vec<OwnedServerName> = Vec::new();
-	for server in candidates.into_iter().take(limit) {
+	let mut remaining = candidates.into_iter();
+	let mut round: usize = 0;
+
+	while attempted.len() < limit {
 		if interest.strong_count() == 0 {
 			return Err(Failure::Cancelled);
 		}
 
-		match self
-			.transport
-			.fetch_raw(opts.op, &server, opts)
-			.await
+		if opts
+			.fanout_rounds
+			.is_some_and(|rounds| round >= rounds.get())
 		{
-			| Err(error) => debug_warn!(%server, "fetch attempt failed: {error}"),
-			| Ok(bytes) => match self.validate(opts, &bytes).await {
-				| Err(error) => debug_warn!(%server, "rejecting poisoned response: {error}"),
-				| Ok(()) => {
-					trace!(%server, "fetch satisfied");
-					return Ok(Arc::new(Outcome { bytes, origin: server }));
-				},
-			},
+			break;
 		}
 
-		attempted.push(server);
+		let budget = limit.saturating_sub(attempted.len());
+		let width = opts
+			.fanout_growth
+			.round_width(round)
+			.min(max_width)
+			.min(budget);
+
+		// race this round's window; the first valid response wins and dropping the
+		// set cancels the losing requests in flight
+		let mut racing: FuturesUnordered<_> = remaining
+			.by_ref()
+			.take(width)
+			.map(|server| self.attempt(server, opts))
+			.collect();
+
+		if racing.is_empty() {
+			break;
+		}
+
+		while let Some((server, bytes)) = racing.next().await {
+			let Some(bytes) = bytes else {
+				attempted.push(server);
+
+				if interest.strong_count() == 0 {
+					return Err(Failure::Cancelled);
+				}
+
+				continue;
+			};
+
+			trace!(%server, "fetch satisfied");
+			return Ok(Arc::new(Outcome { bytes, origin: server }));
+		}
+
+		round = round.saturating_add(1);
 	}
 
 	Err(Failure::NotFound { attempted })
+}
+
+/// Fetch one candidate and validate it: `Some(bytes)` on a clean response,
+/// `None` on a transport error or a poisoned body. A miss is logged, never
+/// fatal, so it cannot cancel a sibling racing the same round.
+#[implement(Service)]
+#[tracing::instrument(
+	name = "attempt",
+	level = "trace",
+	skip_all,
+	fields(%server),
+)]
+async fn attempt(
+	&self,
+	server: OwnedServerName,
+	opts: &Opts,
+) -> (OwnedServerName, Option<Bytes>) {
+	let Some(bytes) = self
+		.transport
+		.fetch_raw(opts.op, &server, opts)
+		.await
+		.inspect_err(|error| debug_warn!(%server, "fetch attempt failed: {error}"))
+		.ok()
+	else {
+		return (server, None);
+	};
+
+	let valid = self
+		.validate(opts, &bytes)
+		.await
+		.inspect_err(|error| debug_warn!(%server, "rejecting poisoned response: {error}"))
+		.is_ok();
+
+	(server, valid.then_some(bytes))
 }
