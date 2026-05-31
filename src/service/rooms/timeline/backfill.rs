@@ -151,15 +151,15 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 		return no_backfill();
 	}
 
+	let opts = Opts::new(Op::Backfill, room_id.to_owned())
+		.event_id(first_pdu.event_id().to_owned())
+		.candidates(eligible)
+		.backfill_limit(BACKFILL_LIMIT);
+
 	let Ok(outcome) = self
 		.services
 		.fetcher
-		.fetch(
-			Opts::new(Op::Backfill, room_id.to_owned())
-				.event_id(first_pdu.event_id().to_owned())
-				.candidates(eligible)
-				.backfill_limit(BACKFILL_LIMIT),
-		)
+		.fetch(opts)
 		.inspect_err(|e| warn!("Backfilling room {room_id} failed: {e}"))
 		.await
 	else {
@@ -189,15 +189,11 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 #[implement(super::Service)]
 #[tracing::instrument(skip(self), level = "debug")]
 pub async fn fetch_remote_event(&self, room_id: &RoomId, event_id: &EventId) -> Result {
-	let outcome = self
-		.services
-		.fetcher
-		.fetch(
-			Opts::new(Op::Event, room_id.to_owned())
-				.event_id(event_id.to_owned())
-				.checks(false),
-		)
-		.await?;
+	let opts = Opts::new(Op::Event, room_id.to_owned())
+		.event_id(event_id.to_owned())
+		.checks(false);
+
+	let outcome = self.services.fetcher.fetch(opts).await?;
 
 	let pdu: Box<RawJsonValue> = serde_json::from_slice(&outcome.bytes)?;
 

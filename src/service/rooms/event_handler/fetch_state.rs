@@ -33,16 +33,16 @@ pub(super) async fn fetch_state(
 	recursion_level: usize,
 	create_event_id: &EventId,
 ) -> Result<Option<HashMap<u64, OwnedEventId>>> {
+	let opts = Opts::new(Op::StateIds, room_id.to_owned())
+		.event_id(event_id.to_owned())
+		.hint(origin.to_owned())
+		.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
+		.fanout_for_op();
+
 	let outcome = self
 		.services
 		.fetcher
-		.fetch(
-			Opts::new(Op::StateIds, room_id.to_owned())
-				.event_id(event_id.to_owned())
-				.hint(origin.to_owned())
-				.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
-				.fanout_for_op(),
-		)
+		.fetch(opts)
 		.await
 		.inspect_err(|e| debug_warn!("Fetching state for event failed: {e}"))?;
 

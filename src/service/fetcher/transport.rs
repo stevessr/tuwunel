@@ -20,7 +20,7 @@ use ruma::{
 		},
 	},
 };
-use tuwunel_core::{Result, err};
+use tuwunel_core::{Result, err, utils::BoolExt};
 
 use super::{Op, Opts};
 use crate::services::OnceServices;
@@ -114,7 +114,9 @@ fn require_event_id(opts: &Opts) -> Result<OwnedEventId> {
 }
 
 fn require_latest_events(opts: &Opts) -> Result {
-	(!opts.latest_events.is_empty())
+	opts.latest_events
+		.is_empty()
+		.is_false()
 		.then_some(())
 		.ok_or_else(|| {
 			err!(Request(InvalidParam("latest_events is required for op {:?}", opts.op)))

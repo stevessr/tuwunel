@@ -165,17 +165,17 @@ async fn fetch_auth_chain(
 		}
 
 		debug!("Fetching {next_id} over federation.");
+		let opts = Opts::new(Op::AuthEvent, room_id.to_owned())
+			.event_id(next_id.clone())
+			.hint(origin.to_owned())
+			.room_version(room_version.to_owned())
+			.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
+			.fanout_for_op();
+
 		let Ok(outcome) = self
 			.services
 			.fetcher
-			.fetch(
-				Opts::new(Op::AuthEvent, room_id.to_owned())
-					.event_id(next_id.clone())
-					.hint(origin.to_owned())
-					.room_version(room_version.to_owned())
-					.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
-					.fanout_for_op(),
-			)
+			.fetch(opts)
 			.inspect_err(|e| debug_error!(?next_id, "Failed to fetch event: {e}"))
 			.await
 		else {

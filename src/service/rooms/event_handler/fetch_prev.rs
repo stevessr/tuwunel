@@ -219,20 +219,15 @@ async fn prefetch_missing_events(
 		.collect()
 		.await;
 
-	let Ok(outcome) = self
-		.services
-		.fetcher
-		.fetch(
-			Opts::new(Op::MissingEvents, room_id.to_owned())
-				.latest_events([incoming_event_id.to_owned()])
-				.earliest_events(boundary)
-				.hint(origin.to_owned())
-				.room_version(room_version.to_owned())
-				.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
-				.fanout_for_op(),
-		)
-		.await
-	else {
+	let opts = Opts::new(Op::MissingEvents, room_id.to_owned())
+		.latest_events([incoming_event_id.to_owned()])
+		.earliest_events(boundary)
+		.hint(origin.to_owned())
+		.room_version(room_version.to_owned())
+		.attempt_limit(super::EVENT_FETCH_ATTEMPT_LIMIT)
+		.fanout_for_op();
+
+	let Ok(outcome) = self.services.fetcher.fetch(opts).await else {
 		return;
 	};
 

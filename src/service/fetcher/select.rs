@@ -4,7 +4,7 @@
 //! it from room state and orders it by population, pinning the room's authority
 //! server ahead of the ranking for auth fetches.
 
-use std::{collections::BTreeSet, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::{Stream, StreamExt, future::Either};
@@ -62,7 +62,7 @@ impl Select for RoomCandidates {
 		.flatten()
 		.map(ToOwned::to_owned);
 
-		let ordered: Candidates = opts
+		let eligible = opts
 			.hint
 			.clone()
 			.into_iter()
@@ -70,11 +70,9 @@ impl Select for RoomCandidates {
 			.stream()
 			.chain(self.route_by_popularity(opts).await)
 			.chain(mxid_hosts.stream())
-			.ready_filter(|server| self.is_eligible(server))
-			.collect()
-			.await;
+			.ready_filter(|server| self.is_eligible(server));
 
-		self.rank_unique(ordered).await
+		self.rank_unique(eligible).await
 	}
 }
 
@@ -84,28 +82,41 @@ impl Select for RoomCandidates {
 #[implement(RoomCandidates)]
 #[tracing::instrument(level = "trace", skip_all)]
 async fn ranked_override(&self, opts: &Opts) -> Candidates {
-	let ordered: Candidates = opts
+	let eligible = opts
 		.hint
 		.iter()
 		.chain(opts.candidates.iter())
 		.filter(|&server| self.is_eligible(server))
 		.cloned()
-		.collect();
+		.stream();
 
-	self.rank_unique(ordered).await
+	self.rank_unique(eligible).await
 }
 
-/// Dedup an assembled candidate list in place, then order it by peer-status
-/// reachability.
+/// Dedup an assembled candidate stream, preserving first-occurrence order,
+/// then order it by peer-status reachability.
 #[implement(RoomCandidates)]
-async fn rank_unique(&self, mut ordered: Candidates) -> Candidates {
-	let mut seen = BTreeSet::new();
-	ordered.retain(|server| seen.insert(server.clone()));
+async fn rank_unique<S>(&self, eligible: S) -> Candidates
+where
+	S: Stream<Item = OwnedServerName> + Send,
+{
+	let ordered: Candidates = eligible
+		.ready_fold(Candidates::new(), push_unique)
+		.await;
 
 	self.services
 		.federation
 		.rank_candidates(ordered, WhenAllBackedOff::Attempt)
 		.await
+}
+
+/// Append a server to the pool only on its first occurrence.
+fn push_unique(mut ordered: Candidates, server: OwnedServerName) -> Candidates {
+	if !ordered.contains(&server) {
+		ordered.push(server);
+	}
+
+	ordered
 }
 
 /// The room's most-powerful server, pinned ahead of the population ranking
@@ -188,4 +199,30 @@ fn is_eligible(&self, server: &ServerName) -> bool {
 			.server
 			.config
 			.is_forbidden_remote_server_name(server)
+}
+
+#[cfg(test)]
+mod tests {
+	use ruma::owned_server_name;
+
+	use super::{Candidates, push_unique};
+
+	#[test]
+	fn push_unique_keeps_first_occurrence() {
+		let pool = [
+			owned_server_name!("a.test"),
+			owned_server_name!("b.test"),
+			owned_server_name!("a.test"),
+			owned_server_name!("c.test"),
+			owned_server_name!("b.test"),
+		];
+
+		let deduped: Candidates = pool
+			.into_iter()
+			.fold(Candidates::new(), push_unique);
+
+		let names: Vec<&str> = deduped.iter().map(AsRef::as_ref).collect();
+
+		assert_eq!(names, ["a.test", "b.test", "c.test"]);
+	}
 }

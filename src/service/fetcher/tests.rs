@@ -902,13 +902,10 @@ async fn missing_events_batch_round_trips() {
 	let select = Arc::new(MockSelect::fixed([server.clone()]));
 	let svc = Service::test_spawn(mock.clone(), select, 4);
 
-	let outcome = svc
-		.fetch(
-			Opts::new(Op::MissingEvents, room())
-				.latest_events([event_id!("$l:test.local").to_owned()]),
-		)
-		.await
-		.expect("batch fetched");
+	let opts = Opts::new(Op::MissingEvents, room())
+		.latest_events([event_id!("$l:test.local").to_owned()]);
+
+	let outcome = svc.fetch(opts).await.expect("batch fetched");
 
 	assert_eq!(&*outcome.bytes, BATCH_BODY, "the batch body round-trips verbatim");
 
@@ -924,14 +921,11 @@ async fn backfill_parses_pdu_batch() {
 	let select = Arc::new(MockSelect::fixed([server.clone()]));
 	let svc = Service::test_spawn(mock.clone(), select, 4);
 
-	let outcome = svc
-		.fetch(
-			Opts::new(Op::Backfill, room())
-				.event_id(event_id!("$first:test.local").to_owned())
-				.backfill_limit(nz(100)),
-		)
-		.await
-		.expect("backfill fetched");
+	let opts = Opts::new(Op::Backfill, room())
+		.event_id(event_id!("$first:test.local").to_owned())
+		.backfill_limit(nz(100));
+
+	let outcome = svc.fetch(opts).await.expect("backfill fetched");
 
 	let pdus: Vec<Box<RawJsonValue>> =
 		serde_json::from_slice(&outcome.bytes).expect("backfill parses as a pdu array");
