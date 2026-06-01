@@ -6,6 +6,7 @@ mod fetch_state;
 mod handle_incoming_pdu;
 mod handle_outlier_pdu;
 mod handle_prev_pdu;
+mod outlier_state;
 mod parse_incoming_pdu;
 mod policy_server;
 mod resolve_state;
@@ -28,6 +29,7 @@ pub struct Service {
 struct Data {
 	eventid_backoff: Arc<Map>,
 	eventid_policysigstate: Arc<Map>,
+	eventid_resolvedstate: Arc<Map>,
 }
 
 type RoomMutexMap = MutexMap<OwnedRoomId, ()>;
@@ -44,6 +46,7 @@ impl crate::Service for Service {
 			db: Data {
 				eventid_backoff: args.db["eventid_backoff"].clone(),
 				eventid_policysigstate: args.db["eventid_policysigstate"].clone(),
+				eventid_resolvedstate: args.db["eventid_resolvedstate"].clone(),
 			},
 		}))
 	}
@@ -55,7 +58,10 @@ impl crate::Service for Service {
 		Ok(())
 	}
 
-	async fn clear_cache(&self) { self.db.eventid_backoff.clear().await; }
+	async fn clear_cache(&self) {
+		self.db.eventid_backoff.clear().await;
+		self.db.eventid_resolvedstate.clear().await;
+	}
 
 	fn name(&self) -> &str { crate::service::make_name(std::module_path!()) }
 }

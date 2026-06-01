@@ -102,6 +102,10 @@ pub(super) static MAPS: &[Descriptor] = &[
 		..descriptor::RANDOM_SMALL_CACHE
 	},
 	Descriptor {
+		name: "eventid_resolvedstate",
+		..descriptor::RANDOM_SMALL_CACHE
+	},
+	Descriptor {
 		name: "eventid_shorteventid",
 		cache_disp: CacheDisp::Unique,
 		key_size_hint: Some(48),
