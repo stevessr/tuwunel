@@ -21,7 +21,7 @@ use tuwunel_core::{
 
 use crate::{
 	fetcher::{EventWindow, Op, Opts},
-	rooms::state_res,
+	rooms::state_res::topological_sort,
 };
 
 #[implement(super::Service)]
@@ -177,13 +177,14 @@ where
 		Ok((int!(0).into(), MilliSecondsSinceUnixEpoch(origin_server_ts)))
 	};
 
-	let sorted = state_res::topological_sort(&graph, &event_fetch)
+	let graph_len = graph.len();
+	let sorted = topological_sort(graph, &event_fetch)
 		.await
 		.map_err(|e| err!(Database(error!("Error sorting prev events: {e}"))))?;
 
 	debug_assert_eq!(
 		sorted.len(),
-		graph.len(),
+		graph_len,
 		"topological sort returned a different number of outputs than inputs"
 	);
 

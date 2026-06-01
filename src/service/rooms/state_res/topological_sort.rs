@@ -72,7 +72,9 @@ impl PartialOrd for TieBreaker {
 ///
 /// ## Returns
 ///
-/// Returns the ordered list of event IDs from earliest to latest.
+/// Returns the ordered list of event IDs from earliest to latest. Every event
+/// in the graph appears exactly once; a reference to an event absent from the
+/// graph is treated as a non-edge rather than dropping the referencing event.
 ///
 /// We consider that the DAG is directed from most recent events to oldest
 /// events, so an event is an incoming edge to its referenced events.
@@ -88,7 +90,7 @@ impl PartialOrd for TieBreaker {
 )]
 #[expect(clippy::implicit_hasher)]
 pub async fn topological_sort<Query, Fut>(
-	graph: &HashMap<OwnedEventId, ReferencedIds>,
+	graph: HashMap<OwnedEventId, ReferencedIds>,
 	query: &Query,
 ) -> Result<Vec<OwnedEventId>>
 where
@@ -121,15 +123,20 @@ where
 			incoming
 		});
 
+	// A reference absent from the graph is unresolvable and not an out-edge.
 	let horizon = graph
 		.iter()
-		.filter(|(_, references)| references.is_empty())
+		.filter(|(_, references)| {
+			!references
+				.iter()
+				.any(|reference| graph.contains_key(reference))
+		})
 		.try_stream()
 		.and_then(async |(event_id, _)| Ok(Reverse(query(event_id.clone()).await?)))
 		.try_collect::<BinaryHeap<Reverse<TieBreaker>>>()
 		.await?;
 
-	kahn_sort(horizon, graph.clone(), &incoming, &query)
+	kahn_sort(horizon, graph, &incoming, &query)
 		.try_collect()
 		.await
 }
@@ -167,14 +174,16 @@ where
 			.flatten()
 			.try_stream()
 			.try_fold(state, |(event_id, (mut heap, mut graph)), parent_id| async move {
-				let out = graph
+				graph
 					.get_mut(&parent_id)
-					.expect("contains all parent_ids");
+					.expect("contains all parent_ids")
+					.retain(is_not_equal_to!(&event_id));
 
-				out.retain(is_not_equal_to!(&event_id));
-
-				// Push on the heap once all the outgoing edges have been removed.
-				if out.is_empty() {
+				// References to absent events never resolve; gate on present out-edges only.
+				if !graph[&parent_id]
+					.iter()
+					.any(|reference| graph.contains_key(reference))
+				{
 					heap.push(Reverse(query(parent_id.clone()).await?));
 				}
 
