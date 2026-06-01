@@ -68,6 +68,10 @@ pub(super) static MAPS: &[Descriptor] = &[
 		..descriptor::RANDOM_SMALL
 	},
 	Descriptor {
+		name: "eventid_backoff",
+		..descriptor::RANDOM_SMALL_CACHE
+	},
+	Descriptor {
 		name: "eventid_originalpdu",
 		key_size_hint: Some(48),
 		val_size_hint: Some(1520),

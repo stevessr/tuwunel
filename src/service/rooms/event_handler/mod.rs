@@ -1,4 +1,5 @@
 mod acl_check;
+mod backoff;
 mod fetch_auth;
 mod fetch_prev;
 mod fetch_state;
@@ -37,6 +38,7 @@ pub struct Service {
 }
 
 struct Data {
+	eventid_backoff: Arc<Map>,
 	eventid_policysigstate: Arc<Map>,
 }
 
@@ -54,6 +56,7 @@ impl crate::Service for Service {
 			services: args.services.clone(),
 			bad_event_ratelimiter: Arc::new(RwLock::new(HashMap::new())),
 			db: Data {
+				eventid_backoff: args.db["eventid_backoff"].clone(),
 				eventid_policysigstate: args.db["eventid_policysigstate"].clone(),
 			},
 		}))
