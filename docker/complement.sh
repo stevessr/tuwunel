@@ -27,7 +27,6 @@ skip="${skip}|TestToDeviceMessagesOverFederation/stopped_server"
 skip="${skip}|TestRestrictedRoomsRemoteJoinFailOver"
 skip="${skip}|TestRestrictedRoomsRemoteJoinFailOverInMSC3787Room"
 skip="${skip}|TestToDeviceMessagesOverFederation/interrupted_connectivity"
-skip="${skip}|TestUnbanViaInvite"
 
 set -a
 cargo_profile="${cargo_profile:-$default_cargo_profile}"

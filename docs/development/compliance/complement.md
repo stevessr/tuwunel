@@ -4,14 +4,14 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 201. Passing: **69.2%**
-  - ✅ `pass`: 139
+- Test groups: 203. Passing: **69.5%**
+  - ✅ `pass`: 141
   - 🟨 `some`: 27
   - ❌ `fail`: 33
   - ⬛ `skip`: 2
 
-- Subtests: 591. Passing: **68.2%**
-  - ✅ `pass`: 403
+- Subtests: 593. Passing: **68.3%**
+  - ✅ `pass`: 405
   - ❌ `fail`: 175
   - ⬛ `skip`: 13
 
@@ -61,6 +61,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestFederationRedactSendsWithoutEvent` | ✅ | – |
 | `TestFederationRejectInvite` | ✅ | – |
 | `TestFederationRoomsInvite` | 🟨 | 8/2/0 |
+| `TestFederationSlidingSyncReInviteAfterLeave` | ✅ | 2/0/0 |
 | `TestFederationThumbnail` | ✅ | – |
 | `TestFetchEvent` | ✅ | – |
 | `TestFetchEventNonWorldReadable` | ❌ | – |
@@ -210,6 +211,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestTxnInEvent` | ✅ | – |
 | `TestTxnScopeOnLocalEcho` | ✅ | – |
 | `TestTyping` | ✅ | 3/0/0 |
+| `TestUnbanViaInvite` | ✅ | – |
 | `TestUnknownEndpoints` | 🟨 | 4/1/0 |
 | `TestUnrejectRejectedEvents` | ✅ | – |
 | `TestUploadKey` | 🟨 | 6/2/0 |
