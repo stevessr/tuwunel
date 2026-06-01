@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use futures::{
 	FutureExt, StreamExt, TryFutureExt,
-	future::{join, join5},
+	future::{join, join3},
 };
 use ruma::{OwnedRoomId, UInt, events::room::member::MembershipState, uint};
 use tuwunel_core::{
@@ -134,9 +134,22 @@ async fn matcher(
 			.unwrap_or_default()
 	});
 
-	let (last_timeline, last_notification, last_account, last_receipt, last_privateread) =
-		join5(last_timeline, last_notification, last_account, last_receipt, last_privateread)
-			.await;
+	let invited = matches!(membership, Some(MembershipState::Invite));
+	let last_membership = (matched && invited).then_async(|| {
+		services
+			.state_cache
+			.get_invite_count(&room_id, sender_user)
+			.unwrap_or_default()
+	});
+
+	let (
+		(last_timeline, last_notification, last_account),
+		(last_receipt, last_privateread, last_membership),
+	) = join(
+		join3(last_timeline, last_notification, last_account),
+		join3(last_receipt, last_privateread, last_membership),
+	)
+	.await;
 
 	Some(WindowRoom {
 		room_id: room_id.clone(),
@@ -149,6 +162,7 @@ async fn matcher(
 			last_account,
 			last_receipt,
 			last_privateread,
+			last_membership,
 		]
 		.into_iter()
 		.map(Option::unwrap_or_default)
