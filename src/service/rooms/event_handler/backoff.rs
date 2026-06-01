@@ -26,9 +26,21 @@ pub(super) enum Context {
 	Upgrade = 2,
 }
 
-/// Permanence of a recorded decision. Unknown bytes decode to the weakest
-/// (`Pending`) so a future encoding can only soften, never wrongly escalate, a
-/// verdict against an old binary. `Permanent` is never written by this store.
+impl From<Context> for u8 {
+	#[inline]
+	fn from(context: Context) -> Self {
+		match context {
+			| Context::Fetch => 0,
+			| Context::Auth => 1,
+			| Context::Upgrade => 2,
+		}
+	}
+}
+
+/// Permanence of a recorded decision. Unknown discriminants decode to the
+/// weakest (`Pending`) so a future encoding can only soften, never wrongly
+/// escalate, a verdict against an old binary. `Permanent` is never written by
+/// this store.
 #[derive(Clone, Copy, Default)]
 pub(super) enum Disposition {
 	#[default]
@@ -51,11 +63,10 @@ struct Summary {
 	latest_class: Disposition,
 }
 
-impl Disposition {
+impl From<u64> for Disposition {
 	#[inline]
-	#[must_use]
-	fn from_byte(byte: u8) -> Self {
-		match byte {
+	fn from(disc: u64) -> Self {
+		match disc {
 			| 1 => Self::Transient,
 			| 2 => Self::Permanent,
 			| _ => Self::Pending,
@@ -63,7 +74,7 @@ impl Disposition {
 	}
 }
 
-impl From<Disposition> for u8 {
+impl From<Disposition> for u64 {
 	#[inline]
 	fn from(disposition: Disposition) -> Self {
 		match disposition {
@@ -80,8 +91,8 @@ impl Suppression {
 }
 
 impl Summary {
-	fn tally(mut self, (_, (class, secs)): (Ignore, (u8, u64))) -> Self {
-		let class = Disposition::from_byte(class);
+	fn tally(mut self, (_, (class, secs)): (Ignore, (u64, u64))) -> Self {
+		let class = Disposition::from(class);
 
 		self.total = self.total.saturating_add(1);
 		if matches!(class, Disposition::Pending) {
@@ -106,16 +117,17 @@ pub(super) fn record_attempt(&self, ctx: Context, event_id: &EventId) {
 
 #[implement(super::Service)]
 pub(super) fn record_outcome(&self, ctx: Context, event_id: &EventId, disposition: Disposition) {
-	self.db
-		.eventid_backoff
-		.put((ctx as u8, event_id, current_bucket()), (u8::from(disposition), now_secs()));
+	self.db.eventid_backoff.put(
+		(u8::from(ctx), event_id, current_bucket()),
+		(u64::from(disposition), now_secs()),
+	);
 }
 
 #[implement(super::Service)]
 pub(super) async fn record_success(&self, ctx: Context, event_id: &EventId) {
 	self.db
 		.eventid_backoff
-		.del_prefix(&(ctx as u8, event_id, Interfix))
+		.del_prefix(&(u8::from(ctx), event_id, Interfix))
 		.await;
 }
 
@@ -129,7 +141,7 @@ pub(super) async fn is_suppressed(
 	let summary = self
 		.db
 		.eventid_backoff
-		.stream_prefix::<Ignore, (u8, u64), _>(&(ctx as u8, event_id, Interfix))
+		.stream_prefix::<Ignore, (u64, u64), _>(&(u8::from(ctx), event_id, Interfix))
 		.ignore_err()
 		.ready_fold(Summary::default(), Summary::tally)
 		.await;

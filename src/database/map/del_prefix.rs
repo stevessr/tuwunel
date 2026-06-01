@@ -14,7 +14,7 @@ use tuwunel_core::{
 #[tracing::instrument(level = "trace", skip(self))]
 pub async fn del_prefix<P>(self: &Arc<Self>, prefix: &P)
 where
-	P: Serialize + ?Sized + Debug,
+	P: Serialize + ?Sized + Debug + Sync,
 {
 	self.keys_prefix_raw(prefix)
 		.ignore_err()

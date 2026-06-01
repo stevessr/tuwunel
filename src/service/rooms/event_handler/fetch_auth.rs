@@ -1,6 +1,5 @@
 use std::{
 	collections::{HashSet, VecDeque},
-	ops::Range,
 	time::Duration,
 };
 
@@ -13,10 +12,11 @@ use tuwunel_core::{
 	debug, debug_error, debug_warn, expected, implement,
 	matrix::{PduEvent, pdu::MAX_AUTH_EVENTS},
 	trace,
-	utils::stream::{BroadbandExt, IterStream, ReadyExt},
+	utils::stream::{BroadbandExt, IterStream},
 	warn,
 };
 
+use super::backoff::{Context, Disposition};
 use crate::fetcher::{Op, Opts};
 
 /// Find the event and auth it. Once the event is validated (steps 1 - 8)
@@ -75,15 +75,19 @@ where
 				.into_iter()
 				.rev()
 				.stream()
-				.ready_filter(|(next_id, _)| {
-					let backed_off = self.is_backed_off(next_id, Range {
-						start: Duration::from_mins(5),
-						end: Duration::from_hours(24),
-					});
-
-					!backed_off
-				})
 				.fold(pdus, async |mut pdus, (next_id, value)| {
+					if self
+						.is_suppressed(
+							Context::Auth,
+							&next_id,
+							Duration::from_mins(5)..Duration::from_hours(24),
+						)
+						.await
+						.is_deny()
+					{
+						return pdus;
+					}
+
 					let outlier = Box::pin(self.handle_outlier_pdu(
 						origin,
 						room_id,
@@ -101,9 +105,9 @@ where
 						if next_id == id {
 							pdus.push((pdu, Some(json)));
 						}
-						self.cancel_back_off(&next_id);
+						self.record_success(Context::Auth, &next_id).await;
 					} else {
-						self.back_off(&next_id);
+						self.record_outcome(Context::Auth, &next_id, Disposition::Transient);
 					}
 
 					pdus
@@ -146,10 +150,15 @@ async fn fetch_auth_chain(
 			continue;
 		}
 
-		if self.is_backed_off(&next_id, Range {
-			start: Duration::from_mins(2),
-			end: Duration::from_hours(8),
-		}) {
+		if self
+			.is_suppressed(
+				Context::Fetch,
+				&next_id,
+				Duration::from_mins(2)..Duration::from_hours(8),
+			)
+			.await
+			.is_deny()
+		{
 			debug_warn!("Backed off from {next_id}");
 			continue;
 		}
@@ -180,17 +189,18 @@ async fn fetch_auth_chain(
 			.await
 		else {
 			debug_warn!("Backing off from {next_id}");
-			self.back_off(&next_id);
+			self.record_outcome(Context::Fetch, &next_id, Disposition::Transient);
 			continue;
 		};
 
 		let Ok(value) = serde_json::from_slice::<CanonicalJsonObject>(&outcome.bytes) else {
-			self.back_off(&next_id);
+			self.record_outcome(Context::Fetch, &next_id, Disposition::Transient);
 			continue;
 		};
 
 		debug!("Got {next_id} over federation");
-		self.cancel_back_off(&next_id);
+		self.record_success(Context::Fetch, &next_id)
+			.await;
 		value
 			.get("auth_events")
 			.and_then(CanonicalJsonValue::as_array)

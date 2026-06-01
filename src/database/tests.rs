@@ -469,8 +469,8 @@ fn ser_de_eventid_backoff_record() {
 	let bucket: u32 = 0x2A2B_2C2D;
 
 	// The production read path deserializes the value; it must round-trip.
-	let val = serialize_to_vec(&(1_u8, 1_717_171_717_u64)).expect("failed to serialize value");
-	let (class, secs): (u8, u64) = from_slice(&val).expect("failed to deserialize value");
+	let val = serialize_to_vec(&(1_u64, 1_717_171_717_u64)).expect("failed to serialize value");
+	let (class, secs): (u64, u64) = from_slice(&val).expect("failed to deserialize value");
 	assert_eq!(class, 1, "class byte does not round-trip");
 	assert_eq!(secs, 1_717_171_717, "timestamp does not round-trip");
 
