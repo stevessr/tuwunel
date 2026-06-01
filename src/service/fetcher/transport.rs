@@ -9,7 +9,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use bytes::Bytes;
 use ruma::{
-	OwnedEventId, ServerName, UInt,
+	OwnedEventId, OwnedRoomId, ServerName, UInt,
 	api::federation::{
 		authorization::get_event_authorization::v1::Request as EventAuthRequest,
 		backfill::get_backfill::v1::Request as BackfillRequest,
@@ -47,7 +47,6 @@ impl Transport for FederationTransport {
 	)]
 	async fn fetch_raw(&self, op: Op, server: &ServerName, opts: &Opts) -> Result<Bytes> {
 		let federation = &self.services.federation;
-		let room_id = opts.room_id.clone();
 
 		match op {
 			| Op::Event | Op::AuthEvent => {
@@ -60,6 +59,7 @@ impl Transport for FederationTransport {
 			},
 			| Op::AuthChain => {
 				let event_id = require_event_id(opts)?;
+				let room_id = require_room_id(opts)?;
 				let res = federation
 					.execute(server, EventAuthRequest { room_id, event_id })
 					.await?;
@@ -68,6 +68,7 @@ impl Transport for FederationTransport {
 			},
 			| Op::Backfill => {
 				let event_id = require_event_id(opts)?;
+				let room_id = require_room_id(opts)?;
 				let res = federation
 					.execute(server, BackfillRequest {
 						room_id,
@@ -80,6 +81,7 @@ impl Transport for FederationTransport {
 			},
 			| Op::StateIds => {
 				let event_id = require_event_id(opts)?;
+				let room_id = require_room_id(opts)?;
 				let res = federation
 					.execute(server, StateIdsRequest { room_id, event_id })
 					.await?;
@@ -91,6 +93,7 @@ impl Transport for FederationTransport {
 			},
 			| Op::MissingEvents => {
 				require_latest_events(opts)?;
+				let room_id = require_room_id(opts)?;
 				let req = MissingEventsRequest {
 					room_id,
 					earliest_events: opts.earliest_events.to_vec(),
@@ -111,6 +114,12 @@ fn require_event_id(opts: &Opts) -> Result<OwnedEventId> {
 	opts.event_id
 		.clone()
 		.ok_or_else(|| err!(Request(InvalidParam("event_id is required for op {:?}", opts.op))))
+}
+
+fn require_room_id(opts: &Opts) -> Result<OwnedRoomId> {
+	opts.room_id
+		.clone()
+		.ok_or_else(|| err!(Request(InvalidParam("room_id is required for op {:?}", opts.op))))
 }
 
 fn require_latest_events(opts: &Opts) -> Result {

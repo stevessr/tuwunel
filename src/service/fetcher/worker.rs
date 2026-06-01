@@ -185,7 +185,7 @@ fn on_complete<'a>(
 	skip_all,
 	fields(
 		op = ?opts.op,
-		room_id = %opts.room_id,
+		room_id = ?opts.room_id,
 		event_id = ?opts.event_id,
 	),
 )]

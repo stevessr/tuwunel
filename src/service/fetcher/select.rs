@@ -7,8 +7,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use futures::{Stream, StreamExt, future::Either};
-use ruma::{EventId, OwnedServerName, ServerName};
+use futures::{Stream, StreamExt, future::Either, stream::empty};
+use ruma::{EventId, OwnedServerName, RoomId, ServerName};
 use tuwunel_core::{
 	arrayvec::ArrayVec,
 	implement,
@@ -42,7 +42,7 @@ impl Select for RoomCandidates {
 		level = "trace",
 		skip_all,
 		fields(
-			room_id = %opts.room_id,
+			room_id = ?opts.room_id,
 		),
 	)]
 	async fn candidates(&self, opts: &Opts) -> Candidates {
@@ -56,11 +56,18 @@ impl Select for RoomCandidates {
 			opts.event_id
 				.as_deref()
 				.and_then(EventId::server_name),
-			opts.room_id.server_name(),
+			opts.room_id
+				.as_deref()
+				.and_then(RoomId::server_name),
 		]
 		.into_iter()
 		.flatten()
 		.map(ToOwned::to_owned);
+
+		let popular = match opts.room_id.as_deref() {
+			| None => Either::Right(empty::<OwnedServerName>()),
+			| Some(room_id) => Either::Left(self.route_by_popularity(room_id).await),
+		};
 
 		let eligible = opts
 			.hint
@@ -68,7 +75,7 @@ impl Select for RoomCandidates {
 			.into_iter()
 			.chain(authority)
 			.stream()
-			.chain(self.route_by_popularity(opts).await)
+			.chain(popular)
 			.chain(mxid_hosts.stream())
 			.ready_filter(|server| self.is_eligible(server));
 
@@ -124,11 +131,13 @@ fn push_unique(mut ordered: Candidates, server: OwnedServerName) -> Candidates {
 #[implement(RoomCandidates)]
 #[tracing::instrument(level = "trace", skip_all)]
 async fn authority_server(&self, opts: &Opts) -> Option<OwnedServerName> {
+	let room_id = opts.room_id.as_deref()?;
+
 	matches!(opts.op, Op::AuthEvent | Op::AuthChain)
 		.then_async(|| {
 			self.services
 				.state_cache
-				.most_powerful_user_server(&opts.room_id)
+				.most_powerful_user_server(room_id)
 		})
 		.await
 		.flatten()
@@ -144,12 +153,12 @@ async fn authority_server(&self, opts: &Opts) -> Option<OwnedServerName> {
 #[tracing::instrument(level = "trace", skip_all)]
 async fn route_by_popularity<'a>(
 	&'a self,
-	opts: &'a Opts,
+	room_id: &'a RoomId,
 ) -> impl Stream<Item = OwnedServerName> + Send + 'a {
 	let sampled: ArrayVec<OwnedServerName, ROUTE_FANOUT> = self
 		.services
 		.state_cache
-		.room_members(&opts.room_id)
+		.room_members(room_id)
 		.sample_by(|user| user.server_name().to_owned())
 		.await;
 
@@ -157,7 +166,7 @@ async fn route_by_popularity<'a>(
 		return Either::Right(
 			self.services
 				.state_cache
-				.room_servers(&opts.room_id)
+				.room_servers(room_id)
 				.map(ToOwned::to_owned),
 		);
 	}
@@ -172,12 +181,12 @@ async fn route_by_popularity<'a>(
 #[allow(dead_code)]
 async fn route_uniformly<'a>(
 	&'a self,
-	opts: &'a Opts,
+	room_id: &'a RoomId,
 ) -> impl Stream<Item = OwnedServerName> + Send + 'a {
 	let count = self
 		.services
 		.state_cache
-		.room_servers(&opts.room_id)
+		.room_servers(room_id)
 		.count()
 		.await;
 
@@ -185,7 +194,7 @@ async fn route_uniformly<'a>(
 
 	self.services
 		.state_cache
-		.room_servers(&opts.room_id)
+		.room_servers(room_id)
 		.map(ToOwned::to_owned)
 		.skip(offset)
 		.take(ROUTE_FANOUT)

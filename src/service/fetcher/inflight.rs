@@ -29,8 +29,8 @@ pub(super) struct Key {
 	/// Endpoint class; two ops over the same event do not coalesce.
 	pub(super) op: Op,
 
-	/// Room the event belongs to.
-	pub(super) room_id: OwnedRoomId,
+	/// Room the event belongs to, or `None` for an unscoped fetch.
+	pub(super) room_id: Option<OwnedRoomId>,
 
 	/// Sought event, or `None` for ops that do not key on one.
 	pub(super) event_id: Option<OwnedEventId>,

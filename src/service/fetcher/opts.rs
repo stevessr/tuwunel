@@ -92,8 +92,9 @@ pub struct Opts {
 	/// Federation endpoint this fetch targets.
 	pub op: Op,
 
-	/// Room the fetch is scoped to.
-	pub room_id: OwnedRoomId,
+	/// Room the fetch is scoped to, or `None` for an unscoped id-addressed
+	/// fetch.
+	pub room_id: Option<OwnedRoomId>,
 
 	/// Event to fetch (id-addressed ops) or anchor from (room-scoped ops).
 	pub event_id: Option<OwnedEventId>,
@@ -152,9 +153,18 @@ pub struct Opts {
 }
 
 impl Opts {
-	/// All validation toggles default on; the caller relaxes them per request.
+	/// Scope a fetch to a room.
 	#[must_use]
-	pub fn new(op: Op, room_id: OwnedRoomId) -> Self {
+	pub fn new(op: Op, room_id: OwnedRoomId) -> Self { Self::with_room_id(op, Some(room_id)) }
+
+	/// A fetch with no room scope, for id-addressed callers such as
+	/// `get-remote-pdu`; room-derived candidate ranking is skipped, leaving the
+	/// hint, the caller-supplied pool, and the event id's origin.
+	#[must_use]
+	pub fn unscoped(op: Op) -> Self { Self::with_room_id(op, None) }
+
+	/// All validation toggles default on; the caller relaxes them per request.
+	fn with_room_id(op: Op, room_id: Option<OwnedRoomId>) -> Self {
 		Self {
 			op,
 			room_id,

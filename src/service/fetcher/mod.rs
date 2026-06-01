@@ -97,7 +97,7 @@ impl crate::Service for Service {
 	skip_all,
 	fields(
 		op = ?opts.op,
-		room_id = %opts.room_id,
+		room_id = ?opts.room_id,
 		event_id = ?opts.event_id,
 	),
 )]
