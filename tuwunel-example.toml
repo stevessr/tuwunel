@@ -668,6 +668,22 @@
 #
 #fetch_unreceived_contexts_over_federation = false
 
+# Per-round ceiling on how many servers a federation event fetch contacts
+# concurrently. Tightens the built-in fan-out profile of every fetch kind;
+# it never widens one. 0 leaves the profiles unchanged.
+#
+# reloadable: yes
+#
+#fetch_fanout_max_width = 0
+
+# Ceiling on how many staged rounds a federation event fetch runs before
+# giving up. Tightens the built-in round count of every fetch kind; it
+# never raises one. 0 leaves the profiles unchanged.
+#
+# reloadable: yes
+#
+#fetch_fanout_rounds = 0
+
 # Sets the default `m.federate` property for newly created rooms when the
 # client does not request one. If `allow_federation` is set to false at
 # the same this value is set to false it then always overrides the client

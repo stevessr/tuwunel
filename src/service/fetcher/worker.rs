@@ -199,9 +199,17 @@ async fn run_attempts(&self, opts: &Opts, interest: &Weak<()>) -> SharedResult {
 		.attempt_limit
 		.map_or(candidates.len(), |n| n.get().min(candidates.len()));
 
-	let max_width = opts
-		.fanout_max_width
-		.map_or(usize::MAX, NonZeroUsize::get);
+	let (config_width, config_rounds) = self
+		.services
+		.try_get()
+		.map_or((0, 0), |services| {
+			let config = &services.server.config;
+
+			(config.fetch_fanout_max_width, config.fetch_fanout_rounds)
+		});
+
+	let max_width = effective_cap(opts.fanout_max_width, config_width);
+	let max_rounds = effective_cap(opts.fanout_rounds, config_rounds);
 
 	let mut attempted: Vec<OwnedServerName> = Vec::new();
 	let mut remaining = candidates.into_iter();
@@ -212,10 +220,7 @@ async fn run_attempts(&self, opts: &Opts, interest: &Weak<()>) -> SharedResult {
 			return Err(Failure::Cancelled);
 		}
 
-		if opts
-			.fanout_rounds
-			.is_some_and(|rounds| round >= rounds.get())
-		{
+		if round >= max_rounds {
 			break;
 		}
 
@@ -257,6 +262,14 @@ async fn run_attempts(&self, opts: &Opts, interest: &Weak<()>) -> SharedResult {
 	}
 
 	Err(Failure::NotFound { attempted })
+}
+
+/// Effective ceiling combining an `opts` cap with a config sentinel, where a
+/// `None` opts value or a `0` config value means unbounded and the tighter
+/// wins.
+pub(super) fn effective_cap(opt: Option<NonZeroUsize>, config: usize) -> usize {
+	opt.map_or(usize::MAX, NonZeroUsize::get)
+		.min(NonZeroUsize::new(config).map_or(usize::MAX, NonZeroUsize::get))
 }
 
 /// Fetch one candidate and validate it: `Some(bytes)` on a clean response,

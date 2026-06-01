@@ -18,7 +18,7 @@ use tokio::{
 };
 use tuwunel_core::{Result, err};
 
-use super::*;
+use super::{worker::effective_cap, *};
 use crate::{federation::Candidates, services::OnceServices};
 
 impl Service {
@@ -632,6 +632,16 @@ fn fanout_for_op_profiles() {
 		assert_eq!(dark.fanout_max_width, None);
 		assert_eq!(dark.fanout_rounds, None);
 	}
+}
+
+#[test]
+fn effective_cap_clamps() {
+	assert_eq!(effective_cap(Some(nz(4)), 0), 4);
+	assert_eq!(effective_cap(None, 0), usize::MAX);
+
+	assert_eq!(effective_cap(Some(nz(4)), 2), 2, "config tightens the opts cap");
+	assert_eq!(effective_cap(Some(nz(2)), 4), 2, "config never widens the opts cap");
+	assert_eq!(effective_cap(None, 3), 3, "config bounds an unbounded profile");
 }
 
 #[tokio::test]
