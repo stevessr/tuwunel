@@ -145,10 +145,10 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3069 | ✅ ◐ | 80/100 | Allow guests to use /account/whoami | whoami returns is_guest; uses is_deactivated heuristic |
 | MSC3030 | 🟨 ● | 60/80 | Jump to date API endpoint | client and federation timestamp_to_event handlers; no remote fallback when lo... |
 | MSC2998 | ✅ ● | 100/100 | Room Version 7 | V7 listed in STABLE_ROOM_VERSIONS; full knock support present |
-| MSC2967 | ✅ ● | 80/90 | API scopes | urn:matrix:client:device:* scope honored; api:* scope advertised |
+| MSC2967 | ✅ ● | 88/90 | API scopes | src/api/oidc/token.rs:96; stable+unstable device scope honored, surfaced, req... |
 | MSC2966 | 🟨 ● | 60/80 | Usage of OAuth 2.0 Dynamic Client Registration in Matrix | dynamic client registration endpoint |
 | MSC2965 | ✅ ● | 90/100 | OAuth 2.0 Authorization Server Metadata discovery | auth_issuer and auth_metadata routes return OAuth provider metadata |
-| MSC2964 | ✅ ● | 90/100 | Usage of OAuth 2.0 authorization code grant and refresh token grant | OAuth2 authorize/token/refresh implemented |
+| MSC2964 | ✅ ● | 95/100 | Usage of OAuth 2.0 authorization code grant and refresh token grant | src/api/oidc/authorize.rs:57; S256 PKCE now required on the auth-code grant |
 | MSC2946 | ✅ ● | 90/100 | Spaces Summary | client and federation hierarchy endpoints implemented |
 | MSC2918 | ✅ ● | 90/100 | Refresh tokens | /refresh, expires_in_ms, refresh_token in /login and /register |
 | MSC2870 | ✅ ◐ | 100/100 | Protect server ACLs from redaction | redaction dispatches on RoomVersionRules.redaction; ruma MSC2870 enabled |

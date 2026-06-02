@@ -103,10 +103,12 @@ pub fn issuer_url(&self) -> Result<String> {
 		})
 }
 
+/// Extract the device id from an MSC2967 device scope, accepting both the
+/// stable (`urn:matrix:client:device:`) and unstable spellings.
 #[inline]
-pub fn extract_device_id(scope: &str) -> Option<String> {
-	scope
-		.split_whitespace()
-		.find_map(|s| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"))
-		.map(ToOwned::to_owned)
+pub fn extract_device_id(scope: &str) -> Option<&str> {
+	scope.split_whitespace().find_map(|s| {
+		s.strip_prefix("urn:matrix:client:device:")
+			.or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"))
+	})
 }

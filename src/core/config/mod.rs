@@ -1382,6 +1382,33 @@ pub struct Config {
 	#[serde(default)]
 	pub refresh_token_hard_logout: bool,
 
+	/// Require OIDC clients (next-gen auth) to request an MSC2967 device scope.
+	///
+	/// When false, a client that omits the `urn:matrix:client:device:<id>`
+	/// scope is assigned a server-generated device id, which is echoed back in
+	/// the granted scope. When true, the authorization-code grant is rejected
+	/// unless the client supplies a device scope, per the MSC2967 expectation
+	/// that the client owns its device id.
+	///
+	/// reloadable: yes
+	/// default: false
+	#[serde(default)]
+	pub oidc_require_device_scope: bool,
+
+	/// Require PKCE (RFC 7636) with the S256 method on the OIDC
+	/// authorization-code grant.
+	///
+	/// When true, the authorize endpoint rejects a request that carries no
+	/// `code_challenge`, as MSC2964 mandates for public clients. A present
+	/// challenge must always use S256; the `plain` method is rejected
+	/// regardless of this setting. Set to false only as a transition escape
+	/// hatch for a legacy client that cannot send a challenge.
+	///
+	/// reloadable: yes
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub oidc_require_pkce: bool,
+
 	/// Static TURN username to provide the client if not using a shared secret
 	/// ("turn_secret"), It is recommended to use a shared secret over static
 	/// credentials.

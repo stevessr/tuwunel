@@ -79,6 +79,7 @@ pub(crate) async fn openid_configuration_route(
 		scopes_supported: Some(vec![
 			"openid".to_owned(),
 			"urn:matrix:org.matrix.msc2967.client:api:*".to_owned(),
+			"urn:matrix:client:device:*".to_owned(),
 			"urn:matrix:org.matrix.msc2967.client:device:*".to_owned(),
 		]),
 

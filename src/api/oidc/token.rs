@@ -18,6 +18,7 @@ use tuwunel_core::{
 		future::OptionFutureExt,
 		time::{now, timepoint_has_passed},
 	},
+	warn,
 };
 use tuwunel_service::{
 	Services,
@@ -92,6 +93,15 @@ async fn token_authorization_code(
 		.exchange_auth_code(code, client_id, redirect_uri, body.code_verifier.as_deref())
 		.await?;
 
+	let requested_device: Option<OwnedDeviceId> =
+		extract_device_id(&session.scope).map(OwnedDeviceId::from);
+
+	if requested_device.is_none() && services.server.config.oidc_require_device_scope {
+		return Err!(Request(InvalidParam(
+			"a device scope (urn:matrix:client:device:<id>) is required"
+		)));
+	}
+
 	let user_id = &session.user_id;
 	let (access_token, expires_in) = services.users.generate_access_token(true);
 	let refresh_token = generate_refresh_token();
@@ -104,8 +114,6 @@ async fn token_authorization_code(
 		.and_then(|c| c.client_name);
 
 	let device_display_name = client_name.as_deref().unwrap_or("OIDC Client");
-	let device_id: Option<OwnedDeviceId> =
-		extract_device_id(&session.scope).map(OwnedDeviceId::from);
 
 	let iss = services.oauth.get_server()?.issuer_url()?;
 	let id_token = session
@@ -134,7 +142,7 @@ async fn token_authorization_code(
 		.users
 		.create_device(
 			user_id,
-			device_id.as_deref(),
+			requested_device.as_deref(),
 			(Some(&access_token), expires_in),
 			Some(&refresh_token),
 			Some(device_display_name),
@@ -149,10 +157,20 @@ async fn token_authorization_code(
 
 	info!("{user_id} logged in via OIDC on {device_id} ({device_display_name})");
 
+	// MSC2967: echo a server-chosen device id back in the scope when the client
+	// omitted one.
+	let scope = if requested_device.is_some() {
+		session.scope
+	} else {
+		warn!(%user_id, %device_id, "OIDC client omitted the device scope; generated a device id");
+
+		format!("{} urn:matrix:org.matrix.msc2967.client:device:{device_id}", session.scope)
+	};
+
 	let mut response = json!({
 		"access_token": access_token,
 		"refresh_token": refresh_token,
-		"scope": session.scope,
+		"scope": scope,
 		"token_type": "Bearer",
 	});
 
