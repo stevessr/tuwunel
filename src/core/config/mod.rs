@@ -496,6 +496,18 @@ pub struct Config {
 	#[serde(default = "default_max_fetch_prev_events")]
 	pub max_fetch_prev_events: u16,
 
+	/// Maximum time, in milliseconds, to wait for the missing prev_events of an
+	/// incoming timeline event to arrive on their own before fetching them over
+	/// federation. A gap that closes within this window skips the fetch. The
+	/// wait is event-driven and wakes the instant the events arrive, so this is
+	/// a ceiling on added latency, not a fixed cost. Set to 0 to fetch
+	/// immediately.
+	///
+	/// reloadable: yes
+	/// default: 750
+	#[serde(default = "default_fetch_prev_wait_ms")]
+	pub fetch_prev_wait_ms: u64,
+
 	/// Default/base connection timeout (seconds). This is used only by URL
 	/// previews and update/news endpoint checks.
 	///
@@ -4086,6 +4098,8 @@ fn default_appservice_idle_timeout() -> u64 { 300 }
 fn default_pusher_idle_timeout() -> u64 { 15 }
 
 fn default_max_fetch_prev_events() -> u16 { 192_u16 }
+
+fn default_fetch_prev_wait_ms() -> u64 { 750 }
 
 fn default_tracing_flame_filter() -> String {
 	cfg!(debug_assertions)

@@ -386,6 +386,17 @@
 #
 #max_fetch_prev_events = 192
 
+# Maximum time, in milliseconds, to wait for the missing prev_events of an
+# incoming timeline event to arrive on their own before fetching them over
+# federation. A gap that closes within this window skips the fetch. The
+# wait is event-driven and wakes the instant the events arrive, so this is
+# a ceiling on added latency, not a fixed cost. Set to 0 to fetch
+# immediately.
+#
+# reloadable: yes
+#
+#fetch_prev_wait_ms = 750
+
 # Default/base connection timeout (seconds). This is used only by URL
 # previews and update/news endpoint checks.
 #

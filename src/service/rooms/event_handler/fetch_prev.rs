@@ -1,11 +1,15 @@
-use std::{collections::HashMap, iter::once};
+use std::{collections::HashMap, iter::once, time::Duration};
 
-use futures::{FutureExt, StreamExt, stream::FuturesOrdered};
+use futures::{
+	FutureExt, StreamExt,
+	stream::{FuturesOrdered, FuturesUnordered},
+};
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId,
 	RoomId, RoomVersionId, ServerName, int, uint,
 };
 use serde_json::value::RawValue as RawJsonValue;
+use tokio::time::{Instant, timeout_at};
 use tuwunel_core::{
 	Result, debug_warn, err, implement,
 	matrix::{
@@ -52,6 +56,12 @@ where
 		.stream()
 		.any(async |event_id| !self.services.timeline.pdu_exists(event_id).await)
 		.await;
+
+	let wait_ms = self.services.server.config.fetch_prev_wait_ms;
+	let has_gap = (has_gap && wait_ms > 0)
+		.then_async(|| self.await_prev_gap(initial_set.clone(), Duration::from_millis(wait_ms)))
+		.await
+		.unwrap_or(has_gap);
 
 	has_gap
 		.then_async(|| {
@@ -194,6 +204,35 @@ where
 	);
 
 	Ok((sorted, eventid_info))
+}
+
+#[implement(super::Service)]
+async fn await_prev_gap<'a, Events>(&self, initial_set: Events, wait: Duration) -> bool
+where
+	Events: Iterator<Item = &'a EventId> + Send,
+{
+	let deadline = Instant::now()
+		.checked_add(wait)
+		.expect("wait deadline overflows");
+
+	// Each watcher registers before its existence recheck, so a prev that
+	// arrives during the recheck still wakes us.
+	let pending: FuturesUnordered<_> = initial_set
+		.map(|event_id| (event_id, self.services.timeline.watch_event(event_id)))
+		.stream()
+		.filter_map(async |(event_id, watcher)| {
+			(!self.services.timeline.pdu_exists(event_id).await).then_some(watcher)
+		})
+		.collect()
+		.await;
+
+	if pending.is_empty() {
+		return false;
+	}
+
+	timeout_at(deadline, pending.count())
+		.await
+		.is_err()
 }
 
 /// Fill the prev gap below `incoming_event_id` with one `/get_missing_events`
