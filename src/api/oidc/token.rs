@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use axum::{
 	Json,
 	body::Body,
@@ -22,11 +24,12 @@ use tuwunel_core::{
 };
 use tuwunel_service::{
 	Services,
-	oauth::server::{IdTokenClaims, Server, extract_device_id},
-	users::device::generate_refresh_token,
+	oauth::server::{IdTokenClaims, Server, narrow_scope},
+	users::device::{RefreshToken, generate_refresh_token},
 };
 
 use super::oauth_error;
+use crate::ClientIp;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct TokenRequest {
@@ -42,24 +45,29 @@ pub(crate) struct TokenRequest {
 
 pub(crate) async fn token_route(
 	State(services): State<crate::State>,
+	ClientIp(client): ClientIp,
 	Form(body): Form<TokenRequest>,
 ) -> impl IntoResponse {
 	// RFC 6749 §5.1 and §5.2 require Cache-Control: no-store and Pragma: no-cache
 	// on all token endpoint responses (success and error).
-	let inner = match body.grant_type.as_str() {
-		| "authorization_code" => token_authorization_code(&services, &body)
-			.await
-			.unwrap_or_else(token_error_response),
+	let inner = if services.oauth.check_rate_limit(client).is_err() {
+		oauth_error(StatusCode::TOO_MANY_REQUESTS, "slow_down", "Too many token requests")
+	} else {
+		match body.grant_type.as_str() {
+			| "authorization_code" => token_authorization_code(&services, &body)
+				.await
+				.unwrap_or_else(token_error_response),
 
-		| "refresh_token" => token_refresh(&services, &body)
-			.await
-			.unwrap_or_else(token_error_response),
+			| "refresh_token" => token_refresh(&services, &body)
+				.await
+				.unwrap_or_else(token_error_response),
 
-		| _ => oauth_error(
-			StatusCode::BAD_REQUEST,
-			"unsupported_grant_type",
-			"Unsupported grant_type",
-		),
+			| _ => oauth_error(
+				StatusCode::BAD_REQUEST,
+				"unsupported_grant_type",
+				"Unsupported grant_type",
+			),
+		}
 	};
 	let mut response = inner.into_response();
 	let headers = response.headers_mut();
@@ -90,11 +98,21 @@ async fn token_authorization_code(
 	let session = services
 		.oauth
 		.get_server()?
-		.exchange_auth_code(code, client_id, redirect_uri, body.code_verifier.as_deref())
+		.exchange_auth_code(
+			code,
+			client_id,
+			redirect_uri,
+			body.code_verifier.as_deref(),
+			services.server.config.oidc_require_pkce,
+		)
 		.await?;
 
-	let requested_device: Option<OwnedDeviceId> =
-		extract_device_id(&session.scope).map(OwnedDeviceId::from);
+	let (granted_scope, requested_device_id) =
+		narrow_scope(&session.scope, services.server.config.oidc_strict_scope)?;
+
+	let requested_device: Option<OwnedDeviceId> = requested_device_id
+		.as_deref()
+		.map(OwnedDeviceId::from);
 
 	if requested_device.is_none() && services.server.config.oidc_require_device_scope {
 		return Err!(Request(InvalidParam(
@@ -116,8 +134,7 @@ async fn token_authorization_code(
 	let device_display_name = client_name.as_deref().unwrap_or("OIDC Client");
 
 	let iss = services.oauth.get_server()?.issuer_url()?;
-	let id_token = session
-		.scope
+	let id_token = granted_scope
 		.contains("openid")
 		.then(|| {
 			let now = now().as_secs();
@@ -150,21 +167,31 @@ async fn token_authorization_code(
 		)
 		.await?;
 
-	let idp_id = session.idp_id.as_deref().unwrap_or("");
-	services
-		.users
-		.mark_oidc_device(user_id, &device_id, idp_id);
+	// Tag the device with the IdP that authenticated it, falling back to the
+	// default; leave the row absent when no provider exists.
+	let idp_id = session
+		.idp_id
+		.clone()
+		.filter(|idp| !idp.is_empty())
+		.or_else(|| services.oauth.providers.get_default_id());
+
+	if let Some(idp_id) = idp_id {
+		services
+			.users
+			.mark_oidc_device(user_id, &device_id, &idp_id);
+	}
 
 	info!("{user_id} logged in via OIDC on {device_id} ({device_display_name})");
 
 	// MSC2967: echo a server-chosen device id back in the scope when the client
 	// omitted one.
 	let scope = if requested_device.is_some() {
-		session.scope
+		granted_scope
 	} else {
 		warn!(%user_id, %device_id, "OIDC client omitted the device scope; generated a device id");
 
-		format!("{} urn:matrix:org.matrix.msc2967.client:device:{device_id}", session.scope)
+		let sep = if granted_scope.is_empty() { "" } else { " " };
+		format!("{granted_scope}{sep}urn:matrix:client:device:{device_id}")
 	};
 
 	let mut response = json!({
@@ -186,52 +213,89 @@ async fn token_authorization_code(
 }
 
 async fn token_refresh(services: &Services, body: &TokenRequest) -> Result<Response<Body>> {
-	let refresh_token = body
+	let presented = body
 		.refresh_token
 		.as_deref()
 		.ok_or_else(|| err!(Request(InvalidParam("refresh_token is required"))))?;
 
-	let (user_id, device_id, expires_at) = services
+	match services
 		.users
-		.find_from_token(refresh_token)
+		.classify_refresh_token(presented)
 		.await
-		.map_err(|_| err!(Request(Forbidden("Invalid refresh token"))))?;
+	{
+		| RefreshToken::Current { user_id, device_id, expires_at } => {
+			if expires_at.is_some_and(timepoint_has_passed) {
+				services
+					.server
+					.config
+					.refresh_token_hard_logout
+					.then_async(|| services.users.remove_device(&user_id, &device_id))
+					.unwrap_or_else_async(async || {
+						services
+							.users
+							.remove_refresh_token(&user_id, &device_id)
+							.await
+							.ok();
+					})
+					.await;
 
-	if expires_at.is_some_and(timepoint_has_passed) {
-		services
-			.server
-			.config
-			.refresh_token_hard_logout
-			.then_async(|| services.users.remove_device(&user_id, &device_id))
-			.unwrap_or_else_async(async || {
+				return Err!(Request(Forbidden("Refresh token has expired")));
+			}
+
+			let (access_token, expires_in) = services.users.generate_access_token(true);
+			let refresh_token = generate_refresh_token();
+			services
+				.users
+				.set_access_token(
+					&user_id,
+					&device_id,
+					&access_token,
+					expires_in,
+					Some(&refresh_token),
+				)
+				.await?;
+
+			token_refresh_response(&access_token, &refresh_token, expires_in)
+		},
+
+		| RefreshToken::Replayed { user_id, device_id, current, grace } if grace => {
+			// Benign double-submit: re-issue an access token for the unchanged
+			// refresh token rather than rotating it.
+			let (access_token, expires_in) = services.users.generate_access_token(true);
+			services
+				.users
+				.set_access_token(&user_id, &device_id, &access_token, expires_in, None)
+				.await?;
+
+			token_refresh_response(&access_token, &current, expires_in)
+		},
+
+		| RefreshToken::Replayed { user_id, device_id, .. } => {
+			let revoke = services.server.config.refresh_token_reuse_revoke;
+			warn!(%user_id, %device_id, revoke, "OIDC refresh token reused after rotation");
+
+			if revoke {
 				services
 					.users
-					.remove_refresh_token(&user_id, &device_id)
-					.await
-					.ok();
-			})
-			.await;
+					.remove_device(&user_id, &device_id)
+					.await;
+			}
 
-		return Err!(Request(Forbidden("Refresh token has expired")));
+			Err!(Request(Forbidden("Refresh token has already been used")))
+		},
+
+		| RefreshToken::Unknown => Err!(Request(Forbidden("Invalid refresh token"))),
 	}
+}
 
-	let (new_access_token, expires_in) = services.users.generate_access_token(true);
-	let new_refresh_token = generate_refresh_token();
-
-	services
-		.users
-		.set_access_token(
-			&user_id,
-			&device_id,
-			&new_access_token,
-			expires_in,
-			Some(&new_refresh_token),
-		)
-		.await?;
-
+fn token_refresh_response(
+	access_token: &str,
+	refresh_token: &str,
+	expires_in: Option<Duration>,
+) -> Result<Response<Body>> {
 	let mut response = json!({
-		"access_token": new_access_token,
-		"refresh_token": new_refresh_token,
+		"access_token": access_token,
+		"refresh_token": refresh_token,
 		"token_type": "Bearer",
 	});
 

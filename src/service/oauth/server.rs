@@ -7,7 +7,7 @@ mod token;
 use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
-use tuwunel_core::{Result, debug_info, debug_warn, err, implement, warn};
+use tuwunel_core::{Err, Result, debug_info, debug_warn, err, implement, warn};
 use tuwunel_database::Map;
 
 pub use self::{
@@ -103,12 +103,101 @@ pub fn issuer_url(&self) -> Result<String> {
 		})
 }
 
-/// Extract the device id from an MSC2967 device scope, accepting both the
-/// stable (`urn:matrix:client:device:`) and unstable spellings.
+/// MSC2967 device-scope prefixes, stable spelling first.
+const DEVICE_SCOPE_PREFIXES: [&str; 2] =
+	["urn:matrix:client:device:", "urn:matrix:org.matrix.msc2967.client:device:"];
+
+/// MSC2967 API-scope prefixes, stable spelling first.
+const API_SCOPE_PREFIXES: [&str; 2] =
+	["urn:matrix:client:api:", "urn:matrix:org.matrix.msc2967.client:api:"];
+
+/// Narrow a requested scope to the granted scope (RFC 6749 §3.3): keep the
+/// tokens this server recognises and return them alongside the MSC2967 device
+/// id, when one was requested. Unrecognised tokens are dropped, or rejected
+/// when `strict` is set. A request carrying more than one device scope, or a
+/// device id outside the RFC 3986 unreserved set, is always rejected.
+pub fn narrow_scope(requested: &str, strict: bool) -> Result<(String, Option<String>)> {
+	let mut granted = String::new();
+	let mut device_id: Option<&str> = None;
+
+	for token in requested.split_whitespace() {
+		let keep = if let Some(id) = DEVICE_SCOPE_PREFIXES
+			.iter()
+			.find_map(|prefix| token.strip_prefix(prefix))
+		{
+			if device_id.is_some() {
+				return Err!(Request(InvalidParam("more than one device scope requested")));
+			}
+			if id.is_empty() || !id.bytes().all(is_unreserved) {
+				return Err!(Request(InvalidParam("device id contains a reserved character")));
+			}
+
+			device_id = Some(id);
+			true
+		} else {
+			token == "openid"
+				|| API_SCOPE_PREFIXES
+					.iter()
+					.any(|prefix| token.starts_with(prefix))
+		};
+
+		if keep {
+			if !granted.is_empty() {
+				granted.push(' ');
+			}
+
+			granted.push_str(token);
+		} else if strict {
+			return Err!(Request(InvalidParam("unsupported scope requested")));
+		}
+	}
+
+	Ok((granted, device_id.map(ToOwned::to_owned)))
+}
+
 #[inline]
-pub fn extract_device_id(scope: &str) -> Option<&str> {
-	scope.split_whitespace().find_map(|s| {
-		s.strip_prefix("urn:matrix:client:device:")
-			.or_else(|| s.strip_prefix("urn:matrix:org.matrix.msc2967.client:device:"))
-	})
+fn is_unreserved(b: u8) -> bool {
+	b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~')
+}
+
+#[cfg(test)]
+mod tests {
+	use super::narrow_scope;
+
+	#[test]
+	fn narrow_scope_keeps_known_drops_unknown() {
+		let requested =
+			"openid urn:matrix:client:api:* urn:matrix:client:device:ABCDEFGHIJ custom:x";
+
+		let (granted, device) = narrow_scope(requested, false).expect("narrows");
+
+		assert_eq!(granted, "openid urn:matrix:client:api:* urn:matrix:client:device:ABCDEFGHIJ");
+		assert_eq!(device.as_deref(), Some("ABCDEFGHIJ"));
+	}
+
+	#[test]
+	fn narrow_scope_strict_rejects_unknown() {
+		narrow_scope("openid custom:x", true).unwrap_err();
+		narrow_scope("openid custom:x", false).unwrap();
+	}
+
+	#[test]
+	fn narrow_scope_accepts_unstable_device_spelling() {
+		let scope = "urn:matrix:org.matrix.msc2967.client:device:DEV0123456";
+		let (_granted, device) = narrow_scope(scope, false).expect("narrows");
+
+		assert_eq!(device.as_deref(), Some("DEV0123456"));
+	}
+
+	#[test]
+	fn narrow_scope_rejects_two_device_scopes() {
+		let two = "urn:matrix:client:device:AAAAAAAAAA urn:matrix:client:device:BBBBBBBBBB";
+
+		narrow_scope(two, false).unwrap_err();
+	}
+
+	#[test]
+	fn narrow_scope_rejects_reserved_device_id() {
+		narrow_scope("urn:matrix:client:device:bad/id", false).unwrap_err();
+	}
 }

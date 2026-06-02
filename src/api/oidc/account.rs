@@ -396,12 +396,6 @@ async fn peek_login_token(services: &Services, token: Option<&str>) -> Result<ru
 }
 
 fn account_management_idp_id(services: &Services) -> Result<String> {
-	if services.config.identity_provider.len() != 1 {
-		return Err!(Request(InvalidParam(
-			"Account management requires exactly one configured identity provider"
-		)));
-	}
-
 	services
 		.oauth
 		.providers

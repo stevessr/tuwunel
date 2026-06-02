@@ -4,19 +4,28 @@ pub mod sessions;
 pub mod token_response;
 pub mod user_info;
 
-use std::sync::Arc;
+use std::{
+	collections::HashMap,
+	net::IpAddr,
+	sync::{Arc, Mutex},
+	time::Instant,
+};
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD as b64encode};
 use futures::{Stream, StreamExt, TryStreamExt};
+use http::StatusCode;
 use reqwest::{
 	Method,
 	header::{ACCEPT, CONTENT_TYPE},
 };
-use ruma::UserId;
+use ruma::{
+	UserId,
+	api::error::{ErrorKind, LimitExceededErrorData},
+};
 use serde::Serialize;
 use serde_json::Value as JsonValue;
 use tuwunel_core::{
-	Err, Result, err, implement,
+	Err, Error, Result, err, implement,
 	utils::{hash::sha256, result::LogErr, stream::ReadyExt},
 	warn,
 };
@@ -37,6 +46,7 @@ pub struct Service {
 	pub providers: Arc<Providers>,
 	pub sessions: Arc<Sessions>,
 	pub server: Option<Arc<Server>>,
+	ratelimiter: Mutex<HashMap<IpAddr, (Instant, f64)>>,
 }
 
 impl crate::Service for Service {
@@ -50,6 +60,7 @@ impl crate::Service for Service {
 			sessions,
 			providers,
 			server,
+			ratelimiter: Mutex::new(HashMap::new()),
 		}))
 	}
 
@@ -62,6 +73,60 @@ pub fn get_server(&self) -> Result<&Server> {
 	self.server
 		.as_deref()
 		.ok_or_else(|| err!(Request(Unrecognized("OIDC server not configured"))))
+}
+
+/// Cap on the rate-limit table; fully refilled buckets are pruned past it.
+const RATELIMIT_MAP_CAP: usize = 1 << 16;
+
+/// Shared per-client-IP token-bucket throttle for the OIDC endpoints. A no-op
+/// unless both `oidc_rc_per_second` and `oidc_rc_burst_count` are configured.
+#[implement(Service)]
+pub fn check_rate_limit(&self, client: IpAddr) -> Result {
+	let config = &self.services.config;
+	let rate = f64::from(config.oidc_rc_per_second);
+	let burst = f64::from(config.oidc_rc_burst_count);
+
+	if rate <= 0.0 || burst <= 0.0 {
+		return Ok(());
+	}
+
+	let now = Instant::now();
+	let mut ratelimiter = self.ratelimiter.lock()?;
+
+	// A fully refilled bucket equals an absent one; prune those past the cap so
+	// a source-address spray cannot grow the table without bound.
+	if ratelimiter.len() >= RATELIMIT_MAP_CAP {
+		ratelimiter.retain(|_, bucket| {
+			let (last, toks) = *bucket;
+			now.duration_since(last)
+				.as_secs_f64()
+				.mul_add(rate, toks)
+				< burst
+		});
+	}
+
+	let (last_time, tokens) = ratelimiter
+		.entry(client)
+		.or_insert_with(|| (now, burst));
+
+	let new_tokens = now
+		.duration_since(*last_time)
+		.as_secs_f64()
+		.mul_add(rate, *tokens)
+		.min(burst);
+
+	if new_tokens < 1.0 {
+		return Err(Error::Request(
+			ErrorKind::LimitExceeded(LimitExceededErrorData { retry_after: None }),
+			"Too many OIDC requests.".into(),
+			StatusCode::TOO_MANY_REQUESTS,
+		));
+	}
+
+	*last_time = now;
+	*tokens = new_tokens - 1.0;
+
+	Ok(())
 }
 
 /// Remove all session state for a user. For debug and developer use only;

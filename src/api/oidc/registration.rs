@@ -5,12 +5,16 @@ use tuwunel_core::{Err, Result, info};
 use tuwunel_service::oauth::server::DcrRequest;
 use url::Url;
 
+use crate::ClientIp;
+
 pub(crate) async fn registration_route(
 	State(services): State<crate::State>,
+	ClientIp(client): ClientIp,
 	headers: HeaderMap,
 	Json(body): Json<DcrRequest>,
 ) -> Result<impl IntoResponse> {
 	let oidc = services.oauth.get_server()?;
+	services.oauth.check_rate_limit(client)?;
 	let config = &services.config;
 
 	if body.redirect_uris.is_empty() {

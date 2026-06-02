@@ -1382,6 +1382,36 @@ pub struct Config {
 	#[serde(default)]
 	pub refresh_token_hard_logout: bool,
 
+	/// Grace window in seconds for a benign refresh-token double-submit.
+	///
+	/// After a refresh token rotates, the spent token is retained for one
+	/// generation so a later reuse is detectable. If that spent token is
+	/// presented again within this window while its successor is still the
+	/// device's current refresh token, the request is treated as a client that
+	/// lost the rotated response: a fresh access token is issued for the
+	/// unchanged refresh token rather than revoking the device. Outside the
+	/// window, or once the chain has advanced, a replayed refresh token revokes
+	/// the device as a suspected compromise. Set to `0` to treat every reuse as
+	/// a compromise.
+	///
+	/// reloadable: yes
+	/// default: 15
+	#[serde(default = "default_refresh_token_reuse_grace")]
+	pub refresh_token_reuse_grace: u64,
+
+	/// Whether a detected refresh-token reuse revokes the device.
+	///
+	/// When true (default), presenting a refresh token that was already rotated
+	/// (outside the `refresh_token_reuse_grace` window) removes the device, the
+	/// RFC 6819 stance that treats reuse as a compromised session. When false,
+	/// the replayed request is rejected but the device is left intact, the
+	/// laxer behaviour an operator fronting another OAuth client may prefer.
+	///
+	/// reloadable: yes
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub refresh_token_reuse_revoke: bool,
+
 	/// Require OIDC clients (next-gen auth) to request an MSC2967 device scope.
 	///
 	/// When false, a client that omits the `urn:matrix:client:device:<id>`
@@ -1409,6 +1439,20 @@ pub struct Config {
 	#[serde(default = "true_fn")]
 	pub oidc_require_pkce: bool,
 
+	/// Reject an OIDC authorization-code grant that requests a scope this
+	/// server does not recognise, instead of narrowing the granted scope down
+	/// to the recognised tokens.
+	///
+	/// When false (default), an unrecognised scope token is dropped and the
+	/// narrowed `scope` is echoed back to the client per RFC 6749. When true,
+	/// an unrecognised scope is rejected. `openid` and the MSC2967 device and
+	/// api scopes (both spellings) are always recognised.
+	///
+	/// reloadable: yes
+	/// default: false
+	#[serde(default)]
+	pub oidc_strict_scope: bool,
+
 	/// Initial access token required to register an OIDC client dynamically
 	/// (RFC 7591).
 	///
@@ -1432,6 +1476,32 @@ pub struct Config {
 	/// default: []
 	#[serde(default)]
 	pub oidc_registration_allowed_redirect_hosts: Vec<String>,
+
+	/// Token-bucket refill rate (requests per second) for the OIDC endpoints.
+	///
+	/// Applies a shared per-client-IP throttle across the authorize, token and
+	/// dynamic-registration endpoints (and the device-grant endpoints once they
+	/// exist). The default of `0` disables the throttle, preserving open
+	/// access; raise it together with `oidc_rc_burst_count` to protect a server
+	/// exposed to a hostile network. The key is the client IP, so a rate low
+	/// enough to bite a brute-force attempt can also throttle many users behind
+	/// one NAT; size the burst accordingly.
+	///
+	/// reloadable: yes
+	/// default: 0
+	#[serde(default)]
+	pub oidc_rc_per_second: u32,
+
+	/// Token-bucket depth (burst size) for the OIDC endpoint throttle.
+	///
+	/// The number of requests a single client IP may make in a burst before the
+	/// `oidc_rc_per_second` refill rate governs. Ignored while
+	/// `oidc_rc_per_second` is `0`.
+	///
+	/// reloadable: yes
+	/// default: 0
+	#[serde(default)]
+	pub oidc_rc_burst_count: u32,
 
 	/// Static TURN username to provide the client if not using a shared secret
 	/// ("turn_secret"), It is recommended to use a shared secret over static
@@ -4367,6 +4437,8 @@ fn default_client_sync_timeout_default() -> u64 { 30000 }
 fn default_client_sync_timeout_max() -> u64 { 90000 }
 
 fn default_access_token_ttl() -> u64 { 604_800 }
+
+fn default_refresh_token_reuse_grace() -> u64 { 15 }
 
 fn default_deprioritize_joins_through_servers() -> RegexSet {
 	RegexSet::new([r"matrix\.org"]).expect("valid set of regular expressions")

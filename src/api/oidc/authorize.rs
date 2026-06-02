@@ -16,6 +16,7 @@ use tuwunel_service::{
 use url::Url;
 
 use super::{OIDC_REQ_ID_LENGTH, url_encode};
+use crate::ClientIp;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct AuthorizeParams {
@@ -28,15 +29,19 @@ pub(crate) struct AuthorizeParams {
 	nonce: Option<String>,
 	code_challenge: Option<String>,
 	code_challenge_method: Option<String>,
+	#[serde(default)]
+	idp_id: Option<String>,
 	#[serde(default, rename = "prompt")]
 	_prompt: Option<String>,
 }
 
 pub(crate) async fn authorize_route(
 	State(services): State<crate::State>,
+	ClientIp(client): ClientIp,
 	request: axum::extract::Request,
 ) -> Result<impl IntoResponse> {
 	let oidc = services.oauth.get_server()?;
+	services.oauth.check_rate_limit(client)?;
 
 	let query = request.uri().query().unwrap_or_default();
 	let params: AuthorizeParams = serde_html_form::from_str(query)?;
@@ -68,11 +73,22 @@ pub(crate) async fn authorize_route(
 
 	let now = SystemTime::now();
 	let req_id = utils::random_string(OIDC_REQ_ID_LENGTH);
-	let idp_id = services
-		.oauth
-		.providers
-		.get_default_id()
-		.ok_or_else(|| err!(Config("identity_provider", "No identity provider configured")))?;
+	let idp_id = match params.idp_id.as_deref() {
+		| Some(requested) => services
+			.oauth
+			.providers
+			.get_config(requested)
+			.map(|provider| provider.id().to_owned())
+			.map_err(|_| err!(Request(InvalidParam("Unrecognized identity provider"))))?,
+
+		| None => services
+			.oauth
+			.providers
+			.get_default_id()
+			.ok_or_else(|| {
+				err!(Config("identity_provider", "No identity provider configured"))
+			})?,
+	};
 
 	let auth_req = AuthRequest {
 		client_id: params.client_id,
