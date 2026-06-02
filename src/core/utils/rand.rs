@@ -29,6 +29,15 @@ pub fn string(length: usize) -> String {
 		.collect()
 }
 
+/// A random string of `length` characters drawn uniformly from `charset`.
+#[must_use]
+pub fn string_from(charset: &[u8], length: usize) -> String {
+	let mut rng = rng();
+	(0..length)
+		.map(|_| char::from(charset[rng.random_range(0..charset.len())]))
+		.collect()
+}
+
 #[inline]
 pub fn string_array<const LENGTH: usize>() -> ArrayString<LENGTH> {
 	let mut ret = ArrayString::<LENGTH>::new();

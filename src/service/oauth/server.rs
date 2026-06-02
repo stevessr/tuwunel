@@ -1,5 +1,6 @@
 mod auth;
 mod client;
+mod device;
 mod jwk;
 mod signing_key;
 mod token;
@@ -7,12 +8,16 @@ mod token;
 use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
-use tuwunel_core::{Err, Result, debug_info, debug_warn, err, implement, warn};
+use tuwunel_core::{Err, Result, debug_info, debug_warn, err, implement, utils::MutexMap, warn};
 use tuwunel_database::Map;
 
 pub use self::{
 	auth::{AUTH_REQUEST_LIFETIME, AuthCodeSession, AuthRequest},
 	client::{ClientRegistration, DcrRequest},
+	device::{
+		ApprovedDeviceGrant, DEVICE_GRANT_INTERVAL_SECS, DEVICE_GRANT_LIFETIME, DeviceGrant,
+		DeviceGrantPoll, DeviceGrantStatus, format_user_code,
+	},
 	token::IdTokenClaims,
 };
 use self::{
@@ -26,12 +31,18 @@ pub struct Server {
 	db: Data,
 	jwk: JsonValue,
 	key: SigningKey,
+
+	/// Serializes the read-check-consume of a device grant by its `device_code`
+	/// so concurrent polls of one approved grant cannot each mint a device.
+	device_locks: MutexMap<String, ()>,
 }
 
 struct Data {
 	oidc_signingkey: Arc<Map>,
 	oidcclientid_registration: Arc<Map>,
 	oidccode_authsession: Arc<Map>,
+	oidcdevicecode_devicegrant: Arc<Map>,
+	oidcusercode_devicecode: Arc<Map>,
 	oidcreqid_authrequest: Arc<Map>,
 }
 
@@ -45,6 +56,8 @@ impl Server {
 			oidc_signingkey: args.db["oidc_signingkey"].clone(),
 			oidcclientid_registration: args.db["oidcclientid_registration"].clone(),
 			oidccode_authsession: args.db["oidccode_authsession"].clone(),
+			oidcdevicecode_devicegrant: args.db["oidcdevicecode_devicegrant"].clone(),
+			oidcusercode_devicecode: args.db["oidcusercode_devicecode"].clone(),
 			oidcreqid_authrequest: args.db["oidcreqid_authrequest"].clone(),
 		};
 
@@ -59,6 +72,7 @@ impl Server {
 			db,
 			jwk: init_jwk(&key.key_der, &key.key_id)?,
 			key,
+			device_locks: MutexMap::new(),
 		}))
 	}
 }

@@ -37,7 +37,7 @@ pub use self::{
 	json::{deserialize_from_str, to_canonical_object},
 	mutex_map::{Guard as MutexMapGuard, MutexMap},
 	option::OptionExt,
-	rand::{shuffle, string as random_string},
+	rand::{shuffle, string as random_string, string_from as random_string_from},
 	stream::{IterStream, ReadyExt, Tools as StreamTools, TryReadyExt},
 	string::{str_from_bytes, string_from_bytes},
 	sys::compute::available_parallelism,

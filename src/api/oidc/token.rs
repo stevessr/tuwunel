@@ -10,7 +10,7 @@ use http::{
 	Response, StatusCode,
 	header::{CACHE_CONTROL, PRAGMA},
 };
-use ruma::OwnedDeviceId;
+use ruma::{OwnedDeviceId, UserId};
 use serde::Deserialize;
 use serde_json::json;
 use tuwunel_core::{
@@ -24,7 +24,7 @@ use tuwunel_core::{
 };
 use tuwunel_service::{
 	Services,
-	oauth::server::{IdTokenClaims, Server, narrow_scope},
+	oauth::server::{DeviceGrantPoll, IdTokenClaims, Server, narrow_scope},
 	users::device::{RefreshToken, generate_refresh_token},
 };
 
@@ -39,8 +39,18 @@ pub(crate) struct TokenRequest {
 	client_id: Option<String>,
 	code_verifier: Option<String>,
 	refresh_token: Option<String>,
+	device_code: Option<String>,
 	#[serde(rename = "scope")]
 	_scope: Option<String>,
+}
+
+/// An authenticated grant ready to mint tokens.
+struct ApprovedGrant<'a> {
+	client_id: &'a str,
+	scope: &'a str,
+	user_id: &'a UserId,
+	nonce: Option<String>,
+	idp_id: Option<String>,
 }
 
 pub(crate) async fn token_route(
@@ -61,6 +71,11 @@ pub(crate) async fn token_route(
 			| "refresh_token" => token_refresh(&services, &body)
 				.await
 				.unwrap_or_else(token_error_response),
+
+			| "urn:ietf:params:oauth:grant-type:device_code" =>
+				token_device_code(&services, &body)
+					.await
+					.unwrap_or_else(token_error_response),
 
 			| _ => oauth_error(
 				StatusCode::BAD_REQUEST,
@@ -107,8 +122,72 @@ async fn token_authorization_code(
 		)
 		.await?;
 
+	issue_tokens(services, ApprovedGrant {
+		client_id: &session.client_id,
+		scope: &session.scope,
+		user_id: &session.user_id,
+		nonce: session.nonce,
+		idp_id: session.idp_id,
+	})
+	.await
+}
+
+/// RFC 8628 §3.4: poll the device-code grant; pending, denied and expired map
+/// to the §3.5 error codes.
+async fn token_device_code(services: &Services, body: &TokenRequest) -> Result<Response<Body>> {
+	let device_code = body
+		.device_code
+		.as_deref()
+		.ok_or_else(|| err!(Request(InvalidParam("device_code is required"))))?;
+
+	let client_id = body
+		.client_id
+		.as_deref()
+		.ok_or_else(|| err!(Request(InvalidParam("client_id is required"))))?;
+
+	match services
+		.oauth
+		.get_server()?
+		.poll_device_grant(device_code, client_id)
+		.await?
+	{
+		| DeviceGrantPoll::Pending => Ok(oauth_error(
+			StatusCode::BAD_REQUEST,
+			"authorization_pending",
+			"The user has not yet completed authorization",
+		)),
+
+		| DeviceGrantPoll::Denied => Ok(oauth_error(
+			StatusCode::BAD_REQUEST,
+			"access_denied",
+			"The authorization request was denied",
+		)),
+
+		| DeviceGrantPoll::Expired => Ok(oauth_error(
+			StatusCode::BAD_REQUEST,
+			"expired_token",
+			"The device code has expired",
+		)),
+
+		| DeviceGrantPoll::Approved(grant) =>
+			issue_tokens(services, ApprovedGrant {
+				client_id: &grant.client_id,
+				scope: &grant.scope,
+				user_id: &grant.user_id,
+				nonce: None,
+				idp_id: grant.idp_id,
+			})
+			.await,
+	}
+}
+
+/// Mint the access token, refresh token and device for an authenticated grant,
+/// honoring the MSC2967 device scope and emitting the OAuth token response.
+async fn issue_tokens(services: &Services, grant: ApprovedGrant<'_>) -> Result<Response<Body>> {
+	let ApprovedGrant { client_id, scope, user_id, nonce, idp_id } = grant;
+
 	let (granted_scope, requested_device_id) =
-		narrow_scope(&session.scope, services.server.config.oidc_strict_scope)?;
+		narrow_scope(scope, services.server.config.oidc_strict_scope)?;
 
 	let requested_device: Option<OwnedDeviceId> = requested_device_id
 		.as_deref()
@@ -120,7 +199,6 @@ async fn token_authorization_code(
 		)));
 	}
 
-	let user_id = &session.user_id;
 	let (access_token, expires_in) = services.users.generate_access_token(true);
 	let refresh_token = generate_refresh_token();
 	let client_name = services
@@ -144,7 +222,7 @@ async fn token_authorization_code(
 				aud: client_id.to_owned(),
 				exp: now.saturating_add(3600),
 				iat: now,
-				nonce: session.nonce,
+				nonce,
 				at_hash: Some(Server::at_hash(&access_token)),
 			};
 
@@ -169,9 +247,7 @@ async fn token_authorization_code(
 
 	// Tag the device with the IdP that authenticated it, falling back to the
 	// default; leave the row absent when no provider exists.
-	let idp_id = session
-		.idp_id
-		.clone()
+	let idp_id = idp_id
 		.filter(|idp| !idp.is_empty())
 		.or_else(|| services.oauth.providers.get_default_id());
 

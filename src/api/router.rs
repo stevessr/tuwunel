@@ -256,6 +256,12 @@ fn register_oidc_routes(router: Router<State>) -> Router<State> {
 		.route("/_tuwunel/oidc/authorize", get(oidc::authorize_route))
 		.route("/_tuwunel/oidc/_complete", get(oidc::complete_route))
 		.route("/_tuwunel/oidc/token", post(oidc::token_route))
+		.route("/_tuwunel/oidc/device_authorization", post(oidc::device_authorization_route))
+		.route("/_tuwunel/oidc/device", get(oidc::get_device_route))
+		.route(
+			"/_tuwunel/oidc/device_callback",
+			get(oidc::get_device_callback_route).post(oidc::post_device_callback_route),
+		)
 		.route("/_tuwunel/oidc/revoke", post(oidc::revoke_route))
 		.route("/_tuwunel/oidc/jwks", get(oidc::jwks_route))
 		.route("/_tuwunel/oidc/userinfo", get(oidc::userinfo_route).post(oidc::userinfo_route))

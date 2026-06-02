@@ -41,12 +41,16 @@ pub use self::{
 };
 use crate::{SelfServices, client::read_response_capped};
 
+/// Per-client-IP token-bucket table: last-refill instant and remaining tokens.
+type Ratelimiter = Mutex<HashMap<IpAddr, (Instant, f64)>>;
+
 pub struct Service {
 	services: SelfServices,
 	pub providers: Arc<Providers>,
 	pub sessions: Arc<Sessions>,
 	pub server: Option<Arc<Server>>,
-	ratelimiter: Mutex<HashMap<IpAddr, (Instant, f64)>>,
+	ratelimiter: Ratelimiter,
+	device_ratelimiter: Ratelimiter,
 }
 
 impl crate::Service for Service {
@@ -61,6 +65,7 @@ impl crate::Service for Service {
 			providers,
 			server,
 			ratelimiter: Mutex::new(HashMap::new()),
+			device_ratelimiter: Mutex::new(HashMap::new()),
 		}))
 	}
 
@@ -78,6 +83,13 @@ pub fn get_server(&self) -> Result<&Server> {
 /// Cap on the rate-limit table; fully refilled buckets are pruned past it.
 const RATELIMIT_MAP_CAP: usize = 1 << 16;
 
+/// Always-on throttle for the RFC 8628 device user-code endpoints. The
+/// `user_code` is low-entropy by design (§6.1), so §5.1 requires bounding
+/// guesses regardless of the optional `oidc_rc_*` knobs; the burst stays
+/// generous for the one code a real user enters.
+const DEVICE_RC_PER_SECOND: f64 = 1.0;
+const DEVICE_RC_BURST: f64 = 60.0;
+
 /// Shared per-client-IP token-bucket throttle for the OIDC endpoints. A no-op
 /// unless both `oidc_rc_per_second` and `oidc_rc_burst_count` are configured.
 #[implement(Service)]
@@ -90,13 +102,24 @@ pub fn check_rate_limit(&self, client: IpAddr) -> Result {
 		return Ok(());
 	}
 
+	check_bucket(&self.ratelimiter, client, rate, burst)
+}
+
+/// Always-on anti-brute-force throttle for the device user-code endpoints
+/// (RFC 8628 §5.1), independent of the optional `oidc_rc_*` knobs.
+#[implement(Service)]
+pub fn check_device_rate_limit(&self, client: IpAddr) -> Result {
+	check_bucket(&self.device_ratelimiter, client, DEVICE_RC_PER_SECOND, DEVICE_RC_BURST)
+}
+
+fn check_bucket(table: &Ratelimiter, client: IpAddr, rate: f64, burst: f64) -> Result {
 	let now = Instant::now();
-	let mut ratelimiter = self.ratelimiter.lock()?;
+	let mut buckets = table.lock()?;
 
 	// A fully refilled bucket equals an absent one; prune those past the cap so
 	// a source-address spray cannot grow the table without bound.
-	if ratelimiter.len() >= RATELIMIT_MAP_CAP {
-		ratelimiter.retain(|_, bucket| {
+	if buckets.len() >= RATELIMIT_MAP_CAP {
+		buckets.retain(|_, bucket| {
 			let (last, toks) = *bucket;
 			now.duration_since(last)
 				.as_secs_f64()
@@ -105,7 +128,7 @@ pub fn check_rate_limit(&self, client: IpAddr) -> Result {
 		});
 	}
 
-	let (last_time, tokens) = ratelimiter
+	let (last_time, tokens) = buckets
 		.entry(client)
 		.or_insert_with(|| (now, burst));
 

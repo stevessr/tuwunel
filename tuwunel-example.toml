@@ -1262,9 +1262,9 @@
 
 # Token-bucket refill rate (requests per second) for the OIDC endpoints.
 #
-# Applies a shared per-client-IP throttle across the authorize, token and
-# dynamic-registration endpoints (and the device-grant endpoints once they
-# exist). The default of `0` disables the throttle, preserving open
+# Applies a shared per-client-IP throttle across the authorize, token,
+# dynamic-registration and device-grant endpoints. The default of `0`
+# disables the throttle, preserving open
 # access; raise it together with `oidc_rc_burst_count` to protect a server
 # exposed to a hostile network. The key is the client IP, so a rate low
 # enough to bite a brute-force attempt can also throttle many users behind
