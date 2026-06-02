@@ -1409,6 +1409,30 @@ pub struct Config {
 	#[serde(default = "true_fn")]
 	pub oidc_require_pkce: bool,
 
+	/// Initial access token required to register an OIDC client dynamically
+	/// (RFC 7591).
+	///
+	/// When set, the registration endpoint requires the caller to present this
+	/// token as an `Authorization: Bearer` credential. The default (empty)
+	/// leaves dynamic client registration open.
+	///
+	/// reloadable: yes
+	/// default:
+	#[serde(default)]
+	pub oidc_registration_access_token: String,
+
+	/// Allowlist of hostnames permitted in a dynamically-registered OIDC
+	/// client's redirect_uris.
+	///
+	/// When non-empty, every redirect_uri presented at registration must have a
+	/// host in this list or the registration is rejected. The default (empty)
+	/// imposes no host restriction.
+	///
+	/// reloadable: yes
+	/// default: []
+	#[serde(default)]
+	pub oidc_registration_allowed_redirect_hosts: Vec<String>,
+
 	/// Static TURN username to provide the client if not using a shared secret
 	/// ("turn_secret"), It is recommended to use a shared secret over static
 	/// credentials.

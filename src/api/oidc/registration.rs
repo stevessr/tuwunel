@@ -1,17 +1,50 @@
 use axum::{Json, extract::State, response::IntoResponse};
-use http::StatusCode;
+use http::{HeaderMap, StatusCode, header::AUTHORIZATION};
 use serde_json::json;
 use tuwunel_core::{Err, Result, info};
 use tuwunel_service::oauth::server::DcrRequest;
+use url::Url;
 
 pub(crate) async fn registration_route(
 	State(services): State<crate::State>,
+	headers: HeaderMap,
 	Json(body): Json<DcrRequest>,
 ) -> Result<impl IntoResponse> {
 	let oidc = services.oauth.get_server()?;
+	let config = &services.config;
 
 	if body.redirect_uris.is_empty() {
 		return Err!(Request(InvalidParam("redirect_uris must not be empty")));
+	}
+
+	// Initial access token (RFC 7591): gate registration when one is configured.
+	let required_token = config.oidc_registration_access_token.as_str();
+	if !required_token.is_empty() {
+		let presented = headers
+			.get(AUTHORIZATION)
+			.and_then(|value| value.to_str().ok())
+			.and_then(|value| value.strip_prefix("Bearer "));
+
+		if presented != Some(required_token) {
+			return Err!(Request(Forbidden("A valid initial access token is required")));
+		}
+	}
+
+	// Redirect-host allowlist (RFC 7591): every redirect_uri host must be listed.
+	let allowed = &config.oidc_registration_allowed_redirect_hosts;
+	if !allowed.is_empty() {
+		let host_allowed = |uri: &String| {
+			Url::parse(uri).is_ok_and(|url| {
+				url.host_str()
+					.is_some_and(|host| allowed.iter().any(|entry| entry.as_str() == host))
+			})
+		};
+
+		if !body.redirect_uris.iter().all(host_allowed) {
+			return Err!(Request(Forbidden(
+				"A redirect_uri host is not in the registration allowlist"
+			)));
+		}
 	}
 
 	let reg = oidc.register_client(body).await?;
