@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 220
-- 🟨 `partial`: 58
+- ✅ `yes`: 221
+- 🟨 `partial`: 57
 - ❌ `no`: 454
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 153 | 28 | 11 | 64 | 256 |
+| merged | 154 | 27 | 11 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -170,7 +170,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC2674 | ✅ ● | 90/100 | Event relationships | relates_to handled in append; rel_type tracked |
 | MSC2666 | 🟨 ● | 60/70 | Get rooms in common with another user | src/api/client/unstable.rs:28 GET /unstable/uk.half-shot.msc2666/user/mutual_... |
 | MSC2663 | ✅ ● | 100/100 | Errors for dealing with non-existent push rules | src/api/client/push.rs all 7 endpoints return NotFound |
-| MSC2659 | 🟨 ● | 70/90 | Application service ping endpoint | src/api/client/appservice.rs:11 calls AS /_matrix/app/v1/ping |
+| MSC2659 | ✅ ● | 95/100 | Application service ping endpoint | ping surfaces M_CONNECTION_TIMEOUT/FAILED and M_BAD_STATUS per spec |
 | MSC2611 | ✅ ● | 100/100 | Remove `m.login.token` User-Interactive Authentication type from the specific... | AuthType::Token UIAA not advertised; m.login.token login is unrelated |
 | MSC2610 | ✅ ● | 100/100 | Remove `m.login.oauth2` User-Interactive Authentication type from the specifi... | AuthType::OAuth2 not advertised; only Password/Sso/Jwt flows |
 | MSC2540 | ❌ ◐ | 0/0 | Stricter event validation: JSON compliance | ruma exposes strict_canonical_json flag; Tuwunel does not enforce floats reje... |
@@ -242,7 +242,6 @@ for spec compliance.
 | MSC4291 | 🟨 ● | 80/90 | Room IDs as hashes of the create event | hydra.11 room id format and auth rules in event_auth, pdu format checks |
 | MSC1219 | 🟨 ● | 70/100 | Storing megolm keys serverside | key backup endpoints fully implemented in src/api/client/backup.rs |
 | MSC2409 | 🟨 ● | 70/70 | Proposal to send typing, presence and receipts to appservices | typing+receipt EDUs sent to AS; presence not forwarded |
-| MSC2659 | 🟨 ● | 70/90 | Application service ping endpoint | src/api/client/appservice.rs:11 calls AS /_matrix/app/v1/ping |
 | MSC3787 | 🟨 ● | 70/? | Allowing knocks to restricted rooms | complement: 33p/14f |
 | MSC4133 | 🟨 ● | 70/80 | Extending User Profile API with Custom Key:Value Pairs | GET/PUT/DELETE profile field endpoints routed at unstable prefix |
 | MSC1866 | 🟨 ○ | 60/70 | MSC 1866 - Unsupported Room Version Error Code for Invites | federation invite errors propagated; not explicitly mapped |
