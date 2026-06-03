@@ -43,7 +43,7 @@ pub(crate) async fn get_supported_versions_route(
 	})
 }
 
-static VERSIONS: [&str; 17] = [
+static VERSIONS: [&str; 25] = [
 	"r0.0.1", /* Historical */
 	"r0.1.0", /* Historical */
 	"r0.2.0", /* Historical */
@@ -55,11 +55,20 @@ static VERSIONS: [&str; 17] = [
 	"v1.1",   /* Stable; Tested */
 	"v1.2",   /* Stable; Tested */
 	"v1.3",   /* Stable; Tested */
-	"v1.4",   /* Stable; Tested */
+	"v1.4",   /* Tested; private read receipts, threads */
 	"v1.5",   /* Stable; Tested */
+	"v1.6",   /* jump to date (element-web labs gate) */
+	"v1.7",   /* intentional mentions */
+	"v1.8",   /* no action */
+	"v1.9",   /* no action */
 	"v1.10",  /* Tested; relations recursion */
 	"v1.11",  /* Tested; authenticated media */
-	"v1.12", "v1.15",
+	"v1.12",  /* no action */
+	"v1.13",  /* no action */
+	"v1.14",  /* no action */
+	"v1.15",  /* OIDC auth metadata */
+	"v1.16",  /* extended profiles (MSC4133) */
+	"v1.17",  /* no action */
 ];
 
 static UNSTABLE_FEATURES: [&str; 34] = [
