@@ -38,9 +38,13 @@ pub(super) async fn selector(
 
 	let mut rooms = services
 		.state_cache
-		.user_memberships(sender_user, Some(&[Join, Invite, Knock]))
+		.user_memberships(sender_user, Some(&[Join, Invite, Knock, Leave]))
 		.map(|(membership, room_id)| (room_id.to_owned(), Some(membership)))
 		.ready_filter(move |(_, m)| !invites_blocked || !matches!(m, Some(Invite)))
+		// Retract a departed room once; left rooms this connection never tracked stay hidden.
+		.ready_filter(|(room_id, m)| {
+			!matches!(m, Some(Leave)) || conn.rooms.contains_key(room_id)
+		})
 		.broad_filter_map(|(room_id, membership)| matcher(sync_info, conn, room_id, membership))
 		.collect::<Vec<_>>()
 		.await;
@@ -134,12 +138,18 @@ async fn matcher(
 			.unwrap_or_default()
 	});
 
-	let invited = matches!(membership, Some(MembershipState::Invite));
-	let last_membership = (matched && invited).then_async(|| {
-		services
+	let last_membership = matched.then_async(async || match &membership {
+		| Some(MembershipState::Invite) => services
 			.state_cache
 			.get_invite_count(&room_id, sender_user)
-			.unwrap_or_default()
+			.await
+			.unwrap_or_default(),
+		| Some(MembershipState::Leave | MembershipState::Ban) => services
+			.state_cache
+			.get_left_count(&room_id, sender_user)
+			.await
+			.unwrap_or_default(),
+		| _ => 0,
 	});
 
 	let (
@@ -151,12 +161,13 @@ async fn matcher(
 	)
 	.await;
 
-	Some(WindowRoom {
-		room_id: room_id.clone(),
-		membership,
-		lists,
-		ranked: 0,
-		last_count: [
+	// A departed room surfaces only on its own leave count, never on room-global
+	// timeline activity the user no longer receives, so the retraction is one-shot.
+	let last_count = match &membership {
+		| Some(MembershipState::Leave | MembershipState::Ban) => last_membership
+			.filter(|count| conn.next_batch.ge(count))
+			.unwrap_or_default(),
+		| _ => [
 			last_timeline,
 			last_notification,
 			last_account,
@@ -169,6 +180,14 @@ async fn matcher(
 		.filter(|count| conn.next_batch.ge(count))
 		.max()
 		.unwrap_or_default(),
+	};
+
+	Some(WindowRoom {
+		room_id: room_id.clone(),
+		membership,
+		lists,
+		ranked: 0,
+		last_count,
 	})
 }
 
@@ -260,6 +279,9 @@ where
 	Rooms: Iterator<Item = &'a WindowRoom>,
 {
 	rooms
+		.filter(|room| {
+			!matches!(room.membership, Some(MembershipState::Leave | MembershipState::Ban))
+		})
 		.flat_map(|room| room.lists.iter())
 		.fold(ResponseLists::default(), |mut lists, id| {
 			let list = lists.entry(id.clone()).or_default();
