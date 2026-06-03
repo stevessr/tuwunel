@@ -306,7 +306,7 @@ jobs:
       && contains(fromJSON(inputs.rust_targets), fromJSON('["x86_64-unknown-linux-gnu"]')[0])
 
     name: Matrix SDK Integration
-    needs: [smoke]
+    needs: [doc, unit, bench, memcheck, smoke, nix]
     uses: ./.github/workflows/bake.yml
     with:
       #bake_targets: '["rust-sdk-integ", "rust-sdk-valgrind"]'
@@ -386,7 +386,7 @@ jobs:
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
 
     name: Compliance (Tuwunel)
-    needs: [complement, smoke]
+    needs: [doc, unit, bench, memcheck, smoke, nix, complement]
     concurrency:
       group: complement-cant-walk-and-chew-bubblegum
       cancel-in-progress: false
@@ -454,7 +454,7 @@ jobs:
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
 
     name: Cryptography (rust-sdk)
-    needs: [complement-crypto, smoke]
+    needs: [doc, unit, bench, memcheck, smoke, nix, complement-crypto]
     concurrency:
       group: complement-cant-walk-and-chew-bubblegum
       cancel-in-progress: false
@@ -522,7 +522,7 @@ jobs:
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
 
     name: Acceptance (element-web)
-    needs: [playwright]
+    needs: [doc, unit, bench, memcheck, smoke, nix, playwright]
     uses: ./.github/workflows/acceptance.yml
     with:
       job_name: Acceptance (element-web)
