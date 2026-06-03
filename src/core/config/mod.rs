@@ -543,6 +543,45 @@ pub struct Config {
 	#[serde(default = "default_request_idle_per_host")]
 	pub request_idle_per_host: u16,
 
+	/// Allow the outbound HTTP client to negotiate gzip with other servers:
+	/// advertise it in Accept-Encoding and transparently decompress responses.
+	/// This covers federation, media, and URL preview traffic, and is separate
+	/// from `gzip_compression`, which compresses tuwunel's own responses.
+	///
+	/// Enabled by default. Set to false to force the client to neither request
+	/// nor decompress gzip. Does nothing unless tuwunel was built with the
+	/// `gzip_compression` feature.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub request_gzip: bool,
+
+	/// Allow the outbound HTTP client to negotiate brotli with other servers:
+	/// advertise it in Accept-Encoding and transparently decompress responses.
+	/// This covers federation, media, and URL preview traffic, and is separate
+	/// from `brotli_compression`, which compresses tuwunel's own responses.
+	///
+	/// Enabled by default. Set to false to force the client to neither request
+	/// nor decompress brotli. Does nothing unless tuwunel was built with the
+	/// `brotli_compression` feature.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub request_brotli: bool,
+
+	/// Allow the outbound HTTP client to negotiate zstd with other servers:
+	/// advertise it in Accept-Encoding and transparently decompress responses.
+	/// This covers federation, media, and URL preview traffic, and is separate
+	/// from `zstd_compression`, which compresses tuwunel's own responses.
+	///
+	/// Enabled by default. Set to false to force the client to neither request
+	/// nor decompress zstd. Does nothing unless tuwunel was built with the
+	/// `zstd_compression` feature.
+	///
+	/// default: true
+	#[serde(default = "true_fn")]
+	pub request_zstd: bool,
+
 	/// Federation well-known resolution connection timeout (seconds).
 	///
 	/// default: 6

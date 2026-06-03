@@ -12,6 +12,8 @@ use tuwunel_core::{Config, Err, Result, debug, either::Either, err, implement, t
 
 use crate::{Services, resolver::Validating, service};
 
+type DisableEncoding = fn(ClientBuilder) -> ClientBuilder;
+
 pub struct Clients {
 	pub default: Client,
 	pub url_preview: Client,
@@ -187,6 +189,17 @@ fn base(config: &Config, name: Option<&str>) -> Result<ClientBuilder> {
 				}),
 		)
 		.connection_verbose(cfg!(debug_assertions));
+
+	let encodings: [(bool, DisableEncoding); 3] = [
+		(config.request_gzip, ClientBuilder::no_gzip),
+		(config.request_brotli, ClientBuilder::no_brotli),
+		(config.request_zstd, ClientBuilder::no_zstd),
+	];
+
+	let builder = encodings
+		.into_iter()
+		.filter(|(enabled, _)| !enabled)
+		.fold(builder, |builder, (_, disable)| disable(builder));
 
 	match config.proxy.to_proxy()? {
 		| Some(proxy) => Ok(builder.proxy(proxy)),
