@@ -116,7 +116,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3786 | ✅ ● | 100/100 | Add a default push rule to ignore `m.room.server_acl` events | server_acl predefined push rule via Ruma defaults |
 | MSC3773 | ✅ ● | 100/100 | Notifications for threads | src/service/pusher/notification.rs:143 per-thread counts; src/api/client/sync... |
 | MSC3771 | ✅ ● | 100/100 | Read receipts for threads | src/api/client/read_marker.rs validates+routes thread; receipt and private_re... |
-| MSC3765 | 🟨 ◐ | 30/40 | Rich text in room topics | topic_block accepted via Ruma; createRoom only writes plain topic |
+| MSC3765 | 🟨 ◐ | 50/80 | Rich text in room topics | createRoom writes m.topic; publicRooms/hierarchy use legacy topic; no search |
 | MSC3758 | ✅ ● | 90/100 | Add `event_property_is` push rule condition kind | event_property_is dispatched via Ruma Ruleset::get_actions |
 | MSC3743 | ✅ ● | 90/100 | Standardized error response for unknown endpoints | M_UNRECOGNIZED 404/405 fallback wired in router |
 | MSC3715 | ✅ ● | 100/100 | Add a pagination direction parameter to `/relations` | dir parameter on /relations is parsed and used |
@@ -256,13 +256,13 @@ for spec compliance.
 | MSC2676 | 🟨 ● | 50/60 | Message editing | edits accepted/relayed; no m.replace bundle or new_content apply |
 | MSC3267 | 🟨 ◐ | 50/50 | reference relationships | reference relations queryable via /relations; no m.relations bundling |
 | MSC3550 | 🟨 ◐ | 50/50 | Add HTTP 403 to possible profile lookup responses | federation 403 returned; client /profile still 404 only |
+| MSC3765 | 🟨 ◐ | 50/80 | Rich text in room topics | createRoom writes m.topic; publicRooms/hierarchy use legacy topic; no search |
 | MSC3925 | 🟨 ◐ | 50/50 | m.replace aggregation with full event | Tuwunel doesn't replace content (good) but also lacks bundled m.replace aggre... |
 | MSC4025 | 🟨 ● | 50/50 | Local user erasure requests | phase A landed (account-data wipe); phase B (per-event visibility gate) deferred |
 | MSC4191 | 🟨 ◐ | 50/80 | Account management for OAuth 2.0 API | metadata wired but action names diverge from MSC |
 | MSC2746 | 🟨 ○ | 40/40 | Improved Signalling for 1:1 VoIP | Events relayed; no specific server hooks |
 | MSC3856 | 🟨 ◐ | 40/60 | Threads List API | GET /threads route present but participated filter and latest-event order mis... |
 | MSC3666 | 🟨 ● | 30/30 | Bundled aggregations for server side search | thread bundles already surface in /search responses via verbatim serializatio... |
-| MSC3765 | 🟨 ◐ | 30/40 | Rich text in room topics | topic_block accepted via Ruma; createRoom only writes plain topic |
 | MSC4277 | 🟨 ◐ | 30/40 | Harmonizing the reporting endpoints | event and room report endpoints exist; user report endpoint absent |
 | MSC3381 | 🟨 ◐ | 0/? | Chat Polls | complement: 0p/2f |
 | MSC3930 | 🟨 ◐ | 0/? | Polls push rules/notifications | complement: 0p/2f |
