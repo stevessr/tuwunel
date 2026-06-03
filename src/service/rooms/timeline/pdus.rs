@@ -90,7 +90,8 @@ pub fn pdu_ids_near_ts(
 				| Forward => Left(self.db.roomid_ts_pducount.stream_from(&key)),
 				| Backward => Right(self.db.roomid_ts_pducount.rev_stream_from(&key)),
 			}
-			.ready_try_filter(move |((room_id_, _), _): &KeyVal<'_>| room_id == *room_id_)
+			.ready_try_skip_while(move |((room_id_, _), _): &KeyVal<'_>| Ok(room_id != *room_id_))
+				.ready_try_take_while(move |((room_id_, _), _): &KeyVal<'_>| Ok(room_id == *room_id_))
 			.map_ok(move |((_, ts), count)| {
 				(MilliSecondsSinceUnixEpoch(ts), PduId { shortroomid, count: count.into() })
 			})
