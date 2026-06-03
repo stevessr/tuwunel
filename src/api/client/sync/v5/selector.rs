@@ -36,15 +36,27 @@ pub(super) async fn selector(
 	// rooms from the sliding-sync window; an unblock re-exposes them.
 	let invites_blocked = services.users.invites_blocked(sender_user).await;
 
-	let mut rooms = services
+	let actives = services
 		.state_cache
-		.user_memberships(sender_user, Some(&[Join, Invite, Knock, Leave]))
-		.map(|(membership, room_id)| (room_id.to_owned(), Some(membership)))
-		.ready_filter(move |(_, m)| !invites_blocked || !matches!(m, Some(Invite)))
-		// Retract a departed room once; left rooms this connection never tracked stay hidden.
-		.ready_filter(|(room_id, m)| {
-			!matches!(m, Some(Leave)) || conn.rooms.contains_key(room_id)
-		})
+		.user_memberships(sender_user, Some(&[Join, Invite, Knock]))
+		.ready_filter(move |(m, _)| !invites_blocked || !matches!(m, Invite))
+		.map(|(membership, room_id)| (room_id.to_owned(), Some(membership)));
+
+	// Source retractions from tracked rooms, not a full left-state scan.
+	let retracted = conn
+		.rooms
+		.keys()
+		.stream()
+		.broad_filter_map(async |room_id| {
+			services
+				.state_cache
+				.is_left(sender_user, room_id)
+				.await
+				.then_some((room_id.clone(), Some(Leave)))
+		});
+
+	let mut rooms = actives
+		.chain(retracted)
 		.broad_filter_map(|(room_id, membership)| matcher(sync_info, conn, room_id, membership))
 		.collect::<Vec<_>>()
 		.await;
