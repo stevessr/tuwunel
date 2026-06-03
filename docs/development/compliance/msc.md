@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 221
-- 🟨 `partial`: 57
+- ✅ `yes`: 222
+- 🟨 `partial`: 56
 - ❌ `no`: 454
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 154 | 27 | 11 | 64 | 256 |
+| merged | 155 | 26 | 11 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -127,7 +127,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3589 | ✅ ● | 100/100 | Room version 9 as a default | default_room_version defaults to V11 (exceeds V9) |
 | MSC3582 | ✅ ● | 100/100 | Remove m.room.message.feedback | feedback removal; tuwunel never produces or dispatches on m.room.message.feed... |
 | MSC3567 | ✅ ● | 100/100 | Allow requesting events from the start/end of the room history | from is optional; defaults to start/end based on dir |
-| MSC3550 | 🟨 ◐ | 50/50 | Add HTTP 403 to possible profile lookup responses | federation 403 returned; client /profile still 404 only |
+| MSC3550 | ✅ ◐ | 100/100 | Add HTTP 403 to possible profile lookup responses | CS /profile returns 403 M_FORBIDDEN when outbound profile lookup disabled |
 | MSC3442 | ✅ ● | 100/100 | move the `prev_content` key to `unsigned` | prev_content placed under unsigned in created/appended PDUs |
 | MSC3440 | 🟨 ● | 60/70 | MSC3440 Threading via `m.thread` relation | [→ MSC3856] thread bundling, /threads, /relations with rel_type filter |
 | MSC3419 | ✅ ○ | 100/100 | Guest State Events | no guest-specific gate on state-event send path; PL/auth_check applies unifor... |
@@ -254,7 +254,6 @@ for spec compliance.
 | MSC2675 | 🟨 ● | 50/60 | Serverside aggregations of message relationships | /relations exists; only m.thread bundling, no m.replace bundle |
 | MSC2676 | 🟨 ● | 50/60 | Message editing | edits accepted/relayed; no m.replace bundle or new_content apply |
 | MSC3267 | 🟨 ◐ | 50/50 | reference relationships | reference relations queryable via /relations; no m.relations bundling |
-| MSC3550 | 🟨 ◐ | 50/50 | Add HTTP 403 to possible profile lookup responses | federation 403 returned; client /profile still 404 only |
 | MSC3765 | 🟨 ◐ | 50/80 | Rich text in room topics | createRoom writes m.topic; publicRooms/hierarchy use legacy topic; no search |
 | MSC3925 | 🟨 ◐ | 50/50 | m.replace aggregation with full event | Tuwunel doesn't replace content (good) but also lacks bundled m.replace aggre... |
 | MSC4025 | 🟨 ● | 50/50 | Local user erasure requests | phase A landed (account-data wipe); phase B (per-event visibility gate) deferred |
