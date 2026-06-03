@@ -1,32 +1,42 @@
 #![cfg(test)]
 
 use std::{
+	cell::RefCell,
 	io::{Result as IoResult, Write},
-	sync::{Arc, Mutex},
+	sync::{Arc, Mutex, Once},
 };
 
-use tracing_subscriber::fmt::MakeWriter;
+use tracing::{level_filters::LevelFilter, subscriber::set_global_default};
+use tracing_subscriber::fmt::{MakeWriter, fmt};
 
 use super::*;
 
-#[derive(Clone)]
-struct SharedBufferWriter(Arc<Mutex<Vec<u8>>>);
+thread_local! {
+	static CAPTURE: RefCell<Option<Arc<Mutex<Vec<u8>>>>> = const { RefCell::new(None) };
+}
 
-impl Write for SharedBufferWriter {
+struct ThreadLocalWriter;
+
+impl Write for ThreadLocalWriter {
 	fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
-		self.0
-			.lock()
-			.expect("buffer lock poisoned")
-			.write(buf)
+		CAPTURE.with_borrow(|sink| {
+			if let Some(sink) = sink {
+				sink.lock()
+					.expect("buffer lock poisoned")
+					.extend_from_slice(buf);
+			}
+		});
+
+		Ok(buf.len())
 	}
 
 	fn flush(&mut self) -> IoResult<()> { Ok(()) }
 }
 
-impl<'a> MakeWriter<'a> for SharedBufferWriter {
+impl<'a> MakeWriter<'a> for ThreadLocalWriter {
 	type Writer = Self;
 
-	fn make_writer(&'a self) -> Self::Writer { self.clone() }
+	fn make_writer(&'a self) -> Self::Writer { Self }
 }
 
 fn config_from_toml(toml: &str) -> Result<Config> {
@@ -34,16 +44,25 @@ fn config_from_toml(toml: &str) -> Result<Config> {
 }
 
 fn check_with_captured_logs(config: &Config) -> (Result, String) {
-	let captured = Arc::new(Mutex::new(Vec::new()));
-	let subscriber = tracing_subscriber::fmt()
-		.with_ansi(false)
-		.with_writer(SharedBufferWriter(Arc::clone(&captured)))
-		.finish();
+	static INIT: Once = Once::new();
 
-	let result = {
-		let _guard = tracing::subscriber::set_default(subscriber);
-		check(config)
-	};
+	// Installed once, process-wide for the whole test binary, since a per-test
+	// set_default races tracing's interest cache; future capture tests reuse this.
+	INIT.call_once(|| {
+		let subscriber = fmt()
+			.with_ansi(false)
+			.with_max_level(LevelFilter::INFO)
+			.with_writer(ThreadLocalWriter)
+			.finish();
+
+		set_global_default(subscriber).ok();
+	});
+
+	let captured = Arc::new(Mutex::new(Vec::new()));
+	CAPTURE.with_borrow_mut(|sink| *sink = Some(Arc::clone(&captured)));
+
+	let result = check(config);
+	CAPTURE.with_borrow_mut(|sink| *sink = None);
 
 	let logs = String::from_utf8(
 		captured
