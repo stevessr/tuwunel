@@ -45,7 +45,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4326 | ✅ ● | 100/100 | Device masquerading for appservices | appservice query device_id asserted; M_UNKNOWN_DEVICE-equivalent on missing |
 | MSC4323 | ✅ ● | 100/100 | User suspension &amp; locking endpoints | src/api/client/admin.rs four routes at stable v1 paths; m.account_moderation ... |
 | MSC4312 | ✅ ● | 90/100 | Resetting cross-signing keys in the OAuth world | cross-signing reset issues m.oauth flow with account-management URL |
-| MSC4311 | 🟨 ◐ | 0/? | Ensuring the create event is available on invites | complement: 0p/1f |
+| MSC4311 | 🟨 ● | 50/50 | Ensuring the create event is available on invites | create event keeps origin_server_ts in stripped state; no recv-side validation |
 | MSC4307 | ✅ ● | 100/100 | Validate that `auth_events` are in the correct room | auth_event room_id mismatch rejected |
 | MSC4304 | ✅ ● | 90/100 | Room Version 12 | V12 supported as stable; default is V11 |
 | MSC4297 | ✅ ● | 100/100 | State Resolution v2.1 | src/service/rooms/state_res/resolve.rs:257 conflicted state subgraph; tests pass |
@@ -260,13 +260,13 @@ for spec compliance.
 | MSC3925 | 🟨 ◐ | 50/50 | m.replace aggregation with full event | Tuwunel doesn't replace content (good) but also lacks bundled m.replace aggre... |
 | MSC4025 | 🟨 ● | 50/50 | Local user erasure requests | phase A landed (account-data wipe); phase B (per-event visibility gate) deferred |
 | MSC4191 | 🟨 ◐ | 50/80 | Account management for OAuth 2.0 API | metadata wired but action names diverge from MSC |
+| MSC4311 | 🟨 ● | 50/50 | Ensuring the create event is available on invites | create event keeps origin_server_ts in stripped state; no recv-side validation |
 | MSC2746 | 🟨 ○ | 40/40 | Improved Signalling for 1:1 VoIP | Events relayed; no specific server hooks |
 | MSC3856 | 🟨 ◐ | 40/60 | Threads List API | GET /threads route present but participated filter and latest-event order mis... |
 | MSC3666 | 🟨 ● | 30/30 | Bundled aggregations for server side search | thread bundles already surface in /search responses via verbatim serializatio... |
 | MSC4277 | 🟨 ◐ | 30/40 | Harmonizing the reporting endpoints | event and room report endpoints exist; user report endpoint absent |
 | MSC3381 | 🟨 ◐ | 0/? | Chat Polls | complement: 0p/2f |
 | MSC3930 | 🟨 ◐ | 0/? | Polls push rules/notifications | complement: 0p/2f |
-| MSC4311 | 🟨 ◐ | 0/? | Ensuring the create event is available on invites | complement: 0p/1f |
 | MSC3860 | ❌ ◐ | 20/20 | Media Download Redirects | forwards allow_redirect to remote fetch but does not emit own redirect |
 | MSC1759 | ❌ ◐ | 10/20 | MSC 1759 - Rooms V2 | v2 algorithm in use for v3+; v2 itself not in supported_room_versions |
 | MSC3816 | ❌ ◐ | 10/10 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |

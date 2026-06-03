@@ -4,10 +4,10 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 203. Passing: **69.5%**
-  - ✅ `pass`: 141
+- Test groups: 203. Passing: **70.0%**
+  - ✅ `pass`: 142
   - 🟨 `some`: 27
-  - ❌ `fail`: 33
+  - ❌ `fail`: 32
   - ⬛ `skip`: 2
 
 - Subtests: 593. Passing: **68.3%**
@@ -124,7 +124,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestMSC4297StateResolutionV2_1_includes_conflicted_subgraph` | ✅ | – |
 | `TestMSC4297StateResolutionV2_1_starts_from_empty_set` | ✅ | – |
 | `TestMSC4308ThreadSubscriptionsSlidingSync` | ❌ | 0/2/0 |
-| `TestMSC4311FullCreateEventOnStrippedState` | ❌ | – |
+| `TestMSC4311FullCreateEventOnStrippedState` | ✅ | – |
 | `TestMediaConfig` | ✅ | – |
 | `TestMediaFilenames` | ✅ | 25/0/0 |
 | `TestMediaWithoutFileName` | ✅ | 4/0/0 |
