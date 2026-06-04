@@ -3,6 +3,7 @@ use std::{env::consts::OS, fs::read_to_string, net::SocketAddr};
 use either::Either;
 use itertools::Itertools;
 use regex::RegexSet;
+use url::Url;
 
 use super::{DEPRECATED_KEYS, IdentityProvider, IpSource, KNOWN_KEYS};
 use crate::{Config, Err, Result, debug, debug_info, err, error, warn};
@@ -490,16 +491,49 @@ fn check_well_known_support_contact_validity(config: &Config) -> Result {
 		);
 	}
 
-	well_known
-		.support_contact
-		.iter()
-		.find(|(_, contact)| contact.email_address.is_none() && contact.matrix_id.is_none())
-		.map_or(Ok(()), |(id, _)| {
-			Err!(
+	if let Some(pgp_key) = well_known.support_pgp_key.as_deref() {
+		validate_pgp_key(pgp_key).map_err(|e| err!("well_known.support_pgp_key: {e}"))?;
+	}
+
+	for (id, contact) in &well_known.support_contact {
+		if contact.email_address.is_none() && contact.matrix_id.is_none() {
+			return Err!(
 				"well_known.support_contact.{id} has neither email_address nor matrix_id; at \
 				 least one is required"
-			)
-		})
+			);
+		}
+
+		if let Some(pgp_key) = contact.pgp_key.as_deref() {
+			validate_pgp_key(pgp_key)
+				.map_err(|e| err!("well_known.support_contact.{id}.pgp_key: {e}"))?;
+		}
+	}
+
+	Ok(())
+}
+
+/// Validates an MSC4439 `pgp_key`: a URI, never inline key material.
+fn validate_pgp_key(value: &str) -> Result {
+	if value.contains("BEGIN PGP") {
+		return Err!(
+			"must be a URI, not inlined key material; publish the key and reference it by URI \
+			 (for example https://example.com/key.asc or openpgp4fpr:<fingerprint>)"
+		);
+	}
+
+	let uri = Url::parse(value).map_err(|_| {
+		err!("must be a URI; a bare fingerprint must be prefixed with `openpgp4fpr:`")
+	})?;
+
+	if uri.scheme() == "openpgp4fpr" && !valid_openpgp4fpr(uri.path()) {
+		return Err!("`openpgp4fpr:` must be followed by a 40- or 64-character hex fingerprint");
+	}
+
+	Ok(())
+}
+
+fn valid_openpgp4fpr(fpr: &str) -> bool {
+	matches!(fpr.len(), 40 | 64) && fpr.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// Iterates over all the keys in the config file and warns if there is a

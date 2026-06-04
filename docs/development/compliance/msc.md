@@ -301,7 +301,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4446 | ❌ ● | 0/0 | Allow moving the fully read marker to older events | No allow_backward field; no monotonicity check on m.fully_read |
 | MSC4445 | ❌ ◐ | 0/0 | Clarify `/sync` timeline order | No msc4445 unstable_features flags advertised |
 | MSC4440 | ❌ ● | 0/0 | Profile Biography via Global Profiles | Generic MSC4133 passthrough only; no m.biography validation |
-| MSC4439 | ✅ ● | 80/90 | Encryption key URIs in `/.well-known/matrix/support` | src/api/client/well_known.rs:58; pgp_key plumbed via ruma unstable-msc4439 |
+| MSC4439 | ✅ ● | 95/95 | Encryption key URIs in `/.well-known/matrix/support` | src/core/config/check.rs:516; validate_pgp_key requires URI, rejects raw key |
 | MSC4438 | ✅ ● | 100/100 | Message bookmarks via account data | Pure account-data convention; existing endpoints store arbitrary types |
 | MSC4437 | ❌ ● | 0/0 | Endpoint to replace entire profile | No PUT /_matrix/client/v3/profile/{userId} replace-all endpoint |
 | MSC4436 | ✅ ● | 100/100 | Make server ACLs case insensitive | Ruma is_allowed uses WildMatch::new_case_insensitive |

@@ -271,3 +271,36 @@ ip_source = "rightmost_x_forwarded_for"
 	check::reload(&none, &none).expect("unchanged none config should reload");
 	check::reload(&some, &some).expect("unchanged some config should reload");
 }
+
+fn check_support_pgp_key(value: &str) -> Result {
+	let toml = format!(
+		"[global.well_known.support_contact.admin]\nrole = \"m.role.admin\"\nemail_address = \
+		 \"admin@example.com\"\npgp_key = \"{value}\"\n"
+	);
+	let config = config_from_toml(&toml).expect("support_contact config should parse");
+	check_with_captured_logs(&config).0
+}
+
+#[test]
+fn pgp_key_accepts_any_uri_scheme() {
+	for value in [
+		"https://example.com/key.asc",
+		"openpgp4fpr:8B77919975EAFA5E2456EE03665FE73077489DB0",
+		"dns:HASH._openpgpkey.example.com?type=OPENPGPKEY",
+	] {
+		check_support_pgp_key(value)
+			.unwrap_or_else(|e| panic!("`{value}` should be accepted as a pgp_key: {e}"));
+	}
+}
+
+#[test]
+fn pgp_key_rejects_raw_material_and_bare_fingerprints() {
+	let err = check_support_pgp_key("8B77919975EAFA5E2456EE03665FE73077489DB0").unwrap_err();
+	assert!(err.to_string().contains("openpgp4fpr"), "{err}");
+
+	let err = check_support_pgp_key("-----BEGIN PGP PUBLIC KEY BLOCK-----").unwrap_err();
+	assert!(err.to_string().contains("inlined key material"), "{err}");
+
+	let err = check_support_pgp_key("openpgp4fpr:nothex").unwrap_err();
+	assert!(err.to_string().contains("hex fingerprint"), "{err}");
+}
