@@ -18,16 +18,16 @@
 
 ## Counts
 
-- ✅ `yes`: 224
+- ✅ `yes`: 225
 - 🟨 `partial`: 55
-- ❌ `no`: 453
+- ❌ `no`: 452
 - ⬛ `n/a`: 292
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 157 | 25 | 10 | 64 | 256 |
+| merged | 158 | 25 | 9 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -85,7 +85,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3989 | ✅ ● | 100/100 | Redact `origin` property on events | V11 redaction drops origin via Ruma RedactionRules |
 | MSC3987 | ✅ ● | 90/90 | Push actions clean-up | unknown push actions ignored as no-ops |
 | MSC3981 | ✅ ● | 100/100 | `/relations` recursion | /relations recurse parameter implemented with depth 3 |
-| MSC3980 | ❌ ● | 0/0 | Dotted Field Consistency | blocked on a missing prerequisite: Tu does not implement event_fields filteri... |
+| MSC3980 | ✅ ● | 90/90 | Dotted Field Consistency | event_fields trim on /sync; dotted paths use the MSC3873 escape grammar |
 | MSC3970 | ✅ ● | 90/100 | Scope transaction IDs to devices | transaction IDs scoped per (user, device, txn_id) |
 | MSC3967 | ✅ ● | 100/100 | Do not require UIA when first uploading cross signing keys | keys/device_signing/upload skips UIA when user has no existing cross-signing ... |
 | MSC3966 | ✅ ● | 100/100 | `event_property_contains` push rule condition | event_property_contains supported via Ruma push conditions |
@@ -272,7 +272,6 @@ for spec compliance.
 | MSC2244 | ❌ ● | 0/0 | Mass redactions | Single-target redactions only; no array redacts handling |
 | MSC2540 | ❌ ◐ | 0/0 | Stricter event validation: JSON compliance | ruma exposes strict_canonical_json flag; Tuwunel does not enforce floats reje... |
 | MSC2705 | ❌ ◐ | 0/10 | Animated thumbnails | animated param accepted; thumbnails always PNG static |
-| MSC3980 | ❌ ● | 0/0 | Dotted Field Consistency | blocked on a missing prerequisite: Tu does not implement event_fields filteri... |
 | MSC4335 | ❌ ● | 0/0 | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
 
 ## Open
