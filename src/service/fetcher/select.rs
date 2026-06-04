@@ -144,11 +144,10 @@ async fn authority_server(&self, opts: &Opts) -> Option<OwnedServerName> {
 }
 
 /// Participating servers sampled in proportion to their resident member
-/// count: each draw lands on a random member, so its server appears with
-/// probability proportional to that server's population. Populous servers
-/// therefore lead more often, without ranking the whole membership. Falls
-/// back to the participating-server set when the room has no resident
-/// members.
+/// count: each draw lands on a random member, so a server appears with
+/// probability proportional to its population, without ranking the whole
+/// membership. Falls back to the participating-server set when the room
+/// has no resident members.
 #[implement(RoomCandidates)]
 #[tracing::instrument(level = "trace", skip_all)]
 async fn route_by_popularity<'a>(
@@ -176,7 +175,8 @@ async fn route_by_popularity<'a>(
 
 /// Uniform-random window over the participating-server cursor: count, skip
 /// a uniform offset, then take a small run. Fully lazy, with no popularity
-/// aggregation.
+/// aggregation. Retained (unused) as the distinctness-favoring alternative
+/// to `route_by_popularity` for a future per-round re-sampling escalation.
 #[implement(RoomCandidates)]
 #[allow(dead_code)]
 async fn route_uniformly<'a>(

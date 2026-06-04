@@ -34,7 +34,6 @@ async fn verify_pdu(&self, opts: &Opts, bytes: &[u8]) -> Result {
 	let value: CanonicalJsonObject = serde_json::from_slice(bytes)
 		.map_err(|e| err!(BadServerResponse("PDU is not a canonical JSON object: {e}")))?;
 
-	// Omitted room version defaults to V11.
 	let v11 = RoomVersionId::V11;
 	let room_version = opts.room_version.as_ref().unwrap_or(&v11);
 

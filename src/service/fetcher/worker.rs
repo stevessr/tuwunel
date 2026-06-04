@@ -18,6 +18,7 @@ use tuwunel_core::{debug_warn, implement, trace};
 
 use super::{
 	Failure, Msg, Opts, Outcome, Service,
+	error::Attempted,
 	inflight::{Inflight, Key, SharedResult},
 };
 
@@ -195,9 +196,10 @@ async fn run_attempts(&self, opts: &Opts, interest: &Weak<()>) -> SharedResult {
 		return Err(Failure::NoCandidates);
 	}
 
+	let count = candidates.len();
 	let limit = opts
 		.attempt_limit
-		.map_or(candidates.len(), |n| n.get().min(candidates.len()));
+		.map_or(count, |n| n.get().min(count));
 
 	let (config_width, config_rounds) = self
 		.services
@@ -211,7 +213,7 @@ async fn run_attempts(&self, opts: &Opts, interest: &Weak<()>) -> SharedResult {
 	let max_width = effective_cap(opts.fanout_max_width, config_width);
 	let max_rounds = effective_cap(opts.fanout_rounds, config_rounds);
 
-	let mut attempted: Vec<OwnedServerName> = Vec::new();
+	let mut attempted: Attempted = Attempted::new();
 	let mut remaining = candidates.into_iter();
 	let mut round: usize = 0;
 
