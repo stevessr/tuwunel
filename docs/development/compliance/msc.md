@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 222
-- 🟨 `partial`: 56
+- ✅ `yes`: 223
+- 🟨 `partial`: 55
 - ❌ `no`: 454
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 155 | 26 | 11 | 64 | 256 |
+| merged | 156 | 25 | 11 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -229,7 +229,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC1501 | ✅ ● | 90/90 | Room version upgrades | upgrade endpoint present; tombstone, predecessor, PL freeze all implemented |
 | MSC1466 | ✅ ● | 100/100 | Soft Remote Logout Proposal | soft_logout=true returned for expired tokens in 401 responses |
 | MSC1442 | ✅ ● | 90/100 | State Resolution: Reloaded | state res v2 implemented in src/service/rooms/state_res/resolve.rs |
-| MSC1219 | 🟨 ● | 70/100 | Storing megolm keys serverside | key backup endpoints fully implemented in src/api/client/backup.rs |
+| MSC1219 | ✅ ● | 90/100 | Storing megolm keys serverside | better-key compare in add_key (all PUT routes); 403 M_WRONG_ROOM_KEYS_VERSION |
 
 ## Spec compliance gaps
 
@@ -240,7 +240,6 @@ for spec compliance.
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
 | MSC4291 | 🟨 ● | 80/90 | Room IDs as hashes of the create event | hydra.11 room id format and auth rules in event_auth, pdu format checks |
-| MSC1219 | 🟨 ● | 70/100 | Storing megolm keys serverside | key backup endpoints fully implemented in src/api/client/backup.rs |
 | MSC2409 | 🟨 ● | 70/70 | Proposal to send typing, presence and receipts to appservices | typing+receipt EDUs sent to AS; presence not forwarded |
 | MSC3787 | 🟨 ● | 70/? | Allowing knocks to restricted rooms | complement: 33p/14f |
 | MSC4133 | 🟨 ● | 70/80 | Extending User Profile API with Custom Key:Value Pairs | GET/PUT/DELETE profile field endpoints routed at unstable prefix |
