@@ -37,12 +37,14 @@ snapshot_baseline() {
 	git show "HEAD:$jsonl" 2>/dev/null | classify /dev/stdin | sort -k2 > "$prev" || :;
 }
 
-count_status() {
-	grep -c "^$1 " "$curr" || :;
+# Count test names in a newline-joined list, split by section (no '/') vs
+# subtest (the "X/Y" rows Go emits beneath a top-level test).
+count_sec() {
+	printf '%s' "$1" | grep -c '^[^/]*$' || :;
 }
 
-count_lines() {
-	printf '%s' "$1" | grep -c . || :;
+count_sub() {
+	printf '%s' "$1" | grep -c '/' || :;
 }
 
 delta() {
@@ -84,9 +86,10 @@ render_grid() {
 emit_header() {
 	echo "### $track_name"
 	echo
-	echo "| accept | errors | skipped | advanced | regressed |"
-	echo "|---|---|---|---|---|"
-	echo "| $accept | $error | $skip | $nprog | $nreg |"
+	echo "|  | accept | errors | skipped | advanced | regressed |"
+	echo "|---|---|---|---|---|---|"
+	echo "| sections | $acc_sec | $err_sec | $skip_sec | $nprog_sec | $nreg_sec |"
+	echo "| subtests | $acc_sub | $err_sub | $skip_sub | $nprog_sub | $nreg_sub |"
 	if test -n "$1"; then
 		echo
 		echo "$1"
@@ -171,17 +174,27 @@ summarise_main() {
 	snapshot_current
 	snapshot_baseline
 
-	accept=$(count_status accept)
-	error=$( count_status error)
-	skip=$(  count_status skip)
-
 	regress=$( delta accept error)
 	progress=$(delta error  accept)
-	nreg=$( count_lines "$regress")
-	nprog=$(count_lines "$progress")
 
 	nobase=0
 	test -s "$prev" || { regress= progress= nobase=1; }
+
+	# Tallies split by section (top-level test) vs subtest. The accept/error/
+	# skip counts come from the classified snapshot; advanced/regressed are the
+	# diff lists partitioned by the same '/' discriminator.
+	read -r acc_sec err_sec skip_sec acc_sub err_sub skip_sub < <(awk '
+		{ is_sub = ($2 ~ /\//) }
+		$1 == "accept" { if (is_sub) sub_a++; else sec_a++ }
+		$1 == "error"  { if (is_sub) sub_e++; else sec_e++ }
+		$1 == "skip"   { if (is_sub) sub_k++; else sec_k++ }
+		END { printf "%d %d %d %d %d %d\n",
+		             sec_a + 0, sec_e + 0, sec_k + 0,
+		             sub_a + 0, sub_e + 0, sub_k + 0 }
+	' "$curr")
+
+	nprog_sec=$(count_sec "$progress"); nprog_sub=$(count_sub "$progress")
+	nreg_sec=$( count_sec "$regress");  nreg_sub=$( count_sub "$regress")
 
 	# Main-branch runs are the baseline; the grid carries no diff signal there.
 	if test "${GITHUB_REF_NAME:-}" = "main"; then
