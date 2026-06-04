@@ -2226,6 +2226,17 @@ pub struct Config {
 	#[serde(default)]
 	pub store_media_on_providers: BTreeSet<String>,
 
+	/// Redirect local media downloads to a presigned object-store URL when the
+	/// client sends `allow_redirect=true` (MSC3860). When a configured storage
+	/// provider can presign the object (S3), the download responds with a 307
+	/// to a short-lived URL instead of proxying the bytes. Media held only on
+	/// the local filesystem is always served directly.
+	///
+	/// reloadable: yes
+	/// default: false
+	#[serde(default)]
+	pub media_allow_redirect: bool,
+
 	/// Vector list of regex patterns of server names that tuwunel will refuse
 	/// to download remote media from.
 	///

@@ -340,9 +340,30 @@ fn register_legacy_media_routes(
 		router
 			.ruma_route(&client::get_media_config_legacy_route)
 			.ruma_route(&client::get_media_preview_legacy_route)
-			.ruma_route(&client::get_content_legacy_route)
-			.ruma_route(&client::get_content_as_filename_legacy_route)
-			.ruma_route(&client::get_content_thumbnail_legacy_route)
+			.route(
+				"/_matrix/media/r0/download/{server_name}/{media_id}",
+				get(client::get_content_legacy_route),
+			)
+			.route(
+				"/_matrix/media/v3/download/{server_name}/{media_id}",
+				get(client::get_content_legacy_route),
+			)
+			.route(
+				"/_matrix/media/r0/download/{server_name}/{media_id}/{filename}",
+				get(client::get_content_as_filename_legacy_route),
+			)
+			.route(
+				"/_matrix/media/v3/download/{server_name}/{media_id}/{filename}",
+				get(client::get_content_as_filename_legacy_route),
+			)
+			.route(
+				"/_matrix/media/r0/thumbnail/{server_name}/{media_id}",
+				get(client::get_content_thumbnail_legacy_route),
+			)
+			.route(
+				"/_matrix/media/v3/thumbnail/{server_name}/{media_id}",
+				get(client::get_content_thumbnail_legacy_route),
+			)
 	} else {
 		router
 			.route("/_matrix/media/v3/config", any(legacy_media_disabled))
