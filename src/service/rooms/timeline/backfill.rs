@@ -140,7 +140,7 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 		.await;
 
 	let no_backfill = || {
-		warn!("No servers could backfill, but backfill was needed in room {room_id}");
+		warn!(%room_id, "No servers could backfill, but backfill was needed");
 		Ok(())
 	};
 
@@ -160,7 +160,7 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 		.services
 		.fetcher
 		.fetch(opts)
-		.inspect_err(|e| warn!("Backfilling room {room_id} failed: {e}"))
+		.inspect_err(|e| warn!(%room_id, "Backfilling failed: {e}"))
 		.await
 	else {
 		return no_backfill();
@@ -171,12 +171,10 @@ pub async fn backfill_if_required(&self, room_id: &RoomId, from: PduCount) -> Re
 	pdus.into_iter()
 		.stream()
 		.for_each(async |pdu| {
-			if let Err(e) = self
-				.backfill_pdu(room_id, &outcome.origin, pdu)
+			self.backfill_pdu(room_id, &outcome.origin, pdu)
 				.await
-			{
-				debug_warn!("Failed to add backfilled pdu in room {room_id}: {e}");
-			}
+				.inspect_err(|e| debug_warn!(%room_id, "Failed to add backfilled pdu: {e}"))
+				.ok();
 		})
 		.await;
 
