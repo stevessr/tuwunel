@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 226
-- 🟨 `partial`: 54
+- ✅ `yes`: 227
+- 🟨 `partial`: 53
 - ❌ `no`: 452
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 159 | 24 | 9 | 64 | 256 |
+| merged | 160 | 23 | 9 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -146,7 +146,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3030 | 🟨 ● | 60/80 | Jump to date API endpoint | client and federation timestamp_to_event handlers; no remote fallback when lo... |
 | MSC2998 | ✅ ● | 100/100 | Room Version 7 | V7 listed in STABLE_ROOM_VERSIONS; full knock support present |
 | MSC2967 | ✅ ● | 88/90 | API scopes | src/api/oidc/token.rs:96; stable+unstable device scope honored, surfaced, req... |
-| MSC2966 | 🟨 ● | 60/80 | Usage of OAuth 2.0 Dynamic Client Registration in Matrix | dynamic client registration endpoint |
+| MSC2966 | ✅ ● | 90/95 | Usage of OAuth 2.0 Dynamic Client Registration in Matrix | Full RFC 7591/8252 metadata validation; drops unknown grant/response |
 | MSC2965 | ✅ ● | 90/100 | OAuth 2.0 Authorization Server Metadata discovery | auth_issuer and auth_metadata routes return OAuth provider metadata |
 | MSC2964 | ✅ ● | 95/100 | Usage of OAuth 2.0 authorization code grant and refresh token grant | src/api/oidc/authorize.rs:57; S256 PKCE now required on the auth-code grant |
 | MSC2946 | ✅ ● | 90/100 | Spaces Summary | client and federation hierarchy endpoints implemented |
@@ -246,7 +246,6 @@ for spec compliance.
 | MSC4133 | 🟨 ● | 70/80 | Extending User Profile API with Custom Key:Value Pairs | GET/PUT/DELETE profile field endpoints routed at unstable prefix |
 | MSC1866 | 🟨 ○ | 60/70 | MSC 1866 - Unsupported Room Version Error Code for Invites | federation invite errors propagated; not explicitly mapped |
 | MSC2666 | 🟨 ● | 60/70 | Get rooms in common with another user | src/api/client/unstable.rs:28 GET /unstable/uk.half-shot.msc2666/user/mutual_... |
-| MSC2966 | 🟨 ● | 60/80 | Usage of OAuth 2.0 Dynamic Client Registration in Matrix | dynamic client registration endpoint |
 | MSC3030 | 🟨 ● | 60/80 | Jump to date API endpoint | client and federation timestamp_to_event handlers; no remote fallback when lo... |
 | MSC3440 | 🟨 ● | 60/70 | MSC3440 Threading via `m.thread` relation | [→ MSC3856] thread bundling, /threads, /relations with rel_type filter |
 | MSC3824 | 🟨 ◐ | 60/60 | OAuth 2.0 API aware clients | oauth_aware_preferred set in /login; SSO redirect action param ignored |

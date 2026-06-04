@@ -1309,6 +1309,20 @@
 #
 #oidc_registration_allowed_redirect_hosts = []
 
+# Require a `client_uri` in dynamic client registration requests
+# (RFC 7591 / MSC2966).
+#
+# When false (default), `client_uri` is optional; a client that supplies
+# one still has it validated (https, host, no userinfo) and the other URLs
+# in the request must share its host or a subdomain. When true, a
+# registration without an https `client_uri` is rejected with
+# `invalid_client_metadata`, enforcing the MSC2966 common-base model on
+# every client.
+#
+# reloadable: yes
+#
+#oidc_registration_require_client_uri = false
+
 # Token-bucket refill rate (requests per second) for the OIDC endpoints.
 #
 # Applies a shared per-client-IP throttle across the authorize, token,
