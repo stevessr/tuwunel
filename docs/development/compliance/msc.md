@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 228
-- 🟨 `partial`: 52
+- ✅ `yes`: 229
+- 🟨 `partial`: 51
 - ❌ `no`: 452
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 161 | 22 | 9 | 64 | 256 |
+| merged | 162 | 21 | 9 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -44,7 +44,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4335 | ❌ ● | 0/0 | M_USER_LIMIT_EXCEEDED error code | M_USER_LIMIT_EXCEEDED error code not used |
 | MSC4326 | ✅ ● | 100/100 | Device masquerading for appservices | appservice query device_id asserted; M_UNKNOWN_DEVICE-equivalent on missing |
 | MSC4323 | ✅ ● | 100/100 | User suspension &amp; locking endpoints | src/api/client/admin.rs four routes at stable v1 paths; m.account_moderation ... |
-| MSC4312 | ✅ ● | 90/100 | Resetting cross-signing keys in the OAuth world | cross-signing reset issues m.oauth flow with account-management URL |
+| MSC4312 | ✅ ● | 95/100 | Resetting cross-signing keys in the OAuth world | adds org.matrix.cross_signing_reset account deep-link action |
 | MSC4311 | 🟨 ● | 50/50 | Ensuring the create event is available on invites | create event keeps origin_server_ts in stripped state; no recv-side validation |
 | MSC4307 | ✅ ● | 100/100 | Validate that `auth_events` are in the correct room | auth_event room_id mismatch rejected |
 | MSC4304 | ✅ ● | 90/100 | Room Version 12 | V12 supported as stable; default is V11 |
@@ -62,7 +62,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4222 | ✅ ● | 100/100 | Adding `state_after` to `/sync` | src/api/client/sync/v3.rs; use_state_after wired through joined+left rooms; s... |
 | MSC4213 | ✅ ● | 90/90 | Remove `server_name` parameter | join/knock use via; server_name still accepted via Ruma fallback |
 | MSC4210 | ✅ ● | 100/100 | Remove legacy mentions | deprecated mention push rules removed at /pushrules read time |
-| MSC4191 | 🟨 ◐ | 50/80 | Account management for OAuth 2.0 API | metadata wired but action names diverge from MSC |
+| MSC4191 | ✅ ● | 95/100 | Account management for OAuth 2.0 API | all six actions advertised and handled; stable names alias prototypes |
 | MSC4190 | ✅ ● | 90/90 | Device management for application services | appservices with device_management can create, update, delete devices without... |
 | MSC4189 | ✅ ◐ | 80/100 | Allowing guests to access uploaded media | guest tokens accepted on authenticated media routes |
 | MSC4180 | ✅ ● | 100/100 | Add a stable flag to MSC3916 | stable feature flag for MSC3916 advertised |
@@ -255,7 +255,6 @@ for spec compliance.
 | MSC3765 | 🟨 ◐ | 50/80 | Rich text in room topics | createRoom writes m.topic; publicRooms/hierarchy use legacy topic; no search |
 | MSC3925 | 🟨 ◐ | 50/50 | m.replace aggregation with full event | Tuwunel doesn't replace content (good) but also lacks bundled m.replace aggre... |
 | MSC4025 | 🟨 ● | 50/50 | Local user erasure requests | phase A landed (account-data wipe); phase B (per-event visibility gate) deferred |
-| MSC4191 | 🟨 ◐ | 50/80 | Account management for OAuth 2.0 API | metadata wired but action names diverge from MSC |
 | MSC4311 | 🟨 ● | 50/50 | Ensuring the create event is available on invites | create event keeps origin_server_ts in stripped state; no recv-side validation |
 | MSC3856 | 🟨 ◐ | 40/60 | Threads List API | GET /threads route present but participated filter and latest-event order mis... |
 | MSC3666 | 🟨 ● | 30/30 | Bundled aggregations for server side search | thread bundles already surface in /search responses via verbatim serializatio... |
