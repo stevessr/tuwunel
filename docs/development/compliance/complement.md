@@ -4,15 +4,15 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 203. Passing: **70.0%**
-  - ✅ `pass`: 142
-  - 🟨 `some`: 27
+- Test groups: 203. Passing: **70.9%**
+  - ✅ `pass`: 144
+  - 🟨 `some`: 25
   - ❌ `fail`: 32
   - ⬛ `skip`: 2
 
-- Subtests: 593. Passing: **71.0%**
-  - ✅ `pass`: 421
-  - ❌ `fail`: 159
+- Subtests: 593. Passing: **71.3%**
+  - ✅ `pass`: 423
+  - ❌ `fail`: 157
   - ⬛ `skip`: 13
 
 ## All Top-Level Tests
@@ -99,8 +99,8 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestKnockRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV12` | ✅ | – |
 | `TestKnockRoomsInPublicRoomsDirectory` | ✅ | – |
 | `TestKnockRoomsInPublicRoomsDirectoryInMSC3787Room` | ✅ | – |
-| `TestKnocking` | 🟨 | 24/1/0 |
-| `TestKnockingInMSC3787Room` | 🟨 | 24/1/0 |
+| `TestKnocking` | ✅ | 25/0/0 |
+| `TestKnockingInMSC3787Room` | ✅ | 25/0/0 |
 | `TestLeakyTyping` | ✅ | – |
 | `TestLeaveEventInviteRejection` | ✅ | – |
 | `TestLeaveEventVisibility` | ❌ | – |

@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 227
-- 🟨 `partial`: 53
+- ✅ `yes`: 228
+- 🟨 `partial`: 52
 - ❌ `no`: 452
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 160 | 23 | 9 | 64 | 256 |
+| merged | 161 | 22 | 9 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -112,7 +112,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3820 | ✅ ● | 90/100 | Room Version 11 | v11 stable; redaction and auth rules dispatch via Ruma RoomVersionRules |
 | MSC3818 | ✅ ● | 100/100 | Copy room type on upgrade | upgrade reuses old m.room.create content; type preserved by default |
 | MSC3816 | ❌ ◐ | 10/10 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |
-| MSC3787 | 🟨 ● | 90/100 | Allowing knocks to restricted rooms | Knock state persisted; ruma Rooms::is_empty now counts knock in /sync |
+| MSC3787 | ✅ ● | 100/100 | Allowing knocks to restricted rooms | Knock-restricted fully wired; remote re-knock reconciles the room server |
 | MSC3786 | ✅ ● | 100/100 | Add a default push rule to ignore `m.room.server_acl` events | server_acl predefined push rule via Ruma defaults |
 | MSC3773 | ✅ ● | 100/100 | Notifications for threads | src/service/pusher/notification.rs:143 per-thread counts; src/api/client/sync... |
 | MSC3771 | ✅ ● | 100/100 | Read receipts for threads | src/api/client/read_marker.rs validates+routes thread; receipt and private_re... |
@@ -239,7 +239,6 @@ for spec compliance.
 
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
-| MSC3787 | 🟨 ● | 90/100 | Allowing knocks to restricted rooms | Knock state persisted; ruma Rooms::is_empty now counts knock in /sync |
 | MSC4291 | 🟨 ● | 80/90 | Room IDs as hashes of the create event | hydra.11 room id format and auth rules in event_auth, pdu format checks |
 | MSC2409 | 🟨 ● | 70/70 | Proposal to send typing, presence and receipts to appservices | typing+receipt EDUs sent to AS; presence not forwarded |
 | MSC3860 | 🟨 ◐ | 70/70 | Media Download Redirects | Emits 307 to presigned object-store URL on allow_redirect; default-off gate |
