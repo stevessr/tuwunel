@@ -129,7 +129,7 @@ jobs:
       !cancelled()
       && needs.acceptance.result != 'skipped'
 
-    name: ${{inputs.job_name}} Summary
+    name: Aggregate
     needs: [acceptance]
     runs-on: ["${{fromJSON(inputs.machines)[0]}}", "${{inputs.runner}}"]
 
