@@ -1,6 +1,6 @@
 //! Per-server reachability store backed by the `servername_status` CF.
 //!
-//! Bucket key layout: `servername || u32_be(now.as_secs() / window_secs)`. The
+//! Bucket key layout: `servername || u64_be(now.as_secs() / window_secs)`. The
 //! one-byte value is the [`Classification`]. Bursts within the same window
 //! collide on the same key, which is a correct collision (the window is the
 //! coalescing quantum). The storage layout is the batch.
@@ -99,7 +99,7 @@ pub async fn should_attempt(&self, server: &ServerName) -> ShouldAttempt {
 	// forces an imperative loop rather than `take_while`.
 	let mut streak: u32 = 1;
 	while streak < self.n_max {
-		let prior = now_bucket.saturating_sub(streak);
+		let prior = now_bucket.saturating_sub(u64::from(streak));
 		if !self.statuses.contains(&(server, prior)).await {
 			break;
 		}
@@ -119,7 +119,7 @@ pub fn peer_snapshot(
 	&self,
 ) -> impl Stream<Item = (&ServerName, SystemTime, Classification)> + Send + '_ {
 	self.statuses.stream().ignore_err().map(
-		move |((server, bucket), value): ((&ServerName, u32), &[u8])| {
+		move |((server, bucket), value): ((&ServerName, u64), &[u8])| {
 			(server, self.bucket_start(bucket), classify(value))
 		},
 	)
@@ -128,20 +128,18 @@ pub fn peer_snapshot(
 #[implement(super::Service)]
 #[inline]
 #[must_use]
-fn current_bucket(&self) -> u32 {
-	let bucket = now_secs()
+fn current_bucket(&self) -> u64 {
+	now_secs()
 		.checked_div(self.window_secs.max(1))
-		.unwrap_or(0);
-
-	u32::try_from(bucket).unwrap_or(u32::MAX)
+		.unwrap_or(0)
 }
 
 /// Wall-clock instant at the start of `bucket`.
 #[implement(super::Service)]
 #[inline]
 #[must_use]
-fn bucket_start(&self, bucket: u32) -> SystemTime {
-	let offset = u64::from(bucket).saturating_mul(self.window_secs);
+fn bucket_start(&self, bucket: u64) -> SystemTime {
+	let offset = bucket.saturating_mul(self.window_secs);
 
 	UNIX_EPOCH
 		.checked_add(Duration::from_secs(offset))
@@ -151,7 +149,7 @@ fn bucket_start(&self, bucket: u32) -> SystemTime {
 #[implement(super::Service)]
 #[inline]
 #[must_use]
-fn earliest_retry(&self, current_bucket: u32, streak: u32) -> SystemTime {
+fn earliest_retry(&self, current_bucket: u64, streak: u32) -> SystemTime {
 	let window = Duration::from_secs(self.window_secs);
 	let delay = window
 		.saturating_mul(streak)
