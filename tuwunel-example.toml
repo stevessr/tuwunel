@@ -2795,12 +2795,11 @@
 #matrix_id =
 
 # The PGP key (i.e. OpenPGP) that one may use for encrypted communications
-# for the above support role. No specific format is mandated for this
-# field or by the spec proposal. This field can contain a URL to a PGP
-# key, the 64-bit long ID, the OPENPGPKEY DNS record, or just the full
-# fingerprint.
-#
-# Full/raw key content must not be here.
+# for the above support role. The value must be a URI. Use a web URL
+# pointing to the key (for example "https://example.com/key.asc"), an
+# OPENPGPKEY DNS record ("dns:..."), or a fingerprint carried with the
+# "openpgp4fpr:" scheme. A bare fingerprint without a scheme, or raw
+# inlined key material, is rejected at startup.
 #
 # As this is a spec proposal (MSC4439), the identifier/prefix for this
 # field is currently "dev.zirco.msc4439.pgp_key"
