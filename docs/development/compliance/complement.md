@@ -4,14 +4,14 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 203. Passing: **70.9%**
+- Test groups: 204. Passing: **70.6%**
   - ✅ `pass`: 144
   - 🟨 `some`: 25
-  - ❌ `fail`: 32
+  - ❌ `fail`: 33
   - ⬛ `skip`: 2
 
-- Subtests: 593. Passing: **71.3%**
-  - ✅ `pass`: 423
+- Subtests: 594. Passing: **71.4%**
+  - ✅ `pass`: 424
   - ❌ `fail`: 157
   - ⬛ `skip`: 13
 
@@ -20,6 +20,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | Test | Status | Subtests |
 |---|---|---|
 | `TestACLs` | ✅ | – |
+| `TestACLsForEDUs` | ❌ | – |
 | `TestAddAccountData` | ✅ | 2/0/0 |
 | `TestArchivedRoomsHistory` | 🟨 | 3/2/1 |
 | `TestAsyncUpload` | ✅ | 6/0/0 |
@@ -91,7 +92,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestJoinFederatedRoomWithUnverifiableEvents` | ✅ | 4/0/0 |
 | `TestJoinViaRoomIDAndServerName` | ✅ | – |
 | `TestJson` | ✅ | 3/0/0 |
-| `TestJumpToDateEndpoint` | 🟨 | 6/8/0 |
+| `TestJumpToDateEndpoint` | 🟨 | 6/9/0 |
 | `TestKeyChangesLocal` | ✅ | 1/0/0 |
 | `TestKeyClaimOrdering` | ✅ | – |
 | `TestKeysQueryWithDeviceIDAsObjectFails` | ✅ | – |
@@ -174,7 +175,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestRoomAlias` | ✅ | 5/0/0 |
 | `TestRoomCanonicalAlias` | ✅ | 10/0/0 |
 | `TestRoomCreate` | ✅ | 15/0/0 |
-| `TestRoomCreationReportsEventsToMyself` | 🟨 | 3/3/0 |
+| `TestRoomCreationReportsEventsToMyself` | 🟨 | 4/2/0 |
 | `TestRoomDeleteAlias` | 🟨 | 7/2/0 |
 | `TestRoomForget` | 🟨 | 5/3/0 |
 | `TestRoomImageRoundtrip` | ✅ | – |
