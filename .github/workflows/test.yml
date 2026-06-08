@@ -387,9 +387,6 @@ jobs:
 
     name: Compliance (Tuwunel)
     needs: [doc, unit, bench, memcheck, smoke, nix, complement]
-    concurrency:
-      group: complement-cant-walk-and-chew-bubblegum
-      cancel-in-progress: false
 
     uses: ./.github/workflows/compliance.yml
     with:
@@ -455,9 +452,6 @@ jobs:
 
     name: Cryptography (rust-sdk)
     needs: [doc, unit, bench, memcheck, smoke, nix, complement-crypto]
-    concurrency:
-      group: complement-cant-walk-and-chew-bubblegum
-      cancel-in-progress: false
 
     uses: ./.github/workflows/compliance.yml
     with:

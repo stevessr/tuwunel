@@ -8,7 +8,7 @@ ARG CARGO_HOME
 ARG rust_toolchain
 # matrix-sdk-ffi-0.18.0 release; carries SqliteStoreBuilder::key for complement-crypto.
 ARG mrsdk_ref="1c44fb66214667c6d00acaf72ab592493653708b"
-ARG complement_crypto_ref="ba6afce2df545cd433776467fbdee9a93c9c1342"
+ARG complement_crypto_ref="989eb5491d3cf695a6e7d77a99989088a108ff3b"
 ARG MRSDK_TARGET_DIR="/usr/src/matrix-rust-sdk/target"
 
 ENV PATH="${CARGO_HOME}/bin:${PATH}"
