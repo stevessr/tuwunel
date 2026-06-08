@@ -471,8 +471,8 @@
 {"Action":"fail","Test":"TestPartialStateJoin/State_rejected_incorrectly"}
 {"Action":"fail","Test":"TestPartialStateJoin/User_directory_is_correctly_updated_once_state_re-sync_completes"}
 {"Action":"fail","Test":"TestPartialStateJoin/joined_members_blocks_during_partial_state_join"}
-{"Action":"fail","Test":"TestPollsLocalPushRules"}
-{"Action":"fail","Test":"TestPollsLocalPushRules/Polls_push_rules_are_correctly_presented_to_the_client"}
+{"Action":"pass","Test":"TestPollsLocalPushRules"}
+{"Action":"pass","Test":"TestPollsLocalPushRules/Polls_push_rules_are_correctly_presented_to_the_client"}
 {"Action":"pass","Test":"TestPowerLevels"}
 {"Action":"pass","Test":"TestPowerLevels/GET_/rooms/:room_id/state/m.room.power_levels_can_fetch_levels"}
 {"Action":"pass","Test":"TestPowerLevels/PUT_/rooms/:room_id/state/m.room.power_levels_can_set_levels"}

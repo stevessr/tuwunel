@@ -4,15 +4,15 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 204. Passing: **70.6%**
-  - ✅ `pass`: 144
+- Test groups: 204. Passing: **71.1%**
+  - ✅ `pass`: 145
   - 🟨 `some`: 25
-  - ❌ `fail`: 33
+  - ❌ `fail`: 32
   - ⬛ `skip`: 2
 
-- Subtests: 594. Passing: **71.4%**
-  - ✅ `pass`: 424
-  - ❌ `fail`: 157
+- Subtests: 594. Passing: **71.5%**
+  - ✅ `pass`: 425
+  - ❌ `fail`: 156
   - ⬛ `skip`: 13
 
 ## All Top-Level Tests
@@ -141,7 +141,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestOutboundFederationProfile` | ✅ | 1/0/0 |
 | `TestOutboundFederationSend` | ✅ | – |
 | `TestPartialStateJoin` | ❌ | 0/58/7 |
-| `TestPollsLocalPushRules` | ❌ | 0/1/0 |
+| `TestPollsLocalPushRules` | ✅ | 1/0/0 |
 | `TestPowerLevels` | ✅ | 3/0/0 |
 | `TestPresence` | 🟨 | 4/1/0 |
 | `TestPresenceSyncDifferentRooms` | ✅ | – |

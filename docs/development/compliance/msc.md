@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 230
-- 🟨 `partial`: 50
+- ✅ `yes`: 231
+- 🟨 `partial`: 49
 - ❌ `no`: 452
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 163 | 20 | 9 | 64 | 256 |
+| merged | 164 | 19 | 9 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -132,7 +132,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3440 | 🟨 ● | 60/70 | MSC3440 Threading via `m.thread` relation | [→ MSC3856] thread bundling, /threads, /relations with rel_type filter |
 | MSC3419 | ✅ ○ | 100/100 | Guest State Events | no guest-specific gate on state-event send path; PL/auth_check applies unifor... |
 | MSC3383 | ✅ ● | 100/100 | Include destination in X-Matrix Auth Header | X-Matrix destination field validated on inbound federation |
-| MSC3381 | 🟨 ◐ | 0/? | Chat Polls | complement: 0p/2f |
+| MSC3381 | ✅ ● | 100/100 | Chat Polls | complement: 2p/0f |
 | MSC3375 | ✅ ● | 100/100 | Room Version 9 | room v9 stable; redaction keeps join_authorised_via_users_server |
 | MSC3316 | ✅ ● | 100/100 | Proposal to add timestamp massaging to the spec | appservice ts honored on /send and /state |
 | MSC3289 | ✅ ● | 100/100 | Room Version 8 | room v8 listed stable; restricted join rule auth implemented |
@@ -258,7 +258,6 @@ for spec compliance.
 | MSC3856 | 🟨 ◐ | 40/60 | Threads List API | GET /threads route present but participated filter and latest-event order mis... |
 | MSC3666 | 🟨 ● | 30/30 | Bundled aggregations for server side search | thread bundles already surface in /search responses via verbatim serializatio... |
 | MSC4277 | 🟨 ◐ | 30/40 | Harmonizing the reporting endpoints | event and room report endpoints exist; user report endpoint absent |
-| MSC3381 | 🟨 ◐ | 0/? | Chat Polls | complement: 0p/2f |
 | MSC1759 | ❌ ◐ | 10/20 | MSC 1759 - Rooms V2 | v2 algorithm in use for v3+; v2 itself not in supported_room_versions |
 | MSC3816 | ❌ ◐ | 10/10 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |
 | MSC1692 | ❌ ◐ | 0/10 | Terms of service at registration | AuthType::Terms exists in Ruma but Tuwunel's register flow does not advertise... |
