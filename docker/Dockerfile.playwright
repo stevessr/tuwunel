@@ -55,6 +55,14 @@ WORKDIR /usr/src
 ADD https://github.com/element-hq/element-web.git#${element_web_ref} element-web
 
 WORKDIR /usr/src/element-web
+
+# element-web pins pnpm via devEngines.packageManager with onFail "error"; the
+# npm-installed pnpm above floats to latest and would hard-fail the version
+# check, including in the child pnpm a postinstall script spawns (which a CLI
+# --pm-on-fail flag cannot reach). Relax the gate to a warning at the source so
+# every pnpm process proceeds; devEngines is not part of the frozen lockfile.
+RUN node -e "const fs=require('fs'),p=require('./package.json');if(p.devEngines?.packageManager)p.devEngines.packageManager.onFail='warn';fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+
 RUN --mount=type=cache,target=/root/.local/share/pnpm,sharing=locked \
     pnpm install --frozen-lockfile
 
