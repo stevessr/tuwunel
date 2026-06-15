@@ -85,10 +85,13 @@ on:
         default: 'het'
       playwright_workers:
         type: string
-        default: '4'
+        default: '3'
       playwright_retries:
         type: string
         default: '1'
+      playwright_shards:
+        type: string
+        default: '6'
 
 jobs:
   doc:
@@ -523,6 +526,7 @@ jobs:
       runner: ${{inputs.playwright_runner}}
       workers: ${{inputs.playwright_workers}}
       retries: ${{inputs.playwright_retries}}
+      shards: ${{inputs.playwright_shards}}
       cargo_profiles: '["bench"]'
       feat_sets: '["logging"]'
       rust_toolchains: '["nightly"]'
