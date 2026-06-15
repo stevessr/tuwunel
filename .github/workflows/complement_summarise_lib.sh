@@ -83,13 +83,31 @@ render_grid() {
 	' "$curr"
 }
 
+# Passing rate: accept over the row's test count (accept + errors + skips).
+# Skips stay in the denominator, so a flaky skip holds the rate below 100%
+# until it is fixed. Empty rows render "n/a" rather than dividing by zero.
+pct() {
+	awk -v a="$1" -v d="$2" 'BEGIN {
+		if (d == 0) print "n/a"; else printf "%.1f%%\n", 100 * a / d
+	}'
+}
+
+# Emit one markdown table row from its cells.
+row() { printf '| %s | %s | %s | %s | %s | %s | %s |\n' "$@"; }
+
 emit_header() {
+	local pass_sec pass_sub pass_tot
+	pass_sec=$(pct "$acc_sec" "$((acc_sec + err_sec + skip_sec))")
+	pass_sub=$(pct "$acc_sub" "$((acc_sub + err_sub + skip_sub))")
+	pass_tot=$(pct "$acc_tot" "$((acc_tot + err_tot + skip_tot))")
+
 	echo "### $track_name"
 	echo
-	echo "|  | accept | errors | skipped | advanced | regressed |"
-	echo "|---|---|---|---|---|---|"
-	echo "| sections | $acc_sec | $err_sec | $skip_sec | $nprog_sec | $nreg_sec |"
-	echo "| subtests | $acc_sub | $err_sub | $skip_sub | $nprog_sub | $nreg_sub |"
+	echo "|  | accept | errors | skipped | advanced | regressed | passing |"
+	echo "|---|---|---|---|---|---|---|"
+	row sections "$acc_sec" "$err_sec" "$skip_sec" "$nprog_sec" "$nreg_sec" "$pass_sec"
+	row subtests "$acc_sub" "$err_sub" "$skip_sub" "$nprog_sub" "$nreg_sub" "$pass_sub"
+	row total "$acc_tot" "$err_tot" "$skip_tot" "$nprog_tot" "$nreg_tot" "$pass_tot"
 	if test -n "$1"; then
 		echo
 		echo "$1"
@@ -169,8 +187,8 @@ summarise_main() {
 		exit 0
 	fi
 
-	curr=$(mktemp); prev=$(mktemp)
-	trap 'rm -f "$curr" "$prev"' EXIT
+	curr=$(mktemp); prev=$(mktemp); leaves=$(mktemp)
+	trap 'rm -f "$curr" "$prev" "$leaves"' EXIT
 	snapshot_current
 	snapshot_baseline
 
@@ -195,6 +213,27 @@ summarise_main() {
 
 	nprog_sec=$(count_sec "$progress"); nprog_sub=$(count_sub "$progress")
 	nreg_sec=$( count_sec "$regress");  nreg_sub=$( count_sub "$regress")
+
+	# Distinct leaf tests for the total row. A classified row is a leaf when no
+	# other row nests beneath it ("<name>/..."); a parent only aggregates its
+	# subtests (fail wins above), so counting parents alongside their leaves
+	# double-counts. Go nests arbitrarily deep, so leaf-ness is computed over
+	# every ancestor prefix, not just the top level. The total thus need not
+	# equal sections + subtests.
+	awk '
+		{ nm[NR] = $2; m = split($2, p, "/"); pre = p[1]
+		  for (i = 2; i <= m; i++) { internal[pre] = 1; pre = pre "/" p[i] } }
+		END { for (i = 1; i <= NR; i++) if (!(nm[i] in internal)) print nm[i] }
+	' "$curr" | sort > "$leaves"
+
+	read -r acc_tot err_tot skip_tot < <(awk '
+		NR == FNR { leaf[$0] = 1; next }
+		$2 in leaf { if ($1 == "accept") a++; else if ($1 == "error") e++; else k++ }
+		END { printf "%d %d %d\n", a + 0, e + 0, k + 0 }
+	' "$leaves" "$curr")
+
+	nprog_tot=$(printf '%s' "$progress" | grep -Fxcf "$leaves" || :)
+	nreg_tot=$( printf '%s' "$regress"  | grep -Fxcf "$leaves" || :)
 
 	# Main-branch runs are the baseline; the grid carries no diff signal there.
 	if test "${GITHUB_REF_NAME:-}" = "main"; then
