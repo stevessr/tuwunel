@@ -167,6 +167,8 @@ jobs:
     - name: Initialize Builder
       env:
         runner: ${{matrix.runner}}
+        pipeline: ${{inputs.pipeline || github.event.head_commit.message || github.event.workflow_run.head_commit.message}}
+        seed_builder: ${{vars.SEED_BUILDER || 'jevolk'}}
         reserved_space:      '{"het": "192GB", "aws": "48GB"}'
         max_used_space:      '{"het": "384GB", "aws": "64GB"}'
         min_free_space:      '{"het": "32GB",  "aws": "16GB"}'
