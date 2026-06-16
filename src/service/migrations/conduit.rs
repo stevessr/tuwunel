@@ -9,6 +9,7 @@ use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, EventId, Mxc, OwnedRoomId, OwnedUserId, RoomId,
 	ServerName, UserId,
 };
+use serde::{Deserialize, de::IgnoredAny};
 use tuwunel_core::{
 	Err, Result, debug_warn, err, info, utils,
 	utils::{ReadyExt, content_disposition::make_content_disposition, stream::TryIgnore},
@@ -18,13 +19,10 @@ use tuwunel_database::{Map, SEP};
 
 use crate::Services;
 
-/// A Conduit database opened in place. Conduit and some forks both
-/// stamp schema version 18, so the discriminator is Conduit's content-addressed
-/// `filehash_metadata` column family, which neither tuwunel nor those forks
-/// has.
-pub(super) async fn is_conduit_database(services: &Services) -> bool {
-	services.globals.db.database_version().await == 18
-		&& services.db.engine.has_cf("filehash_metadata")
+/// Presence probe: `room_id` parses to `Some` when the stored PDU carries it.
+#[derive(Deserialize)]
+struct HasRoomId {
+	room_id: Option<IgnoredAny>,
 }
 
 /// Imports the original media files of a Conduit database, re-uploading each
@@ -193,13 +191,13 @@ fn sha256_hex(digest: &[u8]) -> String {
 	out
 }
 
-/// Injects `room_id` into the stored Conduit PDUs that lack it. Only a room v12
-/// (`hydra`) create event omits the field, deriving its room from the event's
-/// own id per MSC4291; every other event already stores `room_id` and the pass
-/// skips it. tuwunel's `PduEvent` requires the field, so those create events
-/// fail to deserialize without this. Scans both the `pduid_pdu` timeline (room
-/// from the key's leading short room id) and `eventid_outlierpdu` (room from
-/// the create event's own id, which is the outlier key).
+/// Injects `room_id` into stored PDUs that lack it. Runs once on every database
+/// (marker-gated by the caller); a native tuwunel DB always serializes the
+/// field, so it no-ops there. Only a room v12 (`hydra`) create event imported
+/// from Conduit omits it, deriving its room from the event's own id per
+/// MSC4291. Scans the `pduid_pdu` timeline (room from the key's leading short
+/// room id) and `eventid_outlierpdu` (room from the create event's own id, the
+/// outlier key).
 pub(super) async fn migrate_conduit_pdus(services: &Services) -> Result {
 	let db = &services.db;
 
@@ -212,7 +210,7 @@ pub(super) async fn migrate_conduit_pdus(services: &Services) -> Result {
 		.collect()
 		.await;
 
-	warn!("Reconciling Conduit PDUs into tuwunel's format...");
+	warn!("Ensuring stored PDUs carry their room_id field...");
 	let cork = db.cork_and_sync();
 
 	let pduid_pdu = &db["pduid_pdu"];
@@ -238,9 +236,9 @@ pub(super) async fn migrate_conduit_pdus(services: &Services) -> Result {
 	let fixed = timeline.0.saturating_add(outliers.0);
 	let skipped = timeline.1.saturating_add(outliers.1);
 	if skipped > 0 {
-		warn!(%fixed, %skipped, "Reconciled Conduit PDUs; some were skipped");
+		warn!(%fixed, %skipped, "Injected room_id into stored PDUs; some were skipped");
 	} else {
-		info!(%fixed, "Reconciled Conduit PDUs");
+		info!(%fixed, "Ensured stored PDUs carry room_id");
 	}
 
 	Ok(())
@@ -259,19 +257,23 @@ fn tally((fixed, skipped): (usize, usize), result: Result<bool>) -> (usize, usiz
 
 /// Injects `room_id` into one PDU value that lacks it, sourcing the room from
 /// `resolve`. Returns whether the value was rewritten; `false` means it already
-/// carried a `room_id`.
+/// carried a `room_id`. A cheap `HasRoomId` probe short-circuits that common
+/// case, so only the rewritten PDUs pay the full parse and re-serialize.
 fn inject_room_id(
 	map: &Arc<Map>,
 	key: &[u8],
 	value: &[u8],
 	resolve: impl FnOnce(&CanonicalJsonObject) -> Result<OwnedRoomId>,
 ) -> Result<bool> {
-	let mut pdu: CanonicalJsonObject = serde_json::from_slice(value)
+	let probe: HasRoomId = serde_json::from_slice(value)
 		.map_err(|e| err!(Database("Conduit PDU is not canonical JSON: {e}")))?;
 
-	if pdu.contains_key("room_id") {
+	if probe.room_id.is_some() {
 		return Ok(false);
 	}
+
+	let mut pdu: CanonicalJsonObject = serde_json::from_slice(value)
+		.map_err(|e| err!(Database("Conduit PDU is not canonical JSON: {e}")))?;
 
 	let room_id = resolve(&pdu)?;
 	pdu.insert("room_id".into(), CanonicalJsonValue::String(room_id.as_str().into()));
@@ -320,7 +322,7 @@ fn outlier_room(key: &[u8], pdu: &CanonicalJsonObject) -> Result<OwnedRoomId> {
 mod tests {
 	use std::path::Path;
 
-	use super::{conduit_media_path, parse_conduit_media_value, sha256_hex};
+	use super::{HasRoomId, conduit_media_path, parse_conduit_media_value, sha256_hex};
 
 	#[test]
 	fn conduit_media_path_deep_matches_conduit_default() {
@@ -375,5 +377,17 @@ mod tests {
 
 		assert_eq!(filename, None);
 		assert_eq!(content_type, Some("image/png"));
+	}
+
+	#[test]
+	fn has_room_id_probe_detects_presence() {
+		let with_room_id = br#"{"room_id":"!r:server","type":"m.room.message"}"#;
+		let without_room_id = br#"{"type":"m.room.create","sender":"@u:server"}"#;
+
+		let present: HasRoomId = serde_json::from_slice(with_room_id).unwrap();
+		let absent: HasRoomId = serde_json::from_slice(without_room_id).unwrap();
+
+		assert!(present.room_id.is_some());
+		assert!(absent.room_id.is_none());
 	}
 }
