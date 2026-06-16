@@ -1,11 +1,15 @@
 use std::cmp::{self, Ordering};
 
 use futures::{FutureExt, StreamExt};
-use ruma::{MxcUri, OwnedUserId, RoomId, UserId, events::room::member::MembershipState};
+use ruma::{
+	MilliSecondsSinceUnixEpoch, MxcUri, OwnedRoomId, OwnedUserId, RoomId, UserId,
+	events::room::member::MembershipState,
+};
+use serde::Deserialize;
 use tuwunel_core::{
 	Err, Result, debug, debug_info, debug_warn, err, info,
 	itertools::Itertools,
-	matrix::PduCount,
+	matrix::{PduCount, pdu::RawPduId},
 	result::NotFound,
 	utils,
 	utils::{
@@ -16,7 +20,7 @@ use tuwunel_core::{
 };
 use tuwunel_database::{Deserialized, SEP};
 
-use crate::{Services, media};
+use crate::{Services, media, rooms::timeline::bias_count};
 
 mod conduit;
 
@@ -141,6 +145,7 @@ async fn fresh(services: &Services) -> Result {
 	db["global"].insert(b"fix_hashed_sentinel_passwords", []);
 	db["global"].insert(b"upgrade_legacy_mediaid_user", []);
 	db["global"].insert(b"remove_remote_media_userid", []);
+	db["global"].insert(b"rebuild_roomid_tscount_pducount", []);
 
 	// Create the admin room and server user on first run
 	if services.config.create_admin_room {
@@ -225,6 +230,14 @@ async fn migrate(services: &Services) -> Result {
 		.is_not_found()
 	{
 		remove_remote_media_userid(services).await?;
+	}
+
+	if db["global"]
+		.get(b"rebuild_roomid_tscount_pducount")
+		.await
+		.is_not_found()
+	{
+		rebuild_roomid_tscount_pducount(services).await?;
 	}
 
 	// A newer same-lineage database was already refused; stamping ours is safe.
@@ -726,5 +739,45 @@ async fn remove_remote_media_userid(services: &Services) -> Result {
 	);
 
 	db["global"].insert(b"remove_remote_media_userid", []);
+	db.engine.sort()
+}
+
+#[derive(Deserialize)]
+struct PduRoomTs {
+	room_id: OwnedRoomId,
+	origin_server_ts: MilliSecondsSinceUnixEpoch,
+}
+
+async fn rebuild_roomid_tscount_pducount(services: &Services) -> Result {
+	let db = &services.db;
+	let cork = db.cork_and_sync();
+	let pduid_pdu = db["pduid_pdu"].clone();
+	let roomid_tscount_pducount = db["roomid_tscount_pducount"].clone();
+
+	warn!("Rebuilding roomid_tscount_pducount index for same-timestamp event ordering");
+
+	let count = pduid_pdu
+		.raw_stream()
+		.ignore_err()
+		.ready_fold(0_usize, |count, (key, value)| {
+			let Ok(pdu) = serde_json::from_slice::<PduRoomTs>(value) else {
+				return count;
+			};
+
+			let ts = u64::from(pdu.origin_server_ts.get());
+			let pdu_id = RawPduId::from(key);
+			let count_key = bias_count(pdu_id.count());
+			let room_id: &RoomId = &pdu.room_id;
+
+			roomid_tscount_pducount.put_raw((room_id, ts, count_key), pdu_id.count());
+
+			count.saturating_add(1)
+		})
+		.await;
+
+	drop(cork);
+	info!(%count, "Rebuilt roomid_tscount_pducount index");
+
+	db["global"].insert(b"rebuild_roomid_tscount_pducount", []);
 	db.engine.sort()
 }

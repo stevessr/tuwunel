@@ -21,7 +21,7 @@ use tuwunel_core::{
 };
 use tuwunel_database::Json;
 
-use super::ExtractBody;
+use super::{ExtractBody, bias_count};
 use crate::{
 	federation::Candidates,
 	fetcher::{Op, Opts},
@@ -296,7 +296,9 @@ fn prepend_backfill_pdu(
 
 	self.db.eventid_outlierpdu.remove(event_id);
 
+	let count_key = bias_count(pdu_id.count());
+
 	self.db
-		.roomid_ts_pducount
-		.put_raw((room_id, origin_server_ts), pdu_id.count());
+		.roomid_tscount_pducount
+		.put_raw((room_id, origin_server_ts, count_key), pdu_id.count());
 }
