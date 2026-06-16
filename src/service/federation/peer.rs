@@ -173,10 +173,12 @@ fn classify(bytes: &[u8]) -> Classification {
 
 /// Classifies a failed federation attempt for the peer-reachability store, or
 /// `None` when it carries no reachability signal. An HTTP response proves the
-/// peer reachable, so a 4xx (a rejection of one request, e.g. a forbidden
-/// invite or backfill) must not count against it; only 5xx or an explicit
-/// rate-limit (429) does. Transport failures carry no response: always
-/// transient.
+/// peer reachable, so a content-level 4xx (a forbidden invite, a 403 backfill)
+/// must not count against it; only 5xx or an explicit rate-limit (429) records
+/// `Transient`. A 410 is the exception: a Matrix server never returns it for
+/// one endpoint and not another, so a received 410 is a proxy operator
+/// deliberately signaling the peer is gone, and records `Permanent`. Transport
+/// failures carry no response and are always transient.
 #[must_use]
 pub(super) fn classify_error(error: &Error) -> Option<Classification> {
 	let Error::Federation(_, response) = error else {
@@ -185,6 +187,10 @@ pub(super) fn classify_error(error: &Error) -> Option<Classification> {
 
 	let status = response.status_code;
 
-	(status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS)
-		.then_some(Classification::Transient)
+	match status {
+		| _ if status == StatusCode::GONE => Some(Classification::Permanent),
+		| _ if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS =>
+			Some(Classification::Transient),
+		| _ => None,
+	}
 }

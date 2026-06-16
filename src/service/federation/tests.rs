@@ -25,6 +25,13 @@ fn content_4xx_is_not_a_peer_failure() {
 }
 
 #[test]
+fn gone_is_permanent() {
+	let verdict = classify_error(&federation_error(StatusCode::GONE));
+
+	assert!(matches!(verdict, Some(Classification::Permanent)));
+}
+
+#[test]
 fn server_error_and_rate_limit_are_transient() {
 	for status in [
 		StatusCode::TOO_MANY_REQUESTS,
