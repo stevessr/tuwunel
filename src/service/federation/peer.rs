@@ -12,9 +12,10 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use futures::{Stream, StreamExt};
+use http::StatusCode;
 use ruma::ServerName;
 use tuwunel_core::{
-	implement,
+	Error, implement,
 	utils::{stream::TryIgnore, time::now_secs},
 };
 
@@ -168,4 +169,22 @@ fn classify(bytes: &[u8]) -> Classification {
 		.first()
 		.copied()
 		.map_or(Classification::Transient, Classification::from_byte)
+}
+
+/// Classifies a failed federation attempt for the peer-reachability store, or
+/// `None` when it carries no reachability signal. An HTTP response proves the
+/// peer reachable, so a 4xx (a rejection of one request, e.g. a forbidden
+/// invite or backfill) must not count against it; only 5xx or an explicit
+/// rate-limit (429) does. Transport failures carry no response: always
+/// transient.
+#[must_use]
+pub(super) fn classify_error(error: &Error) -> Option<Classification> {
+	let Error::Federation(_, response) = error else {
+		return Some(Classification::Transient);
+	};
+
+	let status = response.status_code;
+
+	(status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS)
+		.then_some(Classification::Transient)
 }
