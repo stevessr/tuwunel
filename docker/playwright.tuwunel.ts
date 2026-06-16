@@ -1,12 +1,12 @@
 import {
     AbstractStartedContainer,
     GenericContainer,
+    type StartedNetwork,
     type StartedTestContainer,
     Wait,
 } from "testcontainers";
 import {type APIRequestContext, type TestInfo} from "@playwright/test";
 import crypto from "node:crypto";
-import * as net from "node:net";
 
 import {
     type HomeserverContainer,
@@ -47,8 +47,10 @@ export class TuwunelContainer extends GenericContainer implements HomeserverCont
 
         this.config = {...DEFAULT_CONFIG};
 
-        this.withWaitStrategy(Wait.forHttp("/_matrix/client/versions", 8008))
-            .withEnvironment({SERVER_NAME: "localhost"});
+        // The testee joins the per-shard network (see start()) and publishes no
+        // host port, so the HTTP wait strategy has no mapped port to probe; gate
+        // readiness on tuwunel's "Listening on" startup line instead.
+        this.withWaitStrategy(Wait.forLogMessage(/Listening on/)).withStartupTimeout(30_000);
     }
 
     /**
@@ -59,7 +61,7 @@ export class TuwunelContainer extends GenericContainer implements HomeserverCont
      */
     public withConfigField<Key extends keyof TuwunelConfig>(key: Key, value: TuwunelConfig[Key]): this {
         (this.config as Record<string, unknown>)[key as string] = value;
-        this.cmdOverrides.push(`-O${String(key)}=${String(value)}`);
+        this.cmdOverrides.push(toOverride(String(key), value));
         return this;
     }
 
@@ -71,7 +73,7 @@ export class TuwunelContainer extends GenericContainer implements HomeserverCont
     public withConfig(config: Partial<TuwunelConfig>): this {
         this.config = {...this.config, ...config};
         for (const [k, v] of Object.entries(config)) {
-            this.cmdOverrides.push(`-O${k}=${String(v)}`);
+            this.cmdOverrides.push(toOverride(k, v));
         }
         return this;
     }
@@ -94,43 +96,66 @@ export class TuwunelContainer extends GenericContainer implements HomeserverCont
         return this; // XXX: MAS integration not implemented
     }
 
+    /**
+     * No-op: the testee joins the per-shard network in start(), not the per-test
+     * network the homeserver fixture creates here. The siblings on that fixture
+     * network (MAS, SMTP, postgres) are all no-ops for tuwunel, so its
+     * withNetwork/withNetworkAliases attach is dead weight; absorbing it keeps a
+     * leftover alias from conflicting with the per-shard attach.
+     * @returns This container, for chaining.
+     */
+    public override withNetwork(_network: StartedNetwork): this {
+        return this;
+    }
+
+    /**
+     * No-op: see withNetwork.
+     * @returns This container, for chaining.
+     */
+    public override withNetworkAliases(..._aliases: string[]): this {
+        return this;
+    }
+
     public override async start(): Promise<StartedTuwunelContainer> {
-        if (this.cmdOverrides.length > 0) {
-            this.withCommand(this.cmdOverrides);
+        // The tester and every testee share a per-shard user-defined bridge
+        // network (docker/playwright.sh, PLAYWRIGHT_NETWORK). Each testee binds
+        // the container-internal port 8008 in its own netns and the tester
+        // reaches it by container-name DNS, so no host port is published: the
+        // shards on the shared daemon cannot collide on a port, and the tester
+        // is off host networking, so sibling veth churn no longer aborts
+        // in-flight Chromium requests (net::ERR_NETWORK_CHANGED, chromium
+        // #974711). The name survives homeserver.restart(), so baseUrl does too.
+        const network = process.env.PLAYWRIGHT_NETWORK;
+        if (!network) {
+            throw new Error("PLAYWRIGHT_NETWORK is unset; see docker/playwright.sh");
         }
-        // Pin the host port so baseUrl survives homeserver.restart() (the spotlight
-        // suite's context fixture restarts the testee between tests). 127.0.0.1 over
-        // testcontainers' default getHost() to avoid the docker0 bridge IP, which
-        // ECONNREFUSEs from Playwright's apiRequestContext under --network=host.
-        //
-        // pickFreePort releases its probe socket before the daemon binds the
-        // port, so a concurrent worker can claim it in the gap (workers run
-        // several testees at once). Retry with a fresh pick on the daemon's
-        // "port is already allocated" until one sticks.
-        for (let attempt = 1; ; attempt++) {
-            const port = await pickFreePort();
-            this.withExposedPorts({container: 8008, host: port});
-            try {
-                const container = await super.start();
-                const baseUrl = `http://127.0.0.1:${port}`;
-                return new StartedTuwunelContainer(container, baseUrl, REGISTRATION_SHARED_SECRET);
-            } catch (e) {
-                if (attempt >= 5 || !/port is already allocated|address already in use/i.test(String(e))) {
-                    throw e;
-                }
-            }
-        }
+
+        // The baked image entrypoint is shell-form, which ignores CMD; override it
+        // with an exec-form entrypoint so the per-container -O flags reach tuwunel.
+        // address 0.0.0.0 so siblings on the shared network can reach it.
+        this.withNetworkMode(network)
+            .withEntrypoint(["tuwunel"])
+            .withCommand([
+                toOverride("server_name", "localhost"),
+                toOverride("port", 8008),
+                toOverride("address", "0.0.0.0"),
+                ...this.cmdOverrides,
+            ]);
+
+        const container = await super.start();
+        const host = container.getName().replace(/^\//, "");
+        const baseUrl = `http://${host}:8008`;
+        return new StartedTuwunelContainer(container, baseUrl, REGISTRATION_SHARED_SECRET);
     }
 }
 
-async function pickFreePort(): Promise<number> {
-    return new Promise<number>((resolve) => {
-        const srv = net.createServer();
-        srv.listen(0, () => {
-            const port = (srv.address() as net.AddressInfo).port;
-            srv.close(() => resolve(port));
-        });
-    });
+/**
+ * Formats a tuwunel `-O<key>=<value>` config override. `-O` parses each value
+ * as TOML, so string values are quoted (a bare unquoted string is rejected).
+ */
+function toOverride(key: string, value: unknown): string {
+    const encoded = typeof value === "string" ? JSON.stringify(value) : String(value);
+    return `-O${key}=${encoded}`;
 }
 
 /**

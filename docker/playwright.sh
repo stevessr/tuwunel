@@ -42,9 +42,10 @@ sys_target="${sys_target:-$default_sys_target}"
 sys_version="${sys_version:-$default_sys_version}"
 set +a
 
-# Per-shard static-server port so concurrent shards on the shared host network
-# do not contend for a single :8080. Pairs SERVE_PORT (element-web CI
-# webServer) with BASE_URL (Playwright baseURL and health check).
+# Per-shard static-server port for the element-web CI webServer. The tester
+# serves and reaches the app over its own loopback (npx serve + Chromium share
+# the tester netns), so this only needs to be stable within a shard; pairs
+# SERVE_PORT with BASE_URL (Playwright baseURL and health check).
 shard_spec="${playwright_shard:-$default_playwright_shard}"
 base_port=$(( 8080 + ${shard_spec%%/*} - 1 ))
 
@@ -64,8 +65,15 @@ tester_image="playwright-tester--${sys_name}--${sys_version}--${sys_target}"
 testee_image="playwright-testee--${cargo_profile}--${rust_toolchain}--${rust_target}--${feat_set}--${sys_name}--${sys_version}--${sys_target}"
 shard_slug=$(printf '%s' "${playwright_shard:-$default_playwright_shard}" | tr '/' '_')
 name="playwright_tester__${sys_name}__${sys_version}__${sys_target}__${shard_slug}"
+# Per-shard user-defined bridge isolating this shard from the others sharing the
+# daemon. The tester and the testees it spawns join it; each testee binds the
+# container-internal :8008 in its own netns (no host port, no cross-shard port
+# contention) and is reached by container-name DNS. Off host networking, the
+# tester's Chromium no longer sees sibling veth churn (net::ERR_NETWORK_CHANGED).
+net="playwright_net__${sys_name}__${sys_version}__${sys_target}__${shard_slug}"
+envs="$envs -e PLAYWRIGHT_NETWORK=$net"
 sock="/var/run/docker.sock"
-arg="--name $name -v $sock:$sock --network=host $envs $tester_image"
+arg="--name $name -v $sock:$sock --network $net $envs $tester_image"
 set +x
 
 if test "$CI_VERBOSE_ENV" = "true"; then
@@ -74,6 +82,8 @@ if test "$CI_VERBOSE_ENV" = "true"; then
 fi
 
 docker rm -f "$name" 2>/dev/null || true
+docker network rm "$net" 2>/dev/null || true
+docker network create "$net" >/dev/null 2>&1 || true
 
 arg="-d $arg"
 cid=$(docker run $arg)
