@@ -107,7 +107,8 @@ ARG cargo_cmd="build"
 ARG cargo_args=""
 ARG color_args="--color always"
 ARG VALGRINDFLAGS=""
-ARG VALGRIND_MAX_WORKERS=128
+ARG VALGRIND_MAX_WORKERS=64
+ARG ROCKSDB_PARALLELISM_THREADS=2
 
 WORKDIR /
 COPY --link --from=source /usr/src/tuwunel /usr/src/tuwunel
@@ -120,6 +121,7 @@ SHELL ["/bin/bash", "-c"]
 ENV CXXSTDLIB=""
 ENV VALGRINDFLAGS="${VALGRINDFLAGS}"
 ENV TUWUNEL_DB_POOL_MAX_WORKERS="${VALGRIND_MAX_WORKERS}"
+ENV TUWUNEL_ROCKSDB_PARALLELISM_THREADS="${ROCKSDB_PARALLELISM_THREADS}"
 RUN \
 --mount=type=cache,dst=${RUSTUP_HOME}/downloads,sharing=locked \
 --mount=type=cache,dst=${CARGO_HOME}/registry,sharing=locked \

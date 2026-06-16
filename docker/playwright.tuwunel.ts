@@ -61,7 +61,9 @@ export class TuwunelContainer extends GenericContainer implements HomeserverCont
      */
     public withConfigField<Key extends keyof TuwunelConfig>(key: Key, value: TuwunelConfig[Key]): this {
         (this.config as Record<string, unknown>)[key as string] = value;
-        this.cmdOverrides.push(toOverride(String(key), value));
+        if (isTuwunelConfigField(String(key))) {
+            this.cmdOverrides.push(toOverride(String(key), value));
+        }
         return this;
     }
 
@@ -73,7 +75,9 @@ export class TuwunelContainer extends GenericContainer implements HomeserverCont
     public withConfig(config: Partial<TuwunelConfig>): this {
         this.config = {...this.config, ...config};
         for (const [k, v] of Object.entries(config)) {
-            this.cmdOverrides.push(toOverride(k, v));
+            if (isTuwunelConfigField(k)) {
+                this.cmdOverrides.push(toOverride(k, v));
+            }
         }
         return this;
     }
@@ -156,6 +160,19 @@ export class TuwunelContainer extends GenericContainer implements HomeserverCont
 function toOverride(key: string, value: unknown): string {
     const encoded = typeof value === "string" ? JSON.stringify(value) : String(value);
     return `-O${key}=${encoded}`;
+}
+
+/**
+ * Whether a config key is one tuwunel recognizes (a DEFAULT_CONFIG field). The
+ * shared element-web fixtures push Synapse-shaped keys (user_consent,
+ * listeners, SMTP) through withConfig before their own homeserver-type skip
+ * runs; forwarding those as -O flags makes tuwunel reject its own startup, so
+ * only known fields reach the command line and the rest are dropped.
+ * @param key The config key to test.
+ * @returns True if the key is a tuwunel config field.
+ */
+function isTuwunelConfigField(key: string): key is keyof TuwunelConfig {
+    return Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, key);
 }
 
 /**

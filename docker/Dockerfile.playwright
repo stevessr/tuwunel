@@ -14,6 +14,7 @@ COPY <<EOF /playwright/playwright.toml
     port = 8008
     server_name = "localhost"
     database_path = "/database"
+    db_pool_max_workers = 64
     allow_registration = true
     yes_i_am_very_very_sure_i_want_an_open_registration_server_prone_to_abuse = true
     allow_guest_registration = false
@@ -28,6 +29,7 @@ COPY <<EOF /playwright/playwright.toml
     log_thread_ids = false
     log_span_events = "NONE"
     media_startup_check = false
+    rocksdb_parallelism_threads = 2
     startup_netburst = false
     admin_room_notices = false
     create_admin_room = false

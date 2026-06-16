@@ -142,7 +142,7 @@ jobs:
       enable_test_playwright: ${{fromJSON(inputs.enable_test_playwright || env.is_dev || 'false')}}
       playwright_runner: 'het'
       playwright_shards: ${{inputs.playwright_shards || vars.PLAYWRIGHT_SHARDS || '8'}}
-      playwright_workers: ${{inputs.playwright_workers || vars.PLAYWRIGHT_WORKERS || '2'}}
+      playwright_workers: ${{inputs.playwright_workers || vars.PLAYWRIGHT_WORKERS || '1'}}
       enable_package: ${{fromJSON(inputs.enable_package || 'true')}}
       enable_package_book: ${{fromJSON(inputs.enable_package_book || 'true')}}
       enable_package_docs: ${{fromJSON(inputs.enable_package_docs || 'true')}}

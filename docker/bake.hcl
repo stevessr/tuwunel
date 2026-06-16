@@ -183,6 +183,7 @@ rustflags = [
 static_rustflags = [
     "-C relocation-model=static",
     "-C target-feature=+crt-static",
+    "-C link-arg=-Wno-unused-command-line-argument",
 ]
 
 static_libs = [
