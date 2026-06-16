@@ -140,6 +140,16 @@ jobs:
         overwrite: true
 
     - if: success() || (failure() && steps.execute.outcome == 'failure')
+      name: Upload Failure Artifacts
+      id: upload-artifacts
+      uses: actions/upload-artifact@v7
+      with:
+        name: playwright_artifacts-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}-shard-${{matrix.shard}}
+        path: ./tests/playwright/test-results
+        if-no-files-found: ignore
+        overwrite: true
+
+    - if: success() || (failure() && steps.execute.outcome == 'failure')
       name: Gate
       run: |
         .github/workflows/playwright_summarise.sh gate

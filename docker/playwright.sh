@@ -96,7 +96,12 @@ result_src="$cid:/playwright/out/results.json"
 result_dst="tests/playwright/results.json"
 output_src="$cid:/playwright/out/output.log"
 output_dst="tests/playwright/output.log"
-mkdir -p tests/playwright
+# Per-failure traces, videos, and error-context.md, which Playwright writes to
+# the config outputDir. Only populated when a test fails, so the upload step
+# ignores an empty result.
+artifacts_src="$cid:/usr/src/element-web/apps/web/playwright/test-results/."
+artifacts_dst="tests/playwright/test-results"
+mkdir -p tests/playwright "$artifacts_dst"
 
 extract_output() {
 	docker cp "$output_src" "$output_dst" 2>/dev/null || true
@@ -104,13 +109,17 @@ extract_output() {
 extract_results() {
 	docker cp "$result_src" "$result_dst" 2>/dev/null || true
 }
+extract_artifacts() {
+	docker cp "$artifacts_src" "$artifacts_dst" 2>/dev/null || true
+}
 
-trap 'extract_output; extract_results; set +x; date; echo -e "\033[1;41;37mERROR\033[0m"' ERR
-trap 'docker container stop $cid; extract_output; extract_results' INT
+trap 'extract_output; extract_results; extract_artifacts; set +x; date; echo -e "\033[1;41;37mERROR\033[0m"' ERR
+trap 'docker container stop $cid; extract_output; extract_results; extract_artifacts' INT
 docker logs -f "$cid"
 docker wait "$cid" >/dev/null 2>&1 || true
 
 extract_results
 extract_output
+extract_artifacts
 
 echo -e "\033[1;42;30mACCEPT\033[0m"
