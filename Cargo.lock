@@ -4727,7 +4727,7 @@ dependencies = [
 [[package]]
 name = "synapse-admin-api"
 version = "0.11.0"
-source = "git+https://github.com/matrix-construct/synapse-admin-api?rev=a81f0085cd3b0beedeaae4797f766fffaa436a1a#a81f0085cd3b0beedeaae4797f766fffaa436a1a"
+source = "git+https://github.com/matrix-construct/synapse-admin-api?rev=42b063b7f5e04289b34c3a7cfcc7f8730bc60c32#42b063b7f5e04289b34c3a7cfcc7f8730bc60c32"
 dependencies = [
  "ruma",
  "serde",

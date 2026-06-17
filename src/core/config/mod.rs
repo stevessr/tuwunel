@@ -836,6 +836,20 @@ pub struct Config {
 	/// example: "/etc/tuwunel/.reg_shared_secret"
 	pub registration_shared_secret_file: Option<PathBuf>,
 
+	/// Shared secret the Matrix Authentication Service (MAS) authenticates its
+	/// provisioning calls with. When set, the `/_synapse/mas/*` endpoints
+	/// accept only requests bearing this exact secret as their bearer token,
+	/// rejecting all others; when unset, those endpoints reject every request.
+	///
+	/// Use a high-entropy value and keep it identical to the secret configured
+	/// on the MAS side.
+	///
+	/// reloadable: yes
+	/// example: "kZ2hN5pQ8wXyL4mR7tBfCgJxV3aD6sE1u"
+	///
+	/// display: sensitive
+	pub mas_secret: Option<String>,
+
 	/// Controls whether encrypted rooms and events are allowed.
 	/// reloadable: yes
 	#[serde(default = "true_fn")]
