@@ -205,14 +205,22 @@ pub async fn get_event_id_near_ts_with_fallback(
 	ts: MilliSecondsSinceUnixEpoch,
 	dir: Direction,
 ) -> Result<(MilliSecondsSinceUnixEpoch, OwnedEventId)> {
-	let local_err = match self.get_event_id_near_ts(room_id, ts, dir).await {
-		| Ok(found) => return Ok(found),
-		| Err(e) => e,
+	let local = self.get_event_id_near_ts(room_id, ts, dir).await;
+
+	// Federate on a local miss, or a forward hit at the start edge of our history.
+	let federate = match &local {
+		| Err(_) => true,
+		| Ok((_, event_id)) =>
+			dir == Direction::Forward && self.is_start_edge_hit(room_id, event_id).await,
 	};
+
+	if !federate {
+		return local;
+	}
 
 	let candidates = self.backfill_candidates(room_id).await;
 	if candidates.is_empty() {
-		return Err(local_err);
+		return local;
 	}
 
 	let opts = Opts::new(Op::TimestampToEvent, room_id.to_owned())
@@ -221,19 +229,49 @@ pub async fn get_event_id_near_ts_with_fallback(
 		.candidates(candidates)
 		.checks(false);
 
-	let outcome = self.services.fetcher.fetch(opts).await?;
-	let TimestampHit { event_id, origin_server_ts } = serde_json::from_slice(&outcome.bytes)?;
+	let Ok(outcome) = self.services.fetcher.fetch(opts).await else {
+		return local;
+	};
 
-	// Fail closed: an un-ingested event can't be visibility-checked, so return the
-	// local miss.
-	self.backfill_event(room_id, &event_id, &outcome.origin)
+	let Ok(TimestampHit { event_id, origin_server_ts }) = serde_json::from_slice(&outcome.bytes)
+	else {
+		return local;
+	};
+
+	// Keep the local hit when it is no farther from the timestamp than the remote.
+	if let Ok((local_ts, local_id)) = &local
+		&& !nearer(dir, origin_server_ts, *local_ts)
+	{
+		return Ok((*local_ts, local_id.clone()));
+	}
+
+	// Fail closed: an un-ingested event can't be visibility-checked, so keep local.
+	let Ok(()) = self
+		.backfill_event(room_id, &event_id, &outcome.origin)
 		.await
-		.map_err(|e| {
-			debug_warn!(%room_id, "timestamp fallback backfill failed: {e}");
-			local_err
-		})?;
+		.inspect_err(|e| debug_warn!(%room_id, "timestamp fallback backfill failed: {e}"))
+	else {
+		return local;
+	};
 
 	Ok((origin_server_ts, event_id))
+}
+
+#[implement(super::Service)]
+async fn is_start_edge_hit(&self, room_id: &RoomId, event_id: &EventId) -> bool {
+	self.first_item_in_room(room_id)
+		.await
+		.is_ok_and(|(_, first)| {
+			*first.event_type() != TimelineEventType::RoomCreate && first.event_id() == event_id
+		})
+}
+
+/// Whether `a` is nearer the queried timestamp than `b` for a search in `dir`.
+fn nearer(dir: Direction, a: MilliSecondsSinceUnixEpoch, b: MilliSecondsSinceUnixEpoch) -> bool {
+	match dir {
+		| Direction::Forward => a < b,
+		| Direction::Backward => a > b,
+	}
 }
 
 #[implement(super::Service)]
