@@ -2093,11 +2093,18 @@ async fn calculate_state_changes<'a>(
 			.into_future()
 	});
 
+	// Full dump is strict; the delta relaxes the member filter under MSC4222.
+	let after = state_after.requested();
 	let state_events = current_state_ids
 		.stream()
-		.chain(state_diff_ids.stream())
-		.broad_filter_map(async |(shortstatekey, shorteventid)| {
-			lazy_filter(services, sender_user, witness, shortstatekey, shorteventid).await
+		.map(|ids| (false, ids))
+		.chain(
+			state_diff_ids
+				.stream()
+				.map(move |ids| (after, ids)),
+		)
+		.broad_filter_map(async |(after, (shortstatekey, shorteventid))| {
+			lazy_filter(services, sender_user, witness, shortstatekey, shorteventid, after).await
 		})
 		.chain(lazy_state_ids.stream())
 		.broad_filter_map(|shorteventid| {
@@ -2133,10 +2140,11 @@ async fn lazy_filter(
 	witness: Option<&Witness>,
 	shortstatekey: ShortStateKey,
 	shorteventid: ShortEventId,
+	after: bool,
 ) -> Option<ShortEventId> {
-	if witness.is_none() {
+	let Some(witness) = witness else {
 		return Some(shorteventid);
-	}
+	};
 
 	let (event_type, state_key) = services
 		.short
@@ -2144,8 +2152,13 @@ async fn lazy_filter(
 		.await
 		.ok()?;
 
-	(event_type != StateEventType::RoomMember || state_key == sender_user.as_str())
-		.then_some(shorteventid)
+	// An MSC4222 delta also keeps changed members the witness will not re-add
+	// (lazy_state_ids covers witnessed ones), avoiding both a miss and a duplicate.
+	let keep = event_type != StateEventType::RoomMember
+		|| state_key == sender_user.as_str()
+		|| (after && <&UserId>::try_from(state_key.as_str()).is_ok_and(|u| !witness.contains(u)));
+
+	keep.then_some(shorteventid)
 }
 
 async fn calculate_counts(

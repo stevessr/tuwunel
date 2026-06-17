@@ -59,7 +59,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC4239 | ✅ ● | 100/100 | Room version 11 as the default room version | default_default_room_version = V11 |
 | MSC4230 | ✅ ● | 100/100 | 'Animated' flag for images | event-only; passthrough; merged in spec |
 | MSC4225 | ✅ ● | 100/100 | Specification of an order in which one-time-keys should be issued | OTKs issued in upload order via count_be prefix; src/service/users/keys.rs:99 |
-| MSC4222 | ✅ ● | 100/100 | Adding `state_after` to `/sync` | stable and unstable use_state_after names honored; state_after at end-of-time... |
+| MSC4222 | ✅ ● | 100/100 | Adding `state_after` to `/sync` | dialects honored; lazy-loaded state_after carries changed members |
 | MSC4213 | ✅ ● | 90/90 | Remove `server_name` parameter | join/knock use via; server_name still accepted via Ruma fallback |
 | MSC4210 | ✅ ● | 100/100 | Remove legacy mentions | deprecated mention push rules removed at /pushrules read time |
 | MSC4191 | ✅ ● | 100/100 | Account management for OAuth 2.0 API | all six actions advertised and handled; stable names alias prototypes |
