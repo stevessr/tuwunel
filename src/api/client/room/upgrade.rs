@@ -242,7 +242,7 @@ async fn upgrade_room_create(
 		.build_and_append_pdu(
 			PduBuilder {
 				event_type: TimelineEventType::RoomCreate,
-				content: to_raw_value(&content)?,
+				content: to_raw_value(&content)?.into(),
 				state_key: Some(StateKey::new()),
 				..Default::default()
 			},
@@ -311,7 +311,7 @@ async fn upgrade_room_create_legacy(
 		.build_and_append_pdu(
 			PduBuilder {
 				event_type: TimelineEventType::RoomCreate,
-				content: to_raw_value(&content)?,
+				content: to_raw_value(&content)?.into(),
 				state_key: Some(StateKey::new()),
 				..Default::default()
 			},
@@ -580,7 +580,7 @@ async fn rebuild_state_event<Pdu: Event>(&self, event: &Pdu) -> Result<PduBuilde
 	};
 
 	Ok(PduBuilder {
-		content,
+		content: content.into(),
 		event_type: event.kind().clone(),
 		state_key: event.state_key().map(Into::into),
 		..Default::default()
