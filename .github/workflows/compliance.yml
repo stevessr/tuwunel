@@ -116,7 +116,7 @@ jobs:
       name: Restore Runtime History
       uses: actions/cache/restore@v5
       with:
-        path: ${{runner.temp}}/digest/${{github.ref_name}}.json
+        path: _ci_digest/${{github.ref_name}}.json
         key: rt-digest-${{github.ref_name}}-${{inputs.metrics_artifact_prefix}}-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}-${{github.run_id}}-${{github.run_attempt}}
         restore-keys: |
           rt-digest-${{github.ref_name}}-${{inputs.metrics_artifact_prefix}}-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}-
@@ -125,7 +125,7 @@ jobs:
       name: Restore Main Baseline
       uses: actions/cache/restore@v5
       with:
-        path: ${{runner.temp}}/digest/${{github.event.repository.default_branch || 'main'}}.json
+        path: _ci_digest/${{github.event.repository.default_branch || 'main'}}.json
         key: rt-digest-${{github.event.repository.default_branch || 'main'}}-${{inputs.metrics_artifact_prefix}}-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}-readonly
         restore-keys: |
           rt-digest-${{github.event.repository.default_branch || 'main'}}-${{inputs.metrics_artifact_prefix}}-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}-
@@ -138,8 +138,8 @@ jobs:
         sys_name: ${{matrix.sys_name}}
         sys_target: ${{matrix.sys_target}}
         GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
-        RUNTIME_DIGEST_OWN: ${{inputs.runtime_history && format('{0}/digest/{1}.json', runner.temp, github.ref_name) || ''}}
-        RUNTIME_DIGEST_MAIN: ${{(inputs.runtime_history && github.ref_name != (github.event.repository.default_branch || 'main')) && format('{0}/digest/{1}.json', runner.temp, github.event.repository.default_branch || 'main') || ''}}
+        RUNTIME_DIGEST_OWN: ${{inputs.runtime_history && format('{0}/_ci_digest/{1}.json', github.workspace, github.ref_name) || ''}}
+        RUNTIME_DIGEST_MAIN: ${{(inputs.runtime_history && github.ref_name != (github.event.repository.default_branch || 'main')) && format('{0}/_ci_digest/{1}.json', github.workspace, github.event.repository.default_branch || 'main') || ''}}
         RUNTIME_DIGEST_KEEP: ${{github.ref_name == (github.event.repository.default_branch || 'main') && '1' || '3'}}
       run: |
         ${{inputs.summariser}}
@@ -175,7 +175,7 @@ jobs:
       continue-on-error: true
       uses: actions/cache/save@v5
       with:
-        path: ${{runner.temp}}/digest/${{github.ref_name}}.json
+        path: _ci_digest/${{github.ref_name}}.json
         key: rt-digest-${{github.ref_name}}-${{inputs.metrics_artifact_prefix}}-${{matrix.feat_set}}-${{matrix.sys_name}}-${{matrix.sys_target}}-${{github.run_id}}-${{github.run_attempt}}
 
     - name: Accept
