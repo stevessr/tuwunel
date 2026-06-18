@@ -2544,6 +2544,20 @@ pub struct Config {
 	#[serde(default)]
 	pub block_non_admin_invites: bool,
 
+	/// Enforce MSC4311 validation of the create event in federated invite and
+	/// knock stripped state. When enabled, an invite whose m.room.create event
+	/// is missing, not a full PDU, bound to a different room, or fails
+	/// signature checks is rejected, and such events are dropped from knock
+	/// stripped state. When disabled (the default), failures are logged but
+	/// tolerated to preserve interoperability during ecosystem migration; a
+	/// create event that is present as a full PDU but cryptographically bound
+	/// to a different room is always rejected for room version 12 and above
+	/// regardless of this setting.
+	///
+	/// reloadable: yes
+	#[serde(default)]
+	pub enforce_stripped_state_pdu_validation: bool,
+
 	/// Allow admins to enter commands in rooms other than "#admins" (admin
 	/// room) by prefixing your message with "\!admin" or "\\!admin" followed up
 	/// a normal tuwunel admin command. The reply will be publicly visible to
