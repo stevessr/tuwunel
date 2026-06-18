@@ -1,7 +1,7 @@
 use futures::FutureExt;
 use ruma::{
 	OwnedServerName, RoomId, UserId,
-	api::federation::membership::create_invite,
+	api::{error::ErrorKind, federation::membership::create_invite},
 	events::room::member::{MembershipState, RoomMemberEventContent},
 };
 use tuwunel_core::{
@@ -110,7 +110,15 @@ async fn remote_invite(
 				.await
 				.ok(),
 		})
-		.await?;
+		.await
+		.map_err(|e| match e.kind() {
+			| ErrorKind::IncompatibleRoomVersion { .. } | ErrorKind::UnsupportedRoomVersion =>
+				err!(Request(UnsupportedRoomVersion(
+					"Server {} does not support room version {room_version_id}.",
+					user_id.server_name(),
+				))),
+			| _ => e,
+		})?;
 
 	// We do not add the event_id field to the pdu here because of signature and
 	// hashes checks

@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 232
-- 🟨 `partial`: 48
+- ✅ `yes`: 233
+- 🟨 `partial`: 47
 - ❌ `no`: 452
 - ⬛ `n/a`: 292
 
@@ -27,7 +27,7 @@
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 165 | 18 | 9 | 64 | 256 |
+| merged | 166 | 17 | 9 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -205,7 +205,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC1930 | ✅ ● | 100/100 | Proposal to add a default push rule for m.room.tombstone events | ruma Ruleset::server_default includes ConditionalPushRule::tombstone() |
 | MSC1929 | ✅ ● | 100/100 | MSC1929 Homeserver Admin Contact and Support page | src/api/client/well_known.rs:42; multiple contacts via support_contact map |
 | MSC1884 | ✅ ● | 100/100 | Proposal to replace slashes in event IDs | room v4 supported via ruma EventIdFormatVersion::V3 (URL-safe base64) |
-| MSC1866 | 🟨 ○ | 60/70 | MSC 1866 - Unsupported Room Version Error Code for Invites | federation invite errors propagated; not explicitly mapped |
+| MSC1866 | ✅ ◐ | 100/100 | MSC 1866 - Unsupported Room Version Error Code for Invites | client invite maps remote unsupported-version to M_UNSUPPORTED_ROOM_VERSION |
 | MSC1831 | ✅ ● | 100/100 | Proposal to do SRV lookups after .well-known to discover homeservers | src/service/resolver/actual.rs:79 well-known before SRV |
 | MSC1819 | ✅ ● | 100/100 | Remove references to presence lists | duplicate of MSC1818; presence lists not implemented |
 | MSC1812 | ✅ ● | 100/100 | MSC 1813 - Federation Make Membership Room Version | src/api/server/make_leave.rs:34 and make_join.rs:52 set room_version |
@@ -243,7 +243,6 @@ for spec compliance.
 | MSC2409 | 🟨 ● | 70/70 | Proposal to send typing, presence and receipts to appservices | typing+receipt EDUs sent to AS; presence not forwarded |
 | MSC3860 | 🟨 ◐ | 70/70 | Media Download Redirects | Emits 307 to presigned object-store URL on allow_redirect; default-off gate |
 | MSC4133 | 🟨 ● | 70/80 | Extending User Profile API with Custom Key:Value Pairs | GET/PUT/DELETE profile field endpoints routed at unstable prefix |
-| MSC1866 | 🟨 ○ | 60/70 | MSC 1866 - Unsupported Room Version Error Code for Invites | federation invite errors propagated; not explicitly mapped |
 | MSC2666 | 🟨 ● | 60/70 | Get rooms in common with another user | src/api/client/unstable.rs:28 GET /unstable/uk.half-shot.msc2666/user/mutual_... |
 | MSC3440 | 🟨 ● | 60/70 | MSC3440 Threading via `m.thread` relation | [→ MSC3856] thread bundling, /threads, /relations with rel_type filter |
 | MSC3824 | 🟨 ◐ | 60/60 | OAuth 2.0 API aware clients | oauth_aware_preferred set in /login; SSO redirect action param ignored |
