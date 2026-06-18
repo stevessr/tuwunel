@@ -3795,6 +3795,25 @@ pub struct IdentityProvider {
 	/// default: {}
 	#[serde(default)]
 	pub extra_authorization_parameters: BTreeMap<String, String>,
+
+	/// Forward the MSC3824 `action` query parameter from the SSO redirect
+	/// endpoints to this provider as an OpenID Connect `prompt` value.
+	///
+	/// When a client appends `action=register` to a `/login/sso/redirect`
+	/// request the upstream authorization request carries `prompt=create`
+	/// (the OpenID Connect "Initiating User Registration" extension) so the
+	/// provider can present its registration screen. `action=login` is left
+	/// unforwarded to avoid forcing a re-authentication, and a `prompt` set in
+	/// `extra_authorization_parameters` still applies in that case. An
+	/// action-derived `prompt` takes precedence over one configured there.
+	///
+	/// Leave this disabled unless the provider supports the `prompt=create`
+	/// registration extension; a provider that does not may reject or ignore
+	/// the request.
+	///
+	/// default: false
+	#[serde(default)]
+	pub forward_action_prompt: bool,
 }
 
 impl IdentityProvider {
