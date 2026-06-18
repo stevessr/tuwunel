@@ -70,10 +70,6 @@ pub struct Pdu {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub unsigned: Option<Unsigned>,
 
-	// BTreeMap<Box<ServerName>, BTreeMap<ServerSigningKeyId, String>>
-	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub signatures: Option<Box<RawJsonValue>>,
-
 	//TODO: https://spec.matrix.org/v1.14/rooms/v11/#rejected-events
 	#[cfg(test)]
 	#[serde(default, skip_serializing)]

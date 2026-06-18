@@ -139,7 +139,6 @@ pub async fn create_hash_and_sign_event(
 		redacts,
 		unsigned,
 		hashes: EventHash::default(),
-		signatures: None,
 		prev_events,
 		auth_events: auth_events
 			.values()
