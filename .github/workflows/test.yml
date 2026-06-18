@@ -77,6 +77,12 @@ on:
       complement_crypto_verbose:
         type: string
         default: 'false'
+      enable_mas:
+        type: string
+        default: 'false'
+      mas_verbose:
+        type: string
+        default: 'false'
       enable_playwright:
         type: string
         default: 'false'
@@ -528,6 +534,72 @@ jobs:
       workers: ${{inputs.playwright_workers}}
       retries: ${{inputs.playwright_retries}}
       shards: ${{inputs.playwright_shards}}
+      cargo_profiles: '["bench"]'
+      feat_sets: '["logging"]'
+      rust_toolchains: '["nightly"]'
+      sys_names: ${{inputs.sys_names}}
+      sys_versions: ${{inputs.sys_versions}}
+      rust_targets: ${{inputs.rust_targets}}
+      sys_targets: '["x86_64-v3-linux-gnu"]'
+      machines: ${{inputs.machines}}
+      excludes: ${{inputs.excludes}}
+      includes: ${{inputs.includes}}
+      checkout: ${{inputs.checkout}}
+
+  mas:
+    if: >
+      !failure() && !cancelled()
+      && fromJSON(inputs.enable_mas)
+      && !contains(inputs.pipeline, '[ci no build]')
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["bench"]')[0])
+      && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
+      && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
+
+    name: MAS
+    uses: ./.github/workflows/bake.yml
+    with:
+      bake_targets: '["mas-testee"]'
+      cargo_profiles: '["bench"]'
+      feat_sets: '["logging"]'
+      rust_toolchains: '["nightly"]'
+      sys_names: ${{inputs.sys_names}}
+      sys_versions: ${{inputs.sys_versions}}
+      rust_targets: ${{inputs.rust_targets}}
+      sys_targets: '["x86_64-v3-linux-gnu"]'
+      machines: ${{inputs.machines}}
+      runner: ${{inputs.complement_runner}}
+      excludes: ${{inputs.excludes}}
+      includes: ${{inputs.includes}}
+      checkout: ${{inputs.checkout}}
+
+  authentication:
+    if: >
+      !failure() && !cancelled()
+      && fromJSON(inputs.enable_mas)
+      && !contains(inputs.pipeline, '[ci no build]')
+      && inputs.machines
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["bench"]')[0])
+      && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
+      && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
+
+    name: Authentication (MAS)
+    needs: [doc, unit, bench, memcheck, smoke, nix, mas]
+
+    uses: ./.github/workflows/compliance.yml
+    with:
+      job_name: Authentication (MAS)
+      flavor: mas
+      runner: ${{inputs.complement_runner}}
+      script: docker/mas.sh
+      summariser: .github/workflows/mas_summarise.sh
+      results_path: tests/mas/results.jsonl
+      logs_path: tests/mas/tuwunel.log
+      runtime_metrics_path: tests/mas/mas.log
+      verbose: ${{inputs.mas_verbose}}
+      results_artifact_prefix: mas_results
+      output_artifact_prefix: mas_output
+      metrics_artifact_prefix: mas_worker_log
+      runtime_history: false
       cargo_profiles: '["bench"]'
       feat_sets: '["logging"]'
       rust_toolchains: '["nightly"]'
