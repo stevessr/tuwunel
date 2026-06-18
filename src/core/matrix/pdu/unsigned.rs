@@ -98,6 +98,36 @@ pub fn add_relation(&mut self, name: &str, pdu: Option<&Pdu>) -> Result {
 	Ok(())
 }
 
+/// MSC3816: overwrite `unsigned.m.relations.m.thread.current_user_participated`
+/// with a per-requester value. No-op when the event carries no thread bundle.
+#[implement(Pdu)]
+pub fn set_thread_participated(&mut self, participated: bool) -> Result {
+	use serde_json::Map;
+
+	let Some(unsigned) = self.unsigned.as_ref() else {
+		return Ok(());
+	};
+
+	let mut unsigned: Map<String, JsonValue> = serde_json::from_str(unsigned.json().get())
+		.map_err(|e| err!(Database("Invalid unsigned in pdu event: {e}")))?;
+
+	let updated = unsigned
+		.get_mut("m.relations")
+		.and_then(JsonValue::as_object_mut)
+		.and_then(|relations| relations.get_mut("m.thread"))
+		.and_then(JsonValue::as_object_mut)
+		.map(|thread| {
+			thread.insert("current_user_participated".to_owned(), participated.into());
+		})
+		.is_some();
+
+	if updated {
+		self.unsigned = Some(to_raw_value(&unsigned)?.into());
+	}
+
+	Ok(())
+}
+
 #[inline]
 fn raw_of<T: Serialize>(value: &T) -> Result<Raw<JsonValue>> {
 	Ok(Raw::from_raw_value(&to_raw_value(value)?))

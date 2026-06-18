@@ -18,16 +18,16 @@
 
 ## Counts
 
-- ✅ `yes`: 233
+- ✅ `yes`: 234
 - 🟨 `partial`: 47
-- ❌ `no`: 452
+- ❌ `no`: 451
 - ⬛ `n/a`: 292
 
 ### Status by inventory bucket
 
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
-| merged | 166 | 17 | 9 | 64 | 256 |
+| merged | 167 | 17 | 8 | 64 | 256 |
 | open | 59 | 29 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
@@ -111,7 +111,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3821 | ✅ ● | 90/100 | Update redaction rules, again | redact_in_place uses Ruma RedactionRules.V11 with keep third_party_invite.signed |
 | MSC3820 | ✅ ● | 90/100 | Room Version 11 | v11 stable; redaction and auth rules dispatch via Ruma RoomVersionRules |
 | MSC3818 | ✅ ● | 100/100 | Copy room type on upgrade | upgrade reuses old m.room.create content; type preserved by default |
-| MSC3816 | ❌ ◐ | 10/10 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |
+| MSC3816 | ✅ ● | 100/100 | Clarify Thread Participation | current_user_participated recomputed per requester at read time on all paths |
 | MSC3787 | ✅ ● | 100/100 | Allowing knocks to restricted rooms | Knock-restricted fully wired; remote re-knock reconciles the room server |
 | MSC3786 | ✅ ● | 100/100 | Add a default push rule to ignore `m.room.server_acl` events | server_acl predefined push rule via Ruma defaults |
 | MSC3773 | ✅ ● | 100/100 | Notifications for threads | src/service/pusher/notification.rs:143 per-thread counts; src/api/client/sync... |
@@ -257,7 +257,6 @@ for spec compliance.
 | MSC3666 | 🟨 ● | 30/30 | Bundled aggregations for server side search | thread bundles already surface in /search responses via verbatim serializatio... |
 | MSC4277 | 🟨 ◐ | 30/40 | Harmonizing the reporting endpoints | event and room report endpoints exist; user report endpoint absent |
 | MSC1759 | ❌ ◐ | 10/20 | MSC 1759 - Rooms V2 | v2 algorithm in use for v3+; v2 itself not in supported_room_versions |
-| MSC3816 | ❌ ◐ | 10/10 | Clarify Thread Participation | BundledThread.current_user_participated hardcoded true on first reply only |
 | MSC1692 | ❌ ◐ | 0/10 | Terms of service at registration | AuthType::Terms exists in Ruma but Tuwunel's register flow does not advertise... |
 | MSC1767 | ❌ ◐ | 0/0 | Extensible events in Matrix | no extensible-events handling; relies on generic event relay |
 | MSC2076 | ❌ ◐ | 0/10 | Enforce key-validity periods when validating event signatures | minimum_valid_until_ts passed for fetches; per-event ts check absent |
