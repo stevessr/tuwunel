@@ -1,7 +1,10 @@
 use futures::FutureExt;
 use ruma::{
 	OwnedServerName, RoomId, UserId,
-	api::{error::ErrorKind, federation::membership::create_invite},
+	api::{
+		error::ErrorKind,
+		federation::membership::{RawStrippedState, create_invite},
+	},
 	events::room::member::{MembershipState, RoomMemberEventContent},
 };
 use tuwunel_core::{
@@ -47,7 +50,7 @@ async fn remote_invite(
 	reason: Option<&String>,
 	is_direct: bool,
 ) -> Result {
-	let (pdu, pdu_json, invite_room_state) = {
+	let (pdu, pdu_json, invite_room_state, room_version_id) = {
 		let state_lock = self.services.state.mutex.lock(room_id).await;
 
 		let content = RoomMemberEventContent {
@@ -74,18 +77,22 @@ async fn remote_invite(
 			)
 			.await?;
 
-		let invite_room_state = self.services.state.summary_stripped(&pdu).await;
+		let room_version_id = self
+			.services
+			.state
+			.get_room_version(room_id)
+			.await?;
+
+		let invite_room_state = self
+			.services
+			.state
+			.summary_pdus(&pdu, &pdu_json, &room_version_id)
+			.await;
 
 		drop(state_lock);
 
-		(pdu, pdu_json, invite_room_state)
+		(pdu, pdu_json, invite_room_state, room_version_id)
 	};
-
-	let room_version_id = self
-		.services
-		.state
-		.get_room_version(room_id)
-		.await?;
 
 	let response = self
 		.services
@@ -101,7 +108,7 @@ async fn remote_invite(
 				.await,
 			invite_room_state: invite_room_state
 				.into_iter()
-				.map(Into::into)
+				.map(RawStrippedState::Pdu)
 				.collect(),
 			via: self
 				.services
@@ -117,6 +124,11 @@ async fn remote_invite(
 					"Server {} does not support room version {room_version_id}.",
 					user_id.server_name(),
 				))),
+			// MSC4311: the remote rejected our well-formed invite over create-event
+			// validation; the client cannot make it succeed, so surface a 5xx.
+			| ErrorKind::MissingParam => err!(BadServerResponse(
+				"Remote server could not validate the invite's create event."
+			)),
 			| _ => e,
 		})?;
 
