@@ -4,10 +4,10 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 204. Passing: **71.1%**
-  - ✅ `pass`: 145
+- Test groups: 204. Passing: **71.6%**
+  - ✅ `pass`: 146
   - 🟨 `some`: 25
-  - ❌ `fail`: 32
+  - ❌ `fail`: 31
   - ⬛ `skip`: 2
 
 - Subtests: 594. Passing: **72.2%**
@@ -121,7 +121,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestMSC4291RoomIDAsHashOfCreateEvent_AuthEventsOmitsCreateEvent` | ✅ | – |
 | `TestMSC4291RoomIDAsHashOfCreateEvent_CannotSendCreateEvent` | ✅ | – |
 | `TestMSC4291RoomIDAsHashOfCreateEvent_RoomIDIsOnCreateEvent` | ✅ | – |
-| `TestMSC4291RoomIDAsHashOfCreateEvent_UpgradedRooms` | ❌ | – |
+| `TestMSC4291RoomIDAsHashOfCreateEvent_UpgradedRooms` | ✅ | – |
 | `TestMSC4297StateResolutionV2_1_includes_conflicted_subgraph` | ✅ | – |
 | `TestMSC4297StateResolutionV2_1_starts_from_empty_set` | ✅ | – |
 | `TestMSC4308ThreadSubscriptionsSlidingSync` | ❌ | 0/2/0 |

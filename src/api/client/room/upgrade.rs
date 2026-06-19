@@ -214,6 +214,9 @@ async fn upgrade_room_create(
 		.map_err(|_| err!(Database("Found room without m.room.create event.")))?;
 
 	content.remove("creator");
+	// MSC4291: v12 create events omit the deprecated predecessor.event_id.
+	let predecessor = PreviousRoom { event_id: None, ..predecessor };
+
 	content.insert("predecessor".into(), json!(predecessor).try_into()?);
 	content.insert("room_version".into(), json!(new_version).try_into()?);
 
