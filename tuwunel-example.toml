@@ -2821,6 +2821,38 @@
 
 
 
+#[global.registration_terms.<ID>]
+
+# Version of this policy document, presented to the client. Configuring
+# any `[global.registration_terms.<ID>]` block makes registration
+# require an `m.login.terms` stage listing every such document; the
+# `<ID>` is the policy id sent to clients.
+#
+# example: "1.2"
+# reloadable: yes
+#
+#version =
+
+
+
+#[global.registration_terms.<ID>.translations.<LANG>]
+
+# User friendly name of the policy document in this language.
+#
+# example: "Terms of Service"
+# reloadable: yes
+#
+#name =
+
+# Link to the text of the policy document. Must be a valid http(s) URL.
+#
+# example: "https://example.org/terms-1.2-en.html"
+# reloadable: yes
+#
+#url =
+
+
+
 #[global.well_known.support_contact.<ID>]
 
 # The name of the support role.

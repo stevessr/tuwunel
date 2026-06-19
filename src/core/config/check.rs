@@ -52,6 +52,7 @@ pub fn check(config: &Config) -> Result {
 	check_network(config)?;
 	check_storage(config)?;
 	check_registration(config)?;
+	check_registration_terms(config)?;
 	check_turn_and_media_misc(config)?;
 	check_url_previews(config)?;
 	check_room_version(config)?;
@@ -284,6 +285,35 @@ fn check_registration(config: &Config) -> Result {
 			 expected to be aware of the risks now. If this is not the desired behaviour, \
 			 please set a registration token."
 		);
+	}
+
+	Ok(())
+}
+
+fn check_registration_terms(config: &Config) -> Result {
+	for (id, policy) in &config.registration_terms {
+		let opaque = !id.is_empty()
+			&& id.len() <= 255
+			&& id.bytes().all(
+				|b| matches!(b, b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b'.' | b'_' | b'~' | b'-'),
+			);
+
+		if !opaque {
+			return Err!(Config(
+				"registration_terms",
+				"Policy id {id:?} must be a non-empty opaque identifier of at most 255 \
+				 characters from [0-9a-zA-Z._~-]."
+			));
+		}
+
+		for (lang, translation) in &policy.translations {
+			if !matches!(translation.url.scheme(), "http" | "https") {
+				return Err!(Config(
+					"registration_terms",
+					"Policy {id:?} translation {lang:?} url must use the http or https scheme."
+				));
+			}
+		}
 	}
 
 	Ok(())

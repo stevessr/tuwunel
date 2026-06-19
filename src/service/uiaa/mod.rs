@@ -210,6 +210,10 @@ pub async fn try_auth(
 		| AuthData::Dummy(_) => {
 			uiaainfo.completed.push(AuthType::Dummy);
 		},
+		| AuthData::Terms(_) => {
+			// MSC1692: an empty auth dict accepts every presented policy.
+			uiaainfo.completed.push(AuthType::Terms);
+		},
 		| auth => error!("AuthData type not supported: {auth:?}"),
 	}
 

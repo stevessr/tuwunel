@@ -66,7 +66,7 @@ use crate::{
 ### https://tuwunel.chat/configuration.html
 "#,
 	ignore = "catchall well_known tls allow_invalid_tls_certificates ldap jwt appservice \
-	          identity_provider storage_provider"
+	          identity_provider storage_provider registration_terms"
 )]
 pub struct Config {
 	/// The server_name is the pretty name of this server. It is used as a
@@ -3083,6 +3083,10 @@ pub struct Config {
 
 	// external structure; separate section
 	#[serde(default)]
+	pub registration_terms: BTreeMap<String, TermsPolicy>,
+
+	// external structure; separate section
+	#[serde(default)]
 	pub ldap: LdapConfig,
 
 	// external structure; separate section
@@ -3269,6 +3273,45 @@ pub struct SupportPolicyTranslation {
 	/// Link to the test of the policy document. A valid URL must be specified.
 	///
 	/// example: "https://website.local/privacy-policy"
+	/// reloadable: yes
+	pub url: Url,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "global.registration_terms.<ID>",
+	ignore = "translations"
+)]
+pub struct TermsPolicy {
+	/// Version of this policy document, presented to the client. Configuring
+	/// any `[global.registration_terms.<ID>]` block makes registration
+	/// require an `m.login.terms` stage listing every such document; the
+	/// `<ID>` is the policy id sent to clients.
+	///
+	/// example: "1.2"
+	/// reloadable: yes
+	pub version: String,
+
+	// external structure; separate section
+	pub translations: BTreeMap<String, TermsPolicyTranslation>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[config_example_generator(
+	filename = "tuwunel-example.toml",
+	section = "global.registration_terms.<ID>.translations.<LANG>"
+)]
+pub struct TermsPolicyTranslation {
+	/// User friendly name of the policy document in this language.
+	///
+	/// example: "Terms of Service"
+	/// reloadable: yes
+	pub name: String,
+
+	/// Link to the text of the policy document. Must be a valid http(s) URL.
+	///
+	/// example: "https://example.org/terms-1.2-en.html"
 	/// reloadable: yes
 	pub url: Url,
 }

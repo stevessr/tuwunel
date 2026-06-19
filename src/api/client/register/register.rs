@@ -8,6 +8,7 @@ use ruma::{
 		uiaa::{AuthFlow, AuthType, UiaaInfo},
 	},
 };
+use serde_json::{json, value::to_raw_value};
 use tuwunel_core::{Err, Error, Result, debug_info, debug_warn, info, utils};
 use tuwunel_service::users::{Register, device::generate_refresh_token};
 
@@ -78,6 +79,8 @@ pub(crate) async fn register_route(
 			..Default::default()
 		})
 		.await?;
+
+	record_accepted_terms(services, &user_id, &body, is_guest).await?;
 
 	if (!is_guest && body.inhibit_login)
 		|| body
@@ -268,36 +271,40 @@ async fn enforce_uiaa(
 	body: &Ruma<register::v3::Request>,
 	is_guest: bool,
 ) -> Result {
-	let mut uiaainfo;
-	let skip_auth = if services.registration_tokens.is_enabled().await && !is_guest {
-		// Registration token required
-		uiaainfo = UiaaInfo {
-			flows: vec![AuthFlow {
-				stages: vec![AuthType::RegistrationToken],
-			}],
-			completed: Vec::new(),
-			params: Default::default(),
-			session: None,
-			auth_error: None,
-		};
-
-		body.appservice_info.is_some()
-	} else {
-		// No registration token necessary, but clients must still go through the flow
-		uiaainfo = UiaaInfo {
-			flows: vec![AuthFlow { stages: vec![AuthType::Dummy] }],
-			completed: Vec::new(),
-			params: Default::default(),
-			session: None,
-			auth_error: None,
-		};
-
-		body.appservice_info.is_some() || is_guest
-	};
-
-	if skip_auth {
+	if body.appservice_info.is_some() || is_guest {
 		return Ok(());
 	}
+
+	let token_required = services.registration_tokens.is_enabled().await;
+	let terms = services.config.login_terms_params();
+
+	let stages: Vec<AuthType> = [
+		token_required.then_some(AuthType::RegistrationToken),
+		terms.is_some().then_some(AuthType::Terms),
+	]
+	.into_iter()
+	.flatten()
+	.collect();
+
+	// A dummy stage still forces the client through UIA when nothing else does.
+	let stages = if stages.is_empty() {
+		vec![AuthType::Dummy]
+	} else {
+		stages
+	};
+
+	let params = terms
+		.as_ref()
+		.map(|terms| to_raw_value(&json!({ "m.login.terms": terms })))
+		.transpose()?;
+
+	let mut uiaainfo = UiaaInfo {
+		flows: vec![AuthFlow { stages }],
+		completed: Vec::new(),
+		params,
+		session: None,
+		auth_error: None,
+	};
 
 	match &body.auth {
 		| Some(auth) => {
@@ -310,6 +317,7 @@ async fn enforce_uiaa(
 					&uiaainfo,
 				)
 				.await?;
+
 			if !worked {
 				return Err(Error::Uiaa(uiaainfo));
 			}
@@ -324,6 +332,7 @@ async fn enforce_uiaa(
 					&uiaainfo,
 					json,
 				);
+
 				return Err(Error::Uiaa(uiaainfo));
 			},
 			| _ => {
@@ -333,6 +342,40 @@ async fn enforce_uiaa(
 	}
 
 	Ok(())
+}
+
+async fn record_accepted_terms(
+	services: crate::State,
+	user_id: &UserId,
+	body: &Ruma<register::v3::Request>,
+	is_guest: bool,
+) -> Result {
+	if is_guest || body.appservice_info.is_some() {
+		return Ok(());
+	}
+
+	let accepted: Vec<String> = services
+		.config
+		.registration_terms
+		.values()
+		.flat_map(|policy| policy.translations.values())
+		.map(|translation| translation.url.to_string())
+		.collect();
+
+	if accepted.is_empty() {
+		return Ok(());
+	}
+
+	let event_type = "m.accepted_terms";
+	let event = json!({
+		"type": event_type,
+		"content": { "accepted": accepted },
+	});
+
+	services
+		.account_data
+		.update(None, user_id, event_type.into(), &event)
+		.await
 }
 
 async fn announce_new_user(
