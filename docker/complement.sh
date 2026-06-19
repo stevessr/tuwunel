@@ -53,12 +53,70 @@ envs="$envs -e complement_run=${1:-$default_complement_run}"
 envs="$envs -e COMPLEMENT_ALWAYS_PRINT_SERVER_LOGS=1"
 envs="$envs -e COMPLEMENT_DESTROY_HS_TIMEOUT_SECS=10"
 
+# Interop runs assign a different homeserver image to one or more homeservers
+# so federation is exercised between heterogeneous implementations (Synapse vs
+# tuwunel, or two tuwunel builds). This drives Complement's native
+# COMPLEMENT_BASE_IMAGE_<hsname> override; the runner pre-pulls each image and
+# forwards the override into the tester container. Selectors, by precedence:
+#
+#   interop=synapse                   hs2 := the published Synapse image
+#   interop_image=<ref>               hs2 := <ref>
+#   interop_hs="hs2 hs4"              which homeservers the foreign image owns
+#   COMPLEMENT_BASE_IMAGE_hs2=<ref>   raw per-homeserver passthrough
+#
+# Any interop selector switches the run to report-only: the heterogeneous
+# result set does not match the homogeneous baseline in
+# tests/complement/results.jsonl, so results land under
+# tests/complement/interop and the baseline gate is off.
+default_interop_hs="hs2"
+default_synapse_image="ghcr.io/element-hq/synapse/complement-synapse:latest"
+
+interop_images=""
+add_interop() {
+	local image="$1" hs
+	for hs in ${interop_hs:-$default_interop_hs}; do
+		interop_images="${interop_images}${hs,,}=${image}"$'\n'
+	done
+}
+
+case "${interop:-}" in
+	synapse) add_interop "${synapse_image:-$default_synapse_image}" ;;
+	"") ;;
+	*) echo "complement: unknown interop peer '${interop}'" >&2; exit 1 ;;
+esac
+
+if test -n "${interop_image:-}"; then
+	add_interop "$interop_image"
+fi
+
+# Raw passthrough: forward any COMPLEMENT_BASE_IMAGE_<hsname> already exported.
+# The suffix is lowercased because Complement looks the override up by the
+# literal homeserver name (`hs1`, `hs2`), so a conventional uppercase env var
+# would otherwise be silently ignored.
+while IFS='=' read -r _name _value; do
+	case "$_name" in
+	COMPLEMENT_BASE_IMAGE_?*)
+		hs="${_name#COMPLEMENT_BASE_IMAGE_}"
+		interop_images="${interop_images}${hs,,}=${_value}"$'\n'
+		;;
+	esac
+done < <(env)
+
 flavor="complement"
 tester_image_prefix="complement-tester"
 container_name_prefix="complement_tester"
 src_root="/usr/src/complement"
 results_dir="tests/complement"
+
+if test -n "$interop_images"; then
+	results_dir="tests/complement/interop"
+	baseline_gate=0
+	envs="$envs -e COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=${complement_spawn_timeout:-60}"
+else
+	baseline_gate=1
+fi
+
 export flavor tester_image_prefix container_name_prefix src_root results_dir
-export envs run
+export envs run interop_images baseline_gate
 
 exec "$BASEDIR/complement-runner.sh"

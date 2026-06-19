@@ -77,6 +77,14 @@ on:
         type: boolean
         default: false
         description: Enable publication stage
+      enable_test_complement_interop:
+        type: boolean
+        default: false
+        description: "Interop: run Complement against a foreign homeserver"
+      complement_interop_run:
+        type: string
+        default: '.*'
+        description: "Interop: test selector regex"
       playwright_shards:
         type: string
         default: '8'
@@ -139,9 +147,11 @@ jobs:
       complement_runner: 'het'
       enable_test_complement_crypto: ${{fromJSON(inputs.enable_test_complement_crypto || 'true')}}
       complement_crypto_verbose: ${{fromJSON(inputs.complement_crypto_verbose || 'false')}}
-      enable_test_mas: ${{fromJSON(inputs.enable_test_mas || env.is_dev || 'false')}}
+      enable_test_complement_interop: ${{fromJSON(inputs.enable_test_complement_interop || env.is_dev || env.is_test)}}
+      complement_interop_run: ${{inputs.complement_interop_run || '.*'}}
+      enable_test_mas: ${{fromJSON(inputs.enable_test_mas || env.is_dev || env.is_test)}}
       mas_verbose: ${{fromJSON(inputs.mas_verbose || 'false')}}
-      enable_test_playwright: ${{fromJSON(inputs.enable_test_playwright || env.is_dev || 'false')}}
+      enable_test_playwright: ${{fromJSON(inputs.enable_test_playwright || env.is_dev || env.is_test)}}
       playwright_runner: 'het'
       playwright_shards: ${{inputs.playwright_shards || vars.PLAYWRIGHT_SHARDS || '8'}}
       playwright_workers: ${{inputs.playwright_workers || vars.PLAYWRIGHT_WORKERS || '1'}}
@@ -288,6 +298,8 @@ jobs:
       complement_verbose: ${{needs.init.outputs.complement_verbose}}
       enable_complement_crypto: ${{needs.init.outputs.enable_test_complement_crypto}}
       complement_crypto_verbose: ${{needs.init.outputs.complement_crypto_verbose}}
+      enable_complement_interop: ${{needs.init.outputs.enable_test_complement_interop}}
+      complement_interop_run: ${{needs.init.outputs.complement_interop_run}}
       enable_mas: ${{needs.init.outputs.enable_test_mas}}
       mas_verbose: ${{needs.init.outputs.mas_verbose}}
       enable_playwright: ${{needs.init.outputs.enable_test_playwright}}

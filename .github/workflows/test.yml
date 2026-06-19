@@ -77,6 +77,18 @@ on:
       complement_crypto_verbose:
         type: string
         default: 'false'
+      enable_complement_interop:
+        type: string
+        default: 'false'
+      complement_interop_peer:
+        type: string
+        default: 'synapse'
+      complement_interop_run:
+        type: string
+        default: '.*'
+      complement_interop_verbose:
+        type: string
+        default: 'false'
       enable_mas:
         type: string
         default: 'false'
@@ -394,12 +406,12 @@ jobs:
       && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
 
-    name: Compliance (Tuwunel)
+    name: Compliance (tuwunel)
     needs: [doc, unit, bench, memcheck, smoke, nix, complement]
 
     uses: ./.github/workflows/compliance.yml
     with:
-      job_name: Compliance (Tuwunel)
+      job_name: Compliance (tuwunel)
       flavor: complement
       runner: ${{inputs.complement_runner}}
       script: docker/complement.sh
@@ -424,9 +436,50 @@ jobs:
       includes: ${{inputs.includes}}
       checkout: ${{inputs.checkout}}
 
+  compliance-interop:
+    if: >
+      !failure() && !cancelled()
+      && fromJSON(inputs.enable_complement)
+      && fromJSON(inputs.enable_complement_interop)
+      && !contains(inputs.pipeline, '[ci no build]')
+      && inputs.machines
+      && contains(fromJSON(inputs.cargo_profiles), fromJSON('["bench"]')[0])
+      && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
+      && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
+
+    name: Interoperability (${{inputs.complement_interop_peer}})
+    needs: [doc, unit, bench, memcheck, smoke, nix, complement]
+
+    uses: ./.github/workflows/compliance.yml
+    with:
+      job_name: Interoperability (${{inputs.complement_interop_peer}})
+      flavor: complement
+      runner: ${{inputs.complement_runner}}
+      script: interop=${{inputs.complement_interop_peer}} docker/complement.sh "${{inputs.complement_interop_run}}"
+      summariser: .github/workflows/complement_interop_summarise.sh
+      results_path: tests/complement/interop/results.jsonl
+      logs_path: tests/complement/interop/logs.jsonl
+      runtime_metrics_path: tests/complement/interop/runtime_metrics.tar.zst
+      verbose: ${{inputs.complement_interop_verbose}}
+      results_artifact_prefix: complement_interop_results
+      output_artifact_prefix: complement_interop_output
+      metrics_artifact_prefix: complement_interop_runtime_metrics
+      cargo_profiles: '["bench"]'
+      feat_sets: '["logging"]'
+      rust_toolchains: '["nightly"]'
+      sys_names: ${{inputs.sys_names}}
+      sys_versions: ${{inputs.sys_versions}}
+      rust_targets: ${{inputs.rust_targets}}
+      sys_targets: '["x86_64-v3-linux-gnu"]'
+      machines: ${{inputs.machines}}
+      excludes: ${{inputs.excludes}}
+      includes: ${{inputs.includes}}
+      checkout: ${{inputs.checkout}}
+
   complement-crypto:
     if: >
       !failure() && !cancelled()
+      && fromJSON(inputs.enable_complement)
       && fromJSON(inputs.enable_complement_crypto)
       && !contains(inputs.pipeline, '[ci no build]')
       && contains(fromJSON(inputs.cargo_profiles), fromJSON('["bench"]')[0])
@@ -453,6 +506,7 @@ jobs:
   compliance-crypto:
     if: >
       !failure() && !cancelled()
+      && fromJSON(inputs.enable_complement)
       && fromJSON(inputs.enable_complement_crypto)
       && !contains(inputs.pipeline, '[ci no build]')
       && inputs.machines
