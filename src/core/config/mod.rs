@@ -2286,6 +2286,9 @@ pub struct Config {
 	///
 	/// Basically "global" ACLs.
 	///
+	/// The server's own name is always permitted and is never subject to this
+	/// list.
+	///
 	/// reloadable: yes
 	/// example: ["badserver\.tld$", "badphrase", "19dollarfortnitecards"]
 	///
@@ -2303,6 +2306,9 @@ pub struct Config {
 	///
 	/// This feature becomes active when this list has one or more entries;
 	/// everything not matching is denied. By default it is empty and inactive.
+	///
+	/// The server's own name is always permitted and is never subject to this
+	/// list.
 	///
 	/// Entries in `forbidden_remote_server_names` are still applied after
 	/// this is applied. This allows you to match e.g. "*\.example\.com" here
