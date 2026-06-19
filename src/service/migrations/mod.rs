@@ -34,6 +34,12 @@ pub(crate) const DATABASE_VERSION: u64 = 17;
 
 const SERVER_NAME_KEY: &[u8] = b"server_name";
 
+/// A marker written by a sibling conduwuit-lineage server but never by tuwunel.
+/// Its presence identifies a foreign database at a higher schema number even
+/// after tuwunel has stamped its own `server_name`, so a database opened by
+/// both servers in turn keeps booting rather than being refused as too new.
+const FOREIGN_LINEAGE_MARKER: &[u8] = b"populate_userroomid_leftstate_table";
+
 pub(crate) async fn migrations(services: &Services) -> Result {
 	if !services.config.database_migrations {
 		warn!("Skipping database migrations due to configuration...");
@@ -53,10 +59,11 @@ pub(crate) async fn migrations(services: &Services) -> Result {
 /// Gate the discovered schema version before migrations and the server_name
 /// backfill run. The integer is comparable only within tuwunel's own lineage; a
 /// foreign database (Conduit and forks) numbers schema on a colliding ladder
-/// and never writes SERVER_NAME_KEY, so its absence marks a foreign lineage
-/// whose number is not gated. Within our lineage a version below 13 is refused
-/// as unmigratable and one above this build as too new to open safely;
-/// force_migration overrides the latter for a deliberate downgrade.
+/// and is recognized as foreign by the absence of SERVER_NAME_KEY or a
+/// FOREIGN_LINEAGE_MARKER, so its number is not gated. Within our lineage a
+/// version below 13 is refused as unmigratable and one above this build as too
+/// new to open safely; force_migration overrides the latter for a deliberate
+/// downgrade.
 async fn check_database_version(services: &Services) -> Result {
 	let discovered = services.globals.db.database_version().await;
 
@@ -64,10 +71,9 @@ async fn check_database_version(services: &Services) -> Result {
 		return Err!(Database("Database schema version {discovered} is no longer supported"));
 	}
 
-	let foreign_lineage = services.db["global"]
-		.get(SERVER_NAME_KEY)
-		.await
-		.is_not_found();
+	let global = &services.db["global"];
+	let foreign_lineage = global.get(SERVER_NAME_KEY).await.is_not_found()
+		|| global.get(FOREIGN_LINEAGE_MARKER).await.is_ok();
 
 	if discovered > DATABASE_VERSION && !foreign_lineage && !services.config.force_migration {
 		return Err!(Database(
