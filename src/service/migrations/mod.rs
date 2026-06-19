@@ -23,6 +23,7 @@ use tuwunel_database::{Deserialized, SEP};
 use crate::{Services, media, rooms::timeline::bias_count};
 
 mod conduit;
+mod moderation;
 
 /// The current schema version.
 /// - If database is opened at greater version we reject with error. The
@@ -245,6 +246,11 @@ async fn migrate(services: &Services) -> Result {
 	{
 		rebuild_roomid_tscount_pducount(services).await?;
 	}
+
+	// Non-destructive and idempotent, so it runs every boot rather than once: a
+	// suspension added by an origin server after a prior tuwunel boot still
+	// carries on the next one.
+	moderation::migrate_moderation(services).await?;
 
 	// A newer same-lineage database was already refused; stamping ours is safe.
 	let discovered = services.globals.db.database_version().await;
