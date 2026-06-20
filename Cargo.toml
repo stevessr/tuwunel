@@ -254,6 +254,20 @@ rev = "fdfbba2bf916b53e5f73cdb1a495ebb649978079"
 default-features = false
 features = ["sync", "tls-rustls"]
 
+[workspace.dependencies.lettre]
+version = "0.11"
+default-features = false
+features = [
+	"builder",
+	"hostname",
+	"pool",
+	"ring",
+	"rustls-platform-verifier",
+	"smtp-transport",
+	"tokio1",
+	"tokio1-rustls",
+]
+
 [workspace.dependencies.libc]
 version = "0.2"
 
@@ -507,6 +521,10 @@ features = [
 	"union",
 	"write",
 ]
+
+[workspace.dependencies.subtle]
+version = "2.6"
+default-features = false
 
 [workspace.dependencies.syn]
 version = "2.0"
