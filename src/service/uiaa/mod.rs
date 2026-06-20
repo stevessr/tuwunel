@@ -1,5 +1,6 @@
 use std::{
 	collections::BTreeMap,
+	ops::ControlFlow,
 	sync::{Arc, RwLock},
 };
 
@@ -70,7 +71,6 @@ pub fn create(
 }
 
 #[implement(Service)]
-#[allow(clippy::useless_let_if_seq)]
 pub async fn try_auth(
 	&self,
 	user_id: &UserId,
@@ -91,79 +91,13 @@ pub async fn try_auth(
 
 	match auth {
 		// Find out what the user completed
-		| AuthData::Password(Password { identifier, password, user, .. }) => {
-			let username = extract!(identifier, x in Some(UserIdentifier::Matrix(ruma::api::client::uiaa::MatrixUserIdentifier { user: x, .. })))
-				.or_else(|| cfg!(feature = "element_hacks").and(user.as_ref()))
-				.ok_or(err!(Request(Unrecognized("Identifier type not recognized."))))?;
-
-			let user_id_from_username = UserId::parse_with_server_name(
-				username.clone(),
-				self.services.globals.server_name(),
-			)
-			.map_err(|_| err!(Request(InvalidParam("User ID is invalid."))))?;
-
-			// Check if the access token being used matches the credentials used for UIAA
-			if user_id.localpart() != user_id_from_username.localpart() {
-				return Err!(Request(Forbidden("User ID and access token mismatch.")));
-			}
-
-			// Check if password is correct
-			let user_id = user_id_from_username;
-			let mut password_verified = false;
-			let mut password_sentinel = false;
-
-			// First try local password hash verification
-			if let Ok(hash) = self.services.users.password_hash(&user_id).await {
-				password_sentinel = hash == PASSWORD_SENTINEL;
-				password_verified = hash::verify_password(password, &hash).is_ok();
-			}
-
-			// Only LDAP-origin accounts fall back to LDAP; others would trigger a
-			// directory-wide search.
-			#[cfg(feature = "ldap")]
-			if !password_verified
-				&& self.services.server.config.ldap.enable
-				&& self
-					.services
-					.users
-					.origin(&user_id)
-					.await
-					.is_ok_and(|origin| origin == "ldap")
-				&& let Ok(dns) = self.services.users.search_ldap(&user_id).await
-				&& let Some((user_dn, _is_admin)) = dns.first()
+		| AuthData::Password(password) => {
+			if let ControlFlow::Break(authed) = self
+				.verify_password(user_id, &mut uiaainfo, password)
+				.await?
 			{
-				password_verified = self
-					.services
-					.users
-					.auth_ldap(user_dn, password)
-					.await
-					.is_ok();
+				return Ok((authed, uiaainfo));
 			}
-
-			// For SSO users that have never set a password, allow.
-			if !password_verified
-				&& password_sentinel
-				&& self
-					.services
-					.oauth
-					.sessions
-					.exists_for_user(&user_id)
-					.await
-			{
-				return Ok((true, uiaainfo));
-			}
-
-			if !password_verified {
-				uiaainfo.auth_error = Some(StandardErrorBody {
-					kind: ErrorKind::forbidden(),
-					message: "Invalid username or password.".to_owned(),
-				});
-
-				return Ok((false, uiaainfo));
-			}
-
-			// Password was correct! Let's add it to `completed`
-			uiaainfo.completed.push(AuthType::Password);
 		},
 		| AuthData::RegistrationToken(t) => {
 			let token = t.token.trim();
@@ -271,6 +205,88 @@ pub async fn try_auth(
 	self.update_uiaa_session(user_id, device_id, session, None);
 
 	Ok((true, uiaainfo))
+}
+
+#[implement(Service)]
+#[allow(clippy::useless_let_if_seq)]
+async fn verify_password(
+	&self,
+	user_id: &UserId,
+	uiaainfo: &mut UiaaInfo,
+	password: &Password,
+) -> Result<ControlFlow<bool>> {
+	let Password { identifier, password, user, .. } = password;
+
+	let username = extract!(identifier, x in Some(UserIdentifier::Matrix(ruma::api::client::uiaa::MatrixUserIdentifier { user: x, .. })))
+		.or_else(|| cfg!(feature = "element_hacks").and(user.as_ref()))
+		.ok_or(err!(Request(Unrecognized("Identifier type not recognized."))))?;
+
+	let user_id_from_username =
+		UserId::parse_with_server_name(username.clone(), self.services.globals.server_name())
+			.map_err(|_| err!(Request(InvalidParam("User ID is invalid."))))?;
+
+	// Check if the access token being used matches the credentials used for UIAA
+	if user_id.localpart() != user_id_from_username.localpart() {
+		return Err!(Request(Forbidden("User ID and access token mismatch.")));
+	}
+
+	let user_id = user_id_from_username;
+	let mut password_verified = false;
+	let mut password_sentinel = false;
+
+	// First try local password hash verification
+	if let Ok(hash) = self.services.users.password_hash(&user_id).await {
+		password_sentinel = hash == PASSWORD_SENTINEL;
+		password_verified = hash::verify_password(password, &hash).is_ok();
+	}
+
+	// Only LDAP-origin accounts fall back to LDAP; others would trigger a
+	// directory-wide search.
+	#[cfg(feature = "ldap")]
+	if !password_verified
+		&& self.services.server.config.ldap.enable
+		&& self
+			.services
+			.users
+			.origin(&user_id)
+			.await
+			.is_ok_and(|origin| origin == "ldap")
+		&& let Ok(dns) = self.services.users.search_ldap(&user_id).await
+		&& let Some((user_dn, _is_admin)) = dns.first()
+	{
+		password_verified = self
+			.services
+			.users
+			.auth_ldap(user_dn, password)
+			.await
+			.is_ok();
+	}
+
+	// For SSO users that have never set a password, allow.
+	if !password_verified
+		&& password_sentinel
+		&& self
+			.services
+			.oauth
+			.sessions
+			.exists_for_user(&user_id)
+			.await
+	{
+		return Ok(ControlFlow::Break(true));
+	}
+
+	if !password_verified {
+		uiaainfo.auth_error = Some(StandardErrorBody {
+			kind: ErrorKind::forbidden(),
+			message: "Invalid username or password.".to_owned(),
+		});
+
+		return Ok(ControlFlow::Break(false));
+	}
+
+	uiaainfo.completed.push(AuthType::Password);
+
+	Ok(ControlFlow::Continue(()))
 }
 
 #[implement(Service)]
