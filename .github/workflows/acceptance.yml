@@ -22,6 +22,10 @@ on:
         type: string
         default: '1'
         description: Number of test shards
+      shard_ids:
+        type: string
+        default: '[1]'
+        description: Enumeration of [1..shards] identifiers.
       cargo_profiles:
         type: string
       feat_sets:
@@ -49,42 +53,19 @@ on:
         default: 'HEAD'
 
 jobs:
-  init:
-    name: Acceptance Initialize
-    runs-on: ["${{fromJSON(inputs.machines)[0]}}", "${{inputs.runner}}"]
-
-    outputs:
-      ids: ${{steps.gen.outputs.ids}}
-      count: ${{steps.gen.outputs.count}}
-
-    steps:
-    - id: gen
-      name: Generate Shard Matrix
-      env:
-        shards: ${{inputs.shards}}
-      run: |
-        case "$shards" in ''|*[!0-9]*) echo "invalid shards: '$shards'" >&2; exit 1;; esac
-        test "$shards" -ge 1 || { echo "shards must be >= 1" >&2; exit 1; }
-        echo "ids=[$(seq -s, 1 "$shards")]" >> "$GITHUB_OUTPUT"
-        echo "count=$shards" >> "$GITHUB_OUTPUT"
-
   acceptance:
     name: ${{inputs.job_name}}
-    needs: [init]
     runs-on: ["${{matrix.machine}}", "${{inputs.runner}}"]
     concurrency:
       group: playwright-cant-walk-and-chew-bubblegum-${{matrix.shard}}
       cancel-in-progress: false
 
-    outputs:
-      shards: ${{needs.init.outputs.count}}
-
     strategy:
       fail-fast: false
       matrix:
-        # Shard ids come from the init job, which expands the `shards` count
-        # into [1..N]; that count is also the /N split and summary expectation.
-        shard: ${{fromJSON(needs.init.outputs.ids)}}
+        # Shard ids enumerate [1..N] and arrive from the caller; the `shards`
+        # count is the /N split denominator and the summary expectation.
+        shard: ${{fromJSON(inputs.shard_ids)}}
         cargo_profile: ${{fromJSON(inputs.cargo_profiles)}}
         feat_set: ${{fromJSON(inputs.feat_sets)}}
         rust_toolchain: ${{fromJSON(inputs.rust_toolchains)}}
@@ -106,7 +87,7 @@ jobs:
       env:
         playwright_workers: ${{fromJSON(inputs.workers)}}
         playwright_retries: ${{fromJSON(inputs.retries)}}
-        playwright_shard: ${{matrix.shard}}/${{needs.init.outputs.count}}
+        playwright_shard: ${{matrix.shard}}/${{inputs.shards}}
         cargo_profile: ${{matrix.cargo_profile}}
         rust_toolchain: ${{matrix.rust_toolchain}}
         rust_target: ${{matrix.rust_target}}
@@ -178,7 +159,7 @@ jobs:
     - name: Merge and Summarise
       shell: bash
       env:
-        shards: ${{needs.acceptance.outputs.shards}}
+        shards: ${{inputs.shards}}
       run: |
         mkdir -p tests/playwright
         mapfile -t files < <(find ./shard-results -name results.json | sort)
