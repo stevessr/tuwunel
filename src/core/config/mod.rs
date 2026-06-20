@@ -2634,6 +2634,17 @@ pub struct Config {
 	#[serde(default = "default_admin_room_tag")]
 	pub admin_room_tag: String,
 
+	/// The room that user, room, and event reports are posted to, instead of
+	/// the admin room. Accepts a room ID or room alias; the server user must be
+	/// joined with permission to post there. Reports fall back to the admin
+	/// room when this is unset, cannot be resolved, or the server user is not a
+	/// member.
+	///
+	/// reloadable: yes
+	/// default: (none)
+	#[serde(default)]
+	pub report_room: Option<OwnedRoomOrAliasId>,
+
 	/// Whether to grant the first user to register admin privileges by joining
 	/// them to the admin room. Note that technically the next user to register
 	/// when the admin room is empty (or only contains the server-user) is

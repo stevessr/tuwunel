@@ -30,7 +30,7 @@ pub(crate) async fn report_user_route(
 	if services.users.is_active_local(target_user).await {
 		services
 			.admin
-			.send_text(&format!(
+			.send_report(&format!(
 				"@room User report received from {sender_user}\nReport Reason: \
 				 {reason}\n\nReported User ID: {target_user}",
 			))
