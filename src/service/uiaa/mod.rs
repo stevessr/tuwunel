@@ -7,7 +7,7 @@ use futures::{TryStreamExt, pin_mut};
 use ruma::{
 	CanonicalJsonValue, DeviceId, OwnedDeviceId, OwnedUserId, UserId,
 	api::{
-		client::uiaa::{AuthData, AuthType, Password, UiaaInfo, UserIdentifier},
+		client::uiaa::{AuthData, AuthType, EmailIdentity, Password, UiaaInfo, UserIdentifier},
 		error::{ErrorKind, StandardErrorBody},
 	},
 };
@@ -213,6 +213,28 @@ pub async fn try_auth(
 		| AuthData::Terms(_) => {
 			// MSC1692: an empty auth dict accepts every presented policy.
 			uiaainfo.completed.push(AuthType::Terms);
+		},
+		| AuthData::EmailIdentity(EmailIdentity { thirdparty_id_creds, .. }) => {
+			// A stray id_server is tolerated and id_access_token is never required.
+			let validated = self
+				.services
+				.threepid
+				.session_validated(
+					thirdparty_id_creds.sid.as_str(),
+					thirdparty_id_creds.client_secret.as_str(),
+				)
+				.await;
+
+			if !validated {
+				uiaainfo.auth_error = Some(StandardErrorBody {
+					kind: ErrorKind::forbidden(),
+					message: "Email address has not been validated.".to_owned(),
+				});
+
+				return Ok((false, uiaainfo));
+			}
+
+			uiaainfo.completed.push(AuthType::EmailIdentity);
 		},
 		| auth => error!("AuthData type not supported: {auth:?}"),
 	}

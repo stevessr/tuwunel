@@ -59,6 +59,7 @@ pub fn check(config: &Config) -> Result {
 	check_identity_providers(config)?;
 	check_media_providers(config)?;
 	check_well_known_support_contact_validity(config)?;
+	check_email(config)?;
 
 	Ok(())
 }
@@ -555,6 +556,19 @@ fn check_well_known_support_contact_validity(config: &Config) -> Result {
 			validate_pgp_key(pgp_key)
 				.map_err(|e| err!("well_known.support_contact.{id}.pgp_key: {e}"))?;
 		}
+	}
+
+	Ok(())
+}
+
+fn check_email(config: &Config) -> Result {
+	if config.smtp.is_some() && config.well_known.client.is_none() {
+		return Err!(Config(
+			"well_known.client",
+			"global.smtp is configured but well_known.client is unset. Email verification links \
+			 are built from the public client base URL, so set well_known.client to a valid \
+			 HTTPS URL alongside global.smtp."
+		));
 	}
 
 	Ok(())

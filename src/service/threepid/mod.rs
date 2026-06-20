@@ -1,21 +1,38 @@
 mod binding;
 mod canonical;
 mod pending;
+mod ratelimit;
 
-use std::sync::Arc;
+use std::{
+	collections::HashMap,
+	net::IpAddr,
+	sync::{Arc, Mutex},
+	time::Instant,
+};
 
 use ruma::{MilliSecondsSinceUnixEpoch, thirdparty::Medium};
 use serde::{Deserialize, Serialize};
-use tuwunel_core::Result;
+use tuwunel_core::{Result, smallstr::SmallString};
 use tuwunel_database::Map;
 
 pub use self::{canonical::canonicalize_email, pending::PendingOutcome};
 
-/// Third-party identifier (email) storage. Holds the forward `(user, email)`
-/// bindings, the reverse `email -> user` lookup, and the pending email
-/// verification sessions. Storage only; no SMTP or HTTP surface.
+/// Token-bucket table keyed on a throttle axis: last-refill instant and
+/// remaining tokens per key.
+type Ratelimiter<K> = Mutex<HashMap<K, (Instant, f64)>>;
+
+/// Stack-string key for the per-address throttle bucket; the modal email
+/// canonical address fits inline.
+type EmailKey = SmallString<[u8; 48]>;
+
+/// Third-party identifier (email) storage and the requestToken throttle. Holds
+/// the forward `(user, email)` bindings, the reverse `email -> user` lookup,
+/// the pending email verification sessions, and the per-IP and per-address
+/// token buckets.
 pub struct Service {
 	db: Data,
+	ip_ratelimiter: Ratelimiter<IpAddr>,
+	address_ratelimiter: Ratelimiter<EmailKey>,
 }
 
 struct Data {
@@ -49,6 +66,8 @@ impl crate::Service for Service {
 				email_userid: args.db["email_userid"].clone(),
 				threepidsid_pending: args.db["threepidsid_pending"].clone(),
 			},
+			ip_ratelimiter: Mutex::new(HashMap::new()),
+			address_ratelimiter: Mutex::new(HashMap::new()),
 		}))
 	}
 

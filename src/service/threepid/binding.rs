@@ -67,7 +67,8 @@ pub fn get_bindings<'a>(
 }
 
 /// Remove a binding in both directions; blind-delete, tolerant of an absent
-/// row.
+/// row. The reverse lookup is removed only when it still maps to this user, so
+/// one user's delete cannot wipe another's reverse row.
 #[implement(super::Service)]
 #[tracing::instrument(
 	level = "debug",
@@ -78,7 +79,16 @@ pub fn get_bindings<'a>(
 )]
 pub async fn del_binding(&self, user_id: &UserId, email_canon: &str) {
 	self.db.userid_email.del((user_id, email_canon));
-	self.db.email_userid.remove(email_canon);
+
+	if self
+		.user_id_for_email(email_canon)
+		.await
+		.ok()
+		.flatten()
+		.is_some_and(|bound| bound == user_id)
+	{
+		self.db.email_userid.remove(email_canon);
+	}
 }
 
 /// The user bound to a canonical email address, if any.

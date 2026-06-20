@@ -2,14 +2,14 @@ use std::{fmt::Write, net::IpAddr};
 
 use axum::extract::State;
 use ruma::{
-	OwnedUserId, UserId,
+	MilliSecondsSinceUnixEpoch, OwnedUserId, UserId,
 	api::client::{
 		account::register::{self, LoginType, RegistrationKind},
-		uiaa::{AuthFlow, AuthType, UiaaInfo},
+		uiaa::{AuthData, AuthFlow, AuthType, EmailIdentity, ThirdpartyIdCredentials, UiaaInfo},
 	},
 };
 use serde_json::{json, value::to_raw_value};
-use tuwunel_core::{Err, Error, Result, debug_info, debug_warn, info, utils};
+use tuwunel_core::{Err, Error, Result, debug_info, debug_warn, info, utils, warn};
 use tuwunel_service::users::{Register, device::generate_refresh_token};
 
 use super::{SESSION_ID_LENGTH, is_matrix_appservice_irc};
@@ -81,6 +81,8 @@ pub(crate) async fn register_route(
 		.await?;
 
 	record_accepted_terms(services, &user_id, &body, is_guest).await?;
+
+	bind_registration_email(services, &user_id, &body).await?;
 
 	if (!is_guest && body.inhibit_login)
 		|| body
@@ -278,8 +280,14 @@ async fn enforce_uiaa(
 	let token_required = services.registration_tokens.is_enabled().await;
 	let terms = services.config.login_terms_params();
 
+	let email_required = services.config.smtp.as_ref().is_some_and(|smtp| {
+		smtp.require_email_for_registration
+			|| (token_required && smtp.require_email_for_token_registration)
+	});
+
 	let stages: Vec<AuthType> = [
 		token_required.then_some(AuthType::RegistrationToken),
+		email_required.then_some(AuthType::EmailIdentity),
 		terms.is_some().then_some(AuthType::Terms),
 	]
 	.into_iter()
@@ -376,6 +384,63 @@ async fn record_accepted_terms(
 		.account_data
 		.update(None, user_id, event_type.into(), &event)
 		.await
+}
+
+/// A stray `id_server` on the credentials is ignored and `id_access_token` is
+/// never required.
+async fn bind_registration_email(
+	services: crate::State,
+	user_id: &UserId,
+	body: &Ruma<register::v3::Request>,
+) -> Result {
+	if !services.sendmail.is_enabled() {
+		return Ok(());
+	}
+
+	let Some(AuthData::EmailIdentity(EmailIdentity { thirdparty_id_creds, .. })) = &body.auth
+	else {
+		return Ok(());
+	};
+
+	if let Err(e) = try_bind_registration_email(services, user_id, thirdparty_id_creds).await {
+		warn!(%user_id, "Skipping registration email binding: {e}");
+	}
+
+	Ok(())
+}
+
+async fn try_bind_registration_email(
+	services: crate::State,
+	user_id: &UserId,
+	thirdparty_id_creds: &ThirdpartyIdCredentials,
+) -> Result {
+	let association = services
+		.threepid
+		.consume_validated(
+			thirdparty_id_creds.sid.as_str(),
+			thirdparty_id_creds.client_secret.as_str(),
+		)
+		.await?;
+
+	if services
+		.threepid
+		.user_id_for_email(&association.address)
+		.await?
+		.is_some_and(|bound| bound != user_id)
+	{
+		warn!(%user_id, "Skipping registration email binding: address bound to another user");
+
+		return Ok(());
+	}
+
+	let now = MilliSecondsSinceUnixEpoch::now();
+
+	services
+		.threepid
+		.put_binding(user_id, &association.address, association.medium, now, now)
+		.await;
+
+	Ok(())
 }
 
 async fn announce_new_user(

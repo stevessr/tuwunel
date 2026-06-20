@@ -71,6 +71,25 @@ pub async fn send(&self, to: &Address, subject: &str, body_html: String) -> Resu
 	Ok(())
 }
 
+/// A malformed address maps to `M_INVALID_PARAM`.
+#[implement(Service)]
+pub async fn send_to(&self, to: &str, subject: &str, body_html: String) -> Result<()> {
+	let to: Address = to
+		.parse()
+		.map_err(|_| err!(Request(InvalidParam("Email address is malformed"))))?;
+
+	self.send(&to, subject, body_html).await
+}
+
+/// Confirms a string address parses as a deliverable mailbox. A malformed
+/// address maps to `M_INVALID_PARAM`.
+#[implement(Service)]
+pub fn check_address(&self, to: &str) -> Result<()> {
+	to.parse::<Address>()
+		.map(|_| ())
+		.map_err(|_| err!(Request(InvalidParam("Email address is malformed"))))
+}
+
 fn build_transport(config: &tuwunel_core::config::SmtpConfig) -> Result<Transport> {
 	let uri = config.connection_uri.as_deref().ok_or_else(|| {
 		err!(Config(

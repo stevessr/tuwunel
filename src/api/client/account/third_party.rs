@@ -1,20 +1,22 @@
-use ruma::api::client::account::get_3pids;
+use axum::extract::State;
+use futures::StreamExt;
+use ruma::api::client::account::get_3pids::{self, v3::Response};
 use tuwunel_core::Result;
 
 use crate::Ruma;
 
 /// # `GET _matrix/client/v3/account/3pid`
 ///
-/// Get a list of third party identifiers associated with this account.
-///
-/// - Currently always returns empty list
+/// Get the third party identifiers bound to this account.
 pub(crate) async fn third_party_route(
+	State(services): State<crate::State>,
 	body: Ruma<get_3pids::v3::Request>,
-) -> Result<get_3pids::v3::Response> {
-	let _sender_user = body
-		.sender_user
-		.as_ref()
-		.expect("user is authenticated");
+) -> Result<Response> {
+	let threepids = services
+		.threepid
+		.get_bindings(body.sender_user())
+		.collect()
+		.await;
 
-	Ok(get_3pids::v3::Response::new(Vec::new()))
+	Ok(Response::new(threepids))
 }

@@ -155,6 +155,22 @@ pub async fn consume_validated(&self, sid: &str, client_secret: &str) -> Result<
 	})
 }
 
+/// Whether a pending session exists, is unexpired, matches `client_secret`, and
+/// has been validated; a non-consuming gate for the registration UIA. Wrong
+/// secret, expired, unknown, or unvalidated all read as `false`, so the caller
+/// learns nothing about session liveness beyond the gate result.
+#[implement(super::Service)]
+#[tracing::instrument(level = "debug", skip(self, client_secret))]
+pub async fn session_validated(&self, sid: &str, client_secret: &str) -> bool {
+	let Ok(pending) = self.get_pending(sid).await else {
+		return false;
+	};
+
+	!expired(&pending)
+		&& ct_eq(&pending.client_secret, client_secret)
+		&& pending.validated_at.is_some()
+}
+
 #[implement(super::Service)]
 fn persist_pending(&self, sid: &str, pending: &Pending) {
 	self.db
