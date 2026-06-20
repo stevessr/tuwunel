@@ -118,21 +118,26 @@ pub async fn try_auth(
 				password_verified = hash::verify_password(password, &hash).is_ok();
 			}
 
-			// If local password verification failed, try LDAP authentication
+			// Only LDAP-origin accounts fall back to LDAP; others would trigger a
+			// directory-wide search.
 			#[cfg(feature = "ldap")]
-			if !password_verified && self.services.server.config.ldap.enable {
-				// Search for user in LDAP to get their DN
-				if let Ok(dns) = self.services.users.search_ldap(&user_id).await
-					&& let Some((user_dn, _is_admin)) = dns.first()
-				{
-					// Try to authenticate with LDAP
-					password_verified = self
-						.services
-						.users
-						.auth_ldap(user_dn, password)
-						.await
-						.is_ok();
-				}
+			if !password_verified
+				&& self.services.server.config.ldap.enable
+				&& self
+					.services
+					.users
+					.origin(&user_id)
+					.await
+					.is_ok_and(|origin| origin == "ldap")
+				&& let Ok(dns) = self.services.users.search_ldap(&user_id).await
+				&& let Some((user_dn, _is_admin)) = dns.first()
+			{
+				password_verified = self
+					.services
+					.users
+					.auth_ldap(user_dn, password)
+					.await
+					.is_ok();
 			}
 
 			// For SSO users that have never set a password, allow.
