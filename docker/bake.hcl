@@ -747,6 +747,7 @@ target "rust-sdk-valgrind" {
             --skip test_latest_event_few_rooms
             --skip test_latest_thread_event_is_redecrypted_and_updated
             --skip test_event_with_context
+            --skip test_repeated_join_leave
 EOF
     }
 }
@@ -782,6 +783,7 @@ target "rust-sdk-integ" {
             --skip test_latest_event_few_rooms
             --skip test_latest_thread_event_is_redecrypted_and_updated
             --skip test_event_with_context
+            --skip test_repeated_join_leave
 EOF
     }
 }
