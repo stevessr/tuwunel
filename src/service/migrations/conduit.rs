@@ -72,9 +72,10 @@ fn media_source(services: &Services) -> Result<MediaSource> {
 }
 
 /// Attempts to read each original from a source storage provider before the
-/// import gives up: one initial try plus two retries, so a transient provider
-/// blip does not abort the whole migration.
-const PROVIDER_READ_ATTEMPTS: u32 = 3;
+/// import gives up: one initial try plus one retry. The object store performs
+/// its own internal retries under each attempt, so a transient provider blip
+/// rarely reaches this outer limit.
+const PROVIDER_READ_ATTEMPTS: u32 = 2;
 
 /// Pause between provider read retries, giving a transient fault time to clear.
 const PROVIDER_READ_RETRY_DELAY: Duration = Duration::from_secs(2);
