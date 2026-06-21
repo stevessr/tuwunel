@@ -3,12 +3,12 @@ name: Compliance
 on:
   workflow_call:
     inputs:
-      flavor:
+      regime:
         type: string
-        description: Flavour label
-      job_name:
+        description: Test package name
+      counterparty:
         type: string
-        description: Display name
+        description: Client or Server tested with
       runner:
         type: string
         default: 'het'
@@ -69,13 +69,20 @@ on:
         default: '[]'
       checkout:
         type: string
-        default: 'HEAD'
+        default: ${{github.sha}}
 
 jobs:
   compliance:
-    name: ${{inputs.job_name}}
-    runs-on: ["${{matrix.machine}}", "${{inputs.runner}}"]
+    name: >
+      ${{inputs.counterparty}}-${{inputs.regime}}
+      ${{matrix.cargo_profile}}
+      ${{matrix.rust_toolchain}}
+      ${{matrix.feat_set}}
+      ${{matrix.sys_name}}
+      ${{matrix.sys_version}}
+      ${{matrix.sys_target}}
 
+    runs-on: ["${{matrix.machine}}", "${{inputs.runner}}"]
     strategy:
       fail-fast: false
       matrix:
@@ -91,9 +98,9 @@ jobs:
         include: ${{fromJSON(inputs.includes)}}
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
-        ref: ${{inputs.checkout}}
+        ref: ${{inputs.checkout || github.sha}}
 
     - name: Execute
       id: execute
@@ -138,6 +145,7 @@ jobs:
         sys_name: ${{matrix.sys_name}}
         sys_target: ${{matrix.sys_target}}
         GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+        execute_outcome: ${{steps.execute.outcome}}
         RUNTIME_DIGEST_OWN: ${{inputs.runtime_history && format('{0}/_ci_digest/{1}.json', github.workspace, github.ref_name) || ''}}
         RUNTIME_DIGEST_MAIN: ${{(inputs.runtime_history && github.ref_name != (github.event.repository.default_branch || 'main')) && format('{0}/_ci_digest/{1}.json', github.workspace, github.event.repository.default_branch || 'main') || ''}}
         RUNTIME_DIGEST_KEEP: ${{github.ref_name == (github.event.repository.default_branch || 'main') && '1' || '3'}}

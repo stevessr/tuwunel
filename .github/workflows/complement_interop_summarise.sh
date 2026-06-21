@@ -3,7 +3,7 @@ set -eo pipefail
 
 track_name="Complement Interoperability"
 jsonl="tests/complement/interop/results.jsonl"
-metrics_tar="tests/complement/interop/runtime_metrics.tar.zst"
+#metrics_tar="tests/complement/interop/runtime_metrics.tar.zst"
 
 # Diff against the homogeneous Complement board so known tuwunel failures render
 # orange (a shared gap) rather than red (an interop regression), and render the
@@ -18,7 +18,7 @@ render_over_baseline=1
 # from the homogeneous boards' green check.
 adv_cell="❎"
 
-# shellcheck source=./complement_summarise_lib.sh
-. "$(dirname "$0")/complement_summarise_lib.sh"
+# shellcheck source=./complement_summarise.sh
+. "$(dirname "$0")/complement_summarise.sh"
 
 summarise_main "$@"

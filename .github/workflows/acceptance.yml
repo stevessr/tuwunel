@@ -3,9 +3,13 @@ name: Acceptance
 on:
   workflow_call:
     inputs:
-      job_name:
+      regime:
         type: string
-        description: Display name
+        description: Test package name
+        default: 'acceptance'
+      counterparty:
+        type: string
+        description: Client software name
       runner:
         type: string
         default: 'het'
@@ -50,11 +54,19 @@ on:
         default: '[]'
       checkout:
         type: string
-        default: 'HEAD'
+        default: ${{github.sha}}
 
 jobs:
   acceptance:
-    name: ${{inputs.job_name}}
+    name: >
+      ${{inputs.counterparty}}-${{inputs.regime}}
+      ${{matrix.cargo_profile}}
+      ${{matrix.rust_toolchain}}
+      ${{matrix.feat_set}}
+      ${{matrix.sys_name}}
+      ${{matrix.sys_version}}
+      ${{matrix.sys_target}}
+
     runs-on: ["${{matrix.machine}}", "${{inputs.runner}}"]
     concurrency:
       group: playwright-cant-walk-and-chew-bubblegum-${{matrix.shard}}
@@ -78,9 +90,9 @@ jobs:
         include: ${{fromJSON(inputs.includes)}}
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
-        ref: ${{inputs.checkout}}
+        ref: ${{inputs.checkout || github.sha}}
 
     - name: Execute
       id: execute
@@ -130,24 +142,34 @@ jobs:
         if-no-files-found: ignore
         overwrite: true
 
-    - if: success() || (failure() && steps.execute.outcome == 'failure')
+    - if: >
+        (success() || (failure() && steps.execute.outcome == 'failure'))
+        && inputs.shards > 1
       name: Gate
       run: |
         .github/workflows/playwright_summarise.sh gate
 
+    - if: >
+        (success() || (failure() && steps.execute.outcome == 'failure'))
+        && inputs.shards <= 1
+      name: Summarise
+      run: |
+        .github/workflows/playwright_summarise.sh
+
   fini:
     if: >
       !cancelled()
+      && inputs.shards > 1
       && needs.acceptance.result != 'skipped'
 
-    name: Acceptance Aggregate
+    name: Acceptance Results
     needs: [acceptance]
-    runs-on: ["${{fromJSON(inputs.machines)[0]}}", "${{inputs.runner}}"]
 
+    runs-on: ["${{fromJSON(inputs.machines)[0]}}", "${{inputs.runner}}"]
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
-        ref: ${{inputs.checkout}}
+        ref: ${{inputs.checkout || github.sha}}
 
     - name: Collect Shard Results
       uses: actions/download-artifact@v7

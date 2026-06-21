@@ -175,7 +175,7 @@ gate_main() {
 
 	if test "$ngate" -ne 0; then
 		{
-			echo "### Playwright shard gate"
+			echo "### Playwright Shard"
 			echo
 			echo '```diff'
 			printf '%s\n' "$gate" | sed -n 's/^./- &/p'

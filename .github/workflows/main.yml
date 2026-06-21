@@ -87,11 +87,11 @@ on:
         description: "Interop: test selector regex"
       playwright_shards:
         type: string
-        default: '8'
+        default: '1'
         description: "Playwright: number of test shards"
       playwright_workers:
         type: string
-        default: '2'
+        default: '1'
         description: "Playwright: workers per shard"
 
 concurrency:
@@ -113,6 +113,8 @@ jobs:
       default_machines: '["X64"]'
       default_package_containers: '["docker", "oci"]'
       default_package_distros: '["deb", "rpm", "nix"]'
+      default_playwright_shards: '8'
+      default_playwright_workers: '1'
       is_release: ${{contains(github.ref, 'tags/v')}}
       is_branch: ${{contains(github.ref, 'refs/heads')}}
       is_pull: ${{contains(github.ref, 'refs/pull')}}
@@ -153,12 +155,12 @@ jobs:
       mas_verbose: ${{fromJSON(inputs.mas_verbose || 'false')}}
       enable_test_playwright: ${{fromJSON(inputs.enable_test_playwright || env.is_dev || env.is_test)}}
       playwright_runner: 'het'
-      playwright_shards: ${{inputs.playwright_shards || vars.PLAYWRIGHT_SHARDS || '8'}}
-      playwright_workers: ${{inputs.playwright_workers || vars.PLAYWRIGHT_WORKERS || '1'}}
+      playwright_shards: ${{inputs.playwright_shards || vars.PLAYWRIGHT_SHARDS || env.default_playwright_shards}}
+      playwright_workers: ${{inputs.playwright_workers || vars.PLAYWRIGHT_WORKERS || env.default_playwright_workers}}
       enable_package: ${{fromJSON(inputs.enable_package || 'true')}}
       enable_package_book: ${{fromJSON(inputs.enable_package_book || 'true')}}
       enable_package_docs: ${{fromJSON(inputs.enable_package_docs || 'true')}}
-      enable_package_binary: ${{fromJSON(inputs.enable_package_binary || 'true')}}
+      enable_package_binary: ${{fromJSON(inputs.enable_package_binary || env.is_fat || env.is_pull || 'false')}}
       enable_package_container: ${{fromJSON(inputs.enable_package_container || env.is_fat || 'true')}}
       package_containers: ${{inputs.package_containers || env.default_package_containers}}
       enable_package_distro: ${{fromJSON(inputs.enable_package_distro || env.is_fat || 'false')}}
@@ -184,7 +186,9 @@ jobs:
         exclude: ${{fromJSON(vars.RUNNERS_EXCLUDES || '[]')}}
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{inputs.checkout || github.sha}}
 
     - name: Initialize Builder
       env:

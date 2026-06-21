@@ -40,7 +40,7 @@ on:
         default: ${{github.event.inputs.pipeline || github.event.workflow_run.head_commit.message}}
       checkout:
         type: string
-        default: 'HEAD'
+        default: ${{github.sha}}
       enable_doc:
         type: string
         default: 'true'
@@ -483,7 +483,9 @@ jobs:
       && contains(fromJSON(inputs.cargo_profiles), fromJSON('["bench"]')[0])
       && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
+      && inputs.playwright_shards > 1
 
+    name: Playwright Sharding
     runs-on: ["${{fromJSON(inputs.machines)[0]}}", "${{inputs.playwright_runner}}"]
 
     outputs:
@@ -513,12 +515,12 @@ jobs:
     needs: [playwright, acceptance-init]
     uses: ./.github/workflows/acceptance.yml
     with:
-      job_name: Acceptance (element-web)
+      counterparty: element-web
       runner: ${{inputs.playwright_runner}}
       workers: ${{inputs.playwright_workers}}
       retries: ${{inputs.playwright_retries}}
       shards: ${{inputs.playwright_shards}}
-      shard_ids: ${{needs.acceptance-init.outputs.ids}}
+      shard_ids: ${{needs.acceptance-init.outputs.ids || '[1]'}}
       cargo_profiles: '["bench"]'
       feat_sets: '["logging"]'
       rust_toolchains: '["nightly"]'
@@ -541,13 +543,13 @@ jobs:
       && contains(fromJSON(inputs.rust_toolchains), fromJSON('["nightly"]')[0])
       && contains(fromJSON(inputs.sys_targets), fromJSON('["x86_64-v3-linux-gnu"]')[0])
 
-    name: Authentication (MAS)
+    name: Authentication (mas)
     needs: [mas]
 
     uses: ./.github/workflows/compliance.yml
     with:
-      job_name: Authentication (MAS)
-      flavor: mas
+      regime: authentication
+      counterparty: mas
       runner: ${{inputs.complement_runner}}
       script: docker/mas.sh
       summariser: .github/workflows/mas_summarise.sh
@@ -586,11 +588,11 @@ jobs:
 
     uses: ./.github/workflows/compliance.yml
     with:
-      job_name: Compliance (tuwunel)
-      flavor: complement
+      regime: compliance
+      counterparty: tuwunel
       runner: ${{inputs.complement_runner}}
       script: docker/complement.sh
-      summariser: .github/workflows/complement_summarise.sh
+      summariser: .github/workflows/complement_complement_summarise.sh
       results_path: tests/complement/results.jsonl
       logs_path: tests/complement/logs.jsonl
       runtime_metrics_path: tests/complement/runtime_metrics.tar.zst
@@ -627,8 +629,8 @@ jobs:
 
     uses: ./.github/workflows/compliance.yml
     with:
-      job_name: Cryptography (rust-sdk)
-      flavor: complement-crypto
+      regime: crypto
+      counterparty: rust-sdk
       runner: ${{inputs.complement_runner}}
       script: docker/complement-crypto.sh
       summariser: .github/workflows/complement_crypto_summarise.sh
@@ -667,8 +669,8 @@ jobs:
 
     uses: ./.github/workflows/compliance.yml
     with:
-      job_name: Interoperability (${{inputs.complement_interop_peer}})
-      flavor: complement
+      regime: interop
+      counterparty: ${{inputs.complement_interop_peer}}
       runner: ${{inputs.complement_runner}}
       script: interop=${{inputs.complement_interop_peer}} docker/complement.sh "${{inputs.complement_interop_run}}"
       summariser: .github/workflows/complement_interop_summarise.sh

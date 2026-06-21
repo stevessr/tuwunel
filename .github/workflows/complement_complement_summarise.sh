@@ -1,8 +1,9 @@
 #!/bin/bash
 set -eo pipefail
 
-track_name="Complement Cryptography"
-jsonl="tests/complement-crypto/results.jsonl"
+track_name="Complement"
+jsonl="tests/complement/results.jsonl"
+metrics_tar="tests/complement/runtime_metrics.tar.zst"
 
 # shellcheck source=./complement_summarise.sh
 . "$(dirname "$0")/complement_summarise.sh"
