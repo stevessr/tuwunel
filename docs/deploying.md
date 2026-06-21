@@ -62,7 +62,9 @@ the content-addressed media layout, set
 `media.directory_structure`: Conduit v0.10.0 stored media flat, so use
 `conduit_media_directory_depth = 0`, while v0.10.1 and later shard it (the
 default). If media lived outside `<database_path>/media`, set
-`conduit_source_media_path`. SQLite databases are not supported.
+`conduit_source_media_path`; if it lived in an S3 bucket, see
+[importing media from a Conduit S3 bucket](media/storage.md#importing-media-from-a-conduit-s3-bucket).
+SQLite databases are not supported.
 
 **Port 8448 matters for federation.** Clients connect on port 443, but other
 Matrix homeservers connect on port 8448. Both must be reachable for a fully
