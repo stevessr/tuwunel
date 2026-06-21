@@ -38,7 +38,17 @@ snapshot_current() {
 }
 
 snapshot_baseline() {
-	git show "HEAD:$jsonl" 2>/dev/null | classify /dev/stdin | sort -k2 > "$prev" || :;
+	git show "HEAD:${baseline_jsonl:-$jsonl}" 2>/dev/null | classify /dev/stdin | sort -k2 > "$prev" || :;
+}
+
+# Interop only: the top-level tests that deployed a peer homeserver this run,
+# i.e. the tests an image override can actually affect. A peer's server name
+# (hs2, hs3, ...) appears in the captured output only when that server was
+# deployed; tests with only hs1 never mention it and become black board filler.
+# Pre-filter the (large) log with grep so jq parses only the matching lines.
+affected_tests() {
+	test -s "${logs_jsonl:-}" || return 0
+	grep -aE 'hs[2-9]' "$logs_jsonl" | jq -r '.Test' 2>/dev/null | sort -u
 }
 
 # Count test names in a newline-joined list, split by section (no '/') vs
@@ -65,26 +75,33 @@ delta() {
 # flavour's test count. A driver may override by setting grid_width first.
 grid_width="${grid_width:-29}"
 
-# Cells: ❎/🟩 for accept (progressed vs stable), 🟥/🟧 for error (regressed vs known),
-# ⬜ skip. With no baseline (nobase=1) all fails are red and all passes plain green.
+# Cells: ✅/🟩 for accept (progressed vs stable; the interop board passes ❎ as
+# $adv_cell for progressed), 🟥/🟧 for error (regressed vs known), ⬛ a skipped
+# test or, on the interop board, a slot with no effective result (did not run,
+# or deploys no peer homeserver and so is inapplicable), ⬜ grid filler past the
+# last test. Squares are emitted over $universe (the full board test list);
+# statuses are read from $curr (the effective result rows). For non-interop
+# flavours $universe is $curr, so the only blank slot is trailing filler. With
+# no baseline (nobase=1) all fails are red and all passes plain green.
 render_grid() {
-	awk -v w="$1" -v nobase="$2" -v R="$3" -v P="$4" '
+	awk -v w="$1" -v nobase="$2" -v R="$3" -v P="$4" -v adv="${adv_cell:-✅}" '
 		BEGIN {
 			split(R, x, "\n"); for (i in x) if (x[i]) reg[x[i]] = 1
 			split(P, x, "\n"); for (i in x) if (x[i]) pro[x[i]] = 1
 		}
+		NR == FNR { st[$2] = $1; next }
 		{
 			t = $2
-			if      ($1 == "skip")   c = "⬜"
-			else if ($1 == "accept") c = pro[t]             ? "❎" : "🟩"
-			else if ($1 == "error")  c = (nobase || reg[t]) ? "🟥" : "🟧"
+			if      (!(t in st) || st[t] == "skip") c = "⬛"
+			else if (st[t] == "accept")             c = pro[t]             ? adv : "🟩"
+			else                                    c = (nobase || reg[t]) ? "🟥" : "🟧"
 			printf "%s", c
 			if (++n % w == 0) printf "<br>"
 		}
 		END {
-			while (n % w != 0) { printf "⬛"; if (++n % w == 0) printf "<br>" }
+			while (n % w != 0) { printf "⬜"; if (++n % w == 0) printf "<br>" }
 		}
-	' "$curr"
+	' "$curr" "$universe"
 }
 
 # Passing rate: accept over the row's test count (accept + errors + skips).
@@ -160,6 +177,20 @@ summarise_main() {
 	snapshot_current
 	snapshot_baseline
 
+	# Interop: keep only tests that deployed a peer homeserver; the rest are
+	# inert under the image override and become black board filler below. Diff
+	# and tallies then speak only to tests that actually exercised interop.
+	if test -n "${logs_jsonl:-}"; then
+		local aff; aff=$(mktemp)
+		affected_tests > "$aff"
+		if test -s "$aff"; then
+			awk 'NR == FNR { a[$1] = 1; next }
+			     { t = $2; sub(/\/.*/, "", t); if (t in a) print }' \
+				"$aff" "$curr" > "$curr.eff" && mv "$curr.eff" "$curr"
+		fi
+		rm -f "$aff"
+	fi
+
 	regress=$( delta accept error)
 	progress=$(delta error  accept)
 
@@ -202,6 +233,15 @@ summarise_main() {
 
 	nprog_tot=$(printf '%s' "$progress" | grep -Fxcf "$leaves" || :)
 	nreg_tot=$( printf '%s' "$regress"  | grep -Fxcf "$leaves" || :)
+
+	# Squares are emitted over $universe. Interop renders over the homogeneous
+	# baseline list so the board lines up square-for-square with the Complement
+	# board; every other flavour renders over its own (effective) result rows.
+	if test -n "${render_over_baseline:-}" && test -s "$prev"; then
+		universe="$prev"
+	else
+		universe="$curr"
+	fi
 
 	# Main-branch runs are the baseline; the grid carries no diff signal there.
 	if test "${GITHUB_REF_NAME:-}" = "main"; then
