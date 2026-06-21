@@ -1,23 +1,30 @@
 use std::{
 	collections::BTreeMap,
+	iter::from_fn,
 	path::{Path, PathBuf},
 	sync::Arc,
+	time::Duration,
 };
 
-use futures::StreamExt;
+use bytes::Bytes;
+use futures::{StreamExt, TryStreamExt};
+use object_store::Error as ObjectStoreError;
 use ruma::{
 	CanonicalJsonObject, CanonicalJsonValue, EventId, Mxc, OwnedRoomId, OwnedUserId, RoomId,
 	ServerName, UserId,
 };
 use serde::{Deserialize, de::IgnoredAny};
+use tokio::time::sleep;
 use tuwunel_core::{
-	Err, Result, debug_warn, err, info, utils,
+	Err, Error, Result, debug_warn, err, error, info,
+	itertools::Itertools,
+	utils,
 	utils::{ReadyExt, content_disposition::make_content_disposition, stream::TryIgnore},
 	warn,
 };
 use tuwunel_database::{Map, SEP};
 
-use crate::Services;
+use crate::{Services, storage::Provider};
 
 /// Presence probe: `room_id` parses to `Some` when the stored PDU carries it.
 #[derive(Deserialize)]
@@ -25,9 +32,60 @@ struct HasRoomId {
 	room_id: Option<IgnoredAny>,
 }
 
+/// Where a Conduit database kept its original media files: on the local
+/// filesystem (the default), or in an object store named by
+/// `conduit_source_media_provider` for a Conduit that backed its media with S3.
+enum MediaSource {
+	Filesystem(PathBuf),
+	Provider(Arc<Provider>),
+}
+
+/// One parsed `servernamemediaid_metadata` entry, borrowing the raw key/value.
+struct ConduitMediaEntry<'a> {
+	server_name: &'a ServerName,
+	media_id: &'a str,
+	sha256: &'a [u8],
+	filename: Option<&'a str>,
+	content_type: Option<&'a str>,
+}
+
+/// Resolves the configured Conduit media source. A named provider must already
+/// be defined under `[storage_provider]`; its absence is an operator error that
+/// aborts the import rather than silently dropping every file.
+fn media_source(services: &Services) -> Result<MediaSource> {
+	let config = &services.server.config;
+
+	match config.conduit_source_media_provider.as_deref() {
+		| Some(name) => services
+			.storage
+			.provider(name)
+			.map(|provider| MediaSource::Provider(provider.clone())),
+		| None => {
+			let media_dir = config
+				.conduit_source_media_path
+				.clone()
+				.unwrap_or_else(|| config.database_path.join("media"));
+
+			Ok(MediaSource::Filesystem(media_dir))
+		},
+	}
+}
+
+/// Attempts to read each original from a source storage provider before the
+/// import gives up: one initial try plus two retries, so a transient provider
+/// blip does not abort the whole migration.
+const PROVIDER_READ_ATTEMPTS: u32 = 3;
+
+/// Pause between provider read retries, giving a transient fault time to clear.
+const PROVIDER_READ_RETRY_DELAY: Duration = Duration::from_secs(2);
+
 /// Imports the original media files of a Conduit database, re-uploading each
-/// `servernamemediaid_metadata` entry through `media.create`. Unreadable
-/// entries are logged and skipped rather than aborting the import.
+/// `servernamemediaid_metadata` entry through `media.create`. A malformed entry
+/// or a missing source file is logged and skipped, but a source storage
+/// provider that stays unreachable aborts the import: nothing is committed in a
+/// way that needs cleanup, so the operator can fix the provider and restart to
+/// resume from the beginning (re-importing an already-copied original is
+/// idempotent).
 pub(super) async fn migrate_conduit_media(services: &Services) -> Result {
 	let db = &services.db;
 	let config = &services.server.config;
@@ -40,13 +98,9 @@ pub(super) async fn migrate_conduit_media(services: &Services) -> Result {
 	let owners = db.open_cf("servernamemediaid_userlocalpart")?;
 	let owners = owners.as_ref();
 
-	let media_dir = config
-		.conduit_source_media_path
-		.clone()
-		.unwrap_or_else(|| config.database_path.join("media"));
-
 	let depth = config.conduit_media_directory_depth;
 	let length = config.conduit_media_directory_length;
+	let source = media_source(services)?;
 
 	warn!("Importing Conduit media originals into tuwunel's key-addressed store...");
 
@@ -54,18 +108,19 @@ pub(super) async fn migrate_conduit_media(services: &Services) -> Result {
 	let (imported, skipped) = metadata
 		.raw_stream()
 		.ignore_err()
-		.fold((0_usize, 0_usize), async |(imported, skipped), (key, value)| {
-			match import_conduit_original(services, owners, &media_dir, depth, length, key, value)
-				.await
-			{
-				| Ok(()) => (imported.saturating_add(1), skipped),
-				| Err(e) => {
-					debug_warn!(error = %e, "skipping unimportable Conduit media entry");
-					(imported, skipped.saturating_add(1))
-				},
-			}
+		.map(Ok::<_, Error>)
+		.try_fold((0_usize, 0_usize), async |(imported, skipped), (key, value)| {
+			let imported_entry =
+				import_conduit_original(services, owners, &source, depth, length, key, value)
+					.await?;
+
+			Ok(if imported_entry {
+				(imported.saturating_add(1), skipped)
+			} else {
+				(imported, skipped.saturating_add(1))
+			})
 		})
-		.await;
+		.await?;
 
 	drop(cork);
 
@@ -78,18 +133,57 @@ pub(super) async fn migrate_conduit_media(services: &Services) -> Result {
 	Ok(())
 }
 
-/// Imports one `servernamemediaid_metadata` entry: the key is
-/// `servername 0xff media_id`. The file lives at the digest's content-addressed
-/// path.
+/// Imports one `servernamemediaid_metadata` entry, returning whether an
+/// original was imported (`false` = skipped). The skip/abort contract is
+/// decided in [`read_conduit_original`].
 async fn import_conduit_original(
 	services: &Services,
 	owners: Option<&Arc<Map>>,
-	media_dir: &Path,
+	source: &MediaSource,
 	depth: u8,
 	length: u8,
 	key: &[u8],
 	value: &[u8],
-) -> Result {
+) -> Result<bool> {
+	let entry = match parse_conduit_media_entry(key, value) {
+		| Ok(entry) => entry,
+		| Err(e) => {
+			debug_warn!(error = %e, "skipping unimportable Conduit media entry");
+			return Ok(false);
+		},
+	};
+
+	let Some(file) = read_conduit_original(source, depth, length, entry.sha256).await? else {
+		return Ok(false);
+	};
+
+	let content_disposition = make_content_disposition(None, entry.content_type, entry.filename);
+	let owner = conduit_media_owner(owners, key, entry.server_name).await;
+	let mxc = Mxc {
+		server_name: entry.server_name,
+		media_id: entry.media_id,
+	};
+
+	match services
+		.media
+		.create(&mxc, owner.as_deref(), Some(&content_disposition), entry.content_type, &file)
+		.await
+	{
+		| Ok(()) => Ok(true),
+		| Err(e) => {
+			debug_warn!(error = %e, "skipping Conduit media entry that failed to store");
+			Ok(false)
+		},
+	}
+}
+
+/// Parses a `servernamemediaid_metadata` entry: the key is
+/// `servername 0xff media_id`, the value is the digest, filename and
+/// content type.
+fn parse_conduit_media_entry<'a>(
+	key: &'a [u8],
+	value: &'a [u8],
+) -> Result<ConduitMediaEntry<'a>> {
 	let Some(sep) = key.iter().position(|&byte| byte == SEP) else {
 		return Err!(Database("Conduit media key has no server-name separator"));
 	};
@@ -100,19 +194,82 @@ async fn import_conduit_original(
 
 	let (sha256, filename, content_type) = parse_conduit_media_value(value)?;
 
-	let path = conduit_media_path(media_dir, depth, length, &sha256_hex(sha256));
-	let file = tokio::fs::read(&path)
-		.await
-		.map_err(|e| err!(Database("reading Conduit media file {path:?}: {e}")))?;
+	Ok(ConduitMediaEntry {
+		server_name,
+		media_id,
+		sha256,
+		filename,
+		content_type,
+	})
+}
 
-	let content_disposition = make_content_disposition(None, content_type, filename);
-	let owner = conduit_media_owner(owners, key, server_name).await;
-	let mxc = Mxc { server_name, media_id };
+/// Reads one Conduit original, named by its content digest, from the configured
+/// media source. A filesystem file that cannot be read is reported as `None`
+/// (skipped, like a dangling metadata row). A source storage provider is
+/// retried on a transient fault; a persistent one returns `Err` so the import
+/// aborts instead of dropping reachable media.
+async fn read_conduit_original(
+	source: &MediaSource,
+	depth: u8,
+	length: u8,
+	sha256: &[u8],
+) -> Result<Option<Bytes>> {
+	let sha256_hex = sha256_hex(sha256);
+	match source {
+		| MediaSource::Filesystem(media_dir) => {
+			let path = conduit_media_path(media_dir, depth, length, &sha256_hex);
+			match tokio::fs::read(&path).await {
+				| Ok(file) => Ok(Some(file.into())),
+				| Err(e) => {
+					debug_warn!(?path, error = %e, "skipping unreadable Conduit media file");
+					Ok(None)
+				},
+			}
+		},
+		| MediaSource::Provider(provider) =>
+			read_provider_original(provider, &conduit_media_key(depth, length, &sha256_hex)).await,
+	}
+}
 
-	services
-		.media
-		.create(&mxc, owner.as_deref(), Some(&content_disposition), content_type, &file)
-		.await
+/// Reads one original from the source storage provider. An absent object is
+/// skipped (`Ok(None)`) like a dangling filesystem row; a transient fault is
+/// retried up to `PROVIDER_READ_ATTEMPTS` times, and a persistent one aborts
+/// the import with an `Err`.
+async fn read_provider_original(provider: &Arc<Provider>, key: &str) -> Result<Option<Bytes>> {
+	let mut attempt = 0_u32;
+	loop {
+		attempt = attempt.saturating_add(1);
+		match provider.get(key).await {
+			| Ok(file) => return Ok(Some(file)),
+			| Err(e) if is_missing_object(&e) => {
+				debug_warn!(%key, error = %e, "skipping missing Conduit media object");
+				return Ok(None);
+			},
+			| Err(e) if attempt >= PROVIDER_READ_ATTEMPTS => {
+				error!(
+					%key,
+					attempts = PROVIDER_READ_ATTEMPTS,
+					error = %e,
+					"Aborting the Conduit media import: source storage provider unreachable. No \
+					 media has been imported in a way that needs cleanup; once the provider is \
+					 reachable, restart tuwunel to resume the import from the beginning."
+				);
+				return Err(e);
+			},
+			| Err(e) => {
+				warn!(%key, attempt, error = %e, "Reading Conduit media object failed; retrying");
+				sleep(PROVIDER_READ_RETRY_DELAY).await;
+			},
+		}
+	}
+}
+
+/// Whether a provider read failed because the object is absent (a 404 or a
+/// dangling metadata row), which is skipped rather than retried. tuwunel's
+/// `Error::is_not_found` does not cover the object-store variant, so match it
+/// directly.
+fn is_missing_object(error: &Error) -> bool {
+	matches!(error, Error::ObjectStore(ObjectStoreError::NotFound { .. }))
 }
 
 /// Splits a `servernamemediaid_metadata` value into its digest, filename, and
@@ -153,29 +310,46 @@ async fn conduit_media_owner(
 
 /// Reconstructs the on-disk path of a Conduit content-addressed media file from
 /// the lowercase SHA-256 hex digest naming it, matching Conduit's
-/// `split_media_path`: a `depth` of zero is a flat directory, otherwise the
-/// digest is sharded into `depth` segments of `length` characters then the
-/// remainder. `config::check` bounds `depth * length` so `length` never
-/// overruns the digest here.
+/// `split_media_path`: `media_dir` joined with the digest's shard segments.
 fn conduit_media_path(media_dir: &Path, depth: u8, length: u8, sha256_hex: &str) -> PathBuf {
 	let mut path = media_dir.to_path_buf();
-	if depth == 0 {
-		path.push(sha256_hex);
-		return path;
-	}
-
-	let mut rest = sha256_hex;
-	for _ in 0..depth {
-		let Some((segment, next)) = rest.split_at_checked(length.into()) else {
-			break;
-		};
-
-		path.push(segment);
-		rest = next;
-	}
-
-	path.push(rest);
+	path.extend(conduit_shards(depth, length, sha256_hex));
 	path
+}
+
+/// The object-store key of a Conduit content-addressed media object, the same
+/// shard segments as `conduit_media_path` joined by `/`. The source provider's
+/// `base_path` supplies any bucket prefix (Conduit's `media.path`).
+fn conduit_media_key(depth: u8, length: u8, sha256_hex: &str) -> String {
+	conduit_shards(depth, length, sha256_hex).join("/")
+}
+
+/// Splits a lowercase SHA-256 hex digest into Conduit's shard segments: `depth`
+/// segments of `length` characters then the remainder, or the whole digest when
+/// `depth` is zero (a flat layout). `config::check` bounds `depth * length`
+/// below the digest length so the segments never overrun it.
+fn conduit_shards(depth: u8, length: u8, sha256_hex: &str) -> impl Iterator<Item = &str> {
+	let mut rest = Some(sha256_hex);
+	let mut remaining = depth;
+	from_fn(move || {
+		let current = rest?;
+		if remaining == 0 {
+			rest = None;
+			return Some(current);
+		}
+
+		remaining = remaining.saturating_sub(1);
+		match current.split_at_checked(length.into()) {
+			| Some((segment, next)) => {
+				rest = Some(next);
+				Some(segment)
+			},
+			| None => {
+				rest = None;
+				Some(current)
+			},
+		}
+	})
 }
 
 /// Lowercase hex digest, matching the names Conduit gives its media files.
@@ -322,7 +496,9 @@ fn outlier_room(key: &[u8], pdu: &CanonicalJsonObject) -> Result<OwnedRoomId> {
 mod tests {
 	use std::path::Path;
 
-	use super::{HasRoomId, conduit_media_path, parse_conduit_media_value, sha256_hex};
+	use super::{
+		HasRoomId, conduit_media_key, conduit_media_path, parse_conduit_media_value, sha256_hex,
+	};
 
 	#[test]
 	fn conduit_media_path_deep_matches_conduit_default() {
@@ -344,6 +520,21 @@ mod tests {
 		let path = conduit_media_path(Path::new("/db/media"), 0, 2, "abcdef");
 
 		assert_eq!(path, Path::new("/db/media/abcdef"));
+	}
+
+	#[test]
+	fn conduit_media_key_deep_joins_shards_with_slash() {
+		// The object key carries no media_dir; the source provider's base_path
+		// supplies any prefix. Same shard segments as the Deep on-disk path.
+		let hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+		let key = conduit_media_key(2, 2, hex);
+
+		assert_eq!(key, "01/23/456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+	}
+
+	#[test]
+	fn conduit_media_key_flat_is_bare_digest() {
+		assert_eq!(conduit_media_key(0, 2, "abcdef"), "abcdef");
 	}
 
 	#[test]

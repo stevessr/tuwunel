@@ -3085,6 +3085,21 @@ pub struct Config {
 	#[serde(default = "default_conduit_media_directory_length")]
 	pub conduit_media_directory_length: u8,
 
+	/// When importing a Conduit database whose media lived in an S3 bucket
+	/// rather than on disk, the name of a `[global.storage_provider.<name>]`
+	/// entry to read the source originals from. Leave unset to read from the
+	/// filesystem at `conduit_source_media_path`. Define the named provider
+	/// with Conduit's own S3 credentials and set its `base_path` to Conduit's
+	/// `media.path` prefix; the importer reads each content-addressed object
+	/// using `conduit_media_directory_depth`/`length` for the key sharding.
+	///
+	/// Scope `media_storage_providers` to your destination provider only (e.g.
+	/// `["media"]`) so the import writes solely there; otherwise media is also
+	/// copied back into the read-only source bucket.
+	///
+	/// example: "conduit_source"
+	pub conduit_source_media_provider: Option<String>,
+
 	/// Set this to true for excluding unencrypted rooms from the common-rooms
 	/// calculation deciding the receivers of device list updates.
 	///
