@@ -52,29 +52,39 @@ pub(crate) async fn migrations(services: &Services) -> Result {
 		return fresh(services).await;
 	}
 
-	check_database_version(services).await?;
+	// Computed before check_server_name backfills SERVER_NAME_KEY, which would
+	// otherwise mask a Conduit-lineage database (it carries no foreign marker).
+	let foreign_lineage = is_foreign_lineage(services).await;
+
+	check_database_version(services, foreign_lineage).await?;
 	check_server_name(services).await?;
-	migrate(services).await
+	migrate(services, foreign_lineage).await
+}
+
+/// Whether the database comes from a foreign (non-tuwunel) lineage: it predates
+/// our SERVER_NAME_KEY stamp, or carries a conduwuit-lineage migration marker
+/// that persists even after we stamp ours. Must be read before the server_name
+/// backfill, which removes the first signal.
+async fn is_foreign_lineage(services: &Services) -> bool {
+	let global = &services.db["global"];
+
+	global.get(SERVER_NAME_KEY).await.is_not_found()
+		|| global.get(FOREIGN_LINEAGE_MARKER).await.is_ok()
 }
 
 /// Gate the discovered schema version before migrations and the server_name
 /// backfill run. The integer is comparable only within tuwunel's own lineage; a
 /// foreign database (Conduit and forks) numbers schema on a colliding ladder
-/// and is recognized as foreign by the absence of SERVER_NAME_KEY or a
-/// FOREIGN_LINEAGE_MARKER, so its number is not gated. Within our lineage a
-/// version below 13 is refused as unmigratable and one above this build as too
-/// new to open safely; force_migration overrides the latter for a deliberate
-/// downgrade.
-async fn check_database_version(services: &Services) -> Result {
+/// and is recognized as foreign by [`is_foreign_lineage`], so its number is not
+/// gated. Within our lineage a version below 13 is refused as unmigratable and
+/// one above this build as too new to open safely; force_migration overrides
+/// the latter for a deliberate downgrade.
+async fn check_database_version(services: &Services, foreign_lineage: bool) -> Result {
 	let discovered = services.globals.db.database_version().await;
 
 	if discovered < 13 {
 		return Err!(Database("Database schema version {discovered} is no longer supported"));
 	}
-
-	let global = &services.db["global"];
-	let foreign_lineage = global.get(SERVER_NAME_KEY).await.is_not_found()
-		|| global.get(FOREIGN_LINEAGE_MARKER).await.is_ok();
 
 	if discovered > DATABASE_VERSION && !foreign_lineage && !services.config.force_migration {
 		return Err!(Database(
@@ -167,10 +177,24 @@ async fn fresh(services: &Services) -> Result {
 }
 
 /// Apply any migrations
-async fn migrate(services: &Services) -> Result {
+async fn migrate(services: &Services, foreign_lineage: bool) -> Result {
 	let db = &services.db;
 
 	let target_version = DATABASE_VERSION;
+	let discovered = services.globals.db.database_version().await;
+
+	// Claim our schema version up front when importing a foreign database
+	// numbered above ours (e.g. Conduit at 18). Stamping only at the end would
+	// leave an aborted import unbootable: the server_name backfill has already
+	// run, so a restart no longer sees the database as foreign and the version
+	// gate refuses it. The per-step markers below remain the real idempotency
+	// gates, so an aborted import still resumes where it left off.
+	if foreign_lineage && discovered > target_version {
+		services
+			.globals
+			.db
+			.bump_database_version(target_version);
+	}
 
 	migrate_media(services).await?;
 
@@ -252,9 +276,9 @@ async fn migrate(services: &Services) -> Result {
 	// carries on the next one.
 	moderation::migrate_moderation(services).await?;
 
-	// A newer same-lineage database was already refused; stamping ours is safe.
-	let discovered = services.globals.db.database_version().await;
-
+	// A newer same-lineage database was already refused; stamping ours is safe. A
+	// foreign import above our version was already stamped down before the import
+	// ran, so this is a no-op for it.
 	services
 		.globals
 		.db
