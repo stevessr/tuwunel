@@ -141,6 +141,7 @@ jobs:
       name: Summarise
       id: summarise
       env:
+        cargo_profile: ${{matrix.cargo_profile}}
         feat_set: ${{matrix.feat_set}}
         sys_name: ${{matrix.sys_name}}
         sys_target: ${{matrix.sys_target}}

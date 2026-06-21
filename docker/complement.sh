@@ -41,6 +41,15 @@ runner_name=$(echo $RUNNER_NAME | cut -d"." -f1)
 runner_num=$(echo $RUNNER_NAME | cut -d"." -f2)
 set +a
 
+# The debug build (the `test` cargo profile, compiled with debug-assertions and
+# overflow checks) runs the whole suite slower than the optimized build,
+# including the state-resolution conformance test which backfills a large event
+# graph and resolves it. Give the run more headroom (still honoring an explicit
+# complement_timeout override).
+if test "$cargo_profile" = "test"; then
+	default_complement_timeout="2h"
+fi
+
 envs=""
 envs="$envs -e complement_verbose=${complement_verbose:-$default_complement_verbose}"
 envs="$envs -e complement_count=${complement_count:-$default_complement_count}"
@@ -113,6 +122,8 @@ if test -n "$interop_images"; then
 	baseline_gate=0
 	envs="$envs -e COMPLEMENT_SPAWN_HS_TIMEOUT_SECS=${complement_spawn_timeout:-60}"
 else
+	# Both the optimized and debug runs gate the same homogeneous baseline in
+	# tests/complement/results.jsonl; the two produce identical results.
 	baseline_gate=1
 fi
 
