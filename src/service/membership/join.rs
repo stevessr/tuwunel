@@ -18,6 +18,7 @@ use ruma::{
 	events::{
 		StateEventType,
 		room::{
+			create::RoomCreateEventContent,
 			join_rules::RoomJoinRulesEventContent,
 			member::{MembershipState, RoomMemberEventContent},
 		},
@@ -131,7 +132,32 @@ pub async fn join(
 			.await?;
 	}
 
+	self.copy_predecessor_push_rules(sender_user, room_id)
+		.await;
+
 	Ok(())
+}
+
+#[implement(Service)]
+async fn copy_predecessor_push_rules(&self, user_id: &UserId, room_id: &RoomId) {
+	let Ok(create): Result<RoomCreateEventContent> = self
+		.services
+		.state_accessor
+		.room_state_get_content(room_id, &StateEventType::RoomCreate, "")
+		.await
+	else {
+		return;
+	};
+
+	let Some(predecessor) = create.predecessor else {
+		return;
+	};
+
+	self.services
+		.account_data
+		.copy_room_push_rule(user_id, &predecessor.room_id, room_id)
+		.await
+		.ok();
 }
 
 #[implement(Service)]
