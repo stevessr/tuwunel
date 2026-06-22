@@ -1,6 +1,9 @@
-use futures::{FutureExt, StreamExt, TryFutureExt, TryStreamExt, future::try_join5};
+use std::collections::HashMap;
+
+use futures::{FutureExt, TryStreamExt, future::try_join5};
 use ruma::{
-	CanonicalJsonObject, CanonicalJsonValue, EventId, OwnedEventId, RoomId, ServerName, UserId,
+	CanonicalJsonObject, CanonicalJsonValue, EventId, MilliSecondsSinceUnixEpoch, OwnedEventId,
+	RoomId, RoomVersionId, ServerName, UserId,
 	events::{
 		AnyStrippedStateEvent, StateEventType,
 		room::member::{MembershipState, RoomMemberEventContent},
@@ -10,7 +13,7 @@ use tuwunel_core::{
 	Err, Result, debug,
 	debug::INFO_SPAN_LEVEL,
 	debug_warn, err, implement,
-	matrix::{Event, PduCount, pdu::MAX_PREV_EVENTS, room_version::from_create_event},
+	matrix::{Event, PduCount, PduEvent, pdu::MAX_PREV_EVENTS, room_version::from_create_event},
 	smallvec::SmallVec,
 	trace,
 	utils::{
@@ -25,9 +28,7 @@ use crate::rooms::timeline::RawPduId;
 
 type PrevResultsHandled = SmallVec<[PrevHandled; MAX_PREV_EVENTS]>;
 type PrevHandled = (OwnedEventId, Handled);
-
-type PrevResults = SmallVec<[PrevResult; MAX_PREV_EVENTS]>;
-type PrevResult = (OwnedEventId, Result<Handled>);
+type PrevSplit = SmallVec<[OwnedEventId; MAX_PREV_EVENTS]>;
 
 type Handled = Option<(RawPduId, bool)>;
 
@@ -175,7 +176,7 @@ pub async fn handle_incoming_pdu<'a>(
 
 	// 9. Fetch any missing prev events doing all checks listed here starting at 1.
 	//    These are timeline events
-	let (sorted_prev_events, mut eventid_info) = self
+	let (sorted_prev_events, eventid_info) = self
 		.fetch_prev(
 			origin,
 			room_id,
@@ -187,60 +188,19 @@ pub async fn handle_incoming_pdu<'a>(
 		)
 		.await?;
 
-	trace!(
-		events = sorted_prev_events.len(),
-		event_ids = ?sorted_prev_events,
-		"Handling previous events"
-	);
-	let _prev_handles: PrevResultsHandled = sorted_prev_events
-		.into_iter()
-		.enumerate()
-		.try_stream()
-		.map_ok(|(i, prev_id)| (i, eventid_info.remove(&prev_id), prev_id))
-		.widen_and_then(MAX_PREV_EVENTS, async |(i, eventid_info, prev_id)| {
-			self.services.server.check_running()?;
-			match self
-				.handle_prev_pdu(
-					origin,
-					room_id,
-					event_id,
-					eventid_info,
-					&room_version,
-					recursion_level,
-					first_ts_in_room,
-					&prev_id,
-					create_event.event_id(),
-				)
-				.await
-			{
-				| Ok(Some(handled)) => {
-					self.record_success(Context::Upgrade, &prev_id)
-						.await;
-					debug!(?i, ?prev_id, ?handled, "Prev event processed.");
-
-					Ok((prev_id, Ok(Some(handled))))
-				},
-				| Ok(None) => {
-					debug_warn!(?i, ?prev_id, "Prev event not processed.");
-
-					Ok((prev_id, Ok(None)))
-				},
-				| Err(e) => {
-					self.record_outcome(Context::Upgrade, &prev_id, Disposition::Transient);
-					warn!(?i, ?prev_id, ?event_id, ?room_id, "Prev event processing failed: {e}");
-
-					Ok((prev_id, Err(e)))
-				},
-			}
-		})
-		.try_collect::<PrevResults>()
-		.map_ok(PrevResults::into_iter)
-		.map_ok(IterStream::stream)
-		.map_ok(|s| s.map(|(id, res)| res.map(|res| (id, res))))
-		.try_flatten_stream()
-		.try_collect()
-		.boxed()
-		.await?;
+	self.handle_prev_events(
+		origin,
+		room_id,
+		event_id,
+		sorted_prev_events,
+		eventid_info,
+		&room_version,
+		recursion_level,
+		first_ts_in_room,
+		create_event.event_id(),
+	)
+	.boxed()
+	.await?;
 
 	// Done with prev events, now handling the incoming event
 	self.upgrade_outlier_to_timeline_pdu(
@@ -373,4 +333,133 @@ async fn handle_rescinded_invite(
 	debug!(%room_id, %target, %sender, "Applied a federated invite rescission.");
 
 	Ok(true)
+}
+
+/// Upgrade an incoming PDU's previous events, walking interior events after
+/// their parents so each derives state locally instead of refetching it.
+#[implement(super::Service)]
+#[expect(clippy::too_many_arguments)]
+async fn handle_prev_events(
+	&self,
+	origin: &ServerName,
+	room_id: &RoomId,
+	event_id: &EventId,
+	sorted_prev_events: Vec<OwnedEventId>,
+	mut eventid_info: HashMap<OwnedEventId, (PduEvent, CanonicalJsonObject)>,
+	room_version: &RoomVersionId,
+	recursion_level: usize,
+	first_ts_in_room: MilliSecondsSinceUnixEpoch,
+	create_event_id: &EventId,
+) -> Result<()> {
+	trace!(
+		events = sorted_prev_events.len(),
+		event_ids = ?sorted_prev_events,
+		"Handling previous events"
+	);
+
+	let (interior, extremities): (PrevSplit, PrevSplit) = sorted_prev_events
+		.into_iter()
+		.partition(|prev_id| {
+			eventid_info.get(prev_id).is_some_and(|(pdu, _)| {
+				pdu.prev_events()
+					.any(|prev| eventid_info.contains_key(prev))
+			})
+		});
+
+	extremities
+		.into_iter()
+		.try_stream()
+		.map_ok(|prev_id| (eventid_info.remove(&prev_id), prev_id))
+		.widen_and_then(MAX_PREV_EVENTS, async |(info, prev_id)| {
+			self.upgrade_prev_event(
+				origin,
+				room_id,
+				event_id,
+				info,
+				room_version,
+				recursion_level,
+				first_ts_in_room,
+				prev_id,
+				create_event_id,
+			)
+			.await
+		})
+		.try_collect::<PrevResultsHandled>()
+		.boxed()
+		.await?;
+
+	// Walk interior events forward so each parent commits before its children.
+	interior
+		.into_iter()
+		.try_stream()
+		.map_ok(|prev_id| (eventid_info.remove(&prev_id), prev_id))
+		.try_for_each(async |(info, prev_id)| {
+			self.upgrade_prev_event(
+				origin,
+				room_id,
+				event_id,
+				info,
+				room_version,
+				recursion_level,
+				first_ts_in_room,
+				prev_id,
+				create_event_id,
+			)
+			.await?;
+
+			Ok(())
+		})
+		.boxed()
+		.await
+}
+
+/// Upgrade one previous event, folding a transient failure into a no-op so a
+/// single bad prev does not abort the batch; a shutdown still propagates.
+#[implement(super::Service)]
+#[expect(clippy::too_many_arguments)]
+async fn upgrade_prev_event(
+	&self,
+	origin: &ServerName,
+	room_id: &RoomId,
+	event_id: &EventId,
+	info: Option<(PduEvent, CanonicalJsonObject)>,
+	room_version: &RoomVersionId,
+	recursion_level: usize,
+	first_ts_in_room: MilliSecondsSinceUnixEpoch,
+	prev_id: OwnedEventId,
+	create_event_id: &EventId,
+) -> Result<PrevHandled> {
+	self.services.server.check_running()?;
+	match self
+		.handle_prev_pdu(
+			origin,
+			room_id,
+			event_id,
+			info,
+			room_version,
+			recursion_level,
+			first_ts_in_room,
+			&prev_id,
+			create_event_id,
+		)
+		.await
+	{
+		| Ok(handled) => {
+			if handled.is_some() {
+				self.record_success(Context::Upgrade, &prev_id)
+					.await;
+				debug!(?prev_id, ?handled, "Prev event processed.");
+			} else {
+				debug_warn!(?prev_id, "Prev event not processed.");
+			}
+
+			Ok((prev_id, handled))
+		},
+		| Err(e) => {
+			self.record_outcome(Context::Upgrade, &prev_id, Disposition::Transient);
+			warn!(?prev_id, ?event_id, ?room_id, "Prev event processing failed: {e}");
+
+			Ok((prev_id, None))
+		},
+	}
 }
