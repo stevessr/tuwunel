@@ -3044,21 +3044,22 @@ pub struct Config {
 	#[serde(default = "true_fn")]
 	pub database_migrations: bool,
 
-	/// Force the database to set its version to the current version known to
-	/// the executable.
+	/// Open a database whose schema version is newer than this build supports.
 	///
-	/// - When the discovered version is less than the current version any
-	///   migrations are applied normally.
-	/// - When the discovered version is equal to the current version,
-	///   unversioned migrations are applied normally.
-	/// - When the discovered database version is greater than the current
-	///   version, one-time migrations are applied normally and the discoverable
-	///   version is regressed back to the current version.
+	/// A database reporting a higher schema version than this build is normally
+	/// refused, since opening it stamps the schema down to this build's version
+	/// and may permanently lose data written by the newer build. Setting this
+	/// to true overrides that refusal: the database opens, one-time migrations
+	/// run, and the schema is stamped down to this build's version.
 	///
-	/// This option extremely dangerous and intended for developer debugging and
-	/// testing only. Never set this option unless you have been instructed to
-	/// do so. Setting this option may cause permanent damage and permanent loss
-	/// of data.
+	/// It has no effect when the discovered version is at or below this build's
+	/// version, where migrations apply normally either way. It is also not
+	/// needed to import a Conduit database or a fork of conduwuit; those are
+	/// recognized by lineage and open without it.
+	///
+	/// This option is extremely dangerous and intended for developer debugging
+	/// and testing only. Never set it unless you have been instructed to do so;
+	/// it may cause permanent damage and permanent loss of data.
 	#[serde(default)]
 	pub force_migration: bool,
 
