@@ -58,6 +58,7 @@ COPY <<EOF complement.toml
     allow_public_room_directory_over_federation = true
     allow_public_room_directory_without_auth = true
     allow_registration = true
+    appservice_dir = "/complement/appservice"
     create_admin_room = false
     database_path = "/database"
     db_pool_max_workers = 64
