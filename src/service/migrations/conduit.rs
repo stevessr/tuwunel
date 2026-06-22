@@ -100,6 +100,9 @@ pub(super) async fn migrate_conduit_media(services: &Services) -> Result {
 	let owners = db.open_cf("servernamemediaid_userlocalpart")?;
 	let owners = owners.as_ref();
 
+	let blocklist = db.open_cf("blocked_servername_mediaid")?;
+	let blocklist = blocklist.as_ref();
+
 	let depth = config.conduit_media_directory_depth;
 	let length = config.conduit_media_directory_length;
 	let source = media_source(services)?;
@@ -107,24 +110,35 @@ pub(super) async fn migrate_conduit_media(services: &Services) -> Result {
 	warn!("Importing Conduit media originals into tuwunel's key-addressed store...");
 
 	let cork = db.cork_and_sync();
-	let (imported, skipped) = metadata
+	let (imported, skipped, blocked) = metadata
 		.raw_stream()
 		.ignore_err()
 		.map(Ok::<_, Error>)
-		.try_fold((0_usize, 0_usize), async |(imported, skipped), (key, value)| {
-			let imported_entry =
-				import_conduit_original(services, owners, &source, depth, length, key, value)
-					.await?;
+		.try_fold(
+			(0_usize, 0_usize, 0_usize),
+			async |(imported, skipped, blocked), (key, value)| {
+				if conduit_media_blocked(blocklist, key).await? {
+					return Ok((imported, skipped, blocked.saturating_add(1)));
+				}
 
-			Ok(if imported_entry {
-				(imported.saturating_add(1), skipped)
-			} else {
-				(imported, skipped.saturating_add(1))
-			})
-		})
+				let imported_entry =
+					import_conduit_original(services, owners, &source, depth, length, key, value)
+						.await?;
+
+				Ok(if imported_entry {
+					(imported.saturating_add(1), skipped, blocked)
+				} else {
+					(imported, skipped.saturating_add(1), blocked)
+				})
+			},
+		)
 		.await?;
 
 	drop(cork);
+
+	if blocked > 0 {
+		warn!(%blocked, "Skipped Conduit media blocked by a moderator; not imported");
+	}
 
 	if skipped > 0 {
 		warn!(%imported, %skipped, "Imported Conduit media originals; some files were skipped");
@@ -308,6 +322,25 @@ async fn conduit_media_owner(
 	let localpart = owners?.get(key).await.ok()?;
 
 	UserId::parse_with_server_name(str::from_utf8(&localpart).ok()?, server_name).ok()
+}
+
+/// Whether a Conduit media entry was blocked by a moderator. Conduit keeps the
+/// file and refuses it only at read time (`blocked_servername_mediaid`);
+/// tuwunel has no per-media blocklist, so importing a blocked original would
+/// serve it again. The blocklist key is `server_name 0xff media_id`, the same
+/// bytes as the `servernamemediaid_metadata` key, so the entry's raw key probes
+/// it directly. Only a clean miss imports; a hard read error aborts the import
+/// (like an unreachable source) rather than silently re-serving blocked media.
+async fn conduit_media_blocked(blocklist: Option<&Arc<Map>>, key: &[u8]) -> Result<bool> {
+	let Some(blocklist) = blocklist else {
+		return Ok(false);
+	};
+
+	match blocklist.exists(key).await {
+		| Ok(()) => Ok(true),
+		| Err(e) if e.is_not_found() => Ok(false),
+		| Err(e) => Err(e),
+	}
 }
 
 /// Reconstructs the on-disk path of a Conduit content-addressed media file from
