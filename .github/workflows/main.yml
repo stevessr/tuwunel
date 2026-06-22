@@ -81,6 +81,10 @@ on:
         type: boolean
         default: false
         description: "Interop: run Complement against a foreign homeserver"
+      enable_test_complement_interop_inverse:
+        type: boolean
+        default: false
+        description: "Interop: run Complement with the foreign homeserver as hs1"
       complement_interop_run:
         type: string
         default: '.*'
@@ -150,11 +154,12 @@ jobs:
       complement_runner: 'het'
       enable_test_complement_crypto: ${{fromJSON(inputs.enable_test_complement_crypto || 'true')}}
       complement_crypto_verbose: ${{fromJSON(inputs.complement_crypto_verbose || 'false')}}
-      enable_test_complement_interop: ${{fromJSON(inputs.enable_test_complement_interop || env.is_dev || env.is_test)}}
+      enable_test_complement_interop: ${{fromJSON(inputs.enable_test_complement_interop || 'true')}}
+      enable_test_complement_interop_inverse: ${{fromJSON(inputs.enable_test_complement_interop_inverse || 'true')}}
       complement_interop_run: ${{inputs.complement_interop_run || '.*'}}
-      enable_test_mas: ${{fromJSON(inputs.enable_test_mas || env.is_dev || env.is_test)}}
+      enable_test_mas: ${{fromJSON(inputs.enable_test_mas || 'true')}}
       mas_verbose: ${{fromJSON(inputs.mas_verbose || 'false')}}
-      enable_test_playwright: ${{fromJSON(inputs.enable_test_playwright || env.is_dev || env.is_test)}}
+      enable_test_playwright: ${{fromJSON(inputs.enable_test_playwright || env.is_branch || 'false')}}
       playwright_runner: 'het'
       playwright_shards: ${{inputs.playwright_shards || vars.PLAYWRIGHT_SHARDS || env.default_playwright_shards}}
       playwright_workers: ${{inputs.playwright_workers || vars.PLAYWRIGHT_WORKERS || env.default_playwright_workers}}
@@ -305,6 +310,7 @@ jobs:
       enable_complement_crypto: ${{needs.init.outputs.enable_test_complement_crypto}}
       complement_crypto_verbose: ${{needs.init.outputs.complement_crypto_verbose}}
       enable_complement_interop: ${{needs.init.outputs.enable_test_complement_interop}}
+      enable_complement_interop_inverse: ${{needs.init.outputs.enable_test_complement_interop_inverse}}
       complement_interop_run: ${{needs.init.outputs.complement_interop_run}}
       enable_mas: ${{needs.init.outputs.enable_test_mas}}
       mas_verbose: ${{needs.init.outputs.mas_verbose}}

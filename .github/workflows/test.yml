@@ -83,6 +83,9 @@ on:
       enable_complement_interop:
         type: string
         default: 'false'
+      enable_complement_interop_inverse:
+        type: string
+        default: 'false'
       complement_interop_peer:
         type: string
         default: 'synapse'
@@ -751,6 +754,7 @@ jobs:
       && fromJSON(inputs.enable_complement)
       && fromJSON(inputs.enable_complement_debug)
       && fromJSON(inputs.enable_complement_interop)
+      && fromJSON(inputs.enable_complement_interop_inverse)
       && !contains(inputs.pipeline, '[ci no build]')
       && inputs.machines
       && contains(fromJSON(inputs.cargo_profiles), fromJSON('["test"]')[0])
