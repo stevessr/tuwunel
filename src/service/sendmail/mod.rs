@@ -19,12 +19,11 @@ struct Transport {
 
 impl crate::Service for Service {
 	fn build(args: &crate::Args<'_>) -> Result<Arc<Self>> {
-		let transport = args
-			.server
-			.config
-			.smtp
-			.as_ref()
-			.map(build_transport)
+		let smtp = &args.server.config.smtp;
+		let transport = smtp
+			.connection_uri
+			.is_some()
+			.then(|| build_transport(smtp))
 			.transpose()?;
 
 		Ok(Arc::new(Self { transport }))

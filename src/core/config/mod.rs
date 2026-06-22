@@ -3111,7 +3111,8 @@ pub struct Config {
 	pub jwt: JwtConfig,
 
 	// external structure; separate section
-	pub smtp: Option<SmtpConfig>,
+	#[serde(default)]
+	pub smtp: SmtpConfig,
 
 	// external structure; separate section
 	#[serde(default)]
@@ -3607,12 +3608,12 @@ pub struct JwtConfig {
 	pub validate_signature: bool,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[config_example_generator(filename = "tuwunel-example.toml", section = "global.smtp")]
 pub struct SmtpConfig {
 	/// Connection URL for the outbound SMTP relay used to send email
-	/// verification messages. The presence of this block enables the email
-	/// subsystem; without it no mail is sent.
+	/// verification messages. Setting this enables the email subsystem;
+	/// without it no mail is sent.
 	///
 	/// Use a `smtp://` URL for an unencrypted or STARTTLS connection and a
 	/// `smtps://` URL for implicit TLS. Credentials and the host go inline:

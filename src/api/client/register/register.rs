@@ -280,10 +280,10 @@ async fn enforce_uiaa(
 	let token_required = services.registration_tokens.is_enabled().await;
 	let terms = services.config.login_terms_params();
 
-	let email_required = services.config.smtp.as_ref().is_some_and(|smtp| {
-		smtp.require_email_for_registration
-			|| (token_required && smtp.require_email_for_token_registration)
-	});
+	let smtp = &services.config.smtp;
+	let email_required = smtp.connection_uri.is_some()
+		&& (smtp.require_email_for_registration
+			|| (token_required && smtp.require_email_for_token_registration));
 
 	let stages: Vec<AuthType> = [
 		token_required.then_some(AuthType::RegistrationToken),

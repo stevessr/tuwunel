@@ -562,12 +562,25 @@ fn check_well_known_support_contact_validity(config: &Config) -> Result {
 }
 
 fn check_email(config: &Config) -> Result {
-	if config.smtp.is_some() && config.well_known.client.is_none() {
+	let smtp = &config.smtp;
+
+	if smtp.connection_uri.is_some() && config.well_known.client.is_none() {
 		return Err!(Config(
 			"well_known.client",
 			"global.smtp is configured but well_known.client is unset. Email verification links \
 			 are built from the public client base URL, so set well_known.client to a valid \
 			 HTTPS URL alongside global.smtp."
+		));
+	}
+
+	if smtp.connection_uri.is_none()
+		&& (smtp.require_email_for_registration || smtp.require_email_for_token_registration)
+	{
+		return Err!(Config(
+			"smtp.connection_uri",
+			"global.smtp requires a verified email at registration but smtp.connection_uri is \
+			 unset. Set smtp.connection_uri so verification mail can be sent, or unset \
+			 require_email_for_registration and require_email_for_token_registration."
 		));
 	}
 

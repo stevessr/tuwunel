@@ -3095,8 +3095,8 @@
 #[global.smtp]
 
 # Connection URL for the outbound SMTP relay used to send email
-# verification messages. The presence of this block enables the email
-# subsystem; without it no mail is sent.
+# verification messages. Setting this enables the email subsystem;
+# without it no mail is sent.
 #
 # Use a `smtp://` URL for an unencrypted or STARTTLS connection and a
 # `smtps://` URL for implicit TLS. Credentials and the host go inline:
