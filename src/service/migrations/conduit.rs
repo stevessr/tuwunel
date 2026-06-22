@@ -2,6 +2,7 @@ use std::{
 	collections::BTreeMap,
 	iter::from_fn,
 	path::{Path, PathBuf},
+	pin::pin,
 	sync::Arc,
 	time::Duration,
 };
@@ -505,6 +506,55 @@ pub(super) async fn migrate_conduit_knocks(services: &Services) -> Result {
 
 	if knocks > 0 {
 		warn!(%knocks, "Imported Conduit knocks");
+	}
+
+	Ok(())
+}
+
+/// Splits Conduit's conflated highlight-count column. Conduit opens
+/// `roomuserid_lastnotificationread` against the `userroomid_highlightcount`
+/// tree (a copy-paste in its schema), so one column holds both stores:
+/// highlight counts keyed `user_id 0xff room_id` and last-notification-read
+/// tokens keyed `room_id 0xff user_id`. tuwunel keeps the two in separate
+/// columns with those same byte layouts, so every room-keyed (last-read) row
+/// moves verbatim into `roomuserid_lastnotificationread`, leaving the
+/// user-keyed highlight rows in place. The orderings never collide: a user id
+/// leads with `@`, a room id with `!`. Absent any room-keyed row the column is
+/// not aliased, so this returns early and is safe to run on a native database.
+pub(super) async fn migrate_conduit_highlight_split(services: &Services) -> Result {
+	let db = &services.db;
+	let highlight = db["userroomid_highlightcount"].clone();
+
+	// A room-keyed (last-read) row leads with '!'; without one the column is a
+	// plain highlight column needing no split.
+	if pin!(highlight.raw_keys_prefix(b"!"))
+		.next()
+		.await
+		.is_none()
+	{
+		return Ok(());
+	}
+
+	let lastread = db["roomuserid_lastnotificationread"].clone();
+	let cork = db.cork_and_sync();
+	let moved = highlight
+		.raw_stream()
+		.ignore_err()
+		.ready_fold(0_usize, |moved, (key, value)| {
+			if key.first() == Some(&b'!') {
+				lastread.insert(key, value);
+				highlight.remove(key);
+				moved.saturating_add(1)
+			} else {
+				moved
+			}
+		})
+		.await;
+
+	drop(cork);
+
+	if moved > 0 {
+		warn!(%moved, "Split Conduit last-notification-read rows out of the highlight-count column");
 	}
 
 	Ok(())

@@ -208,6 +208,7 @@ async fn migrate(services: &Services, foreign_lineage: bool) -> Result {
 	}
 
 	import_conduit_knocks(services).await?;
+	split_conduit_highlight_counts(services).await?;
 
 	if db["global"]
 		.get(b"fix_bad_double_separator_in_state_cache")
@@ -372,6 +373,27 @@ async fn import_conduit_knocks(services: &Services) -> Result {
 	if pending && db.open_cf("roomuserid_knockcount")?.is_some() {
 		conduit::migrate_conduit_knocks(services).await?;
 		db["global"].insert(b"imported_conduit_knocks", []);
+	}
+
+	Ok(())
+}
+
+/// Splits a Conduit database's conflated highlight-count column once. Conduit
+/// aliased `roomuserid_lastnotificationread` onto the
+/// `userroomid_highlightcount` tree, so one column holds both stores; tuwunel
+/// keeps them apart. Gated on its own marker; the split itself returns early
+/// unless a room-keyed row is present, so it is a cheap no-op on a native
+/// database.
+async fn split_conduit_highlight_counts(services: &Services) -> Result {
+	let db = &services.db;
+
+	if db["global"]
+		.get(b"split_conduit_highlight")
+		.await
+		.is_not_found()
+	{
+		conduit::migrate_conduit_highlight_split(services).await?;
+		db["global"].insert(b"split_conduit_highlight", []);
 	}
 
 	Ok(())
