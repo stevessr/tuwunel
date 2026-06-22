@@ -493,6 +493,51 @@ fn outlier_room(key: &[u8], pdu: &CanonicalJsonObject) -> Result<OwnedRoomId> {
 		.map_err(|e| err!(Database("deriving room id from create event id: {e}")))
 }
 
+/// Imports Conduit's pending knocks. Conduit names the columns
+/// `roomuserid_knockcount` / `userroomid_knockstate`; tuwunel renamed them to
+/// `*knocked*` but kept the byte layout (`room_id 0xff user_id` -> u64 count;
+/// `user_id 0xff room_id` -> JSON stripped state), so each row copies verbatim.
+/// Imported once: tuwunel clears a knock on the user's join or leave, so a
+/// re-import would resurrect a knock the user has already resolved.
+pub(super) async fn migrate_conduit_knocks(services: &Services) -> Result {
+	let knocks = copy_cf(services, "roomuserid_knockcount", "roomuserid_knockedcount").await?;
+	copy_cf(services, "userroomid_knockstate", "userroomid_knockedstate").await?;
+
+	if knocks > 0 {
+		warn!(%knocks, "Imported Conduit knocks");
+	}
+
+	Ok(())
+}
+
+/// Copies every row of one column verbatim into another whose key and value
+/// share the same byte layout, so neither needs reserialization.
+async fn copy_cf(
+	services: &Services,
+	source_name: &'static str,
+	target_name: &'static str,
+) -> Result<usize> {
+	let db = &services.db;
+	let Some(source) = db.open_cf(source_name)? else {
+		return Ok(0);
+	};
+
+	let target = &db[target_name];
+	let cork = db.cork_and_sync();
+	let copied = source
+		.raw_stream()
+		.ignore_err()
+		.ready_fold(0_usize, |copied, (key, value)| {
+			target.insert(key, value);
+			copied.saturating_add(1)
+		})
+		.await;
+
+	drop(cork);
+
+	Ok(copied)
+}
+
 #[cfg(test)]
 mod tests {
 	use std::path::Path;

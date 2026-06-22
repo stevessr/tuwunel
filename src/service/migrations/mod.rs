@@ -207,6 +207,8 @@ async fn migrate(services: &Services, foreign_lineage: bool) -> Result {
 		db["global"].insert(b"fix_pdu_missing_room_id", []);
 	}
 
+	import_conduit_knocks(services).await?;
+
 	if db["global"]
 		.get(b"fix_bad_double_separator_in_state_cache")
 		.await
@@ -351,6 +353,26 @@ async fn migrate(services: &Services, foreign_lineage: bool) -> Result {
 	}
 
 	info!("Loaded RocksDB database with schema version {DATABASE_VERSION}");
+
+	Ok(())
+}
+
+/// Imports a Conduit database's pending knocks once. Gated on its own marker
+/// and the source column's presence, so it runs only for a Conduit database and
+/// only the first time; a re-import would resurrect a knock the user later
+/// resolved.
+async fn import_conduit_knocks(services: &Services) -> Result {
+	let db = &services.db;
+
+	let pending = db["global"]
+		.get(b"imported_conduit_knocks")
+		.await
+		.is_not_found();
+
+	if pending && db.open_cf("roomuserid_knockcount")?.is_some() {
+		conduit::migrate_conduit_knocks(services).await?;
+		db["global"].insert(b"imported_conduit_knocks", []);
+	}
 
 	Ok(())
 }
