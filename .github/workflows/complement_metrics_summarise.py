@@ -95,6 +95,41 @@ def parse_usage(payload):
 	out.update(extract_ints(split_kv(body), USAGE_INTS))
 	return out
 
+# `perf stat -ddd -x,` CSV, one event per line:
+#   value,unit,event,run_time_ns,run_pct,metric_value,metric_unit
+# Hybrid CPUs (e.g. i9-12900K) split each hardware event into cpu_core/<ev>/
+# and cpu_atom/<ev>/; we strip the PMU prefix and sum the two. Unmeasured
+# events read "<not counted>" / "<not supported>" / empty and are skipped.
+# Anything outside this allowlist (topdown groups, metric-only lines) is ignored.
+PERF_EVENTS = {
+	"instructions":          "perf_instructions",
+	"cpu-cycles":            "perf_cycles",
+	"branches":              "perf_branches",
+	"branch-misses":         "perf_branch_misses",
+	"L1-dcache-load-misses": "perf_l1d_misses",
+}
+
+def perf_event_name(field):
+	return re.sub(r"^cpu_(core|atom)/(.*)/$", r"\2", field.strip())
+
+def parse_perf_val(s):
+	s = s.strip()
+	if not s or s.startswith("<"): return None
+	try: return float(s)
+	except ValueError: return None
+
+def parse_perf_stat(text):
+	out = {}
+	for line in text.splitlines():
+		if line.startswith("#") or not line.strip(): continue
+		parts = line.split(",")
+		if len(parts) < 3: continue
+		dst = PERF_EVENTS.get(perf_event_name(parts[2]))
+		v = parse_perf_val(parts[0])
+		if dst is None or v is None: continue
+		out[dst] = out.get(dst, 0.0) + v
+	return out
+
 ###############################################################################
 # Tarball ingestion
 #
@@ -111,7 +146,7 @@ def open_tar(path):
 	return tarfile.open(fileobj=proc.stdout, mode="r|"), proc
 
 def is_dump(member):
-	return member.isfile() and member.name.endswith(".json")
+	return member.isfile() and (member.name.endswith(".json") or "perf_stat" in member.name)
 
 def parse_member_path(name):
 	# Returns (test, cid, fname) or None for paths outside by_test/.
@@ -125,6 +160,12 @@ def read_dump(tar, member):
 	if fp is None: return None
 	try: return json.loads(fp.read().decode("utf-8"))
 	except (UnicodeDecodeError, json.JSONDecodeError): return None
+
+def read_text(tar, member):
+	fp = tar.extractfile(member)
+	if fp is None: return None
+	try: return fp.read().decode("utf-8")
+	except UnicodeDecodeError: return None
 
 def merge_dump(row, fname, dump):
 	payload = dump.get("payload", "")
@@ -140,11 +181,15 @@ def load_tar(path):
 			parsed = parse_member_path(m.name)
 			if parsed is None: continue
 			test, cid, fname = parsed
+			row = rows[(test, cid)]
+			row["test"], row["cid"] = test, cid
+			if "perf_stat" in fname:
+				raw = read_text(tar, m)
+				if raw: row.update(parse_perf_stat(raw))
+				continue
 			dump = read_dump(tar, m)
 			if dump is None: continue
 			version = version or dump.get("meta", {}).get("tuwunel_version")
-			row = rows[(test, cid)]
-			row["test"], row["cid"] = test, cid
 			merge_dump(row, fname, dump)
 	proc.wait()
 	return list(rows.values()), version
@@ -162,6 +207,13 @@ def busy_ratio(r):
 def cpu_total_us(r):
 	u, s = r.get("utime_us"), r.get("stime_us")
 	return u + s if u is not None and s is not None else None
+
+def ratio(r, num, den):
+	n, d = r.get(num), r.get(den)
+	return n / d if n is not None and d else None
+
+def perf_ipc(r):          return ratio(r, "perf_instructions", "perf_cycles")
+def perf_branch_miss(r):  return ratio(r, "perf_branch_misses", "perf_branches")
 
 def derive_col(rows, fn):
 	return [v for v in (fn(r) for r in rows) if v is not None]
@@ -212,6 +264,23 @@ def aggregate(rows):
 		"majflt_total": safe_sum(majflt),
 		"minflt_median": pct(minflt, 50),
 		"overflow_total": safe_sum(overflow),
+		**aggregate_perf(rows),
+	}
+
+# Hardware-counter aggregates from `perf stat` (perf testee variant only).
+# Absent on ordinary runs, so the perf rows are suppressed there (see render).
+def aggregate_perf(rows):
+	instr = col(rows, "perf_instructions")
+	cyc = col(rows, "perf_cycles")
+	l1d = col(rows, "perf_l1d_misses")
+	if not (instr or cyc or l1d): return {}
+	return {
+		"perf_present": True,
+		"perf_instructions_sum": safe_sum(instr),
+		"perf_cycles_sum": safe_sum(cyc),
+		"perf_ipc_median": pct(derive_col(rows, perf_ipc), 50),
+		"perf_branch_miss_median": pct(derive_col(rows, perf_branch_miss), 50),
+		"perf_l1d_misses_sum": safe_sum(l1d),
 	}
 
 ###############################################################################
@@ -237,6 +306,14 @@ def fmt_ns(ns):
 
 def fmt_ratio(r): return "n/a" if r is None else f"{r:.3f}"
 def fmt_int(n): return "n/a" if n is None else (f"{n:,.0f}" if isinstance(n, float) else f"{n:,}")
+
+def fmt_pct(r): return "n/a" if r is None else f"{r * 100:.2f}%"
+
+def fmt_count(n):
+	if n is None: return "n/a"
+	for div, suf in ((1e9, "G"), (1e6, "M"), (1e3, "k")):
+		if abs(n) >= div: return f"{n / div:.2f}{suf}"
+	return f"{n:.0f}"
 
 ###############################################################################
 # Rendering
@@ -264,6 +341,15 @@ ROWS = (
 	("majflt_total",        "Major page faults (total)",    fmt_int,   True,  1),
 	("minflt_median",       "Minor page faults (median)",   fmt_int,   None,  1),
 	("overflow_total",      "Worker overflow (total)",      fmt_int,   True,  1),
+)
+
+# Hardware-counter rows, appended only when a run carries perf-stat data.
+PERF_ROWS = (
+	("perf_instructions_sum",  "Instructions (total)",       fmt_count, True,  1e9),
+	("perf_cycles_sum",        "CPU cycles (total)",         fmt_count, True,  1e9),
+	("perf_ipc_median",        "IPC (median)",               fmt_ratio, False, 0.01),
+	("perf_branch_miss_median","Branch miss rate (median)",  fmt_pct,   True,  0.001),
+	("perf_l1d_misses_sum",    "L1-dcache misses (total)",   fmt_count, True,  1e6),
 )
 
 def is_regression(direction, delta):
@@ -318,7 +404,8 @@ def cell(curr, col, key, fmt, direction, floor):
 def render_table(curr, cols):
 	heads = " | ".join(c[0] for c in cols)
 	lines = ["| Metric | " + heads + " |", "|" + "---|" * (len(cols) + 1)]
-	for key, lbl, fmt, direction, floor in ROWS:
+	rows = ROWS + PERF_ROWS if curr.get("perf_present") else ROWS
+	for key, lbl, fmt, direction, floor in rows:
 		cells = " | ".join(cell(curr, c, key, fmt, direction, floor) for c in cols)
 		lines.append(f"| {lbl} | " + cells + " |")
 	return lines
@@ -402,6 +489,7 @@ def parse_args():
 	ap.add_argument("--keep", type=int, default=3)
 	ap.add_argument("--out", default="-")
 	ap.add_argument("--emit-json")
+	ap.add_argument("--no-render", action="store_true")
 	return ap.parse_args()
 
 def write_out(path, body):
@@ -422,7 +510,9 @@ def main():
 
 	if args.emit_json: Path(args.emit_json).write_text(json.dumps(curr, indent=2))
 	if args.history_out: write_buffer(args.history_out, rotate(prev_own, this_entry(curr), args.keep))
-	write_out(args.out, render(curr, cols, rows, version))
+	# Main is the baseline ring: record the digest for branches to diff against,
+	# but render no table (it carries no diff signal, like the suppressed grid).
+	if not args.no_render: write_out(args.out, render(curr, cols, rows, version))
 	return 0
 
 if __name__ == "__main__":

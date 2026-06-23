@@ -165,6 +165,12 @@ emit_runtime_metrics() {
 		args+=(--history-out "$RUNTIME_DIGEST_OWN" --keep "${RUNTIME_DIGEST_KEEP:-3}")
 	fi
 	test -s "${RUNTIME_DIGEST_MAIN:-}" && args+=(--main-in "$RUNTIME_DIGEST_MAIN")
+
+	# Main-branch runs are the baseline; the table carries no diff signal there,
+	# so still record the digest but render no table (mirrors the failure board).
+	if test "${GITHUB_REF_NAME:-}" = "main"; then
+		args+=(--no-render)
+	fi
 	python3 "$script" "${args[@]}" || :
 }
 

@@ -353,6 +353,7 @@ group "complement" {
         "complement-testee",
         #"complement-tester-valgrind",
         #"complement-testee-valgrind",
+        #"complement-testee-perf",
     ]
 }
 
@@ -388,6 +389,29 @@ target "complement-testee" {
         elem_tag("complement-testee", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
     target = "complement-testee"
+    output = ["type=docker,compression=zstd,mode=min"]
+    entitlements = ["network.host"]
+    dockerfile = "${docker_dir}/Dockerfile.complement"
+    matrix = cargo_rust_feat_sys
+    inherits = [
+        elem("install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    ]
+    contexts = {
+        input = elem("target:install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+        complement-tester = elem("target:complement-tester", [sys_name, sys_version, sys_target])
+        complement-config = elem("target:complement-config", [sys_name, sys_version, sys_target])
+    }
+    args = {
+        RUST_BACKTRACE = "full"
+    }
+}
+
+target "complement-testee-perf" {
+    name = elem("complement-testee-perf", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
+    tags = [
+        elem_tag("complement-testee-perf", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
+    ]
+    target = "complement-testee-perf"
     output = ["type=docker,compression=zstd,mode=min"]
     entitlements = ["network.host"]
     dockerfile = "${docker_dir}/Dockerfile.complement"
@@ -482,7 +506,7 @@ group "mas" {
 
 # Tuwunel SUT for the MAS smoke test. Long elem'd tag for matrix
 # disambiguation plus a stable short alias for local `docker run`. The runner
-# (docker/mas-runner.sh) references the long elem name, as complement-runner.sh
+# (docker/lib/mas-runner.sh) references the long elem name, as complement-runner.sh
 # does, so concurrent matrix cells never collide.
 target "mas-testee" {
     name = elem("mas-testee", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
@@ -816,6 +840,9 @@ target "integ" {
         cargo_args = (cargo_profile == "bench"?
             "--no-fail-fast --bench=*": "--no-fail-fast --test=*"
         )
+
+        sched_policy = (cargo_profile == "bench"? "--fifo": "--rr")
+        sched_prio = 1
     }
 }
 
@@ -962,6 +989,9 @@ target "unit" {
         cargo_args = (cargo_profile == "bench"?
             "--no-fail-fast --lib": "--no-fail-fast --lib --bins"
         )
+
+        sched_policy = (cargo_profile == "bench"? "--fifo": "--rr")
+        sched_prio = 1
     }
 }
 
