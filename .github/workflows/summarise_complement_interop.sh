@@ -2,7 +2,7 @@
 set -eo pipefail
 
 track_name="Complement Interoperability"
-jsonl="tests/complement/interop/results.jsonl"
+results="tests/complement/interop/results.jsonl"
 #metrics_tar="tests/complement/interop/runtime_metrics.tar.zst"
 
 # Diff against the homogeneous Complement board so known tuwunel failures render
@@ -10,7 +10,7 @@ jsonl="tests/complement/interop/results.jsonl"
 # grid over that board's full test list so the two line up square-for-square.
 # logs_jsonl drives the peer-homeserver detection that blacks out non-federation
 # tests.
-baseline_jsonl="tests/complement/results.jsonl"
+baseline="tests/complement/results.jsonl"
 logs_jsonl="tests/complement/interop/logs.jsonl"
 render_over_baseline=1
 
@@ -18,7 +18,7 @@ render_over_baseline=1
 # from the homogeneous boards' green check.
 adv_cell="❎"
 
-# shellcheck source=./complement_summarise.sh
-. "$(dirname "$0")/complement_summarise.sh"
+# shellcheck source=./summarise_complement.sh
+. "$(dirname "$0")/summarise_complement.sh"
 
 summarise_main "$@"

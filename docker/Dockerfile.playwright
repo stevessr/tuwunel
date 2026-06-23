@@ -199,7 +199,7 @@ cd /usr/src/element-web/apps/web
 # of 10. With the early-abort active, the suite stopped at the 10th unique
 # failure and marked the rest skipped, which made the failing-spec set
 # non-deterministic across runs. The regression gate in
-# docker/playwright_summarise.sh needs a stable input set.
+# .github/workflows/summarise_playwright.sh needs a stable input set.
 PLAYWRIGHT_JSON_OUTPUT_NAME=/playwright/out/results.json \\
 npx playwright test \\
     --project=Tuwunel \\

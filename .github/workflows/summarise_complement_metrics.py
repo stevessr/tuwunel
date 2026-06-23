@@ -1,9 +1,14 @@
 #!/usr/bin/env -S python3 -S
 """Aggregate Tuwunel runtime-metrics dumps from a Complement run."""
 
-import argparse, json, os, re, subprocess, sys, tarfile, time
+import argparse, json, re, subprocess, sys, tarfile
 from collections import defaultdict
 from pathlib import Path
+
+from summarise_engine import (
+	buffer_runs, load_buffer, render_table, rotate, short_label, this_entry,
+	usable, write_buffer, write_out,
+)
 
 ###############################################################################
 # Debug-string parsing
@@ -352,22 +357,6 @@ PERF_ROWS = (
 	("perf_l1d_misses_sum",    "L1-dcache misses (total)",   fmt_count, True,  1e6),
 )
 
-def is_regression(direction, delta):
-	if direction is None: return None
-	return delta > 0 if direction else delta < 0
-
-def fmt_delta(curr, prev, direction, floor):
-	if curr is None or prev is None: return ""
-	d = curr - prev
-	if abs(d) < floor: return "·"
-	pct_d = (d / prev * 100.0) if prev else float("inf")
-	regress = is_regression(direction, d)
-	marker = ""
-	if regress is True and abs(pct_d) >= 5: marker = " ⚠️"
-	if regress is False and abs(pct_d) >= 5: marker = " ✅"
-	sign = "+" if d >= 0 else ""
-	return f"{sign}{pct_d:.1f}%{marker}" if prev else f"{sign}{d:.0f}{marker}"
-
 def header_line(curr, version):
 	bits = []
 	if version: bits.append(f"tuwunel {version}")
@@ -379,10 +368,6 @@ def header_line(curr, version):
 #   "this"  this run's value;  "delta"  signed % vs the column's agg (markers);
 #   "value" a prior run's raw value (no delta).
 
-def short_label(entry):
-	sha = (entry.get("sha") or "")[:7]
-	return sha or f"run {entry.get('run_id', '?')}"
-
 def build_columns(curr, main_entry, history):
 	cols = [("This run", "this", curr)]
 	if main_entry is not None:
@@ -392,23 +377,6 @@ def build_columns(curr, main_entry, history):
 		branch = e.get("branch") or "prev"
 		cols.append((f"{branch} −{i}<br>`{short_label(e)}`", "value", e["agg"]))
 	return cols
-
-def cell(curr, col, key, fmt, direction, floor):
-	_, kind, agg = col
-	if kind == "this":
-		v = curr.get(key); return fmt(v) if v is not None else "n/a"
-	if kind == "delta":
-		return fmt_delta(curr.get(key), agg.get(key), direction, floor)
-	v = agg.get(key); return fmt(v) if v is not None else "n/a"
-
-def render_table(curr, cols):
-	heads = " | ".join(c[0] for c in cols)
-	lines = ["| Metric | " + heads + " |", "|" + "---|" * (len(cols) + 1)]
-	rows = ROWS + PERF_ROWS if curr.get("perf_present") else ROWS
-	for key, lbl, fmt, direction, floor in rows:
-		cells = " | ".join(cell(curr, c, key, fmt, direction, floor) for c in cols)
-		lines.append(f"| {lbl} | " + cells + " |")
-	return lines
 
 def hot_rss(rows, n=5):
 	xs = [r for r in rows if r.get("maxrss_kb") is not None]
@@ -428,7 +396,8 @@ def render_hot(title, items):
 
 def render(curr, cols, rows, version):
 	out = ["", "#### Runtime metrics", "", header_line(curr, version), ""]
-	out += render_table(curr, cols)
+	rowcat = ROWS + PERF_ROWS if curr.get("perf_present") else ROWS
+	out += render_table("Metric", (), curr, cols, rowcat)
 	out += render_hot("Top 5 testees by peak RSS:", hot_rss(rows))
 	out += render_hot("Top 5 testees by CPU:", hot_cpu(rows))
 	if len(cols) == 1:
@@ -437,48 +406,7 @@ def render(curr, cols, rows, version):
 	return "\n".join(out)
 
 ###############################################################################
-# History ring buffer
-#
-# A small JSON document persisted per (branch, matrix slot) in the GitHub
-# Actions cache. Each green run prepends its aggregate and truncates to --keep;
-# reads tolerate a cold (absent) or corrupt cache.
-
-BUFFER_VERSION = 1
-
-def load_buffer(path):
-	if not path or not Path(path).is_file(): return None
-	try: buf = json.loads(Path(path).read_text(encoding="utf-8"))
-	except (OSError, json.JSONDecodeError): return None
-	return buf if isinstance(buf, dict) else None
-
-def buffer_runs(buf):
-	runs = buf.get("runs") if buf else None
-	return runs if isinstance(runs, list) else []
-
-def this_entry(agg):
-	env = os.environ
-	return {
-		"run_id":      env.get("GITHUB_RUN_ID", ""),
-		"run_attempt": env.get("GITHUB_RUN_ATTEMPT", ""),
-		"sha":         env.get("GITHUB_SHA", ""),
-		"branch":      env.get("GITHUB_REF_NAME", ""),
-		"ts":          int(time.time()),
-		"agg":         agg,
-	}
-
-def rotate(prev, entry, keep):
-	return {"v": BUFFER_VERSION, "runs": ([entry] + buffer_runs(prev))[:max(1, keep)]}
-
-def write_buffer(path, buf):
-	p = Path(path)
-	p.parent.mkdir(parents=True, exist_ok=True)
-	p.write_text(json.dumps(buf), encoding="utf-8")
-
-###############################################################################
 # Entry point
-
-def usable(path):
-	return path and Path(path).is_file() and Path(path).stat().st_size > 0
 
 def parse_args():
 	ap = argparse.ArgumentParser()
@@ -491,10 +419,6 @@ def parse_args():
 	ap.add_argument("--emit-json")
 	ap.add_argument("--no-render", action="store_true")
 	return ap.parse_args()
-
-def write_out(path, body):
-	if path == "-": sys.stdout.write(body)
-	else: open(path, "a", encoding="utf-8").write(body)
 
 def main():
 	args = parse_args()
@@ -509,7 +433,7 @@ def main():
 	cols = build_columns(curr, main_entry, history)
 
 	if args.emit_json: Path(args.emit_json).write_text(json.dumps(curr, indent=2))
-	if args.history_out: write_buffer(args.history_out, rotate(prev_own, this_entry(curr), args.keep))
+	if args.history_out: write_buffer(args.history_out, rotate(prev_own, this_entry(agg=curr), args.keep))
 	# Main is the baseline ring: record the digest for branches to diff against,
 	# but render no table (it carries no diff signal, like the suppressed grid).
 	if not args.no_render: write_out(args.out, render(curr, cols, rows, version))
