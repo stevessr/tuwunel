@@ -105,13 +105,27 @@ def parse_usage(payload):
 # Hybrid CPUs (e.g. i9-12900K) split each hardware event into cpu_core/<ev>/
 # and cpu_atom/<ev>/; we strip the PMU prefix and sum the two. Unmeasured
 # events read "<not counted>" / "<not supported>" / empty and are skipped.
-# Anything outside this allowlist (topdown groups, metric-only lines) is ignored.
+# Raw counts outside this allowlist are ignored; derived metrics are read below.
 PERF_EVENTS = {
 	"instructions":          "perf_instructions",
 	"cpu-cycles":            "perf_cycles",
 	"branches":              "perf_branches",
 	"branch-misses":         "perf_branch_misses",
 	"L1-dcache-load-misses": "perf_l1d_misses",
+}
+
+# Besides the raw counters, `perf stat` derives a rate for some events and prints
+# it in the trailing value/name pair (metric_value, metric_unit = "<unit>  <name>"):
+# the cache/TLB miss rates and the TopdownL1 frontend/backend split the hardware
+# reports directly. Each is a percentage, kept here as a ratio. The testee runs on
+# the P-cores, so we read the cpu_core value (or a non-hybrid line) and drop the
+# cpu_atom duplicate, whose tiny counts are background noise.
+PERF_METRICS = {
+	"llc_miss_rate":      "perf_llc_miss",
+	"l1i_miss_rate":      "perf_l1i_miss",
+	"dtlb_miss_rate":     "perf_dtlb_miss",
+	"tma_frontend_bound": "perf_frontend_bound",
+	"tma_backend_bound":  "perf_backend_bound",
 }
 
 def perf_event_name(field):
@@ -123,16 +137,32 @@ def parse_perf_val(s):
 	try: return float(s)
 	except ValueError: return None
 
+# The PMU behind a metric: a cpu_core/cpu_atom event prefix names it directly; a
+# bare topdown node inherits the most recent "TopdownL1 (cpu_<x>)" group instead.
+def perf_metric_pmu(event_field, td_pmu):
+	m = re.match(r"cpu_(core|atom)/", event_field.strip())
+	return m.group(1) if m else td_pmu
+
 def parse_perf_stat(text):
-	out = {}
+	out, td_pmu = {}, None
 	for line in text.splitlines():
 		if line.startswith("#") or not line.strip(): continue
 		parts = line.split(",")
 		if len(parts) < 3: continue
 		dst = PERF_EVENTS.get(perf_event_name(parts[2]))
 		v = parse_perf_val(parts[0])
-		if dst is None or v is None: continue
-		out[dst] = out.get(dst, 0.0) + v
+		if dst is not None and v is not None:
+			out[dst] = out.get(dst, 0.0) + v
+		# Trailing derived metric (cpu_core only; cpu_atom is background noise).
+		if len(parts) < 7: continue
+		tail = parts[6].strip()
+		if tail.startswith("TopdownL1"):
+			g = re.search(r"cpu_(core|atom)", tail)
+			td_pmu = g.group(1) if g else None
+		mkey = PERF_METRICS.get(tail.split()[-1]) if tail else None
+		mv = parse_perf_val(parts[5])
+		if mkey is not None and mv is not None and perf_metric_pmu(parts[2], td_pmu) != "atom":
+			out[mkey] = mv / 100.0
 	return out
 
 ###############################################################################
@@ -279,7 +309,7 @@ def aggregate_perf(rows):
 	cyc = col(rows, "perf_cycles")
 	l1d = col(rows, "perf_l1d_misses")
 	if not (instr or cyc or l1d): return {}
-	return {
+	out = {
 		"perf_present": True,
 		"perf_instructions_sum": safe_sum(instr),
 		"perf_cycles_sum": safe_sum(cyc),
@@ -287,6 +317,12 @@ def aggregate_perf(rows):
 		"perf_branch_miss_median": pct(derive_col(rows, perf_branch_miss), 50),
 		"perf_l1d_misses_sum": safe_sum(l1d),
 	}
+	# Per-testee perf-derived rates reduced to a median; a metric the hardware
+	# never reported is left out so its row drops from the table (see render).
+	for src in PERF_METRICS.values():
+		v = pct(col(rows, src), 50)
+		if v is not None: out[f"{src}_median"] = v
+	return out
 
 ###############################################################################
 # Formatters
@@ -350,11 +386,16 @@ ROWS = (
 
 # Hardware-counter rows, appended only when a run carries perf-stat data.
 PERF_ROWS = (
-	("perf_instructions_sum",  "Instructions (total)",       fmt_count, True,  1e9),
-	("perf_cycles_sum",        "CPU cycles (total)",         fmt_count, True,  1e9),
-	("perf_ipc_median",        "IPC (median)",               fmt_ratio, False, 0.01),
-	("perf_branch_miss_median","Branch miss rate (median)",  fmt_pct,   True,  0.001),
-	("perf_l1d_misses_sum",    "L1-dcache misses (total)",   fmt_count, True,  1e6),
+	("perf_instructions_sum",      "Instructions (total)",         fmt_count, True,  1e9),
+	("perf_cycles_sum",            "CPU cycles (total)",           fmt_count, True,  1e9),
+	("perf_ipc_median",            "IPC (median)",                 fmt_ratio, False, 0.01),
+	("perf_branch_miss_median",    "Branch miss rate (median)",    fmt_pct,   True,  0.001),
+	("perf_l1d_misses_sum",        "L1-dcache misses (total)",     fmt_count, True,  1e6),
+	("perf_llc_miss_median",       "LLC miss rate (median)",       fmt_pct,   True,  0.001),
+	("perf_l1i_miss_median",       "L1-icache miss rate (median)", fmt_pct,   True,  0.001),
+	("perf_dtlb_miss_median",      "dTLB miss rate (median)",      fmt_pct,   True,  0.001),
+	("perf_frontend_bound_median", "Frontend bound (median)",      fmt_pct,   True,  0.001),
+	("perf_backend_bound_median",  "Backend bound (median)",       fmt_pct,   True,  0.001),
 )
 
 def header_line(curr, version):
@@ -394,9 +435,16 @@ def render_hot(title, items):
 	for name, value in items: out.append(f"- `{name}`: {value}")
 	return out
 
+# A perf row appears only if some column carries its value; a metric the hardware
+# did not report leaves the key absent everywhere and the row is dropped. The full
+# set is then sorted lexically by label so every metric reads in one alphabet.
+def live_rows(perf_rows, cols):
+	return tuple(r for r in perf_rows if any(c[2].get(r[0]) is not None for c in cols))
+
 def render(curr, cols, rows, version):
 	out = ["", "#### Runtime metrics", "", header_line(curr, version), ""]
-	rowcat = ROWS + PERF_ROWS if curr.get("perf_present") else ROWS
+	perf_rows = live_rows(PERF_ROWS, cols) if curr.get("perf_present") else ()
+	rowcat = tuple(sorted(ROWS + perf_rows, key=lambda r: r[1].lower()))
 	out += render_table("Metric", (), curr, cols, rowcat)
 	out += render_hot("Top 5 testees by peak RSS:", hot_rss(rows))
 	out += render_hot("Top 5 testees by CPU:", hot_cpu(rows))

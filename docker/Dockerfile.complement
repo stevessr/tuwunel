@@ -121,7 +121,16 @@ ARG sched_policy="--rr"
 ARG sched_prio=1
 ENV sched_policy=${sched_policy}
 ENV sched_prio=${sched_prio}
-ENTRYPOINT exec /complement/provision_complement.sh tuwunel -Oserver_name=\""$SERVER_NAME\""
+RUN <<EOF
+    set -eux
+    apt-get update
+    apt-get install -y --no-install-recommends linux-perf
+    rm -rf /var/lib/apt/lists/*
+EOF
+COPY docker/lib/perf_wrap.sh /complement/perf_wrap.sh
+RUN chmod a+x /complement/perf_wrap.sh
+ENTRYPOINT exec /complement/provision_complement.sh /complement/perf_wrap.sh \
+    tuwunel -Oserver_name=\""$SERVER_NAME\""
 
 
 FROM complement-testee-base AS complement-testee-valgrind
@@ -139,23 +148,6 @@ ENTRYPOINT exec /complement/provision_complement.sh valgrind \
     tuwunel \
         -Oserver_name=\""$SERVER_NAME\"" \
         -Odb_pool_max_workers=${db_pool_max_workers}
-
-
-FROM complement-testee-base AS complement-testee-perf
-ARG sched_policy="--fifo"
-ARG sched_prio=1
-ENV sched_policy=${sched_policy}
-ENV sched_prio=${sched_prio}
-RUN <<EOF
-    set -eux
-    apt-get update
-    apt-get install -y --no-install-recommends linux-perf
-    rm -rf /var/lib/apt/lists/*
-EOF
-COPY docker/lib/perf_wrap.sh /complement/perf_wrap.sh
-RUN chmod a+x /complement/perf_wrap.sh
-ENTRYPOINT exec /complement/provision_complement.sh /complement/perf_wrap.sh \
-    tuwunel -Oserver_name=\""$SERVER_NAME\""
 
 
 FROM input AS complement-base

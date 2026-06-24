@@ -49,15 +49,20 @@ envs="$envs -e COMPLEMENT_RUN_ID=${run_id}"
 
 # Schedule the testee above the build workload sharing this runner so the suite
 # does not time out under contention; the testee entrypoint renices itself and
-# CAP_SYS_NICE lets it. The perf variant additionally deploys the perf testee
-# image under `perf stat` and needs CAP_PERFMON, which the default Docker seccomp
-# profile already keys its perf_event_open allowance on.
+# CAP_SYS_NICE lets it. With complement_perf the same testee image additionally
+# runs the server under `perf stat`: its entrypoint perf wrapper is opt-in on
+# TESTEE_PERF (a plain exec otherwise) and CAP_PERFMON unblocks perf_event_open,
+# which the default Docker seccomp profile already keys its allowance on. The
+# testee env var is delivered through Complement's COMPLEMENT_SHARE_ENV_PREFIX
+# passthrough, which strips the prefix and forwards the remainder into each
+# spawned testee.
+caps="SYS_NICE"
 if test "${complement_perf:-0}" = "1"; then
-	testee_image="complement-testee-perf--${cargo_profile}--${rust_toolchain}--${rust_target}--${feat_set}--${sys_name}--${sys_version}--${sys_target}"
-	envs="$envs -e COMPLEMENT_TESTEE_CAP_ADD=PERFMON,SYS_NICE"
-else
-	envs="$envs -e COMPLEMENT_TESTEE_CAP_ADD=SYS_NICE"
+	caps="PERFMON,$caps"
+	envs="$envs -e COMPLEMENT_SHARE_ENV_PREFIX=COMPLEMENT_TESTEE_ENV_"
+	envs="$envs -e COMPLEMENT_TESTEE_ENV_TESTEE_PERF=1"
 fi
+envs="$envs -e COMPLEMENT_TESTEE_CAP_ADD=$caps"
 
 # Interop homeserver image overrides, one `hsname=image` per line. Pre-pull
 # each image into the host daemon Complement deploys from (it will not pull a

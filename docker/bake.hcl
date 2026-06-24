@@ -353,7 +353,6 @@ group "complement" {
         "complement-testee",
         #"complement-tester-valgrind",
         #"complement-testee-valgrind",
-        #"complement-testee-perf",
     ]
 }
 
@@ -389,29 +388,6 @@ target "complement-testee" {
         elem_tag("complement-testee", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
     ]
     target = "complement-testee"
-    output = ["type=docker,compression=zstd,mode=min"]
-    entitlements = ["network.host"]
-    dockerfile = "${docker_dir}/Dockerfile.complement"
-    matrix = cargo_rust_feat_sys
-    inherits = [
-        elem("install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
-    ]
-    contexts = {
-        input = elem("target:install", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
-        complement-tester = elem("target:complement-tester", [sys_name, sys_version, sys_target])
-        complement-config = elem("target:complement-config", [sys_name, sys_version, sys_target])
-    }
-    args = {
-        RUST_BACKTRACE = "full"
-    }
-}
-
-target "complement-testee-perf" {
-    name = elem("complement-testee-perf", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target])
-    tags = [
-        elem_tag("complement-testee-perf", [cargo_profile, rust_toolchain, rust_target, feat_set, sys_name, sys_version, sys_target], "latest"),
-    ]
-    target = "complement-testee-perf"
     output = ["type=docker,compression=zstd,mode=min"]
     entitlements = ["network.host"]
     dockerfile = "${docker_dir}/Dockerfile.complement"

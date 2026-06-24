@@ -615,6 +615,7 @@ jobs:
       output_artifact_prefix: complement_output
       metrics_artifact_prefix: complement_runtime_metrics
       runtime_history: true
+      complement_perf: true
       cargo_profiles: '["bench"]'
       feat_sets: '["logging"]'
       rust_toolchains: '["nightly"]'
