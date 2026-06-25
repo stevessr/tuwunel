@@ -18,6 +18,13 @@ render_over_baseline=1
 # from the homogeneous boards' green check.
 adv_cell="❎"
 
+# Known peer-side false positives, scored orange (accounted-for) not red
+# (regression). These media tests exercise the legacy unauthenticated
+# /_matrix/media/v3 path over federation; the Synapse peer removed it per MSC3916
+# and 404s its own endpoint, while tuwunel serves the authenticated v1 path
+# correctly. The failure is the peer's deprecation, not a tuwunel regression.
+interop_fp_regress="TestMediaFilenames|TestRemotePngThumbnail"
+
 # shellcheck source=./summarise_complement.sh
 . "$(dirname "$0")/summarise_complement.sh"
 

@@ -229,6 +229,15 @@ summarise_main() {
 	nobase=0
 	test -s "$prev" || { regress= progress= nobase=1; }
 
+	# A driver may flag whole test families whose interop failure is a known
+	# peer-side cause, not a tuwunel regression (interop_fp_regress, a '|'-joined
+	# top-level name alternation). Drop their leaves from the red set so they
+	# render as accounted-for (orange) rather than regressions (red). Unset
+	# everywhere but the interop board, where it is a no-op.
+	if test -n "${interop_fp_regress:-}"; then
+		regress=$(printf '%s\n' "$regress" | grep -vE "^(${interop_fp_regress})(\$|/)" || :)
+	fi
+
 	# Flat tally over the leaf set. accept/error/flaky/skip come from the
 	# classified snapshot; advanced/regressed are the diff lists confined to
 	# leaves (a no-op on the boards where every row is already a leaf).
