@@ -18,8 +18,8 @@
 
 ## Counts
 
-- ✅ `yes`: 247
-- 🟨 `partial`: 41
+- ✅ `yes`: 248
+- 🟨 `partial`: 40
 - ❌ `no`: 450
 - ⬛ `n/a`: 286
 
@@ -28,7 +28,7 @@
 | Inv | yes | partial | no | n/a | total |
 |---|---|---|---|---|---|
 | merged | 180 | 11 | 7 | 58 | 256 |
-| open | 59 | 29 | 404 | 176 | 668 |
+| open | 60 | 28 | 404 | 176 | 668 |
 | closed | 8 | 1 | 39 | 52 | 100 |
 
 ## Merged
@@ -555,7 +555,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3901 | ❌ ◐ | 0/0 | Deleting State | meta-MSC of sub-proposals; obsolete-state cleanup not implemented |
 | MSC3896 | ❌ ● | 0/0 | Appservice media | appservice media namespace not implemented |
 | MSC3895 | ❌ ● | 0/0 | Federation API Behaviour of Partial-State Resident Servers | M_UNABLE_DUE_TO_PARTIAL_STATE error code not implemented |
-| MSC3890 | 🟨 ◐ | 0/? | Remotely silence local notifications | complement: 0p/2f |
+| MSC3890 | ✅ ● | 100/100 | Remotely silence local notifications | device removal deletes local_notification_settings via MSC3391 tombstone |
 | MSC3885 | 🟨 ● | 70/80 | Sliding Sync Extension: To-Device | to_device extension uses its own opaque since token in v5 sync |
 | MSC3884 | ✅ ● | 90/100 | Sliding Sync Extension: E2EE | sliding sync e2ee extension implemented |
 | MSC3883 | ❌ ● | 0/0 | Fundamental state changes | draft proposal, no concrete API; would require new room version |
