@@ -21,7 +21,7 @@
 {"Action":"pass","Test":"TestBannedUserCannotSendJoin"}
 {"Action":"skip","Test":"TestCanRegisterAdmin"}
 {"Action":"pass","Test":"TestCannotKickLeftUser"}
-{"Action":"fail","Test":"TestCannotKickNonPresentUser"}
+{"Action":"pass","Test":"TestCannotKickNonPresentUser"}
 {"Action":"pass","Test":"TestCannotSendKnockViaSendKnockInMSC3787Room"}
 {"Action":"pass","Test":"TestCannotSendKnockViaSendKnockInMSC3787Room/event_with_mismatched_state_key"}
 {"Action":"pass","Test":"TestCannotSendKnockViaSendKnockInMSC3787Room/invite_event"}

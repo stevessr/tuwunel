@@ -4,10 +4,10 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 204. Passing: **77.9%**
-  - ✅ `pass`: 159
+- Test groups: 204. Passing: **78.4%**
+  - ✅ `pass`: 160
   - 🟨 `some`: 20
-  - ❌ `fail`: 23
+  - ❌ `fail`: 22
   - ⬛ `skip`: 2
 
 - Subtests: 594. Passing: **76.8%**
@@ -28,7 +28,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestBannedUserCannotSendJoin` | ✅ | – |
 | `TestCanRegisterAdmin` | ⬛ | – |
 | `TestCannotKickLeftUser` | ✅ | – |
-| `TestCannotKickNonPresentUser` | ❌ | – |
+| `TestCannotKickNonPresentUser` | ✅ | – |
 | `TestCannotSendKnockViaSendKnockInMSC3787Room` | ✅ | 6/0/0 |
 | `TestCannotSendNonJoinViaSendJoinV2` | ✅ | 6/0/0 |
 | `TestCannotSendNonKnockViaSendKnock` | ✅ | 6/0/0 |
