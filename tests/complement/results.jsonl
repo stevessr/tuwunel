@@ -155,11 +155,11 @@
 {"Action":"pass","Test":"TestFederationSlidingSyncReInviteAfterLeave/leave_then_reinvite"}
 {"Action":"pass","Test":"TestFederationThumbnail"}
 {"Action":"pass","Test":"TestFetchEvent"}
-{"Action":"fail","Test":"TestFetchEventNonWorldReadable"}
+{"Action":"pass","Test":"TestFetchEventNonWorldReadable"}
 {"Action":"pass","Test":"TestFetchEventWorldReadable"}
-{"Action":"fail","Test":"TestFetchHistoricalInvitedEventFromBeforeInvite"}
+{"Action":"pass","Test":"TestFetchHistoricalInvitedEventFromBeforeInvite"}
 {"Action":"pass","Test":"TestFetchHistoricalInvitedEventFromBetweenInvite"}
-{"Action":"fail","Test":"TestFetchHistoricalJoinedEventDenied"}
+{"Action":"pass","Test":"TestFetchHistoricalJoinedEventDenied"}
 {"Action":"pass","Test":"TestFetchHistoricalSharedEvent"}
 {"Action":"pass","Test":"TestFetchMessagesFromNonExistentRoom"}
 {"Action":"pass","Test":"TestFilter"}

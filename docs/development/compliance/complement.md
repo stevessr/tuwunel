@@ -4,10 +4,10 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 204. Passing: **76.5%**
-  - ✅ `pass`: 156
+- Test groups: 204. Passing: **77.9%**
+  - ✅ `pass`: 159
   - 🟨 `some`: 20
-  - ❌ `fail`: 26
+  - ❌ `fail`: 23
   - ⬛ `skip`: 2
 
 - Subtests: 594. Passing: **76.8%**
@@ -65,11 +65,11 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestFederationSlidingSyncReInviteAfterLeave` | ✅ | 2/0/0 |
 | `TestFederationThumbnail` | ✅ | – |
 | `TestFetchEvent` | ✅ | – |
-| `TestFetchEventNonWorldReadable` | ❌ | – |
+| `TestFetchEventNonWorldReadable` | ✅ | – |
 | `TestFetchEventWorldReadable` | ✅ | – |
-| `TestFetchHistoricalInvitedEventFromBeforeInvite` | ❌ | – |
+| `TestFetchHistoricalInvitedEventFromBeforeInvite` | ✅ | – |
 | `TestFetchHistoricalInvitedEventFromBetweenInvite` | ✅ | – |
-| `TestFetchHistoricalJoinedEventDenied` | ❌ | – |
+| `TestFetchHistoricalJoinedEventDenied` | ✅ | – |
 | `TestFetchHistoricalSharedEvent` | ✅ | – |
 | `TestFetchMessagesFromNonExistentRoom` | ✅ | – |
 | `TestFilter` | ✅ | – |
