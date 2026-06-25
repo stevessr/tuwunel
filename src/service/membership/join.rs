@@ -26,7 +26,7 @@ use ruma::{
 	room::{AllowRule, JoinRule},
 	room_version_rules::RoomVersionRules,
 };
-use serde_json::value::RawValue as RawJsonValue;
+use serde_json::value::{RawValue as RawJsonValue, to_raw_value};
 use tuwunel_core::{
 	Err, Result, at, debug, debug_error, debug_info, debug_warn, err, error, implement, info,
 	matrix::{event::gen_event_id_canonical_json, room_version},
@@ -48,6 +48,7 @@ use crate::{
 };
 
 #[implement(Service)]
+#[expect(clippy::too_many_arguments)]
 #[tracing::instrument(
 	level = "debug",
 	skip_all,
@@ -61,6 +62,7 @@ pub async fn join(
 	reason: Option<String>,
 	servers: &[OwnedServerName],
 	is_appservice: bool,
+	extra_content: Option<CanonicalJsonObject>,
 ) -> Result {
 	let state_lock = self.services.state.mutex.lock(room_id).await;
 
@@ -122,12 +124,12 @@ pub async fn join(
 		|| (servers.len() == 1 && self.services.globals.server_is_ours(&servers[0]));
 
 	if local_join {
-		self.join_local(sender_user, room_id, reason, &servers, state_lock)
+		self.join_local(sender_user, room_id, reason, &servers, state_lock, extra_content)
 			.boxed()
 			.await?;
 	} else {
 		// Ask a remote server if we are not participating in this room
-		self.join_remote(sender_user, room_id, reason, &servers, state_lock)
+		self.join_remote(sender_user, room_id, reason, &servers, state_lock, extra_content)
 			.boxed()
 			.await?;
 	}
@@ -174,6 +176,7 @@ pub async fn join_remote(
 	reason: Option<String>,
 	servers: &[OwnedServerName],
 	state_lock: RoomMutexGuard,
+	extra_content: Option<CanonicalJsonObject>,
 ) -> Result {
 	info!("Joining {room_id} over federation.");
 
@@ -193,6 +196,7 @@ pub async fn join_remote(
 			&room_version_id,
 			&room_version_rules,
 			reason,
+			extra_content,
 		)
 		.await?;
 
@@ -687,6 +691,7 @@ pub async fn join_local(
 	reason: Option<String>,
 	servers: &[OwnedServerName],
 	state_lock: RoomMutexGuard,
+	extra_content: Option<CanonicalJsonObject>,
 ) -> Result {
 	debug_info!("We can join locally");
 
@@ -756,25 +761,30 @@ pub async fn join_local(
 	)
 	.await;
 
-	let content = RoomMemberEventContent {
-		displayname,
-		avatar_url,
-		blurhash,
-		reason: reason.clone(),
-		join_authorized_via_users_server,
-		..RoomMemberEventContent::new(MembershipState::Join)
+	let content = merge_member_content(
+		RoomMemberEventContent {
+			displayname,
+			avatar_url,
+			blurhash,
+			reason: reason.clone(),
+			join_authorized_via_users_server,
+			..RoomMemberEventContent::new(MembershipState::Join)
+		},
+		extra_content.as_ref(),
+	)?;
+
+	let pdu_builder = PduBuilder {
+		event_type: StateEventType::RoomMember.into(),
+		content: to_raw_value(&content).map(Into::into)?,
+		state_key: Some(sender_user.to_string().into()),
+		..Default::default()
 	};
 
 	// Try normal join first
 	let Err(error) = self
 		.services
 		.timeline
-		.build_and_append_pdu(
-			PduBuilder::state(sender_user.to_string(), &content),
-			sender_user,
-			room_id,
-			&state_lock,
-		)
+		.build_and_append_pdu(pdu_builder, sender_user, room_id, &state_lock)
 		.await
 	else {
 		return Ok(());
@@ -813,6 +823,7 @@ pub async fn join_local(
 			&room_version_id,
 			&room_version_rules,
 			reason,
+			extra_content,
 		)
 		.await?;
 
@@ -845,6 +856,7 @@ pub async fn join_local(
 }
 
 #[implement(Service)]
+#[expect(clippy::too_many_arguments)]
 #[tracing::instrument(name = "make_join", level = "debug", skip_all)]
 async fn create_join_event(
 	&self,
@@ -854,6 +866,7 @@ async fn create_join_event(
 	room_version_id: &RoomVersionId,
 	room_version_rules: &RoomVersionRules,
 	reason: Option<String>,
+	extra_content: Option<CanonicalJsonObject>,
 ) -> Result<(CanonicalJsonObject, OwnedEventId, Option<OwnedUserId>)> {
 	let mut event: CanonicalJsonObject =
 		serde_json::from_str(join_event_stub.get()).map_err(|e| {
@@ -879,17 +892,19 @@ async fn create_join_event(
 
 	let (displayname, avatar_url, blurhash) = join3(displayname, avatar_url, blurhash).await;
 
-	event.insert(
-		"content".into(),
-		to_canonical_value(RoomMemberEventContent {
+	let content = merge_member_content(
+		RoomMemberEventContent {
 			displayname,
 			avatar_url,
 			blurhash,
 			reason,
 			join_authorized_via_users_server: join_authorized_via_users_server.clone(),
 			..RoomMemberEventContent::new(MembershipState::Join)
-		})?,
-	);
+		},
+		extra_content.as_ref(),
+	)?;
+
+	event.insert("content".into(), content);
 
 	event.insert(
 		"origin".into(),
@@ -923,6 +938,26 @@ async fn create_join_event(
 	check_rules(&event, &room_version_rules.event_format)?;
 
 	Ok((event, event_id, join_authorized_via_users_server))
+}
+
+// Server-computed membership fields win; client custom keys only fill the gaps.
+fn merge_member_content(
+	content: RoomMemberEventContent,
+	extra_content: Option<&CanonicalJsonObject>,
+) -> Result<CanonicalJsonValue> {
+	let mut content = to_canonical_value(content)?;
+
+	if let (CanonicalJsonValue::Object(content), Some(extra_content)) =
+		(&mut content, extra_content)
+	{
+		for (key, value) in extra_content {
+			content
+				.entry(key.clone())
+				.or_insert_with(|| value.clone());
+		}
+	}
+
+	Ok(content)
 }
 
 #[implement(Service)]

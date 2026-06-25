@@ -647,12 +647,12 @@
 {"Action":"fail","Test":"TestRoomForget/Parallel/Forgotten_room_messages_cannot_be_paginated"}
 {"Action":"fail","Test":"TestRoomForget/Parallel/Leave_for_forgotten_room_shows_up_in_v2_incremental_/sync"}
 {"Action":"pass","Test":"TestRoomImageRoundtrip"}
-{"Action":"fail","Test":"TestRoomMembers"}
-{"Action":"fail","Test":"TestRoomMembers/Parallel"}
+{"Action":"pass","Test":"TestRoomMembers"}
+{"Action":"pass","Test":"TestRoomMembers/Parallel"}
 {"Action":"pass","Test":"TestRoomMembers/Parallel/POST_/join/:room_alias_can_join_a_room"}
-{"Action":"fail","Test":"TestRoomMembers/Parallel/POST_/join/:room_alias_can_join_a_room_with_custom_content"}
+{"Action":"pass","Test":"TestRoomMembers/Parallel/POST_/join/:room_alias_can_join_a_room_with_custom_content"}
 {"Action":"pass","Test":"TestRoomMembers/Parallel/POST_/join/:room_id_can_join_a_room"}
-{"Action":"fail","Test":"TestRoomMembers/Parallel/POST_/join/:room_id_can_join_a_room_with_custom_content"}
+{"Action":"pass","Test":"TestRoomMembers/Parallel/POST_/join/:room_id_can_join_a_room_with_custom_content"}
 {"Action":"pass","Test":"TestRoomMembers/Parallel/POST_/rooms/:room_id/ban_can_ban_a_user"}
 {"Action":"pass","Test":"TestRoomMembers/Parallel/POST_/rooms/:room_id/invite_can_send_an_invite"}
 {"Action":"pass","Test":"TestRoomMembers/Parallel/POST_/rooms/:room_id/join_can_join_a_room"}

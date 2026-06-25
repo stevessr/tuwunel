@@ -149,6 +149,7 @@ pub async fn full_register(
 					Some("Automatically joining this room upon registration".to_owned()),
 					&[],
 					false,
+					None,
 				)
 				.boxed()
 				.await
