@@ -25,13 +25,14 @@ pub(crate) async fn turn_server_route(
 
 	let user = body.sender_user();
 
-	let user_is_guest = services
-		.users
-		.is_deactivated(user)
-		.await
-		.unwrap_or(false);
-
-	if user_is_guest && !services.config.turn_allow_guests {
+	if !services.config.turn_allow_guests
+		&& body.appservice_info.is_none()
+		&& services
+			.users
+			.is_deactivated(user)
+			.await
+			.unwrap_or(false)
+	{
 		return Err!(Request(Forbidden("Guest users are not allowed to get TURN credentials")));
 	}
 
