@@ -4,15 +4,15 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 
 ## Counts
 
-- Test groups: 204. Passing: **79.4%**
-  - ✅ `pass`: 162
-  - 🟨 `some`: 19
-  - ❌ `fail`: 21
+- Test groups: 204. Passing: **80.4%**
+  - ✅ `pass`: 164
+  - 🟨 `some`: 18
+  - ❌ `fail`: 20
   - ⬛ `skip`: 2
 
-- Subtests: 594. Passing: **77.4%**
-  - ✅ `pass`: 460
-  - ❌ `fail`: 121
+- Subtests: 594. Passing: **77.8%**
+  - ✅ `pass`: 462
+  - ❌ `fail`: 119
   - ⬛ `skip`: 13
 
 ## All Top-Level Tests
@@ -50,7 +50,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestDeviceListUpdates` | 🟨 | 8/2/0 |
 | `TestDeviceListsUpdateOverFederation` | 🟨 | 2/1/0 |
 | `TestDeviceListsUpdateOverFederationOnRoomJoin` | ❌ | – |
-| `TestDeviceManagement` | 🟨 | 6/1/0 |
+| `TestDeviceManagement` | ✅ | 7/0/0 |
 | `TestDisplayNameUpdate` | ✅ | – |
 | `TestE2EKeyBackupReplaceRoomKeyRules` | ✅ | 3/0/0 |
 | `TestEvent` | ✅ | 3/0/0 |
@@ -161,7 +161,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestRemotePresence` | ❌ | 0/2/0 |
 | `TestRemoteTyping` | ✅ | – |
 | `TestRemovingAccountData` | ✅ | 4/0/0 |
-| `TestRequestEncodingFails` | ❌ | 0/1/0 |
+| `TestRequestEncodingFails` | ✅ | 1/0/0 |
 | `TestRestrictedRoomsLocalJoin` | ✅ | 5/0/0 |
 | `TestRestrictedRoomsLocalJoinInMSC3787Room` | ✅ | 5/0/0 |
 | `TestRestrictedRoomsLocalJoinNoCreatorsUsesPowerLevelsV11` | ✅ | – |
