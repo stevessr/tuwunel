@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use futures::{Stream, StreamExt, TryFutureExt, future::Either};
+use futures::{Stream, StreamExt, TryFutureExt, future::Either, pin_mut};
 use ruma::{
 	EventId, RoomId, UserId,
 	api::Direction,
@@ -14,6 +14,7 @@ use tuwunel_core::{
 	result::LogErr,
 	trace,
 	utils::{
+		BoolExt,
 		stream::{ReadyExt, TryIgnore, WidebandExt},
 		u64_from_u8,
 	},
@@ -172,32 +173,78 @@ pub fn get_relations<'a>(
 }
 
 /// Fold read-time bundled aggregations into a served event's `unsigned`,
-/// per-requester. Currently the MSC3816 thread-participation correction: the
-/// stored `m.thread` bundle carries a shared `current_user_participated`, so
-/// the flag is recomputed for `sender_user` on the way out. The presence gate
-/// keeps the common no-bundle case to a substring scan; the authoritative check
-/// happens on mutate.
+/// per-requester. MSC3816: the stored `m.thread` bundle carries a shared
+/// `current_user_participated`, recomputed here for `sender_user`. MSC3925:
+/// when `bundle_edit_relations` is enabled, the newest `m.replace` edit is
+/// folded in as the full replacement event. The thread presence gate keeps the
+/// common no-bundle case to a substring scan; the edit fold is skipped unless
+/// enabled.
 #[implement(Service)]
 pub async fn bundle_aggregations(&self, sender_user: &UserId, mut pdu: Pdu) -> Pdu {
 	let has_thread = pdu
 		.unsigned()
 		.is_some_and(|unsigned| unsigned.get().contains("m.thread"));
 
-	if !has_thread {
-		return pdu;
+	if has_thread {
+		let participated = self
+			.services
+			.threads
+			.user_participated(pdu.event_id(), sender_user)
+			.await;
+
+		pdu.set_thread_participated(participated)
+			.log_err()
+			.ok();
 	}
 
-	let participated = self
+	let replacement = self
 		.services
-		.threads
-		.user_participated(pdu.event_id(), sender_user)
-		.await;
+		.server
+		.config
+		.bundle_edit_relations
+		.then_async(|| self.newest_replacement(&pdu))
+		.await
+		.flatten();
 
-	pdu.set_thread_participated(participated)
-		.log_err()
-		.ok();
+	if let Some(replacement) = replacement {
+		pdu.set_replacement_bundle(&replacement.to_format())
+			.log_err()
+			.ok();
+	}
 
 	pdu
+}
+
+/// MSC3925: the newest `m.replace` edit of `parent` as a full event, or `None`
+/// when `parent` is redacted or has no valid edit. An edit counts only when it
+/// shares the parent's sender and type and is not itself redacted; newest is by
+/// stream order, since the relation index is not `origin_server_ts` ordered.
+#[implement(Service)]
+async fn newest_replacement(&self, parent: &Pdu) -> Option<Pdu> {
+	if parent.is_redacted() {
+		return None;
+	}
+
+	let parent_id: PduId = self
+		.services
+		.timeline
+		.get_pdu_id(parent.event_id())
+		.map_ok(Into::into)
+		.await
+		.ok()?;
+
+	let replacements = self
+		.get_relations(parent_id.shortroomid, parent_id.count, None, Direction::Backward, None)
+		.ready_filter(move |(_, child)| {
+			RelationType::Replacement.relation_type_equal(&child)
+				&& !child.is_redacted()
+				&& child.sender() == parent.sender()
+				&& child.kind() == parent.kind()
+		})
+		.map(|(_, child)| child);
+
+	pin_mut!(replacements);
+	replacements.next().await
 }
 
 #[implement(Service)]

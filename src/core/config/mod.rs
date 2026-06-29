@@ -1106,6 +1106,17 @@ pub struct Config {
 	#[serde(default = "default_policy_server_request_timeout")]
 	pub policy_server_request_timeout: u64,
 
+	/// MSC3925: fold the most recent message edit (an `m.replace` relation)
+	/// into `unsigned.m.relations` on a served event as the full replacement
+	/// event, on the client read endpoints. Off by default: without a
+	/// relation-type index the fold walks every child of each served event, so
+	/// it trades read cost for server-authoritative edit summaries.
+	///
+	/// reloadable: yes
+	/// default: false
+	#[serde(default)]
+	pub bundle_edit_relations: bool,
+
 	/// Default room version tuwunel will create rooms with.
 	///
 	/// The default is prescribed by the spec, but may be selected by developer
