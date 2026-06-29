@@ -41,7 +41,7 @@ pub(super) struct Presence {
 impl Presence {
 	pub(super) fn from_json_bytes(bytes: &[u8]) -> Result<Self> {
 		serde_json::from_slice(bytes)
-			.map_err(|_| err!(Database("Invalid presence data in database")))
+			.map_err(|_| err!(Database(error!("Invalid presence data in database"))))
 	}
 }
 
