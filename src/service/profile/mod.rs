@@ -65,6 +65,19 @@ pub async fn update_all_rooms(
 		return;
 	}
 
+	if !profile_values.iter().any(|(name, _)| {
+		matches!(name, ProfileFieldName::DisplayName | ProfileFieldName::AvatarUrl)
+	}) {
+		return;
+	}
+
+	let (current_displayname, current_avatar_url) =
+		if matches!(propagation, Propagation::Unchanged) {
+			join(self.displayname(user_id).ok(), self.avatar_url(user_id).ok()).await
+		} else {
+			(None, None)
+		};
+
 	let rooms: Vec<OwnedRoomId> = self
 		.services
 		.state_cache
@@ -78,7 +91,14 @@ pub async fn update_all_rooms(
 		.stream()
 		.for_each_concurrent(automatic_width(), async |room_id| {
 			if let Err(e) = self
-				.update_room(user_id, room_id, profile_values, propagation)
+				.update_room(
+					user_id,
+					room_id,
+					profile_values,
+					propagation,
+					current_displayname.as_deref(),
+					current_avatar_url.as_deref(),
+				)
 				.await
 			{
 				warn!(
@@ -99,6 +119,8 @@ async fn update_room(
 	room_id: &RoomId,
 	profile_values: &[(ProfileFieldName, Option<Value>)],
 	propagation: Propagation,
+	current_displayname: Option<&str>,
+	current_avatar_url: Option<&MxcUri>,
 ) -> Result {
 	let unchanged = match propagation {
 		| Propagation::All => false,
@@ -121,12 +143,8 @@ async fn update_room(
 	for (name, value) in profile_values {
 		match name {
 			| ProfileFieldName::DisplayName => {
-				if unchanged {
-					let current_displayname = self.displayname(user_id).ok().await;
-
-					if content.displayname != current_displayname {
-						continue;
-					}
+				if unchanged && content.displayname.as_deref() != current_displayname {
+					continue;
 				}
 
 				let displayname = value.clone().map(|value| {
@@ -138,12 +156,8 @@ async fn update_room(
 				changed = true;
 			},
 			| ProfileFieldName::AvatarUrl => {
-				if unchanged {
-					let current_avatar_url = self.avatar_url(user_id).ok().await;
-
-					if content.avatar_url != current_avatar_url {
-						continue;
-					}
+				if unchanged && content.avatar_url.as_deref() != current_avatar_url {
+					continue;
 				}
 
 				let avatar_url = value.clone().map(|value| {
@@ -326,12 +340,7 @@ pub async fn set_profile_keys(
 		},
 	);
 
-	if !matches!(propagation, Propagation::None) {
-		assert!(
-			self.services.globals.user_is_local(user_id),
-			"propagation requested for remote user"
-		);
-
+	if !matches!(propagation, Propagation::None) && self.services.globals.user_is_local(user_id) {
 		self.update_all_rooms(user_id, profile_values, propagation)
 			.await;
 	}
