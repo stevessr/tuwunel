@@ -10,9 +10,9 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
   - ❌ `fail`: 20
   - ⬛ `skip`: 2
 
-- Subtests: 594. Passing: **77.8%**
-  - ✅ `pass`: 462
-  - ❌ `fail`: 119
+- Subtests: 594. Passing: **77.9%**
+  - ✅ `pass`: 463
+  - ❌ `fail`: 118
   - ⬛ `skip`: 13
 
 ## All Top-Level Tests
@@ -177,7 +177,7 @@ Tuwunel runs the [Complement](https://github.com/matrix-org/complement) Matrix h
 | `TestRoomCreate` | ✅ | 15/0/0 |
 | `TestRoomCreationReportsEventsToMyself` | 🟨 | 4/2/0 |
 | `TestRoomDeleteAlias` | 🟨 | 7/2/0 |
-| `TestRoomForget` | 🟨 | 5/3/0 |
+| `TestRoomForget` | 🟨 | 6/2/0 |
 | `TestRoomImageRoundtrip` | ✅ | – |
 | `TestRoomMembers` | ✅ | 10/0/0 |
 | `TestRoomMessagesLazyLoading` | ✅ | – |
