@@ -811,9 +811,10 @@ impl Service {
 			.get_registration(&id)
 			.await
 		else {
+			//TODO: appservice queue cleanup.
 			return Err((
 				Destination::Appservice(id.clone()),
-				err!(Database(warn!(?id, "Missing appservice registration"))),
+				err!(Database(debug_warn!(?id, "Missing appservice registration"))),
 			));
 		};
 
