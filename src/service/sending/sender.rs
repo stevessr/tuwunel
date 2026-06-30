@@ -326,7 +326,6 @@ impl Service {
 			return Ok(None);
 		}
 
-		let _cork = self.db.db.cork();
 		let mut events = Vec::new();
 
 		// Must retry any previous transaction for this remote.
