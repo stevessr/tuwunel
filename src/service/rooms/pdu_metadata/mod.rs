@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures::{Stream, StreamExt, TryFutureExt, future::Either, pin_mut};
 use ruma::{
-	CanonicalJsonObject, CanonicalJsonValue, EventId, RoomId, UserId,
+	CanonicalJsonObject, CanonicalJsonValue, EventId, OwnedEventId, RoomId, UserId,
 	api::Direction,
 	events::{reaction::ReactionEventContent, relation::RelationType, room::encrypted::Relation},
 };
@@ -66,6 +66,9 @@ const TYPED_KEY_LEN: usize = TYPED_PREFIX_LEN + size_of::<u64>() * 2;
 
 /// `relatesto_typed` key: byte offset of the child `PduCount` (the key tail).
 const TYPED_CHILD_COUNT_OFFSET: usize = TYPED_KEY_LEN - size_of::<u64>();
+
+/// Cap on the `m.reference` bundle chunk; /relations is the paginated fallback.
+const REFERENCE_BUNDLE_MAX: usize = 100;
 
 #[derive(Deserialize)]
 struct ExtractRelatesTo {
@@ -256,9 +259,11 @@ pub fn get_relations<'a>(
 /// per-requester. MSC3816: the stored `m.thread` bundle carries a shared
 /// `current_user_participated`, recomputed here for `sender_user`. MSC3925:
 /// when `bundle_edit_relations` is enabled, the newest `m.replace` edit is
-/// folded in as the full replacement event. The thread presence gate keeps the
-/// common no-bundle case to a substring scan; the edit fold is skipped unless
-/// enabled.
+/// folded in as the full replacement event. MSC3267: when
+/// `bundle_reference_relations` is enabled, the `m.reference` children are
+/// folded in as a `{ chunk: [{ event_id }] }` summary. The thread presence gate
+/// keeps the common no-bundle case to a substring scan; the edit and reference
+/// folds are skipped unless enabled.
 #[implement(Service)]
 pub async fn bundle_aggregations(&self, sender_user: &UserId, mut pdu: Pdu) -> Pdu {
 	let has_thread = pdu
@@ -288,6 +293,21 @@ pub async fn bundle_aggregations(&self, sender_user: &UserId, mut pdu: Pdu) -> P
 
 	if let Some(replacement) = replacement {
 		pdu.set_replacement_bundle(&replacement.to_format())
+			.log_err()
+			.ok();
+	}
+
+	let references = self
+		.services
+		.server
+		.config
+		.bundle_reference_relations
+		.then_async(|| self.references(&pdu))
+		.await
+		.unwrap_or_default();
+
+	if !references.is_empty() {
+		pdu.set_reference_bundle(&references)
 			.log_err()
 			.ok();
 	}
@@ -353,6 +373,63 @@ fn replacement_children<'a>(
 				.filter(|child| !child.is_redacted())
 				.filter(|child| child.sender() == parent.sender())
 				.filter(|child| child.kind() == parent.kind())
+		})
+}
+
+/// MSC2675/MSC3267: the event ids of `parent`'s `m.reference` children, oldest
+/// first, from the typed index, capped at `REFERENCE_BUNDLE_MAX`. Empty when
+/// `parent` is redacted or unreferenced. The ids come from the index value (the
+/// child shorteventid) without loading the children, so the chunk is filtered
+/// for neither ignored users nor history visibility. The ignored-user posture
+/// matches the /relations endpoint, which also does not filter relation
+/// children by ignored sender; the history-visibility posture matches the
+/// thread and edit bundles and is less strict than /relations, which does
+/// filter children by visibility.
+#[implement(Service)]
+async fn references(&self, parent: &Pdu) -> Vec<OwnedEventId> {
+	if parent.is_redacted() {
+		return Vec::new();
+	}
+
+	let Ok(parent_id) = self
+		.services
+		.timeline
+		.get_pdu_id(parent.event_id())
+		.map_ok(PduId::from)
+		.await
+	else {
+		return Vec::new();
+	};
+
+	self.referenced_children(parent_id)
+		.take(REFERENCE_BUNDLE_MAX)
+		.collect()
+		.await
+}
+
+/// Stream the event ids of `parent_id`'s `m.reference` children, oldest first,
+/// from the typed index, resolving each row value (the child shorteventid) to
+/// an event id with no PDU load.
+#[implement(Service)]
+fn referenced_children<'a>(
+	&'a self,
+	parent_id: PduId,
+) -> impl Stream<Item = OwnedEventId> + Send + 'a {
+	let prefix = typed_relation_prefix(parent_id.shortroomid, parent_id.count, RelTag::Reference);
+	let seek = prefix.clone();
+
+	self.db
+		.relatesto_typed
+		.raw_stream_from(seek.as_slice())
+		.ignore_err()
+		.ready_take_while(move |(key, _)| key.starts_with(&prefix))
+		.map(|(_, val)| u64_from_u8(val))
+		.wide_filter_map(async |short| {
+			self.services
+				.short
+				.get_eventid_from_short(short)
+				.await
+				.ok()
 		})
 }
 

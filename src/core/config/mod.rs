@@ -1117,6 +1117,18 @@ pub struct Config {
 	#[serde(default)]
 	pub bundle_edit_relations: bool,
 
+	/// MSC2675/MSC3267: fold reference relations (`m.reference`) into
+	/// `unsigned.m.relations` on a served event as `{ chunk: [{ event_id },
+	/// ...] }`, on the client read endpoints. Off by default: no surveyed
+	/// client renders reference bundles (references are plumbing for polls,
+	/// beacons, and verification, which clients resolve directly), so most
+	/// deployments gain nothing from the added read-time cost.
+	///
+	/// reloadable: yes
+	/// default: false
+	#[serde(default)]
+	pub bundle_reference_relations: bool,
+
 	/// Default room version tuwunel will create rooms with.
 	///
 	/// The default is prescribed by the spec, but may be selected by developer

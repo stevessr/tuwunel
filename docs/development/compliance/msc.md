@@ -138,7 +138,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC3316 | ✅ ● | 100/100 | Proposal to add timestamp massaging to the spec | appservice ts honored on /send and /state |
 | MSC3289 | ✅ ● | 100/100 | Room Version 8 | room v8 listed stable; restricted join rule auth implemented |
 | MSC3283 | ✅ ● | 100/100 | Expose enable_set_displayname, enable_set_avatar_url and enable_3pid_changes ... | src/api/client/capabilities.rs explicitly emits m.set_displayname, m.set_avat... |
-| MSC3267 | 🟨 ◐ | 50/50 | reference relationships | reference relations queryable via /relations; no m.relations bundling |
+| MSC3267 | 🟨 ◐ | 75/85 | reference relationships | m.reference bundle added; gated default-off; no ignore/visibility filter |
 | MSC3266 | ✅ ● | 100/100 | Room Summary API | summary endpoint routed at unstable and (via Ruma) stable paths |
 | MSC3231 | ✅ ● | 100/100 | Token Authenticated Registration | registration token UIA + validity endpoint implemented |
 | MSC3173 | ✅ ● | 100/100 | Expose stripped state events to any potential joiner | summary_stripped includes recommended events incl create |
@@ -167,7 +167,7 @@ in the [Out of scope](#out-of-scope) section.
 | MSC2689 | ✅ ◐ | 100/100 | Allow guests to operate in encrypted rooms | Auth treats guests like users; /members open |
 | MSC2677 | ✅ ● | 80/90 | Annotations and Reactions | Duplicate annotation rejected; reactions plumbed |
 | MSC2676 | 🟨 ● | 50/60 | Message editing | edits accepted/relayed; no m.replace bundle or new_content apply |
-| MSC2675 | 🟨 ● | 50/60 | Serverside aggregations of message relationships | /relations exists; only m.thread bundling, no m.replace bundle |
+| MSC2675 | 🟨 ◐ | 70/80 | Serverside aggregations of message relationships | thread+edit+reference bundled (edit/ref gated); reactions unbundled |
 | MSC2674 | ✅ ● | 90/100 | Event relationships | relates_to handled in append; rel_type tracked |
 | MSC2666 | ✅ ● | 100/100 | Get rooms in common with another user | v1 stable path + count + cursor pagination; self-query/non-compliant 400 |
 | MSC2663 | ✅ ● | 100/100 | Errors for dealing with non-existent push rules | src/api/client/push.rs all 7 endpoints return NotFound |
@@ -246,12 +246,12 @@ for spec compliance.
 | MSC | Status | Correct/Impl | Title | Note |
 |---|---|---:|---|---|
 | MSC3925 | 🟨 ◐ | 85/85 | m.replace aggregation with full event | Full m.replace bundle; gated default-off; typed index, ts-ordered selection |
+| MSC3267 | 🟨 ◐ | 75/85 | reference relationships | m.reference bundle added; gated default-off; no ignore/visibility filter |
 | MSC3440 | 🟨 ● | 75/75 | MSC3440 Threading via `m.thread` relation | [→ MSC3856] bundle now per-requester + full latest_event; related_by_* filter... |
 | MSC2409 | 🟨 ● | 70/70 | Proposal to send typing, presence and receipts to appservices | typing+receipt EDUs sent to AS; presence not forwarded |
+| MSC2675 | 🟨 ◐ | 70/80 | Serverside aggregations of message relationships | thread+edit+reference bundled (edit/ref gated); reactions unbundled |
 | MSC3860 | 🟨 ◐ | 70/70 | Media Download Redirects | Emits 307 to presigned object-store URL on allow_redirect; default-off gate |
-| MSC2675 | 🟨 ● | 50/60 | Serverside aggregations of message relationships | /relations exists; only m.thread bundling, no m.replace bundle |
 | MSC2676 | 🟨 ● | 50/60 | Message editing | edits accepted/relayed; no m.replace bundle or new_content apply |
-| MSC3267 | 🟨 ◐ | 50/50 | reference relationships | reference relations queryable via /relations; no m.relations bundling |
 | MSC4025 | 🟨 ● | 50/50 | Local user erasure requests | phase A landed (account-data wipe); phase B (per-event visibility gate) deferred |
 | MSC3856 | 🟨 ◐ | 40/60 | Threads List API | GET /threads route present but participated filter and latest-event order mis... |
 | MSC3666 | 🟨 ● | 30/30 | Bundled aggregations for server side search | thread bundle on result events (per-requester); context events not bundled |
