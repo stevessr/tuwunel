@@ -163,6 +163,7 @@ async fn fresh(services: &Services) -> Result {
 	db["global"].insert(b"upgrade_legacy_mediaid_user", []);
 	db["global"].insert(b"remove_remote_media_userid", []);
 	db["global"].insert(b"rebuild_roomid_tscount_pducount", []);
+	db["global"].insert(b"rebuild_relatesto_typed", []);
 	db["global"].insert(b"migrate_profile_keys_to_useridprofilekey", []);
 
 	// Create the admin room and server user on first run
@@ -274,6 +275,19 @@ async fn migrate(services: &Services, foreign_lineage: bool) -> Result {
 		.is_not_found()
 	{
 		rebuild_roomid_tscount_pducount(services).await?;
+	}
+
+	if db["global"]
+		.get(b"rebuild_relatesto_typed")
+		.await
+		.is_not_found()
+	{
+		services
+			.pdu_metadata
+			.rebuild_typed_relations()
+			.await?;
+
+		db["global"].insert(b"rebuild_relatesto_typed", []);
 	}
 
 	if db["global"]

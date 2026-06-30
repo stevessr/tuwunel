@@ -1108,9 +1108,9 @@ pub struct Config {
 
 	/// MSC3925: fold the most recent message edit (an `m.replace` relation)
 	/// into `unsigned.m.relations` on a served event as the full replacement
-	/// event, on the client read endpoints. Off by default: without a
-	/// relation-type index the fold walks every child of each served event, so
-	/// it trades read cost for server-authoritative edit summaries.
+	/// event, on the client read endpoints. Off by default: it adds a typed
+	/// index seek per served event and a server-authoritative edit summary that
+	/// most clients reconstruct locally anyway, so it is opt-in.
 	///
 	/// reloadable: yes
 	/// default: false

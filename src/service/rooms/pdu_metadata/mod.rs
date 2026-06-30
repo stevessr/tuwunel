@@ -2,10 +2,11 @@ use std::sync::Arc;
 
 use futures::{Stream, StreamExt, TryFutureExt, future::Either, pin_mut};
 use ruma::{
-	EventId, RoomId, UserId,
+	CanonicalJsonObject, CanonicalJsonValue, EventId, RoomId, UserId,
 	api::Direction,
-	events::{reaction::ReactionEventContent, relation::RelationType},
+	events::{reaction::ReactionEventContent, relation::RelationType, room::encrypted::Relation},
 };
+use serde::Deserialize;
 use tuwunel_core::{
 	PduId, Result,
 	arrayvec::ArrayVec,
@@ -15,13 +16,16 @@ use tuwunel_core::{
 	trace,
 	utils::{
 		BoolExt,
-		stream::{ReadyExt, TryIgnore, WidebandExt},
+		stream::{ReadyExt, TryIgnore, WidebandExt, automatic_width},
 		u64_from_u8,
 	},
 };
 use tuwunel_database::{Interfix, Map};
 
 use crate::rooms::short::ShortRoomId;
+
+#[cfg(test)]
+mod tests;
 
 pub struct Service {
 	services: Arc<crate::services::OnceServices>,
@@ -30,8 +34,43 @@ pub struct Service {
 
 struct Data {
 	tofrom_relation: Arc<Map>,
+	relatesto_typed: Arc<Map>,
 	referencedevents: Arc<Map>,
 	softfailedeventids: Arc<Map>,
+}
+
+/// `relatesto_typed` rel_type discriminant, occupying one key byte between the
+/// parent `RawPduId` and the child's ts. Stable on-disk format; the explicit
+/// discriminants are permanent and must stay distinct.
+#[derive(Clone, Copy)]
+enum RelTag {
+	Replace = 0x01,
+	Reference = 0x02,
+}
+
+impl From<RelTag> for u8 {
+	#[inline]
+	fn from(tag: RelTag) -> Self {
+		match tag {
+			| RelTag::Replace => 0x01,
+			| RelTag::Reference => 0x02,
+		}
+	}
+}
+
+/// `relatesto_typed` seek prefix: `shortroomid || parent_count || tag`.
+const TYPED_PREFIX_LEN: usize = size_of::<u64>() * 2 + size_of::<u8>();
+
+/// `relatesto_typed` key: the prefix followed by `child_ts || child_count`.
+const TYPED_KEY_LEN: usize = TYPED_PREFIX_LEN + size_of::<u64>() * 2;
+
+/// `relatesto_typed` key: byte offset of the child `PduCount` (the key tail).
+const TYPED_CHILD_COUNT_OFFSET: usize = TYPED_KEY_LEN - size_of::<u64>();
+
+#[derive(Deserialize)]
+struct ExtractRelatesTo {
+	#[serde(rename = "m.relates_to")]
+	relates_to: Relation,
 }
 
 impl crate::Service for Service {
@@ -40,6 +79,7 @@ impl crate::Service for Service {
 			services: args.services.clone(),
 			db: Data {
 				tofrom_relation: args.db["tofrom_relation"].clone(),
+				relatesto_typed: args.db["relatesto_typed"].clone(),
 				referencedevents: args.db["referencedevents"].clone(),
 				softfailedeventids: args.db["softfailedeventids"].clone(),
 			},
@@ -63,6 +103,46 @@ pub fn add_relation(&self, from: PduCount, to: PduCount) {
 		},
 		| _ => {}, // TODO: Relations with backfilled pdus
 	}
+}
+
+/// Maintain the `rel_type`-aware relation index for an `m.replace` or
+/// `m.reference` child of `parent`. The row is keyed by the parent so a serve
+/// of `parent` seeks its newest edit (or its references) without loading
+/// non-matching children. Indexed unconditionally; only the read fold is gated.
+#[implement(Service)]
+#[tracing::instrument(skip(self, child), level = "debug")]
+pub async fn add_typed_relation<E: Event>(
+	&self,
+	shortroomid: ShortRoomId,
+	child_count: PduCount,
+	parent: &EventId,
+	child: &E,
+	rel_type: RelationType,
+) {
+	let Some(tag) = rel_type_tag(&rel_type) else {
+		return;
+	};
+
+	let Ok(parent_count) = self.services.timeline.get_pdu_count(parent).await else {
+		return;
+	};
+
+	let (PduCount::Normal(_), PduCount::Normal(_)) = (parent_count, child_count) else {
+		return; // backfilled relations are not indexed
+	};
+
+	let child_short = self
+		.services
+		.short
+		.get_or_create_shorteventid(child.event_id())
+		.await;
+
+	let child_ts = u64::from(child.origin_server_ts().get());
+	let key = typed_relation_key(shortroomid, parent_count, tag, child_ts, child_count);
+
+	self.db
+		.relatesto_typed
+		.aput_raw::<TYPED_KEY_LEN, _, _>(key.as_slice(), child_short.to_be_bytes());
 }
 
 /// Query relations of an event to determine if matching any of the trailing
@@ -218,7 +298,7 @@ pub async fn bundle_aggregations(&self, sender_user: &UserId, mut pdu: Pdu) -> P
 /// MSC3925: the newest `m.replace` edit of `parent` as a full event, or `None`
 /// when `parent` is redacted or has no valid edit. An edit counts only when it
 /// shares the parent's sender and type and is not itself redacted; newest is by
-/// stream order, since the relation index is not `origin_server_ts` ordered.
+/// `origin_server_ts`, which the typed index sorts on.
 #[implement(Service)]
 async fn newest_replacement(&self, parent: &Pdu) -> Option<Pdu> {
 	if parent.is_redacted() {
@@ -233,18 +313,47 @@ async fn newest_replacement(&self, parent: &Pdu) -> Option<Pdu> {
 		.await
 		.ok()?;
 
-	let replacements = self
-		.get_relations(parent_id.shortroomid, parent_id.count, None, Direction::Backward, None)
-		.ready_filter(move |(_, child)| {
-			RelationType::Replacement.relation_type_equal(&child)
-				&& !child.is_redacted()
-				&& child.sender() == parent.sender()
-				&& child.kind() == parent.kind()
-		})
-		.map(|(_, child)| child);
+	let replacements = self.replacement_children(parent, parent_id);
 
 	pin_mut!(replacements);
 	replacements.next().await
+}
+
+/// Stream `parent`'s valid `m.replace` children, newest `origin_server_ts`
+/// first, from the typed index. A child counts only when it shares the parent's
+/// sender and type and is not itself redacted.
+#[implement(Service)]
+fn replacement_children<'a>(
+	&'a self,
+	parent: &'a Pdu,
+	parent_id: PduId,
+) -> impl Stream<Item = Pdu> + Send + 'a {
+	let shortroomid = parent_id.shortroomid;
+	let prefix = typed_relation_prefix(shortroomid, parent_id.count, RelTag::Replace);
+
+	let mut seek = ArrayVec::<u8, TYPED_KEY_LEN>::new();
+	seek.extend(prefix.iter().copied());
+	seek.extend([u8::MAX; size_of::<u64>() * 2]);
+
+	self.db
+		.relatesto_typed
+		.rev_raw_keys_from(seek.as_slice())
+		.ignore_err()
+		.ready_take_while(move |key| key.starts_with(&prefix))
+		.map(|key| u64_from_u8(&key[TYPED_CHILD_COUNT_OFFSET..TYPED_KEY_LEN]))
+		.map(PduCount::from_unsigned)
+		.map(move |count| (shortroomid, count))
+		.filter_map(async |(shortroomid, count)| {
+			let child_id: RawPduId = PduId { shortroomid, count }.into();
+			self.services
+				.timeline
+				.get_pdu_from_id(&child_id)
+				.await
+				.ok()
+				.filter(|child| !child.is_redacted())
+				.filter(|child| child.sender() == parent.sender())
+				.filter(|child| child.kind() == parent.kind())
+		})
 }
 
 #[implement(Service)]
@@ -298,4 +407,165 @@ pub async fn delete_all_referenced_for_room(&self, room_id: &RoomId) -> Result {
 		.await;
 
 	Ok(())
+}
+
+/// Remove the `relatesto_typed` row for a redacted `m.replace` or `m.reference`
+/// child. Storage hygiene for edits; correctness-critical for references, whose
+/// read emits from the index value without loading the child. Call before the
+/// child's content is stripped, while its relation fields are still readable.
+#[implement(Service)]
+#[tracing::instrument(skip_all, level = "debug")]
+pub async fn delete_typed_relation(&self, child_id: &RawPduId, child: &CanonicalJsonObject) {
+	let Some(relates_to) = child
+		.get("content")
+		.and_then(CanonicalJsonValue::as_object)
+		.and_then(|content| content.get("m.relates_to"))
+		.and_then(CanonicalJsonValue::as_object)
+	else {
+		return;
+	};
+
+	let tag = match relates_to
+		.get("rel_type")
+		.and_then(CanonicalJsonValue::as_str)
+	{
+		| Some("m.replace") => RelTag::Replace,
+		| Some("m.reference") => RelTag::Reference,
+		| _ => return,
+	};
+
+	let Some(parent) = relates_to
+		.get("event_id")
+		.and_then(CanonicalJsonValue::as_str)
+		.and_then(|parent| EventId::parse(parent).ok())
+	else {
+		return;
+	};
+
+	let Some(child_ts) = child
+		.get("origin_server_ts")
+		.and_then(CanonicalJsonValue::as_integer)
+		.and_then(|ts| u64::try_from(i64::from(ts)).ok())
+	else {
+		return;
+	};
+
+	let child_count = child_id.pdu_count();
+	let shortroomid = u64_from_u8(&child_id.shortroomid());
+
+	let Ok(parent_count) = self
+		.services
+		.timeline
+		.get_pdu_count(&parent)
+		.await
+	else {
+		return;
+	};
+
+	let (PduCount::Normal(_), PduCount::Normal(_)) = (parent_count, child_count) else {
+		return;
+	};
+
+	let key = typed_relation_key(shortroomid, parent_count, tag, child_ts, child_count);
+
+	self.db.relatesto_typed.remove(key.as_slice());
+}
+
+#[implement(Service)]
+#[tracing::instrument(skip(self), level = "debug")]
+pub async fn delete_all_relatesto_typed_for_room(&self, room_id: &RoomId) -> Result {
+	let Ok(shortroomid) = self.services.short.get_shortroomid(room_id).await else {
+		return Ok(());
+	};
+
+	self.db
+		.relatesto_typed
+		.keys_prefix_raw(&shortroomid)
+		.ignore_err()
+		.ready_for_each(|key| {
+			self.db.relatesto_typed.remove(key);
+		})
+		.await;
+
+	Ok(())
+}
+
+/// Rebuild `relatesto_typed` from every stored PDU. Run once at startup behind
+/// a `global` marker, and on demand from the admin command. Clears first so a
+/// partial or stale index is replaced wholesale.
+#[implement(Service)]
+pub async fn rebuild_typed_relations(&self) -> Result {
+	self.db.relatesto_typed.clear().await;
+
+	let pduid_pdu = self.services.db["pduid_pdu"].clone();
+
+	pduid_pdu
+		.raw_stream()
+		.ignore_err()
+		.ready_filter_map(|(key, value)| {
+			let pdu_id = RawPduId::from(key);
+			let pdu = serde_json::from_slice::<Pdu>(value).ok()?;
+
+			Some((pdu_id, pdu))
+		})
+		.for_each_concurrent(automatic_width(), async |(pdu_id, pdu)| {
+			self.index_pdu_relations(pdu_id, &pdu).await;
+		})
+		.await;
+
+	Ok(())
+}
+
+#[implement(Service)]
+async fn index_pdu_relations(&self, pdu_id: RawPduId, pdu: &Pdu) {
+	let Ok(content) = pdu.get_content::<ExtractRelatesTo>() else {
+		return;
+	};
+
+	let (rel_type, parent) = match content.relates_to {
+		| Relation::Replacement(replacement) => (RelationType::Replacement, replacement.event_id),
+		| Relation::Reference(reference) => (RelationType::Reference, reference.event_id),
+		| _ => return,
+	};
+
+	let shortroomid = u64_from_u8(&pdu_id.shortroomid());
+
+	self.add_typed_relation(shortroomid, pdu_id.pdu_count(), &parent, pdu, rel_type)
+		.await;
+}
+
+fn rel_type_tag(rel_type: &RelationType) -> Option<RelTag> {
+	match rel_type {
+		| RelationType::Replacement => Some(RelTag::Replace),
+		| RelationType::Reference => Some(RelTag::Reference),
+		| _ => None,
+	}
+}
+
+fn typed_relation_prefix(
+	shortroomid: ShortRoomId,
+	parent: PduCount,
+	tag: RelTag,
+) -> ArrayVec<u8, TYPED_PREFIX_LEN> {
+	let mut buf = ArrayVec::new();
+	buf.extend(shortroomid.to_be_bytes());
+	buf.extend(parent.to_be_bytes());
+	buf.push(u8::from(tag));
+	buf
+}
+
+fn typed_relation_key(
+	shortroomid: ShortRoomId,
+	parent: PduCount,
+	tag: RelTag,
+	child_ts: u64,
+	child: PduCount,
+) -> ArrayVec<u8, TYPED_KEY_LEN> {
+	let mut buf = ArrayVec::new();
+	buf.extend(shortroomid.to_be_bytes());
+	buf.extend(parent.to_be_bytes());
+	buf.push(u8::from(tag));
+	buf.extend(child_ts.to_be_bytes());
+	buf.extend(child.to_be_bytes());
+	buf
 }
