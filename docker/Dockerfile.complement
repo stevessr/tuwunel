@@ -117,7 +117,7 @@ ENV TUWUNEL_RUNTIME_USAGE_DIR="/var/log/tuwunel/metrics"
 
 
 FROM complement-testee-base AS complement-testee
-ARG sched_policy="--rr"
+ARG sched_policy=""
 ARG sched_prio=1
 ENV sched_policy=${sched_policy}
 ENV sched_prio=${sched_prio}
@@ -135,7 +135,7 @@ ENTRYPOINT exec /complement/provision_complement.sh /complement/perf_wrap.sh \
 
 FROM complement-testee-base AS complement-testee-valgrind
 ARG db_pool_max_workers=128
-ARG sched_policy="--rr"
+ARG sched_policy=""
 ARG sched_prio=1
 ENV sched_policy=${sched_policy}
 ENV sched_prio=${sched_prio}
