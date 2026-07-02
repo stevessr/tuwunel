@@ -106,7 +106,7 @@ EOF
 
 FROM input AS complement-testee-base
 EXPOSE 8008 8448
-RUN mkdir -p /database /var/log/tuwunel/metrics
+RUN mkdir -p /database /var/log/tuwunel/metrics /complement/appservice
 COPY --from=complement-config * /complement/
 COPY docker/lib/provision_complement.sh /complement/provision_complement.sh
 RUN chmod a+x /complement/provision_complement.sh
