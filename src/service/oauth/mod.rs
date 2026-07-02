@@ -22,7 +22,7 @@ use ruma::{
 	UserId,
 	api::error::{ErrorKind, LimitExceededErrorData},
 };
-use serde::Serialize;
+use serde::{Deserialize as _, Serialize};
 use serde_json::Value as JsonValue;
 use tuwunel_core::{
 	Err, Error, Result, err, implement,
@@ -353,7 +353,11 @@ where
 	let http_response = request.send().await?.error_for_status()?;
 
 	let body = read_response_capped(http_response, limit).await?;
-	let response: JsonValue = serde_json::from_slice(&body)?;
+	let response: JsonValue = {
+		let mut de = serde_json::Deserializer::from_slice(&body);
+		de.deny_duplicate_field(false);
+		serde_json::Value::deserialize(&mut de)?
+	};
 
 	if let Some(response) = response.as_object().as_ref()
 		&& let Some(error) = response.get("error").and_then(JsonValue::as_str)
