@@ -84,23 +84,18 @@ jobs:
           fi
 
           TARGET="${{matrix.target}}"
-          RUSTFLAGS="${RUSTFLAGS:-}"
 
-          # x86_64_v3: use x86-64-v3 CPU level with base x86_64 target
+          # x86_64_v3: use x86-64-v3 CPU level only for the final binary,
+          #            not for build scripts / dependencies (avoids zstd-sys crashes)
           if [[ "$TARGET" == x86_64_v3-* ]]; then
-            RUSTFLAGS="-C target-cpu=x86-64-v3 $RUSTFLAGS"
             BUILD_TARGET="x86_64-unknown-linux-gnu"
-          else
-            BUILD_TARGET="$TARGET"
-          fi
-
-          export RUSTFLAGS
-
-          if [ "$BUILD_TARGET" = "aarch64-unknown-linux-gnu" ]; then
+            cargo rustc $PROFILE_FLAG --target "$BUILD_TARGET" \
+              -p tuwunel -- -C target-cpu=x86-64-v3
+          elif [ "$TARGET" = "aarch64-unknown-linux-gnu" ]; then
             cargo install cross 2>/dev/null || true
-            cross build $PROFILE_FLAG --target "$BUILD_TARGET"
+            cross build $PROFILE_FLAG --target "$TARGET"
           else
-            cargo build $PROFILE_FLAG --target "$BUILD_TARGET"
+            cargo build $PROFILE_FLAG --target "$TARGET"
           fi
 
       - name: Build .deb package
