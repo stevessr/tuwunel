@@ -298,7 +298,10 @@ fn register_oidc_routes(router: Router<State>) -> Router<State> {
 			"/_tuwunel/oidc/account_callback",
 			get(oidc::get_account_callback_route).post(oidc::post_account_callback_route),
 		)
-		.route("/_tuwunel/oidc/account", get(oidc::get_account_route))
+		.route(
+			"/_tuwunel/oidc/account",
+			get(oidc::get_account_route).post(oidc::post_account_login_route),
+		)
 		.route("/_matrix/client/v1/auth_issuer", get(oidc::auth_issuer_route))
 		.route("/_matrix/client/v1/auth_metadata", get(oidc::openid_configuration_route))
 		.route(

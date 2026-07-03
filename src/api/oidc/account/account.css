@@ -50,7 +50,8 @@ label {
 	margin: .8em 0 .2em
 }
 
-input[type=text] {
+input[type=text],
+input[type=password] {
 	width: 100%;
 	padding: .4em;
 	border: 1px solid #ccc;

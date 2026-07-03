@@ -2,6 +2,7 @@
 mod tests;
 
 mod account_deactivate;
+mod account_login;
 mod cross_signing_reset;
 mod profile;
 mod profile_saved;
@@ -18,16 +19,20 @@ use http::{
 	HeaderValue, Method, StatusCode,
 	header::{CACHE_CONTROL, CONTENT_SECURITY_POLICY, CONTENT_TYPE, REFERRER_POLICY},
 };
-use ruma::OwnedDeviceId;
+use ruma::{OwnedDeviceId, OwnedRoomId, UserId};
 use tuwunel_core::{
 	Err, Error, Result, err,
-	utils::{BoolExt, html::escape as html_escape},
+	utils::{BoolExt, hash, html::escape as html_escape, random_string},
+};
+use tuwunel_service::{
+	Services, users::{PASSWORD_SENTINEL, propagation_default},
 };
 use tuwunel_service::Services;
 use url::Url;
 
 use self::{
 	account_deactivate::{account_deactivate_confirm_html, account_deactivate_execute_html},
+	account_login::{LoginForm, account_login_page_html, password_login_page_html},
 	cross_signing_reset::{cross_signing_reset_confirm_html, cross_signing_reset_execute_html},
 	profile::profile_html,
 	profile_saved::profile_saved_html,
@@ -37,6 +42,9 @@ use self::{
 	session_view::session_view_html,
 };
 use super::url_encode;
+
+/// Length of the login token generated for account management password login.
+const ACCOUNT_LOGIN_TOKEN_LENGTH: usize = 32;
 
 pub(crate) static ACCOUNT_MANAGEMENT_ACTIONS_SUPPORTED: &[&str] = &[
 	"org.matrix.profile",
@@ -87,6 +95,8 @@ static ACCOUNT_CSP: &[&str] = &[
 struct AccountQueryParams {
 	action: Option<String>,
 	device_id: Option<String>,
+	#[serde(default)]
+	manual: bool,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -108,15 +118,23 @@ pub(crate) async fn get_account_route(
 			| Ok(params) => params,
 		};
 
-	let action = params
-		.action
-		.as_deref()
-		.unwrap_or("org.matrix.sessions_list");
+	// If manual login is requested, show the password form.
+	if params.manual {
+		return account_html_response(StatusCode::OK, password_login_page_html());
+	}
 
-	let device_id = params.device_id.as_deref().unwrap_or_default();
+	// If an action is specified, proceed with SSO redirect (existing behavior).
+	if let Some(action) = params.action.as_deref() {
+		let device_id = params.device_id.as_deref().unwrap_or_default();
+		return match account_sso_redirect(&services, action, device_id) {
+			| Ok(redirect) => account_redirect_response(redirect),
+			| Err(e) => account_error_response(&e),
+		};
+	}
 
-	match account_sso_redirect(&services, action, device_id) {
-		| Ok(redirect) => account_redirect_response(redirect),
+	// No action and no manual flag: show the login selection page.
+	match build_account_login_page_html(&services) {
+		| Ok(html) => account_html_response(StatusCode::OK, html),
 		| Err(e) => account_error_response(&e),
 	}
 }
@@ -143,6 +161,18 @@ pub(crate) async fn post_account_callback_route(
 ) -> impl IntoResponse {
 	match handle_account_callback(&services, Method::POST, body).await {
 		| Ok(html) => account_html_response(StatusCode::OK, html),
+		| Err(e) => account_error_response(&e),
+	}
+}
+
+/// POST `/_tuwunel/oidc/account_login` — authenticate via password and redirect
+/// to the account management callback.
+pub(crate) async fn post_account_login_route(
+	State(services): State<crate::State>,
+	Form(form): Form<LoginForm>,
+) -> impl IntoResponse {
+	match handle_password_login(&services, &form).await {
+		| Ok(redirect) => account_redirect_response(redirect),
 		| Err(e) => account_error_response(&e),
 	}
 }
@@ -297,6 +327,14 @@ async fn handle_account_callback(
 
 fn account_sso_redirect(services: &Services, action: &str, device_id: &str) -> Result<Redirect> {
 	validate_account_action(action)?;
+	let sso_url = build_account_sso_url(services, action, device_id)?;
+
+	Ok(Redirect::temporary(&sso_url))
+}
+
+/// Build the SSO redirect URL for account management.
+fn build_account_sso_url(services: &Services, action: &str, device_id: &str) -> Result<String> {
+	validate_account_action(action)?;
 
 	let default_idp = account_management_idp_id(services)?;
 	let idp_id_enc = url_encode(&default_idp);
@@ -320,7 +358,78 @@ fn account_sso_redirect(services: &Services, action: &str, device_id: &str) -> R
 		.query_pairs_mut()
 		.append_pair("redirectUrl", callback_url.as_str());
 
-	Ok(Redirect::temporary(sso_url.as_str()))
+	Ok(sso_url.to_string())
+}
+
+/// Build the login selection page: SSO button + password option.
+fn build_account_login_page_html(services: &Services) -> Result<String> {
+	let sso_url = match services.oauth.providers.get_default_id() {
+		| Some(_) => build_account_sso_url(services, "org.matrix.sessions_list", "").ok(),
+		| None => None,
+	};
+
+	let sso_url_str = sso_url.as_deref().unwrap_or("");
+	Ok(account_login_page_html(sso_url_str))
+}
+
+/// Handle password-based login for the account management page.
+async fn handle_password_login(services: &Services, form: &LoginForm) -> Result<Redirect> {
+	let server_name = services.globals.server_name();
+
+	let user_id = UserId::parse_with_server_name(&form.username, server_name)
+		.map_err(|_| err!(Request(InvalidParam("Invalid username format"))))?;
+
+	let hash = services.users.password_hash(&user_id).await.map_err(|_| {
+		err!(Request(Forbidden("Invalid username or password")))
+	})?;
+
+	if hash == tuwunel_service::users::PASSWORD_SENTINEL {
+		return Err!(Request(Forbidden(
+			"This account does not support password login"
+		)));
+	}
+
+	hash::verify_password(&form.password, &hash).map_err(|_| {
+		err!(Request(Forbidden("Invalid username or password")))
+	})?;
+
+	if !services.users.is_active_local(&user_id).await {
+		return Err!(Request(UserDeactivated("This user has been deactivated.")));
+	}
+
+	let login_token = random_string(ACCOUNT_LOGIN_TOKEN_LENGTH);
+	services.users.create_login_token(&user_id, &login_token);
+
+	let issuer = match services.oauth.get_server() {
+		| Ok(server) => server.issuer_url()?.trim_end_matches('/').to_owned(),
+		| Err(_) => {
+			// Fall back to the well-known client URL when OIDC server is not available.
+			services
+				.config
+				.well_known
+				.client
+				.as_ref()
+				.map(Url::as_str)
+				.map(|s| s.trim_end_matches('/').to_owned())
+				.ok_or_else(|| {
+					err!(Config(
+						"well_known.client",
+						"Cannot determine server base URL"
+					))
+				})?
+		},
+	};
+
+	let mut redirect_url = Url::parse(&format!("{issuer}/_tuwunel/oidc/account_callback"))
+		.map_err(|_| err!(error!("Failed to build account callback URL")))?;
+
+	let action = form.action.as_deref().unwrap_or("org.matrix.sessions_list");
+	redirect_url
+		.query_pairs_mut()
+		.append_pair("action", action)
+		.append_pair("loginToken", &login_token);
+
+	Ok(Redirect::temporary(redirect_url.as_str()))
 }
 
 pub(super) fn account_redirect_response(redirect: Redirect) -> Response {
