@@ -1,0 +1,186 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "v*"
+  pull_request:
+    branches:
+      - "main"
+  workflow_dispatch:
+    inputs:
+      profile:
+        type: choice
+        description: "Cargo build profile"
+        options:
+          - release
+          - release-debuginfo
+          - release-native
+        default: release
+      run_tests:
+        type: boolean
+        description: "Run tests"
+        default: true
+
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{inputs.profile || 'release'}})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain (${{matrix.target}})
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{matrix.target}}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            pkg-config \
+            libssl-dev \
+            libclang-dev \
+            libolm-dev \
+            libc6-dev \
+            ${{matrix.target == 'aarch64-unknown-linux-gnu' && 'binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu' || ''}}
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{runner.os}}-${{matrix.target}}-cargo-${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            ${{runner.os}}-${{matrix.target}}-cargo-
+
+      - name: Build binary
+        run: |
+          PROFILE="${{inputs.profile || 'release'}}"
+          if [ "$PROFILE" = "release" ]; then
+            PROFILE_FLAG="--release"
+          else
+            PROFILE_FLAG="--profile $PROFILE"
+          fi
+
+          if [ "${{matrix.target}}" = "aarch64-unknown-linux-gnu" ]; then
+            cargo install cross 2>/dev/null || true
+            cross build $PROFILE_FLAG --target ${{matrix.target}}
+          else
+            cargo build $PROFILE_FLAG --target ${{matrix.target}}
+          fi
+
+      - name: Build .deb package
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          PROFILE="${{inputs.profile || 'release'}}"
+          if [ "$PROFILE" != "release" ]; then
+            echo "Skipping deb for non-release profile"
+            exit 0
+          fi
+          cargo install cargo-deb 2>/dev/null || true
+          cargo deb --target ${{matrix.target}} --no-build
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuwunel-${{matrix.target}}-${{inputs.profile || 'release'}}
+          path: |
+            target/${{matrix.target}}/${{inputs.profile == 'release-debuginfo' && 'release' || inputs.profile || 'release'}}/tuwunel
+          if-no-files-found: warn
+
+      - name: Upload .deb artifact
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tuwunel-deb-${{inputs.profile || 'release'}}
+          path: |
+            target/${{matrix.target}}/debian/*.deb
+          if-no-files-found: warn
+
+  test:
+    if: |
+      !failure() && !cancelled()
+      && (inputs.run_tests != false)
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq pkg-config libssl-dev libclang-dev libolm-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{runner.os}}-test-cargo-${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            ${{runner.os}}-test-cargo-
+
+      - name: Run cargo test
+        run: cargo test --workspace
+
+      - name: Run cargo check (no default features)
+        run: cargo check --no-default-features
+
+  lint:
+    if: |
+      !failure() && !cancelled()
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq pkg-config libssl-dev libclang-dev libolm-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{runner.os}}-lint-cargo-${{hashFiles('Cargo.lock')}}
+          restore-keys: |
+            ${{runner.os}}-lint-cargo-
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
