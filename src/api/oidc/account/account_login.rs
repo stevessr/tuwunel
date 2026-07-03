@@ -40,8 +40,22 @@ pub(super) fn account_login_page_html(sso_url: &str) -> String {
 	)
 }
 
-/// Render the password-only login form (when SSO is not available).
-pub(super) fn password_login_page_html() -> String {
+/// Render the password-only login form.
+///
+/// `action` — if set, included as a hidden form field to carry a target action
+/// through to the callback (e.g. `org.matrix.bind_sso`).
+/// `message` — optional informational or error message shown above the form.
+pub(super) fn password_login_page_html(action: Option<&str>, message: &str) -> String {
+	let action_field = action
+		.map(|a| format!(r#"<input type="hidden" name="action" value="{}">"#, html_escape(a)))
+		.unwrap_or_default();
+
+	let msg_html = if message.is_empty() {
+		String::new()
+	} else {
+		format!(r#"<p class="meta">{}</p>"#, html_escape(message))
+	};
+
 	format!(
 		r#"<!DOCTYPE html>
 <html lang="en">
@@ -52,6 +66,7 @@ pub(super) fn password_login_page_html() -> String {
 	</head>
 	<body>
 		<h1>Account Management</h1>
+		{msg_html}
 		<p>Enter your Matrix password to manage your account.</p>
 
 		<form method="post" action="/_tuwunel/oidc/account">
@@ -60,6 +75,8 @@ pub(super) fn password_login_page_html() -> String {
 
 			<label for="password">Password</label>
 			<input type="password" id="password" name="password" required autocomplete="current-password">
+
+			{action_field}
 
 			<div class="submit-row">
 				<button type="submit">Sign in</button>

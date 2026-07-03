@@ -56,6 +56,7 @@ pub(crate) static ACCOUNT_MANAGEMENT_ACTIONS_SUPPORTED: &[&str] = &[
 	"org.matrix.sessions_list",
 	"org.matrix.session_view",
 	"org.matrix.session_end",
+	"org.matrix.bind_sso",
 ];
 
 /// Raw JS served at `/_tuwunel/oidc/account.js`.
@@ -97,6 +98,8 @@ struct AccountQueryParams {
 	device_id: Option<String>,
 	#[serde(default)]
 	manual: bool,
+	#[serde(rename = "loginToken")]
+	login_token: Option<String>,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
@@ -120,7 +123,28 @@ pub(crate) async fn get_account_route(
 
 	// If manual login is requested, show the password form.
 	if params.manual {
-		return account_html_response(StatusCode::OK, password_login_page_html());
+		let login_token_str = params.login_token.as_deref().unwrap_or("");
+		return account_html_response(
+			StatusCode::OK,
+			password_login_page_html(params.action.as_deref(), login_token_str),
+		);
+	}
+
+	// If bind_sso action and we have a login token, start the SSO bind flow.
+	if params.action.as_deref() == Some("org.matrix.bind_sso") {
+		if let Some(ref login_token) = params.login_token {
+			return match account_sso_bind_redirect(&services, login_token).await {
+				| Ok(redirect) => account_redirect_response(redirect),
+				| Err(e) => account_error_response(&e),
+			};
+		}
+
+		// No login_token: ask the user to authenticate with password first.
+		let err_msg = "Please sign in with your password to bind an SSO identity.";
+		return account_html_response(
+			StatusCode::OK,
+			password_login_page_html(Some("org.matrix.bind_sso"), err_msg),
+		);
 	}
 
 	// If an action is specified, proceed with SSO redirect (existing behavior).
@@ -321,6 +345,9 @@ async fn handle_account_callback(
 		| "org.matrix.cross_signing_reset" if method == Method::GET =>
 			cross_signing_reset_confirm_html(&user_id, login_token.unwrap_or_default()).await,
 
+		| "org.matrix.bind_sso" =>
+			Ok(bind_sso_success_html(&user_id)),
+
 		| _ => Err!(Request(InvalidParam("Unsupported account management action"))),
 	}
 }
@@ -420,16 +447,104 @@ async fn handle_password_login(services: &Services, form: &LoginForm) -> Result<
 		},
 	};
 
-	let mut redirect_url = Url::parse(&format!("{issuer}/_tuwunel/oidc/account_callback"))
+	let action = form.action.as_deref().unwrap_or("org.matrix.sessions_list");
+
+	// For bind_sso, redirect to account route (which handles the SSO redirect)
+	// instead of account_callback (which would show an HTML page).
+	let redirect_path = if action == "org.matrix.bind_sso" {
+		"/_tuwunel/oidc/account"
+	} else {
+		"/_tuwunel/oidc/account_callback"
+	};
+
+	let mut redirect_url = Url::parse(&format!("{issuer}{redirect_path}"))
 		.map_err(|_| err!(error!("Failed to build account callback URL")))?;
 
-	let action = form.action.as_deref().unwrap_or("org.matrix.sessions_list");
 	redirect_url
 		.query_pairs_mut()
 		.append_pair("action", action)
 		.append_pair("loginToken", &login_token);
 
 	Ok(Redirect::temporary(redirect_url.as_str()))
+}
+
+/// Start an SSO bind flow for an already-authenticated user.
+///
+/// Consumes the given login token to authenticate the user, creates a new
+/// login token, and redirects to the OIDC provider's SSO endpoint with the
+/// new token embedded so `handle_sso_login` pre-sets the session's user_id.
+/// After the OIDC callback completes (`sso_callback_route`), the upstream
+/// identity is stored in `oauthuniqid_oauthid` → `user_id`, permanently
+/// binding it to this user. The browser is then redirected back to
+/// `account_callback?action=org.matrix.bind_sso&loginToken=…`, which renders
+/// a confirmation page.
+async fn account_sso_bind_redirect(
+	services: &Services,
+	login_token_str: &str,
+) -> Result<Redirect> {
+	// Authenticate the user via the login token (consumes it).
+	let user_id = services
+		.users
+		.find_from_login_token(login_token_str)
+		.await
+		.map_err(|_| err!(Request(Forbidden("Invalid or expired login token"))))?;
+
+	// Create a fresh login token for the SSO redirect flow.
+	let new_token = random_string(ACCOUNT_LOGIN_TOKEN_LENGTH);
+	services.users.create_login_token(&user_id, &new_token);
+
+	let default_idp = account_management_idp_id(services)?;
+	let idp_id_enc = url_encode(&default_idp);
+
+	let issuer = services.oauth.get_server()?.issuer_url()?;
+	let base = issuer.trim_end_matches('/');
+
+	let mut callback_url = Url::parse(&format!("{base}/_tuwunel/oidc/account_callback"))
+		.map_err(|_| err!(error!("Failed to build account callback URL")))?;
+
+	callback_url
+		.query_pairs_mut()
+		.append_pair("action", "org.matrix.bind_sso");
+
+	// Build the SSO redirect URL, including the login token so that
+	// handle_sso_login pre-sets session.user_id to this user.
+	let mut sso_url =
+		Url::parse(&format!("{base}/_matrix/client/v3/login/sso/redirect/{idp_id_enc}"))
+			.map_err(|_| err!(error!("Failed to build SSO URL")))?;
+
+	sso_url
+		.query_pairs_mut()
+		.append_pair("redirectUrl", callback_url.as_str())
+		.append_pair("loginToken", &new_token);
+
+	Ok(Redirect::temporary(sso_url.as_str()))
+}
+
+/// HTML page shown after successfully binding an SSO identity to the account.
+fn bind_sso_success_html(user_id: &UserId) -> String {
+	let uid = html_escape(user_id.as_str());
+
+	format!(
+		r#"<!DOCTYPE html>
+<html lang="en">
+	<head>
+		{ACCOUNT_HEAD}
+		<title>SSO Identity Bound</title>
+	</head>
+	<body>
+		<h1 class="ok">SSO Identity Bound</h1>
+		<p>
+			Your account <strong>{uid}</strong> has been linked to your
+			Single Sign-On identity. Future logins via this provider will
+			authenticate as this account.
+		</p>
+		<div class="nav">
+			<a href="/_tuwunel/oidc/account">Return to account management</a>
+		</div>
+		{ACCOUNT_JS_INCLUDE}
+	</body>
+</html>"#
+	)
 }
 
 pub(super) fn account_redirect_response(redirect: Redirect) -> Response {

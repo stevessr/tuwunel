@@ -91,6 +91,8 @@ static PAGE_HTML: &str = const_format!(
 		</table>
 		<div class="nav">
 			<a href="/_tuwunel/oidc/account?action=org.matrix.profile">View Profile</a>
+			<span class="sep"> | </span>
+			<a href="/_tuwunel/oidc/account?action=org.matrix.bind_sso">Bind SSO Identity</a>
 		</div>
 		{ACCOUNT_JS_INCLUDE}
 	</body>
