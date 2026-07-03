@@ -36,6 +36,7 @@ jobs:
       fail-fast: false
       matrix:
         target:
+          - x86_64_v3-unknown-linux-gnu
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
 
@@ -56,8 +57,9 @@ jobs:
             libssl-dev \
             libclang-dev \
             libolm-dev \
+            libzstd-dev \
             libc6-dev \
-            ${{matrix.target == 'aarch64-unknown-linux-gnu' && 'binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu' || ''}}
+            ${{(matrix.target == 'aarch64-unknown-linux-gnu') && 'binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu' || ''}}
 
       - name: Cache cargo registry and build
         uses: actions/cache@v4
@@ -71,6 +73,8 @@ jobs:
             ${{runner.os}}-${{matrix.target}}-cargo-
 
       - name: Build binary
+        env:
+          ZSTD_SYS_USE_PKG_CONFIG: "1"
         run: |
           PROFILE="${{inputs.profile || 'release'}}"
           if [ "$PROFILE" = "release" ]; then
@@ -79,39 +83,61 @@ jobs:
             PROFILE_FLAG="--profile $PROFILE"
           fi
 
-          if [ "${{matrix.target}}" = "aarch64-unknown-linux-gnu" ]; then
-            cargo install cross 2>/dev/null || true
-            cross build $PROFILE_FLAG --target ${{matrix.target}}
+          TARGET="${{matrix.target}}"
+          RUSTFLAGS="${RUSTFLAGS:-}"
+
+          # x86_64_v3: use x86-64-v3 CPU level with base x86_64 target
+          if [[ "$TARGET" == x86_64_v3-* ]]; then
+            RUSTFLAGS="-C target-cpu=x86-64-v3 $RUSTFLAGS"
+            BUILD_TARGET="x86_64-unknown-linux-gnu"
           else
-            cargo build $PROFILE_FLAG --target ${{matrix.target}}
+            BUILD_TARGET="$TARGET"
+          fi
+
+          export RUSTFLAGS
+
+          if [ "$BUILD_TARGET" = "aarch64-unknown-linux-gnu" ]; then
+            cargo install cross 2>/dev/null || true
+            cross build $PROFILE_FLAG --target "$BUILD_TARGET"
+          else
+            cargo build $PROFILE_FLAG --target "$BUILD_TARGET"
           fi
 
       - name: Build .deb package
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        if: matrix.target == 'x86_64_v3-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
           PROFILE="${{inputs.profile || 'release'}}"
           if [ "$PROFILE" != "release" ]; then
             echo "Skipping deb for non-release profile"
             exit 0
           fi
+
+          # Map x86_64_v3 to base target for deb build
+          TARGET="${{matrix.target}}"
+          if [[ "$TARGET" == x86_64_v3-* ]]; then
+            BUILD_TARGET="x86_64-unknown-linux-gnu"
+          else
+            BUILD_TARGET="$TARGET"
+          fi
+
           cargo install cargo-deb 2>/dev/null || true
-          cargo deb --target ${{matrix.target}} --no-build
+          cargo deb --target "$BUILD_TARGET" --no-build
 
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: tuwunel-${{matrix.target}}-${{inputs.profile || 'release'}}
           path: |
-            target/${{matrix.target}}/${{inputs.profile == 'release-debuginfo' && 'release' || inputs.profile || 'release'}}/tuwunel
+            target/${{matrix.target == 'x86_64_v3-unknown-linux-gnu' && 'x86_64-unknown-linux-gnu' || matrix.target}}/${{inputs.profile == 'release-debuginfo' && 'release' || inputs.profile || 'release'}}/tuwunel
           if-no-files-found: warn
 
       - name: Upload .deb artifact
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        if: matrix.target == 'x86_64_v3-unknown-linux-gnu' || matrix.target == 'x86_64-unknown-linux-gnu'
         uses: actions/upload-artifact@v4
         with:
-          name: tuwunel-deb-${{inputs.profile || 'release'}}
+          name: tuwunel-deb-${{matrix.target}}-${{inputs.profile || 'release'}}
           path: |
-            target/${{matrix.target}}/debian/*.deb
+            target/${{matrix.target == 'x86_64_v3-unknown-linux-gnu' && 'x86_64-unknown-linux-gnu' || matrix.target}}/debian/*.deb
           if-no-files-found: warn
 
   test:
